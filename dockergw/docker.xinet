@@ -1,0 +1,14 @@
+service dockergw
+{
+        type           = UNLISTED
+        port           = 7777
+        socket_type    = stream
+        protocol       = tcp
+        wait           = no
+        user           = docker
+        server         = /usr/bin/dockergw
+
+        log_on_success =
+
+        disable        = no
+}
