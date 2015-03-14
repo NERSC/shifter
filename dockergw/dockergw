@@ -1,39 +1,121 @@
 #!/usr/bin/env python
 import sys
 import os
+import tempfile
 from os import symlink
-from os.path import exists
 from docker import Client
+import subprocess
+import fcntl
+
 c = Client(base_url='unix://var/run/docker.sock')
 
-linkbase="/tmp/"
-dbase="/var/lib/docker/graph/"
-
+imagePath = "/export/data/dockergw/images"
 
 def lookup(name):
-  lst = c.images()
-  image=0
-  for i in lst:
-    for tag in i['RepoTags']:
-     if tag==name:
-       image=i
-  return image
+    lst = c.images()
+    image = None
+    for i in lst:
+        for tag in i['RepoTags']:
+            if tag==name:
+                image=i
+    return image
+
+def lockfile(fname):
+    fd = open(fname, 'w')
+    try:
+        fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except IOError:
+        fd.close()
+        return None
+    return fd
+
+def package(image):
+    global imagePath
+    global c
+    finalPath = os.path.join(imagePath, image + ".ext4")
+    tarPath = os.path.join(imagePath, image + ".tar")
+    if os.path.exists(finalPath):
+        return finalPath
+
+    lockPath = os.path.join(imagePath, image + ".lock")
+    lfd = lockfile(lockPath)
+    if lfd is None:
+        return None
+
+    ## get the tarball
+    if os.path.exists(tarPath):
+        os.unlink(tarPath)
+
+    try:
+        imageStream = c.get_image(image)
+        tarfd = open(tarPath, 'w')
+        tarfd.write(imageStream.data)
+        tarfd.close()
+    except:
+        if os.path.exists(tarPath):
+            os.unlink(tarfd)
+
+    ## create sparsefile for the image
+    imageTempPath = os.path.join(imagePath, image + ".ext4_partial")
+    ret = subprocess.call(["dd", "of=%s" % imageTempPath, "bs=1", "count=0", "seek=%d" % os.stat(tarPath).st_size * 2])
+    if ret != 0:
+        # error handling
+        pass
+    ret = subprocess.call(["mke2fs", imageTempPath])
+    if ret != 0:
+        # error handling
+        pass
+    
+    ## prepare a mount point and mount the image file
+    mntPoint = tempfile.mkdtemp()
+    ret = subprocess.call(["mount", "-o", "loop", imageTempPath, mntPoint])
+    ret = subprocess.call(["tar", "xf", tarPath, "-C", mntPoint])
+    ret = subprocess.call(["umount", mntPoint])
+    shutil.move(imageTempPath, finalPath)
+    return finalPath
+
+def rsync(filename):
+    return True
 
 
-name=sys.stdin.readline().rstrip()
+def main():
+    input_data=sys.stdin.readline().strip().split(' ')
+    if input_data is None or type(input_data) is not list or len(input_data) == 0:
+        print "ERR"
+        sys.exit(0)
 
-image=lookup(name)
 
-if image==0:
-  c.pull(name)
-  image=lookup(name)
+    command = input_data[0]
+    args = None
+    if len(input_data) > 1:
+        args = input_data[1:]
 
-imagePath = os.path.join(dbase, image['Id'])
-linkPath = os.path.join(linkbase, name)
-print imagePath
-if image != 0:
-  if exists(linkPath)==False:
-    symlink(imagePath, linkPath)
-  print 1
-else:
-  print 0
+    if command == "lookup":
+        if args is None or len(args) == 0:
+            print "ERR"
+            sys.exit(0)
+        name = args[0]
+        image = lookup(name)
+        if image is None:
+            c.pull(name)
+            image = lookup(name)
+        if image is None:
+            print "ERR"
+            sys.exit(0)
+        print image
+        sys.exit(0)
+
+    if command == "retrieve":
+        if args is None or len(args) == 0:
+            print "ERR"
+            sys.exit(0)
+        name = args[0]
+        path = package(name)
+        if rsync(path):
+            print "SUCCESS"
+            sys.exit(0)
+        print "ERR"
+        sys.exit(0)
+
+    print "ERR"
+    sys.exit(0)
