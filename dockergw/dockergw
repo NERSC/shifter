@@ -6,12 +6,22 @@ from os import symlink
 from docker import Client
 import subprocess
 import fcntl
+import shutil
+import json
+
+systems = {
+    'grace':  {
+        'host': '128.55.34.74',
+        'path': '/scratch/scratchdirs/craydock/docker',
+        'rsyncOptions': ['-e', 'ssh -l craydock -i /home/docker/craydock.id_dsa'],
+    }
+}
 
 c = Client(base_url='unix://var/run/docker.sock')
 
 imagePath = "/export/data/dockergw/images"
 
-def lookup(name):
+def lookup(name, username, password):
     lst = c.images()
     image = None
     for i in lst:
@@ -29,15 +39,27 @@ def lockfile(fname):
         return None
     return fd
 
-def package(image):
+def expandDockerLayer(layersPath, id, mntPoint):
+    jsonPath = os.path.join(layersPath, id, "json")
+    if os.path.exists(jsonPath):
+         json_data = open(jsonPath, 'r')
+         data = json.load(json_data)
+         json_data.close()
+         if 'parent' in data:
+             expandDockerLayer(layersPath, data['parent'], mntPoint)
+    tarPath = os.path.join(layersPath, id, "layer.tar")
+    ret = subprocess.call(['tar', 'xf', tarPath, '-C', mntPoint])
+
+def package(name, id):
     global imagePath
     global c
-    finalPath = os.path.join(imagePath, image + ".ext4")
-    tarPath = os.path.join(imagePath, image + ".tar")
+    returnValue = None
+    finalPath = os.path.join(imagePath, id + ".ext4")
+    tarPath = os.path.join(imagePath, id + ".tar")
     if os.path.exists(finalPath):
         return finalPath
 
-    lockPath = os.path.join(imagePath, image + ".lock")
+    lockPath = os.path.join(imagePath, id + ".lock")
     lfd = lockfile(lockPath)
     if lfd is None:
         return None
@@ -46,22 +68,32 @@ def package(image):
     if os.path.exists(tarPath):
         os.unlink(tarPath)
 
+    ret = 1
     try:
-        imageStream = c.get_image(image)
-        tarfd = open(tarPath, 'w')
-        tarfd.write(imageStream.data)
-        tarfd.close()
-    except:
-        if os.path.exists(tarPath):
-            os.unlink(tarfd)
+        ret = subprocess.call(['docker','save','-o',tarPath,name])
+    finally:
+        if ret != 0 and os.path.exists(tarPath):
+            os.unlink(tarPath)
+            return None
+
+    ## expand the tar file
+    layersPath = os.path.join(imagePath, id + ".layers")
+    ret = 1
+    try:
+        os.mkdir(layersPath)
+        ret = subprocess.call(['tar', 'xf', tarPath, '-C', layersPath])
+    finally:
+        if ret != 0 and os.path.exists(layersPath):
+            shutil.rmtree(layersPath)
+            return None
 
     ## create sparsefile for the image
-    imageTempPath = os.path.join(imagePath, image + ".ext4_partial")
-    ret = subprocess.call(["dd", "of=%s" % imageTempPath, "bs=1", "count=0", "seek=%d" % os.stat(tarPath).st_size * 2])
+    imageTempPath = os.path.join(imagePath, id + ".ext4_partial")
+    ret = subprocess.call(["dd", "of=%s" % imageTempPath, "bs=1", "count=0", "seek=%d" % (os.stat(tarPath).st_size * 2)])
     if ret != 0:
         # error handling
         pass
-    ret = subprocess.call(["mke2fs", imageTempPath])
+    ret = subprocess.call(["mke2fs", "-F", imageTempPath])
     if ret != 0:
         # error handling
         pass
@@ -69,56 +101,77 @@ def package(image):
     ## prepare a mount point and mount the image file
     mntPoint = tempfile.mkdtemp()
     ret = subprocess.call(["mount", "-o", "loop", imageTempPath, mntPoint])
-    ret = subprocess.call(["tar", "xf", tarPath, "-C", mntPoint])
+    if ret != 0:
+        return None
+
+    expandDockerLayer(layersPath, id, mntPoint)
+
     ret = subprocess.call(["umount", mntPoint])
     shutil.move(imageTempPath, finalPath)
-    return finalPath
+    shutil.rmtree(layersPath)
+    os.unlink(tarPath)
+    lfd.close()
+    os.unlink(lockPath) 
+    returnValue = finalPath
+    return returnValue
 
-def rsync(filename):
-    return True
+def rsync(filename,system):
+    (basePath,imageFilename) = os.path.split(filename)
+    remoteFilename = os.path.join(systems[system]['path'], imageFilename)
+    rsyncCmd = ['rsync', '-as']
+    if 'rsyncOptions' in systems[system]:
+        rsyncCmd.extend(systems[system]['rsyncOptions'])
+    rsyncCmd.extend([filename,'%s:%s' % (systems[system]['host'], remoteFilename)])
+    ret = subprocess.call(rsyncCmd)
+    return ret == 0
 
 
 def main():
     input_data=sys.stdin.readline().strip().split(' ')
-    if input_data is None or type(input_data) is not list or len(input_data) == 0:
+    if input_data is None or type(input_data) is not list or len(input_data) < 2:
         print "ERR"
         sys.exit(0)
 
-
-    command = input_data[0]
-    args = None
-    if len(input_data) > 1:
-        args = input_data[1:]
-
-    if command == "lookup":
-        if args is None or len(args) == 0:
-            print "ERR"
-            sys.exit(0)
-        name = args[0]
-        image = lookup(name)
-        if image is None:
-            c.pull(name)
-            image = lookup(name)
-        if image is None:
-            print "ERR"
-            sys.exit(0)
-        print image
+    name = input_data[0]
+    system = input_data[1]
+    if system not in systems:
+        print "ERR: unknown system"
         sys.exit(0)
 
-    if command == "retrieve":
-        if args is None or len(args) == 0:
-            print "ERR"
-            sys.exit(0)
-        name = args[0]
-        path = package(name)
-        if rsync(path):
-            print "SUCCESS"
-            sys.exit(0)
+    registry = 'https://index.docker.io/v1/'
+    username = None
+    password = None
+    logged_in = False
+    for arg in input_data[2:]:
+        (k,v) = arg.split('=', 2)
+        if k == "username":
+            username = v
+        if k == "password":
+            password = v
+        if k == "registry":
+            registry = v
+    if username is not None and password is not None:
+        val = c.login(username=username, password=password, registry=registry)
+        logged_in = True
+    image = lookup(name, username, password)
+    if image is None:
+        c.pull(name)
+        image = lookup(name, username, password)
+    if image is None:
         print "ERR"
         sys.exit(0)
+    if type(image) is not dict or 'Id' not in image:
+        print 'ERR'
+        sys.exit(0)
+    id = image['Id']
 
+    path = package(name, id)
+    if path is not None and rsync(path,system):
+        print id
+        sys.exit(0)
     print "ERR"
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()
