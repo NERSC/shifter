@@ -8,6 +8,9 @@ import subprocess
 import fcntl
 import shutil
 import json
+import re
+
+fdnull = open(os.devnull, 'w')
 
 systems = {
     'grace':  {
@@ -39,6 +42,14 @@ def lockfile(fname):
         return None
     return fd
 
+def get_size(start_path):
+    total_size = 0
+    for dirpath, dirnames, filenames in os.walk(start_path):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            total_size += os.path.getsize(fp)
+    return total_size
+
 def expandDockerLayer(layersPath, id, mntPoint):
     jsonPath = os.path.join(layersPath, id, "json")
     if os.path.exists(jsonPath):
@@ -48,7 +59,55 @@ def expandDockerLayer(layersPath, id, mntPoint):
          if 'parent' in data:
              expandDockerLayer(layersPath, data['parent'], mntPoint)
     tarPath = os.path.join(layersPath, id, "layer.tar")
-    ret = subprocess.call(['tar', 'xf', tarPath, '-C', mntPoint])
+    ret = subprocess.call(['tar', 'xf', tarPath, '-C', mntPoint], stdout=fdnull, stderr=fdnull)
+
+def generateExt4Image(id, layersPath):
+    global imagePath
+    ## create sparsefile for the image
+    imageTempPath = os.path.join(imagePath, id + ".ext4_partial")
+    ret = subprocess.call(["dd", "of=%s" % imageTempPath, "bs=1", "count=0", "seek=%d" % (get_size(layersPath) * 2)], stdout=fdnull, stderr=fdnull)
+    if ret != 0:
+        # error handling
+        pass
+    ret = subprocess.call(["mke2fs", "-F", imageTempPath], stdout=fdnull, stderr=fdnull)
+    if ret != 0:
+        # error handling
+        pass
+    
+    ## prepare a mount point and mount the image file
+    mntPoint = tempfile.mkdtemp()
+    ret = subprocess.call(["mount", "-o", "loop", imageTempPath, mntPoint], stdout=fdnull, stderr=fdnull)
+    if ret != 0:
+        return None
+
+    expandDockerLayer(layersPath, id, mntPoint)
+
+    loopDevice = None
+    fd = open("/proc/mounts", "r")
+    for line in fd:
+        (device, t_mntPoint, stuff) = line.split(' ', 2)
+        if t_mntPoint == mntPoint and re.match('/dev/loop\d+', device) is not None:
+            loopDevice = device
+            break
+    fd.close()
+    ret = subprocess.call(["umount", mntPoint], stdout=fdnull, stderr=fdnull)
+    if loopDevice is not None:
+        subprocess.call(['losetup', '-d', loopDevice])
+    return imageTempPath
+
+def generateCramFSImage(id, layersPath):
+    global imagePath
+    imageTempPath = os.path.join(imagePath, id + ".cram_partial")
+    expandedPath = os.path.join(imagePath, id + ".expanded")
+    os.mkdir(expandedPath)
+    expandDockerLayer(layersPath, id, expandedPath)
+    
+    ret = subprocess.call(["mkfs.cramfs", expandedPath, imageTempPath], stdout=fdnull, stderr=fdnull)
+    if ret != 0:
+        # error handling
+        pass
+    
+    return imageTempPath
 
 def package(name, id):
     global imagePath
@@ -70,7 +129,7 @@ def package(name, id):
 
     ret = 1
     try:
-        ret = subprocess.call(['docker','save','-o',tarPath,name])
+        ret = subprocess.call(['docker','save','-o',tarPath,name], stdout=fdnull, stderr=fdnull)
     finally:
         if ret != 0 and os.path.exists(tarPath):
             os.unlink(tarPath)
@@ -81,39 +140,23 @@ def package(name, id):
     ret = 1
     try:
         os.mkdir(layersPath)
-        ret = subprocess.call(['tar', 'xf', tarPath, '-C', layersPath])
+        ret = subprocess.call(['tar', 'xf', tarPath, '-C', layersPath], stdout=fdnull, stderr=fdnull)
     finally:
         if ret != 0 and os.path.exists(layersPath):
             shutil.rmtree(layersPath)
             return None
 
-    ## create sparsefile for the image
-    imageTempPath = os.path.join(imagePath, id + ".ext4_partial")
-    ret = subprocess.call(["dd", "of=%s" % imageTempPath, "bs=1", "count=0", "seek=%d" % (os.stat(tarPath).st_size * 2)])
-    if ret != 0:
-        # error handling
-        pass
-    ret = subprocess.call(["mke2fs", "-F", imageTempPath])
-    if ret != 0:
-        # error handling
-        pass
-    
-    ## prepare a mount point and mount the image file
-    mntPoint = tempfile.mkdtemp()
-    ret = subprocess.call(["mount", "-o", "loop", imageTempPath, mntPoint])
-    if ret != 0:
-        return None
-
-    expandDockerLayer(layersPath, id, mntPoint)
-
-    ret = subprocess.call(["umount", mntPoint])
-    shutil.move(imageTempPath, finalPath)
+    imageTempPath = generateExt4Image(id, layersPath)
+    if imageTempPath is not None:
+        shutil.move(imageTempPath, finalPath)
+        returnValue = finalPath
+       
     shutil.rmtree(layersPath)
     os.unlink(tarPath)
     lfd.close()
     os.unlink(lockPath) 
-    returnValue = finalPath
     return returnValue
+
 
 def rsync(filename,system):
     (basePath,imageFilename) = os.path.split(filename)
@@ -122,7 +165,7 @@ def rsync(filename,system):
     if 'rsyncOptions' in systems[system]:
         rsyncCmd.extend(systems[system]['rsyncOptions'])
     rsyncCmd.extend([filename,'%s:%s' % (systems[system]['host'], remoteFilename)])
-    ret = subprocess.call(rsyncCmd)
+    ret = subprocess.call(rsyncCmd, stdout=fdnull, stderr=fdnull)
     return ret == 0
 
 
