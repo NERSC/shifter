@@ -16,7 +16,7 @@ systems = {
     'grace':  {
         'host': '128.55.34.74',
         'path': '/scratch/scratchdirs/craydock/docker',
-        'rsyncOptions': ['-e', 'ssh -l craydock -i /home/docker/craydock.id_dsa'],
+        'rsyncOptions': ['-e', 'ssh -o StrictHostKeyChecking=no -l craydock -i /home/docker/craydock.id_dsa'],
     }
 }
 
@@ -161,7 +161,7 @@ def package(name, id):
 def rsync(filename,system):
     (basePath,imageFilename) = os.path.split(filename)
     remoteFilename = os.path.join(systems[system]['path'], imageFilename)
-    rsyncCmd = ['rsync', '-as']
+    rsyncCmd = ['rsync', '-aS']
     if 'rsyncOptions' in systems[system]:
         rsyncCmd.extend(systems[system]['rsyncOptions'])
     rsyncCmd.extend([filename,'%s:%s' % (systems[system]['host'], remoteFilename)])
