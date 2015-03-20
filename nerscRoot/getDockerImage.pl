@@ -12,10 +12,7 @@ my $image = $ARGV[0];
 if ($image !~ /:/) {
     usage(1);
 }
-if (!defined($ENV{"NERSC_HOST"})) {
-    usage(1);
-}
-my $nerscHost = $ENV{"NERSC_HOST"};
+my $nerscHost = `cat /etc/clustername`;
 my $socket = new IO::Socket::INET (
     PeerHost => $dockergw_host,
     PeerPort => $dockergw_port,
