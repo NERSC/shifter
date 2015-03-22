@@ -17,21 +17,20 @@ if [ -z $loopMount ]; then
 fi
 ret=0
 
-for i in `cat /proc/mounts | grep $nerscMount | sort -k2 -r | awk '{print $2}'`; do
-    umount $i || ret=1
+for i in `cat /proc/mounts | grep "$nerscMount" | sort -k2 -r | awk '{print $2}'`; do
+    umount "$i" || ret=1
 done
 
-grep $loopMount /proc/mounts >/dev/null 2>&1 || ret=1
+grep "$loopMount" /proc/mounts >/dev/null 2>&1 || ret=1
 
 ## must be a loop mount to clean up
-umount $loopMount || ret=1
+umount "$loopMount" || ret=1
 
 ## remove any kernel modules loaded (in reverse order)
 if [ -n $kmodCache -a -e "$kmodCache" ]; then
-    for kmod in `cat $kmodCache | awk '{ L[n++] = $0 } END{ while(n--) { print L[n] } }'`; do
-        echo /sbin/rmmod $kmod
-        /sbin/rmmod $kmod
+    for kmod in `cat "$kmodCache" | awk '{ L[n++] = $0 } END{ while(n--) { print L[n] } }'`; do
+        /sbin/rmmod "$kmod"
     done
-    rm $kmodCache
+    rm "$kmodCache"
 fi
 exit $ret

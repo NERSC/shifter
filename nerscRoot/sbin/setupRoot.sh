@@ -118,35 +118,35 @@ setupNerscVFSRoot () {
     local option
     local ok
     local REGIFS
-    imageDir=$1
+    imageDir="$1"
 
     ## create tmpfs/rootfs for our /
     ## this is to ensure there are writeable areas for manipulating the image
-    mount -o nosuid,nodev -t rootfs none $nerscMount
-    cd $nerscMount
+    mount -o nosuid,nodev -t rootfs none "$nerscMount"
+    cd "$nerscMount"
 
     ## setup NERSC GPFS filesystems
     mkdir global
     for fs in $globalFs; do 
-        mkdir global/$fs
-        mount -o bind /global/$fs global/$fs
-        mount -o bind,remount,nosuid,nodev $nerscMount/global/$fs
+        mkdir "global/$fs"
+        mount -o bind "/global/$fs" "global/$fs"
+        mount -o bind,remount,nosuid,nodev "$nerscMount/global/$fs"
     done
     cd global
     ln -s u1 homes
-    cd $nerscMount
+    cd "$nerscMount"
 
     ## setup lustre mounts
     for fs in $lustreFs; do
-        mkdir $fs
-        mount -o bind /$fs $fs
-        mount -o bind,remount,nodev,nosuid $nerscMount/$fs ### XXX lustre is weird about remounts
+        mkdir "$fs"
+        mount -o bind "/$fs" "$fs"
+        mount -o bind,remount,nodev,nosuid "$nerscMount/$fs" ### XXX lustre is weird about remounts
     done
 
     ## make some aspects of the local environment available
     mkdir -p local/etc
     mount -o bind /dsl/etc local/etc
-    mount -o bind,remount,nodev,nosuid $nerscMount/local/etc
+    mount -o bind,remount,nodev,nosuid "$nerscMount/local/etc"
     mkdir -p .shared
     mount -o bind /dsl/.shared .shared
 
@@ -160,43 +160,43 @@ setupNerscVFSRoot () {
     mount -o bind /tmp tmp
     
     # mount the image into the new mount
-    for dir in `ls $imageDir`; do
+    for dir in `ls "$imageDir"`; do
         # don't do anything to "reserved" paths
-        if [ -e $dir ]; then
+        if [ -e "$dir" ]; then
             continue
         fi
         # properly copy symlinks
-        if [ -L $imageDir/$dir ]; then
-            cp -P $imageDir/$dir $dir
+        if [ -L "$imageDir/$dir" ]; then
+            cp -P "$imageDir/$dir" "$dir"
             continue
         fi
         # copy files
-        if [ -f $imageDir/$dir ]; then
-            cp -p $imageDir/$dir $dir
+        if [ -f "$imageDir/$dir" ]; then
+            cp -p "$imageDir/$dir" "$dir"
             continue
         fi
         # bind mount directories
-        if [ -d $imageDir/$dir ]; then
-            mkdir $dir
-            mount --bind $imageDir/$dir $nerscMount/$dir
-            mount -o bind,remount,nodev,nosuid $nerscMount/$dir
+        if [ -d "$imageDir/$dir" ]; then
+            mkdir "$dir"
+            mount --bind "$imageDir/$dir" "$nerscMount/$dir"
+            mount -o bind,remount,nodev,nosuid "$nerscMount/$dir"
         fi
     done
 
     ## merge image etc, site customizations, and local customizations into /etc
-    if [ -e $imageDir/etc ]; then
-        mount -o bind $imageDir/etc etc/nerscImage
-        mount -o bind,remount,nodev,nosuid $nerscMount/etc/nerscImage
+    if [ -e "$imageDir/etc" ]; then
+        mount -o bind "$imageDir/etc" etc/nerscImage
+        mount -o bind,remount,nodev,nosuid "$nerscMount/etc/nerscImage"
         cd etc
         for item in `ls nerscImage`; do
-            ln -s nerscImage/$item .
+            ln -s "nerscImage/$item" .
         done
         for item in `ls $etcDir`; do
-            cp -p $etcDir/$item $nerscMount/etc/site
-            if [ -e $item ]; then
-                rm $item
+            cp -p "$etcDir/$item" "$nerscMount/etc/site"
+            if [ -e "$item" ]; then
+                rm "$item"
             fi
-            ln -s site/$item $item
+            ln -s "site/$item" "$item"
         done
         ## take care of passwd
         if [ -e passwd ]; then
@@ -210,14 +210,14 @@ setupNerscVFSRoot () {
     fi
 
     ## mount up linux needs
-    mount -t proc none $nerscMount/proc
-    mount -o bind /dev $nerscMount/dev
-    mount -o bind /sys $nerscMount/sys
+    mount -t proc none "$nerscMount/proc"
+    mount -o bind /dev "$nerscMount/dev"
+    mount -o bind /sys "$nerscMount/sys"
 
     ## perform any user-requested bind-mounts
     ##    any leading slashes are stripped to force the bind mount to *only*
     ##    occur within the chroot area
-    cd $nerscMount
+    cd "$nerscMount"
     REGIFS=$IFS
     IFS="|"
     for volMap in $VOLUMES; do
@@ -236,13 +236,6 @@ setupNerscVFSRoot () {
             mount -o bind "$src" "$dest"
             if [ "x$option" == "xro" ]; then
                 mount -o bind,remount,ro "$dest"
-#ok=0
-#                containsItemStartsWith "$src" $lustreFs
-#                ok=$?
-#                if [ $ok -eq 0 ]; then
-#                    echo "Fail: cannot mark lustre filesystems read-only"
-#                else
-#                fi
             fi
         fi
         IFS="|"
