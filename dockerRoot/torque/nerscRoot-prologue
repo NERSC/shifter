@@ -35,6 +35,17 @@ PATH=${PATH}:/opt/cray/alps/default/bin/
 
 
 echo "Initializing NERSC Root environment, Please Wait"
+if [ "x$NERSC_ROOT_TYPE" == "xDOCKER" ]; then
+    echo "Retrieving Docker Image"
+    echo $nerscRootSetupPath/getDockerImage.pl $NERSC_ROOT_VALUE
+    image=$( $nerscRootSetupPath/getDockerImage.pl $NERSC_ROOT_VALUE )
+    if [ "x$image" == "x" -o "x$image" == "xERR" ]; then
+        echo "Failed to get docker image: $NERSC_ROOT_VALUE"
+    else
+        NERSC_ROOT_VALUE=$image
+    fi
+    echo "got image $NERSC_ROOT_VALUE"
+fi
 
         if [ -z "$CCM_BATCH_RUNDIR" ] ; then
             ccm_rundir=/var/run/crayccm_nerscroot
@@ -194,6 +205,7 @@ echo "Initializing NERSC Root environment, Please Wait"
         #
 #msg_severity=6 ; msg_type="ccm_prologue_mark"
 #        echo "${CCM_JOBID} `/bin/date +%c`" 2>&1 | logmsg
+        echo $xtxqtcmd_path $ccm_init_nodelist $nerscRootSetupPath/setupRoot.sh \"$NERSC_ROOT_TYPE\" \"$NERSC_ROOT_VALUE\"
         $xtxqtcmd_path $ccm_init_nodelist "$nerscRootSetupPath/setupRoot.sh \"$NERSC_ROOT_TYPE\" \"$NERSC_ROOT_VALUE\"" >> $ccm_init_log 2>&1
         okcnt=`grep "(complete)" $ccm_init_log | wc -l`
 
