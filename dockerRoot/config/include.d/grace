@@ -1,8 +1,8 @@
-preNetFsBindMount() {
+preSiteFsBindMount() {
     mkdir -p global
 }
 
-postNetFsMount() {
+postSiteFsBindMount() {
     local my_cwd
     my_cwd=$( pwd )
     cd global
