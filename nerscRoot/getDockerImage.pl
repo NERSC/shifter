@@ -1,21 +1,50 @@
 #!/usr/bin/perl
 
 use IO::Socket::INET;
+use Getopt::Long;
 
 my $dockergw_host = "128.55.50.83";
 my $dockergw_port = "7777";
 my $ret = 0;
 
-if (scalar(@ARGV) != 1) {
-    usage(1);
+my $verbosity_level=1;
+my $quiet=FALSE;
+my $verbose=FALSE;
+my $help=FALSE;
+my $username = undef;
+my $password = undef;
+my $image = undef;
+my $registry = undef;
+my $system = undef;
+GetOptions('help|h!'       => \$help,
+           'verbose|v!'    => \$verbose,
+           'quiet|q!'      => \$quiet,
+           'image|i=s'    => \$image,
+           'username|u=s' => \$username,
+           'password|p=s' => \$password,
+           'registry|r=s' => \$registry,
+           'system|s=s'   => \$system,
+);
+
+if ($verbose) {
+    $verbosity_level += 1;
 }
-my $image = $ARGV[0];
+if ($quiet) {
+    $verbosity_level -= 1;
+}
+if (!defined($image)) {
+    if (scalar(@ARGV) != 1) {
+        usage(1);
+    }
+    $image = $ARGV[0];
+}
 if ($image !~ /:/) {
     usage(1);
 }
-my $system = undef;
-if (-e "/etc/clustername") {
-    $system = `cat /etc/clustername`;
+if (!defined($system)) {
+    if (-e "/etc/clustername") {
+        $system = `cat /etc/clustername`;
+    }
 }
 if (!defined($system)) {
     print STDERR "Unknown system.\n";
@@ -27,7 +56,7 @@ my $socket = new IO::Socket::INET (
     PeerPort => $dockergw_port,
     Proto => 'tcp',
 ) or die("Failed to connect to dockergw");
-$socket->send("$image $nerscHost\n");
+$socket->send("$image $system\n");
 my $result = "";
 while (<$socket>) {
     my $data = $_;
