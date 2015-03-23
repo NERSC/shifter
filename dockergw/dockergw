@@ -50,6 +50,15 @@ def get_size(start_path):
             total_size += os.path.getsize(fp)
     return total_size
 
+def extractDockerMetadata(layersPath, id):
+    jsonPath = os.path.join(layersPath, id, "json")
+    if os.path.exists(jsonPath):
+        json_data = open(jsonPath, 'r')
+        data = json.load(json_data)
+        json_data.close()
+        return data
+    return None
+
 def expandDockerLayer(layersPath, id, mntPoint):
     jsonPath = os.path.join(layersPath, id, "json")
     if os.path.exists(jsonPath):
@@ -115,7 +124,8 @@ def package(name, id):
     returnValue = None
     finalPath = os.path.join(imagePath, id + ".ext4")
     tarPath = os.path.join(imagePath, id + ".tar")
-    if os.path.exists(finalPath):
+    metadataPath = os.path.join(imagePath, id + ".json")
+    if os.path.exists(finalPath) and os.path.exists(metadataPath):
         return finalPath
 
     lockPath = os.path.join(imagePath, id + ".lock")
@@ -137,6 +147,8 @@ def package(name, id):
 
     ## expand the tar file
     layersPath = os.path.join(imagePath, id + ".layers")
+    if os.path.exists(layersPath):
+        shutil.rmtree(layersPath)
     ret = 1
     try:
         os.mkdir(layersPath)
@@ -146,10 +158,17 @@ def package(name, id):
             shutil.rmtree(layersPath)
             return None
 
-    imageTempPath = generateExt4Image(id, layersPath)
-    if imageTempPath is not None:
-        shutil.move(imageTempPath, finalPath)
-        returnValue = finalPath
+    if not os.path.exists(metadataPath):
+    	imageMetadata = extractDockerMetadata(layersPath, id)
+        fd = open(metadataPath, 'w')
+        json.dump(imageMetadata, fd)
+        fd.close()
+    
+    if not os.path.exists(finalPath):
+        imageTempPath = generateExt4Image(id, layersPath)
+        if imageTempPath is not None:
+            shutil.move(imageTempPath, finalPath)
+            returnValue = finalPath
        
     shutil.rmtree(layersPath)
     os.unlink(tarPath)
@@ -170,9 +189,10 @@ def rsync(filename,system):
 
 
 def main():
+    verbose=True
     input_data=sys.stdin.readline().strip().split(' ')
     if input_data is None or type(input_data) is not list or len(input_data) < 2:
-        print "ERR"
+        print "ERR: Bad Input"
         sys.exit(0)
 
     name = input_data[0]
@@ -196,23 +216,34 @@ def main():
     if username is not None and password is not None:
         val = c.login(username=username, password=password, registry=registry)
         logged_in = True
+    print "INFO: looking up image"
     image = lookup(name, username, password)
     if image is None:
-        c.pull(name)
+        print "INFO: pulling image"
+        if verbose:
+            for line in c.pull(name, stream=True):
+                d = json.loads(line)
+                print "INFO: PULL %s,%s" % (d['status'], json.dumps(d))
+        else:
+            c.pull(name)
+        
         image = lookup(name, username, password)
     if image is None:
-        print "ERR"
+        print "ERR: Unable to lookup image"
         sys.exit(0)
     if type(image) is not dict or 'Id' not in image:
-        print 'ERR'
+        print 'ERR: Cannot interpret image id'
         sys.exit(0)
     id = image['Id']
 
     path = package(name, id)
-    if path is not None and rsync(path,system):
-        print id
+    if path is None:
+        print 'ERR: failed to package image'
         sys.exit(0)
-    print "ERR"
+    if rsync(path,system):
+        print "ID: %s" % id
+        sys.exit(0)
+    print "ERR: Failed to transfer image"
     sys.exit(0)
 
 
