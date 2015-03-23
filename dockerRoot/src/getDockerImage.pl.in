@@ -3,8 +3,20 @@
 use IO::Socket::INET;
 use Getopt::Long;
 
-my $dockergw_host = "128.55.50.83";
-my $dockergw_port = "7777";
+my $config_file = @@@CONFIG_FILE@@@;
+open(my $cfd, "<", $config_file) or die "Couldn't open configuration file";
+while (<$cfd>) {
+    my ($key,$value) = split(/=/, $_, 2);
+    $key =~ s/^\s+//g;
+    $key =~ s/\s$//g; 
+    $value =~ s/^\s+//g;
+    $value =~ s/\s$//g; 
+    if ($key =~ /dockergw_host/) {
+        $dockergw_host = $value;
+    } elsif ($key =~ /dockergw_port/) {
+        $dockergw_port = $value;
+    }
+}
 my $ret = 0;
 
 my $verbosity_level=1;

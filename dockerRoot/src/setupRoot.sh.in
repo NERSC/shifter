@@ -15,7 +15,7 @@ export LD_LIBRARY_PATH=""
 export LD_PRELOAD=""
 
 ## read configuration
-CONFIG_FILE=/global/syscom/sc/nsg/etc/nerscRoot.conf
+CONFIG_FILE=@@@CONFIG_FILE@@@
 if [ -e $CONFIG_FILE ]; then
     . $CONFIG_FILE
 fi
@@ -44,18 +44,6 @@ while getopts ":v:" opt; do
             ;;
     esac
 done
-
-#### TODO CHECK CONFIGURATION SETTINGS ####
-#nerscMount=/var/nerscMount
-#chosPath=/scratch/chos
-#dockerPath=/scratch/scratchdirs/craydock/docker
-#nerscRootPath=/global/syscom/sc/nsg/opt/nerscRoot
-#mapPath=$nerscRootPath/fsMap.conf
-#etcDir=$nerscRootPath/etc
-#kmodDir=$nerscRootPath/kmod/$( uname -r )
-#kmodCache=/tmp/nerscRootLoadedModules.txt
-#globalFs="u1 u2 project syscom common scratch2" 
-#lustreFs="scratch"
 
 targetType=""
 target=""
