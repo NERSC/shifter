@@ -14,10 +14,21 @@ export PATH="/usr/bin:/bin"
 export LD_LIBRARY_PATH=""
 export LD_PRELOAD=""
 
+
+## stub functions to be replaced by site-specific include file
+preSiteFsBindMount() {
+}
+postSiteFsBindMount() {
+}
+
 ## read configuration
 CONFIG_FILE=@@@CONFIG_FILE@@@
 if [ -e $CONFIG_FILE ]; then
     . $CONFIG_FILE
+fi
+
+if [ "x$dockerRootIncludeFile" != "x" ]; then
+    . $dockerRootIncludeFile
 fi
 
 ## parse command line arguments
@@ -113,23 +124,18 @@ setupNerscVFSRoot () {
     mount -o nosuid,nodev -t rootfs none "$dockerMount"
     cd "$dockerMount"
 
-    ## setup NERSC GPFS filesystems
-    mkdir global
-    for fs in $globalFs; do 
-        mkdir "global/$fs"
-        mount -o bind "/global/$fs" "global/$fs"
-        mount -o bind,remount,nosuid,nodev "$dockerMount/global/$fs"
-    done
-    cd global
-    ln -s u1 homes
-    cd "$dockerMount"
+    ### premount -- should be defined in include file
+    preSiteFsBindMount
 
-    ## setup lustre mounts
-    for fs in $lustreFs; do
-        mkdir "$fs"
+    ### perform the bind mounts
+    for fs in $siteFs; do
+        mkdir $fs
         mount -o bind "/$fs" "$fs"
-        mount -o bind,remount,nodev,nosuid "$dockerMount/$fs" ### XXX lustre is weird about remounts
+        mount -o bind,remount,nosuid,nodev "$dockerMount/$fs"
     done
+
+    ### postmount -- should be defined in include file
+    postSiteFsBindMount
 
     ## make some aspects of the local environment available
     mkdir -p local/etc
