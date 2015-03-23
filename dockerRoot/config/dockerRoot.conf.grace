@@ -3,6 +3,7 @@ loopMount=/var/loopNerscMount
 chosPath=/scratch/chos
 dockerPath=/scratch/scratchdirs/craydock/docker
 dockerRootPath=/global/syscom/sc/nsg/opt/nerscRoot
+dockerRootIncludeFile=/global/syscom/sc/nsg/etc/dockerRoot.include.d/grace
 mapPath=$dockerRootPath/fsMap.conf
 etcDir=$dockerRootPath/etc
 kmodDir=$dockerRootPath/kmod/$( uname -r )
