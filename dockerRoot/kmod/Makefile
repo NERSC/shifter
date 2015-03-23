@@ -26,7 +26,9 @@ modules.tar:
 	./build_kernel_modules.sh $(CRAY_NETTYPE) $(CRAY_NODETYPE)
 
 install: all
-	tar xvf modules.tar -C $(PREFIX)/kmod
+	KVER := $(shell uname -r)
+	mkdir -p $(PREFIX)/kmod/$(KVER)-cray_$(CRAY_NETTYPE)_$(CRAY_NODETYPE)
+	tar xvf modules.tar -C $(PREFIX)/kmod/$(KVER)-cray_$(CRAY_NETTYPE)_$(CRAY_NODETYPE)
 	chmod -R a+rX $(PREFIX)/kmod
 
 clean:
