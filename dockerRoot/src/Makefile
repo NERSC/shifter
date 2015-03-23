@@ -43,8 +43,12 @@ install: all
 		$(INSTALL) --owner=root --group=root --mode=555  getDockerImage.pl $(PREFIX)/bin/getDockerImage.pl; \
 	fi
 	if ! $(CMP) -s dockerRootClient $(PREFIX)/libexec/dockerRootClient; then \
-		$(INSTALL) --owner=root --group=root --mode=555  dockerRootClient $(PREFIX)/libexec/dockerRootClient; \
+		$(INSTALL) --owner=root --group=root --mode=4555  dockerRootClient $(PREFIX)/libexec/dockerRootClient; \
 	fi
 
-clean: all
-	rm setupRoot.sh unsetupRoot.sh dockerRootClient
+clean:
+	if [ -a setupRoot.sh ]; then $(RM) setupRoot.sh; fi
+	if [ -a unsetupRoot.sh ]; then $(RM) unsetupRoot.sh; fi
+	if [ -a getDockerImage.pl ]; then $(RM) getDockerImage.pl; fi
+	if [ -a dockerRootClient ]; then $(RM) dockerRootClient; fi
+
