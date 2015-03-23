@@ -3,7 +3,7 @@
 ##################
 ## Setup NERSC chroot for docker,chos images
 ##  Validates user selected chroot image
-##  Bind mounts image to $nerscRootPath
+##  Bind mounts image to $dockerRootPath
 ##  Bind mounts needed filesystems into the image
 ##
 ## Authors:  Douglas Jacobsen, Shane Canon
@@ -110,36 +110,36 @@ setupNerscVFSRoot () {
 
     ## create tmpfs/rootfs for our /
     ## this is to ensure there are writeable areas for manipulating the image
-    mount -o nosuid,nodev -t rootfs none "$nerscMount"
-    cd "$nerscMount"
+    mount -o nosuid,nodev -t rootfs none "$dockerMount"
+    cd "$dockerMount"
 
     ## setup NERSC GPFS filesystems
     mkdir global
     for fs in $globalFs; do 
         mkdir "global/$fs"
         mount -o bind "/global/$fs" "global/$fs"
-        mount -o bind,remount,nosuid,nodev "$nerscMount/global/$fs"
+        mount -o bind,remount,nosuid,nodev "$dockerMount/global/$fs"
     done
     cd global
     ln -s u1 homes
-    cd "$nerscMount"
+    cd "$dockerMount"
 
     ## setup lustre mounts
     for fs in $lustreFs; do
         mkdir "$fs"
         mount -o bind "/$fs" "$fs"
-        mount -o bind,remount,nodev,nosuid "$nerscMount/$fs" ### XXX lustre is weird about remounts
+        mount -o bind,remount,nodev,nosuid "$dockerMount/$fs" ### XXX lustre is weird about remounts
     done
 
     ## make some aspects of the local environment available
     mkdir -p local/etc
     mount -o bind /dsl/etc local/etc
-    mount -o bind,remount,nodev,nosuid "$nerscMount/local/etc"
+    mount -o bind,remount,nodev,nosuid "$dockerMount/local/etc"
     mkdir -p .shared
     mount -o bind /dsl/.shared .shared
 
     ## reserve some directories in "/" that will be handled explicitly
-    mkdir -p etc/nerscImage
+    mkdir -p etc/dockerImage
     mkdir -p etc/site
     mkdir -p proc
     mkdir -p sys
@@ -166,21 +166,21 @@ setupNerscVFSRoot () {
         # bind mount directories
         if [ -d "$imageDir/$dir" ]; then
             mkdir "$dir"
-            mount --bind "$imageDir/$dir" "$nerscMount/$dir"
-            mount -o bind,remount,nodev,nosuid "$nerscMount/$dir"
+            mount --bind "$imageDir/$dir" "$dockerMount/$dir"
+            mount -o bind,remount,nodev,nosuid "$dockerMount/$dir"
         fi
     done
 
     ## merge image etc, site customizations, and local customizations into /etc
     if [ -e "$imageDir/etc" ]; then
-        mount -o bind "$imageDir/etc" etc/nerscImage
-        mount -o bind,remount,nodev,nosuid "$nerscMount/etc/nerscImage"
+        mount -o bind "$imageDir/etc" etc/dockerImage
+        mount -o bind,remount,nodev,nosuid "$dockerMount/etc/dockerImage"
         cd etc
-        for item in `ls nerscImage`; do
-            ln -s "nerscImage/$item" .
+        for item in `ls dockerImage`; do
+            ln -s "dockerImage/$item" .
         done
         for item in `ls $etcDir`; do
-            cp -p "$etcDir/$item" "$nerscMount/etc/site"
+            cp -p "$etcDir/$item" "$dockerMount/etc/site"
             if [ -e "$item" ]; then
                 rm "$item"
             fi
@@ -190,22 +190,22 @@ setupNerscVFSRoot () {
         if [ -e passwd ]; then
             rm passwd
         fi
-        ln -s site/nersc_passwd passwd
+        ln -s site/docker_passwd passwd
         if [ -e group ]; then
             rm group
         fi
-        ln -s site/nersc_group group
+        ln -s site/docker_group group
     fi
 
     ## mount up linux needs
-    mount -t proc none "$nerscMount/proc"
-    mount -o bind /dev "$nerscMount/dev"
-    mount -o bind /sys "$nerscMount/sys"
+    mount -t proc none "$dockerMount/proc"
+    mount -o bind /dev "$dockerMount/dev"
+    mount -o bind /sys "$dockerMount/sys"
 
     ## perform any user-requested bind-mounts
     ##    any leading slashes are stripped to force the bind mount to *only*
     ##    occur within the chroot area
-    cd "$nerscMount"
+    cd "$dockerMount"
     REGIFS=$IFS
     IFS="|"
     for volMap in $VOLUMES; do
@@ -322,7 +322,7 @@ fullPath="${basePath}/${image}"
 [[ -e $fullPath ]] || die "Path to $targetType image \"$target\" does not exist: $fullPath"
 
 ## start doing bind mounts
-mkdir -p $nerscMount
+mkdir -p $dockerMount
 if [ "x$imageType" == "xvfs" ]; then
     setupNerscVFSRoot $fullPath
 elif [ "x$imageType" == "xext4Image" ]; then
