@@ -29,6 +29,7 @@ fsMap.conf: fsMap.conf.$(SYSTEM).in
 all: dockerRoot.conf dockerRoot.include fsMap.conf
 
 install: all
+	mkdir -p $(CONFIG_DIR)
 	if ! $(CMP) -s dockerRoot.conf $(CONFIG_FILE); then \
 	    $(INSTALL) --owner=root --group=root --mode=444  dockerRoot.conf $(CONFIG_FILE); \
 	fi

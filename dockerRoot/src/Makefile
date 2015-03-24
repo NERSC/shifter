@@ -33,6 +33,8 @@ getDockerImage.pl: getDockerImage.pl.in
 	cat $< | sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' > $@
 	
 install: all
+	mkdir -p $(PREFIX)/sbin
+	mkdir -p $(PREFIX)/bin
 	if ! $(CMP) -s setupRoot.sh $(PREFIX)/sbin/setupRoot.sh; then \
 		$(INSTALL) --owner=root --group=root --mode=555  setupRoot.sh $(PREFIX)/sbin/setupRoot.sh; \
 	fi
