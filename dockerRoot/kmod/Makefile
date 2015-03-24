@@ -9,11 +9,6 @@
 include ../config.mk
 KVER := $(shell uname -r | sed 's|\(.*\)-cray_.*|\1|g' )
 
-CC      = /usr/bin/gcc
-RM      = /bin/rm
-CMP     = /usr/bin/cmp
-INSTALL = /usr/bin/install
-
 ## configuration
 CFLAGS=-O2 -Wall
 LDFLAGS=

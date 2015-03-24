@@ -8,11 +8,6 @@
 
 include ../../config.mk
 
-CC      = /usr/bin/gcc
-RM      = /bin/rm
-CMP     = /usr/bin/cmp
-INSTALL = /usr/bin/install
-
 dockerRoot-epilogue: dockerRoot-epilogue.in
 	cat $< | sed 's|@@@SYSTEM@@@|$(SYSTEM)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' > $@
 

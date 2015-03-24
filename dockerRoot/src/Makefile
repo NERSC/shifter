@@ -7,11 +7,6 @@
 ########
 include ../config.mk
 
-CC      = /usr/bin/gcc
-RM      = /bin/rm
-CMP     = /usr/bin/cmp
-INSTALL = /usr/bin/install
-
 ## configuration
 CFLAGS=-O2 -Wall
 LDFLAGS=
@@ -38,7 +33,7 @@ install: all
 		$(INSTALL) --owner=root --group=root --mode=555  setupRoot.sh $(PREFIX)/sbin/setupRoot.sh; \
 	fi
 	if ! $(CMP) -s unsetupRoot.sh $(PREFIX)/sbin/unsetupRoot.sh; then \
-		$(INSTALL) --owner=root --group=root --mode=555  setupRoot.sh $(PREFIX)/sbin/unsetupRoot.sh; \
+		$(INSTALL) --owner=root --group=root --mode=555  unsetupRoot.sh $(PREFIX)/sbin/unsetupRoot.sh; \
 	fi
 	if ! $(CMP) -s getDockerImage.pl $(PREFIX)/bin/getDockerImage.pl; then \
 		$(INSTALL) --owner=root --group=root --mode=555  getDockerImage.pl $(PREFIX)/bin/getDockerImage.pl; \

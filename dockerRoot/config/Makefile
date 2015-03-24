@@ -8,11 +8,6 @@
 
 include ../config.mk
 
-CC      = /usr/bin/gcc
-RM      = /bin/rm
-CMP     = /usr/bin/cmp
-INSTALL = /usr/bin/install
-
 dockerRoot.conf: dockerRoot.conf.$(SYSTEM).in
 	cat $< | sed 's|@@@SYSTEM@@@|$(SYSTEM)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' | sed 's|@@@INCLUDE_FILE@@@|$(INCLUDE_FILE)|g' > $@
 
