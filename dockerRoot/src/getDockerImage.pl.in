@@ -3,7 +3,7 @@
 use IO::Socket::INET;
 use Getopt::Long;
 
-my $config_file = @@@CONFIG_FILE@@@;
+my $config_file = "@@@CONFIG_FILE@@@";
 open(my $cfd, "<", $config_file) or die "Couldn't open configuration file";
 while (<$cfd>) {
     my ($key,$value) = split(/=/, $_, 2);

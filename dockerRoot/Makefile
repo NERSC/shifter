@@ -18,7 +18,7 @@ install:
 	mkdir -p $(PREFIX)/sbin
 	mkdir -p $(PREFIX)/bin
 	mkdir -p $(PREFIX)/share/dockerRoot
-	./setup_dockerRoot_etc_files.sh
+	PREFIX=$(PREFIX) ./setup_dockerRoot_etc_files.sh
 	$(INSTALL) --owner=root --group=root --mode=500  setup_dockerRoot_etc_files.sh $(PREFIX)/share/dockerRoot
 	for dir in $(DIRS); do (cd $$dir; make install || exit 1) || exit 1; done
 
