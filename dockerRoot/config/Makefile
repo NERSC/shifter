@@ -6,11 +6,7 @@
 ##
 ########
 
-PREFIX=/global/syscom/sc/nsg/opt/dockerRoot
-CONFIG_DIR=/global/syscom/sc/nsg/etc
-CONFIG_FILE=$(CONFIG_DIR)/dockerRoot.conf
-INCLUDE_FILE=$(CONFIG_DIR)/dockerRoot.include
-SYSTEM=grace
+include ../config.mk
 
 CC      = /usr/bin/gcc
 RM      = /bin/rm

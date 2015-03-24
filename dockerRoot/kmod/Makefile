@@ -6,10 +6,7 @@
 ##
 ########
 
-PREFIX=/global/syscom/sc/nsg/opt/dockerRoot
-CONFIG_FILE=/global/syscom/sc/nsg/etc/dockerRoot.conf
-CRAY_NETTYPE=gem
-CRAY_NODETYPE=c
+include ../config.mk
 KVER := $(shell uname -r | sed 's|\(.*\)-cray_.*|\1|g' )
 
 CC      = /usr/bin/gcc

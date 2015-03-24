@@ -5,9 +5,7 @@
 ## Date  :  2015/03/23
 ##
 ########
-
-PREFIX=/global/syscom/sc/nsg/opt/dockerRoot
-CONFIG_FILE=/global/syscom/sc/nsg/etc/dockerRoot.conf
+include ../config.mk
 
 CC      = /usr/bin/gcc
 RM      = /bin/rm
@@ -19,6 +17,7 @@ CFLAGS=-O2 -Wall
 LDFLAGS=
 
 all: dockerRootClient setupRoot.sh unsetupRoot.sh getDockerImage.pl
+	echo $(PREFIX)
 
 setupRoot.sh: setupRoot.sh.in
 	cat $< | sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' > $@
