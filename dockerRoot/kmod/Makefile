@@ -10,6 +10,7 @@ PREFIX=/global/syscom/sc/nsg/opt/dockerRoot
 CONFIG_FILE=/global/syscom/sc/nsg/etc/dockerRoot.conf
 CRAY_NETTYPE=gem
 CRAY_NODETYPE=c
+KVER := $(shell uname -r | sed 's|\(.*\)-cray_.*|\1|g' )
 
 CC      = /usr/bin/gcc
 RM      = /bin/rm
@@ -26,7 +27,6 @@ modules.tar:
 	./build_kernel_modules.sh $(CRAY_NETTYPE) $(CRAY_NODETYPE)
 
 install: all
-	KVER := $(shell uname -r)
 	mkdir -p $(PREFIX)/kmod/$(KVER)-cray_$(CRAY_NETTYPE)_$(CRAY_NODETYPE)
 	tar xvf modules.tar -C $(PREFIX)/kmod/$(KVER)-cray_$(CRAY_NETTYPE)_$(CRAY_NODETYPE)
 	chmod -R a+rX $(PREFIX)/kmod
