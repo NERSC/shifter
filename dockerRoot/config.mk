@@ -5,3 +5,4 @@ INCLUDE_FILE=$(CONFIG_DIR)/dockerRoot.include
 CRAY_NETWORK=gem
 CRAY_NODETYPE=c
 SYSTEM=grace
+WLM_INT=alps

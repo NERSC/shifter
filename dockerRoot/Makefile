@@ -1,6 +1,10 @@
-DIRS := config src 
+DIRS := config src kmod
 
 include config.mk
+
+ifeq ($(WLM_INT),alps)
+    DIRS += wlm_integration/alps
+endif
 
 
 all: 
