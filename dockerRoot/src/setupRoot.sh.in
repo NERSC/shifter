@@ -17,8 +17,10 @@ export LD_PRELOAD=""
 
 ## stub functions to be replaced by site-specific include file
 preSiteFsBindMount() {
+    return 0
 }
 postSiteFsBindMount() {
+    return 0
 }
 
 ## read configuration
