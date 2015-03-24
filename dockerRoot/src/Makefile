@@ -42,8 +42,8 @@ install: all
 	if ! $(CMP) -s getDockerImage.pl $(PREFIX)/bin/getDockerImage.pl; then \
 		$(INSTALL) --owner=root --group=root --mode=555  getDockerImage.pl $(PREFIX)/bin/getDockerImage.pl; \
 	fi
-	if ! $(CMP) -s dockerRootClient $(PREFIX)/libexec/dockerRootClient; then \
-		$(INSTALL) --owner=root --group=root --mode=4555  dockerRootClient $(PREFIX)/libexec/dockerRootClient; \
+	if ! $(CMP) -s dockerRootClient $(PREFIX)/sbin/dockerRootClient; then \
+		$(INSTALL) --owner=root --group=root --mode=4555  dockerRootClient $(PREFIX)/sbin/dockerRootClient; \
 	fi
 
 clean:
