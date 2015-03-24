@@ -13,8 +13,8 @@ CCM_JOBID=$1
 CCM_JID=`echo $CCM_JOBID | awk -F. '{print $1}'`
 CCM_USER=$2
 CCM_GROUP=$3
-NERSC_ROOT_TYPE=$4
-NERSC_ROOT_VALUE=$5
+DOCKER_ROOT_TYPE=$4
+DOCKER_ROOT_VALUE=$5
 
 CCM_APID_TIMEOUT=15
 
@@ -25,7 +25,7 @@ CCM_QUEUES="ccm_queue"
 LLMLOGGER="/opt/cray/llm/default/bin/xtlog"
 LLMCONF="/etc/opt/cray/llm/llm.conf"
 
-nerscRootSetupPath=/global/syscom/sc/nsg/opt/nerscRoot
+dockerRootSetupPath=@@@PREFIX@@@
 exit_code=0
 
 # Set apstat -n output columns
@@ -40,10 +40,10 @@ if [ "x${DOCKER}${CHOS}" == "x" ]; then
 fi
 
 
-echo "Deconstructing NERSC Root environment, Please Wait"
+echo "Deconstructing DockerRoot environment, Please Wait"
 
         if [ -z "$CCM_BATCH_RUNDIR" ] ; then
-            ccm_rundir=/var/run/crayccm_nerscroot
+            ccm_rundir=/var/run/crayccm_dockerroot
         else
             ccm_rundir=$CCM_BATCH_RUNDIR 
         fi
@@ -180,7 +180,7 @@ echo "Deconstructing NERSC Root environment, Please Wait"
         #
 #msg_severity=6 ; msg_type="ccm_prologue_mark"
 #        echo "${CCM_JOBID} `/bin/date +%c`" 2>&1 | logmsg
-        $xtxqtcmd_path $ccm_init_nodelist "$nerscRootSetupPath/unsetupRoot.sh" >> $ccm_init_log 2>&1
+        $xtxqtcmd_path $ccm_init_nodelist "$dockerRootSetupPath/sbin/unsetupRoot.sh" >> $ccm_init_log 2>&1
         okcnt=`grep "y (complete)" $ccm_init_log | wc -l`
 
 #        CCM_PATH=/var/crayccm
@@ -199,11 +199,11 @@ echo "Deconstructing NERSC Root environment, Please Wait"
         echo $expcnt > $ccm_rundir/$CCM_USER/$CCM_JOBID.run
 
         if [ "$expcnt" == "$okcnt" ]; then
-                echo NerscRoot Stop success, $okcnt of $expcnt responses
+                echo DockerRoot Stop success, $okcnt of $expcnt responses
 #rm -f $ccm_init_log
                 exit_code=0
         else
-                echo NerscRoot Stop failed, $okcnt of $expcnt responses
+                echo DockerRoot Stop failed, $okcnt of $expcnt responses
                 echo Log on $ccm_init_log
                 chmod 644 $ccm_init_log
                 exit_code=1
