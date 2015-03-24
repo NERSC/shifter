@@ -6,7 +6,7 @@
 ##
 ########
 
-include ../config.mk
+include ../../config.mk
 
 CC      = /usr/bin/gcc
 RM      = /bin/rm
