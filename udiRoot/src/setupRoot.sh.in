@@ -1,9 +1,9 @@
 #!/bin/sh
 
 ##################
-## Setup NERSC chroot for docker,chos images
+## Setup UDI chroot for docker,chos images
 ##  Validates user selected chroot image
-##  Bind mounts image to $dockerRootPath
+##  Bind mounts image to $udiMount
 ##  Bind mounts needed filesystems into the image
 ##
 ## Authors:  Douglas Jacobsen, Shane Canon
@@ -29,13 +29,13 @@ if [ -e $CONFIG_FILE ]; then
     . $CONFIG_FILE
 fi
 
-if [ "x$dockerRootIncludeFile" != "x" ]; then
-    . $dockerRootIncludeFile
+if [ "x$udiRootIncludeFile" != "x" ]; then
+    . $udiRootIncludeFile
 fi
 
 ## parse command line arguments
-NERSC_ROOT_TYPE=$1
-NERSC_ROOT_VALUE=$2
+UDI_ROOT_TYPE=$1
+UDI_ROOT_VALUE=$2
 shift 2
 VOLUMES=""
 while getopts ":v:" opt; do
@@ -123,8 +123,8 @@ setupNerscVFSRoot () {
 
     ## create tmpfs/rootfs for our /
     ## this is to ensure there are writeable areas for manipulating the image
-    mount -o nosuid,nodev -t rootfs none "$dockerMount"
-    cd "$dockerMount"
+    mount -o nosuid,nodev -t rootfs none "$udiMount"
+    cd "$udiMount"
 
     ### premount -- should be defined in include file
     preSiteFsBindMount
@@ -133,7 +133,7 @@ setupNerscVFSRoot () {
     for fs in $siteFs; do
         mkdir $fs
         mount -o bind "/$fs" "$fs"
-        mount -o bind,remount,nosuid,nodev "$dockerMount/$fs"
+        mount -o bind,remount,nosuid,nodev "$udiMount/$fs"
     done
 
     ### postmount -- should be defined in include file
@@ -142,12 +142,12 @@ setupNerscVFSRoot () {
     ## make some aspects of the local environment available
     mkdir -p local/etc
     mount -o bind /dsl/etc local/etc
-    mount -o bind,remount,nodev,nosuid "$dockerMount/local/etc"
+    mount -o bind,remount,nodev,nosuid "$udiMount/local/etc"
     mkdir -p .shared
     mount -o bind /dsl/.shared .shared
 
     ## reserve some directories in "/" that will be handled explicitly
-    mkdir -p etc/dockerImage
+    mkdir -p etc/udiImage
     mkdir -p etc/site
     mkdir -p proc
     mkdir -p sys
@@ -174,21 +174,21 @@ setupNerscVFSRoot () {
         # bind mount directories
         if [ -d "$imageDir/$dir" ]; then
             mkdir "$dir"
-            mount --bind "$imageDir/$dir" "$dockerMount/$dir"
-            mount -o bind,remount,nodev,nosuid "$dockerMount/$dir"
+            mount --bind "$imageDir/$dir" "$udiMount/$dir"
+            mount -o bind,remount,nodev,nosuid "$udiMount/$dir"
         fi
     done
 
     ## merge image etc, site customizations, and local customizations into /etc
     if [ -e "$imageDir/etc" ]; then
-        mount -o bind "$imageDir/etc" etc/dockerImage
-        mount -o bind,remount,nodev,nosuid "$dockerMount/etc/dockerImage"
+        mount -o bind "$imageDir/etc" etc/udiImage
+        mount -o bind,remount,nodev,nosuid "$udiMount/etc/udiImage"
         cd etc
-        for item in `ls dockerImage`; do
-            ln -s "dockerImage/$item" .
+        for item in `ls udiImage`; do
+            ln -s "udiImage/$item" .
         done
         for item in `ls $etcDir`; do
-            cp -p "$etcDir/$item" "$dockerMount/etc/site"
+            cp -p "$etcDir/$item" "$udiMount/etc/site"
             if [ -e "$item" ]; then
                 rm "$item"
             fi
@@ -198,22 +198,22 @@ setupNerscVFSRoot () {
         if [ -e passwd ]; then
             rm passwd
         fi
-        ln -s site/docker_passwd passwd
+        ln -s site/udi_passwd passwd
         if [ -e group ]; then
             rm group
         fi
-        ln -s site/docker_group group
+        ln -s site/udi_group group
     fi
 
     ## mount up linux needs
-    mount -t proc none "$dockerMount/proc"
-    mount -o bind /dev "$dockerMount/dev"
-    mount -o bind /sys "$dockerMount/sys"
+    mount -t proc none "$udiMount/proc"
+    mount -o bind /dev "$udiMount/dev"
+    mount -o bind /sys "$udiMount/sys"
 
     ## perform any user-requested bind-mounts
     ##    any leading slashes are stripped to force the bind mount to *only*
     ##    occur within the chroot area
-    cd "$dockerMount"
+    cd "$udiMount"
     REGIFS=$IFS
     IFS="|"
     for volMap in $VOLUMES; do
@@ -292,14 +292,14 @@ if [ "x$DOCKER" != "x" ]; then
     target=$DOCKER
 fi
 
-if [ "x$NERSC_ROOT_TYPE" == "xCHOS" ]; then
+if [ "x$UDI_ROOT_TYPE" == "xCHOS" ]; then
     targetType="chos"
 fi
-if [ "x$NERSC_ROOT_TYPE" == "xDOCKER" ]; then
+if [ "x$UDI_ROOT_TYPE" == "xDOCKER" ]; then
     targetType="docker"
 fi
-if [ "x$NERSC_ROOT_VALUE" != "x" ]; then
-    target=$NERSC_ROOT_VALUE
+if [ "x$UDI_ROOT_VALUE" != "x" ]; then
+    target=$UDI_ROOT_VALUE
 fi
 
 containsItem $targetType "chos" "docker" || die "Invalid image target type: $targetType"
@@ -330,7 +330,7 @@ fullPath="${basePath}/${image}"
 [[ -e $fullPath ]] || die "Path to $targetType image \"$target\" does not exist: $fullPath"
 
 ## start doing bind mounts
-mkdir -p $dockerMount
+mkdir -p $udiMount
 if [ "x$imageType" == "xvfs" ]; then
     setupNerscVFSRoot $fullPath
 elif [ "x$imageType" == "xext4Image" ]; then

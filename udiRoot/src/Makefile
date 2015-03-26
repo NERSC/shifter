@@ -1,5 +1,5 @@
 ########
-## dockerRoot: Makefile
+## udiRoot: Makefile
 ##
 ## Author:  Douglas Jacobsen <dmj@nersc.gov>
 ## Date  :  2015/03/23
@@ -11,8 +11,7 @@ include ../config.mk
 CFLAGS=-O2 -Wall
 LDFLAGS=
 
-all: dockerRootClient setupRoot.sh unsetupRoot.sh getDockerImage.pl
-	echo $(PREFIX)
+all: udiRootEnter setupRoot.sh unsetupRoot.sh getDockerImage.pl
 
 setupRoot.sh: setupRoot.sh.in
 	cat $< | sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' > $@
@@ -20,8 +19,8 @@ setupRoot.sh: setupRoot.sh.in
 unsetupRoot.sh: unsetupRoot.sh.in
 	cat $< | sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' > $@
 
-dockerRootClient: dockerRootClient.c
-	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" $< -o $@
+udiRootEnter: udiRootEnter.c
+	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" $< -o $@
 
 getDockerImage.pl: getDockerImage.pl.in
 	cat $< | sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' > $@
@@ -38,13 +37,13 @@ install: all
 	if ! $(CMP) -s getDockerImage.pl $(PREFIX)/bin/getDockerImage.pl; then \
 		$(INSTALL) --owner=root --group=root --mode=555  getDockerImage.pl $(PREFIX)/bin/getDockerImage.pl; \
 	fi
-	if ! $(CMP) -s dockerRootClient $(PREFIX)/sbin/dockerRootClient; then \
-		$(INSTALL) --owner=root --group=root --mode=4555  dockerRootClient $(PREFIX)/sbin/dockerRootClient; \
+	if ! $(CMP) -s udiRootEnter $(PREFIX)/sbin/udiRootEnter; then \
+		$(INSTALL) --owner=root --group=root --mode=4555  udiRootEnter $(PREFIX)/sbin/udiRootEnter; \
 	fi
 
 clean:
 	if [ -a setupRoot.sh ]; then $(RM) setupRoot.sh; fi
 	if [ -a unsetupRoot.sh ]; then $(RM) unsetupRoot.sh; fi
 	if [ -a getDockerImage.pl ]; then $(RM) getDockerImage.pl; fi
-	if [ -a dockerRootClient ]; then $(RM) dockerRootClient; fi
+	if [ -a udiRootEnter ]; then $(RM) udiRootEnter; fi
 

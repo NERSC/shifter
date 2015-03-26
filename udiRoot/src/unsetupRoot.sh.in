@@ -9,8 +9,8 @@ if [ -e $CONFIG_FILE ]; then
     . $CONFIG_FILE
 fi
 
-if [ -z $dockerMount ]; then
-	echo "Unknown dockerMount location" 1>&2
+if [ -z $udiMount ]; then
+	echo "Unknown udiMount location" 1>&2
     exit 1
 fi
 if [ -z $loopMount ]; then
@@ -19,7 +19,7 @@ if [ -z $loopMount ]; then
 fi
 ret=0
 
-for i in `cat /proc/mounts | grep "$dockerMount" | sort -k2 -r | awk '{print $2}'`; do
+for i in `cat /proc/mounts | grep "$udiMount" | sort -k2 -r | awk '{print $2}'`; do
     umount "$i" || ret=1
 done
 

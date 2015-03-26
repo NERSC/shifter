@@ -13,8 +13,8 @@ CCM_JOBID=$1
 CCM_JID=`echo $CCM_JOBID | awk -F. '{print $1}'`
 CCM_USER=$2
 CCM_GROUP=$3
-DOCKER_ROOT_TYPE=$4
-DOCKER_ROOT_VALUE=$5
+UDI_ROOT_TYPE=$4
+UDI_ROOT_VALUE=$5
 
 CCM_APID_TIMEOUT=15
 
@@ -25,7 +25,7 @@ CCM_QUEUES="ccm_queue"
 LLMLOGGER="/opt/cray/llm/default/bin/xtlog"
 LLMCONF="/etc/opt/cray/llm/llm.conf"
 
-dockerRootSetupPath=@@@PREFIX@@@
+udiRootSetupPath=@@@PREFIX@@@
 exit_code=0
 
 # Set apstat -n output columns
@@ -33,17 +33,22 @@ export apstat_nodeTable="NID,Arch,State,HW,Rv,Pl,PgSz,Avl,Conf,Placed,PEs,Apids"
 
 PATH=${PATH}:/opt/cray/alps/default/bin/
 
-DOCKER=$( /usr/syscom/nsg/sbin/qgetenv $1 DOCKER 2>/dev/null )
-CHOS=$( /usr/syscom/nsg/sbin/qgetenv $1 CHOS 2>/dev/null )
-if [ "x${DOCKER}${CHOS}" == "x" ]; then
-    exit
+
+echo "Initializing UdiRoot environment, Please Wait"
+if [ "x$UDI_ROOT_TYPE" == "xDOCKER" ]; then
+    echo "Retrieving Docker Image"
+    image=$( $udiRootSetupPath/bin/getDockerImage.pl -quiet $UDI_ROOT_VALUE )
+    ret=$?
+    if [ "x$image" == "x" -o $ret -ne 0 ]; then
+        echo "Failed to get udi image: $UDI_ROOT_VALUE"
+        exit 1
+    else
+        UDI_ROOT_VALUE=$image
+    fi
 fi
 
-
-echo "Deconstructing DockerRoot environment, Please Wait"
-
         if [ -z "$CCM_BATCH_RUNDIR" ] ; then
-            ccm_rundir=/var/run/crayccm_dockerroot
+            ccm_rundir=/var/run/crayccm_udiroot
         else
             ccm_rundir=$CCM_BATCH_RUNDIR 
         fi
@@ -151,6 +156,20 @@ echo "Deconstructing DockerRoot environment, Please Wait"
 
         ccm_init_log=$ccm_rundir/ccm_initlog.$CCM_JOBID
  
+        # create an empty nodelist to avoid special casing of the
+        # exec commandline later on
+        rhosts_nodelist=$ccm_rundir/ccm_rhosts.$CCM_JOBID
+
+        if [ "$CCM_ENABLERSH" == "yes" ] || [ "$CCM_ENABLERSH" == "y" ] ; then
+            for ccm_node in $ccm_nodelist;  do 
+                echo $ccm_node " " $CCM_USER >>  $rhosts_nodelist
+            done 
+        else
+          touch $rhosts_nodelist
+        fi
+        
+            chown $CCM_USER $rhosts_nodelist
+        
 
         #su $CCM_USER -c "/opt/cray/ccm/default/sbin/ccm_userenv $CCM_USER $CCM_HOMEDIR $CCM_JOBID /var/run/crayccm 1"
         ## CANT CALL because ccm_userenv has default ccm_runder baked-in
@@ -167,12 +186,18 @@ echo "Deconstructing DockerRoot environment, Please Wait"
            exit 1
         fi
 
-        ccm_init_nodelist=$ccm_rundir/ccm_init_nodelist.epilogue.$CCM_JOBID
+        ccm_init_nodelist=$ccm_rundir/ccm_init_nodelist.prologue.$CCM_JOBID
 
         if [ ! -f $ccm_init_nodelist ] ; then 
             cat $job_nodelist | sort -u > $ccm_init_nodelist
             chown root:root $ccm_init_nodelist
             chmod 600 $ccm_init_nodelist
+        # should only ever hit this path if the epilogue is running
+        else 
+            echo "CCM Resuming on partially initialized nodes."
+            echo "Nodelist is `cat $ccm_init_nodelist`"
+            rm -f $ccm_init_nodelist
+            exit 1
         fi
 
         #
@@ -180,8 +205,9 @@ echo "Deconstructing DockerRoot environment, Please Wait"
         #
 #msg_severity=6 ; msg_type="ccm_prologue_mark"
 #        echo "${CCM_JOBID} `/bin/date +%c`" 2>&1 | logmsg
-        $xtxqtcmd_path $ccm_init_nodelist "$dockerRootSetupPath/sbin/unsetupRoot.sh" >> $ccm_init_log 2>&1
-        okcnt=`grep "y (complete)" $ccm_init_log | wc -l`
+        echo $xtxqtcmd_path $ccm_init_nodelist $udiRootSetupPath/sbin/setupRoot.sh \"$UDI_ROOT_TYPE\" \"$UDI_ROOT_VALUE\"
+        $xtxqtcmd_path $ccm_init_nodelist "$udiRootSetupPath/sbin/setupRoot.sh \"$UDI_ROOT_TYPE\" \"$UDI_ROOT_VALUE\"" >> $ccm_init_log 2>&1
+        okcnt=`grep "(complete)" $ccm_init_log | wc -l`
 
 #        CCM_PATH=/var/crayccm
 
@@ -199,11 +225,11 @@ echo "Deconstructing DockerRoot environment, Please Wait"
         echo $expcnt > $ccm_rundir/$CCM_USER/$CCM_JOBID.run
 
         if [ "$expcnt" == "$okcnt" ]; then
-                echo DockerRoot Stop success, $okcnt of $expcnt responses
+                echo UdiRoot Start success, $okcnt of $expcnt responses
 #rm -f $ccm_init_log
                 exit_code=0
         else
-                echo DockerRoot Stop failed, $okcnt of $expcnt responses
+                echo UdiRoot Start failed, $okcnt of $expcnt responses
                 echo Log on $ccm_init_log
                 chmod 644 $ccm_init_log
                 exit_code=1

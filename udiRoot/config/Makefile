@@ -1,5 +1,5 @@
 ########
-## dockerRoot: Makefile
+## udiRoot: Makefile
 ##
 ## Author:  Douglas Jacobsen <dmj@nersc.gov>
 ## Date  :  2015/03/23
@@ -8,30 +8,30 @@
 
 include ../config.mk
 
-dockerRoot.conf: dockerRoot.conf.$(SYSTEM).in
+udiRoot.conf: udiRoot.conf.$(SYSTEM).in
 	cat $< | sed 's|@@@SYSTEM@@@|$(SYSTEM)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' | sed 's|@@@INCLUDE_FILE@@@|$(INCLUDE_FILE)|g' > $@
 
-dockerRoot.include: dockerRoot.include.$(SYSTEM).in
+udiRoot.include: udiRoot.include.$(SYSTEM).in
 	cat $< | sed 's|@@@SYSTEM@@@|$(SYSTEM)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' | sed 's|@@@INCLUDE_FILE@@@|$(INCLUDE_FILE)|g' > $@
 
 fsMap.conf: fsMap.conf.$(SYSTEM).in
 	cat $< | sed 's|@@@SYSTEM@@@|$(SYSTEM)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' | sed 's|@@@INCLUDE_FILE@@@|$(INCLUDE_FILE)|g' > $@
 
-all: dockerRoot.conf dockerRoot.include fsMap.conf
+all: udiRoot.conf udiRoot.include fsMap.conf
 
 install: all
 	mkdir -p $(CONFIG_DIR)
-	if ! $(CMP) -s dockerRoot.conf $(CONFIG_FILE); then \
-	    $(INSTALL) --owner=root --group=root --mode=444  dockerRoot.conf $(CONFIG_FILE); \
+	if ! $(CMP) -s udiRoot.conf $(CONFIG_FILE); then \
+	    $(INSTALL) --owner=root --group=root --mode=444  udiRoot.conf $(CONFIG_FILE); \
 	fi
-	if ! $(CMP) -s dockerRoot.include $(INCLUDE_FILE); then \
-	    $(INSTALL) --owner=root --group=root --mode=444  dockerRoot.include $(INCLUDE_FILE); \
+	if ! $(CMP) -s udiRoot.include $(INCLUDE_FILE); then \
+	    $(INSTALL) --owner=root --group=root --mode=444  udiRoot.include $(INCLUDE_FILE); \
 	fi
 	if ! $(CMP) -s fsMap.conf $(PREFIX)/fsMap.conf; then \
-	    $(INSTALL) --owner=root --group=root --mode=400  dockerRoot.include $(PREFIX)/fsMap.conf; \
+	    $(INSTALL) --owner=root --group=root --mode=400  udiRoot.include $(PREFIX)/fsMap.conf; \
 	fi
 
 clean:
-	if [ -a dockerRoot.conf ]; then $(RM) dockerRoot.conf; fi
-	if [ -a dockerRoot.include ]; then $(RM) dockerRoot.include; fi
+	if [ -a udiRoot.conf ]; then $(RM) udiRoot.conf; fi
+	if [ -a udiRoot.include ]; then $(RM) udiRoot.include; fi
 	if [ -a fsMap.conf ]; then $(RM) fsMap.conf; fi

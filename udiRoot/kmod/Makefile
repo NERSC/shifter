@@ -1,5 +1,5 @@
 ########
-## dockerRoot: Makefile
+## udiRoot: Makefile
 ##
 ## Author:  Douglas Jacobsen <dmj@nersc.gov>
 ## Date  :  2015/03/23
