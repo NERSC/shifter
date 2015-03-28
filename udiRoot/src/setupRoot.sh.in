@@ -10,7 +10,8 @@
 ## 2015/02/27
 ##################
 
-set -o noglob
+set -o noglob      ## do not expand filenames
+set -o privileged  ## limit how much is sourced by the environment
 
 export PATH="/usr/bin:/bin"
 export LD_LIBRARY_PATH=""
@@ -93,16 +94,16 @@ parseConfiguration() {
     if [[ ! -d "${dockerPath}" ]]; then die "Inaccessible docker path"; fi
     if [[ ! -d "${chosPath}" ]]; then die "Inaccessible chos path"; fi
     if [[ ! -d "${udiRootPath}" ]]; then die "Inaccessible installation dir"; fi
-    validateFile "${udiRootPath}" "555" || die "Incorrect permissions on installation dir"; fi
+    validateFile "${udiRootPath}" "555" || die "Incorrect permissions on installation dir"
     validateFile "${mapPath}" "400" || die "Invalid map file"
-    if [[ ! -d "${etcPath}" ]]; then die "Inaccessible site etc dir"; fi
-    validateFile "${etcPath}" "555" || die "Incorrect permissions on site etc dir"; fi
+    if [[ ! -d "${etcDir}" ]]; then die "Inaccessible site etc dir"; fi
+    validateFile "${etcDir}" "555" || die "Incorrect permissions on site etc dir"
     if [[ ! -d "${kmodPath}" ]]; then die "Inaccessible kernel module dir"; fi
-    validateFile "${kmodPath}" "555" || die "Incorrect permissions on kernel module dir"; fi
+    validateFile "${kmodPath}" "555" || die "Incorrect permissions on kernel module dir"
     if [[ -z "${kmodCache}" ]]; then die "Unknown kernel module cache file location"; fi
     if [[ -z "${system}" ]]; then die "Unknown system"; fi
 
-    validateFile "${INCLUDLE_FILE}" "400" || die "Invalid include file"
+    validateFile "${INCLUDE_FILE}" "400" || die "Invalid include file"
     source "${INCLUDE_FILE}"
     readonly -f preSiteFsBindMount
     readonly -f postSiteFsBindMount
@@ -177,8 +178,6 @@ setupVFSMount () {
     local src
     local dest
     local option
-    local ok
-    local REGIFS
     mntPoint="$1"
     imageDir="$2"
 
@@ -223,7 +222,9 @@ setupVFSMount () {
     mount -o bind,remount,nosuid,nodev tmp
     
     # mount the image into the new mount
+    IFS=$'\n'
     for dir in $(ls "$imageDir"); do
+        unset IFS
         ## weed out possibly dangerous items
         dir="${dir//[^a-zA-Z0-9_+\-\.]/}"
         if [[ ! -e "${imageDir}/${dir}" ]]; then
@@ -256,7 +257,9 @@ setupVFSMount () {
         mount -o bind "$imageDir/etc" etc/udiImage
         mount -o bind,remount,nodev,nosuid "${mntPoint}/etc/udiImage"
         cd etc
+        IFS=$'\n'
         for item in $(ls udiImage); do
+            unset IFS
             ## weed out possibly dangerous items
             item="${item//[^a-zA-Z0-9_+\-\.]/}"
             if [[ ! -e "udiImage/${item}" ]]; then
@@ -264,7 +267,9 @@ setupVFSMount () {
             fi
             ln -s "udiImage/$item" .
         done
+        IFS=$'\n'
         for item in $(ls "$etcDir"); do
+            unset IFS
             ## weed out possibly dangerous items
             item="${item//[^a-zA-Z0-9_+\-\.]/}"
             if [[ ! -e "$etcDir/${item}" ]]; then
@@ -311,7 +316,7 @@ setupVFSMount () {
             option="$1"
             shift
         fi
-        if [[ -e "$src" -a -e "$dest" ]]; then
+        if [[ -e "$src" && -e "$dest" ]]; then
             mount -o bind "$src" "$dest"
             if [[ "$option" == "ro" ]]; then
                 mount -o bind,remount,ro,nodev,nosuid "$dest"
@@ -339,7 +344,7 @@ loadKernelModule() {
     kmodPath="$2"
     loadModule=0
     /sbin/lsmod | egrep "^$kmodName$" || loadModule=1
-    if [[ $loadModule -eq 1 -a -e "$kmodPath" ]]; then
+    if [[ $loadModule -eq 1 && -e "$kmodPath" ]]; then
         /sbin/insmod "$kmodPath" || return 1
         echo "$kmodName" >> "$kmodCache"
     fi
