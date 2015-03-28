@@ -10,6 +10,8 @@
 ## 2015/02/27
 ##################
 
+set -o noglob
+
 export PATH="/usr/bin:/bin"
 export LD_LIBRARY_PATH=""
 export LD_PRELOAD=""
@@ -25,11 +27,11 @@ postSiteFsBindMount() {
 
 ## read configuration
 CONFIG_FILE=@@@CONFIG_FILE@@@
-if [ -e $CONFIG_FILE ]; then
+if [[ -e $CONFIG_FILE ]]; then
     . $CONFIG_FILE
 fi
 
-if [ "x$udiRootIncludeFile" != "x" ]; then
+if [[ -z "$udiRootIncludeFile"  ]]; then
     . $udiRootIncludeFile
 fi
 
@@ -41,7 +43,7 @@ VOLUMES=""
 while getopts ":v:" opt; do
     case $opt in
         v)
-            if [ -z $VOLUMES ]; then
+            if [[ -z "$VOLUMES" ]]; then
                 VOLUMES=$OPTARG
             else
                 VOLUMES="$VOLUMES|$OPTARG"
@@ -62,14 +64,14 @@ targetType=""
 target=""
 
 die () {
-    echo $1
+    echo "$1"
     exit 1
 }
 
 stripLeadingSlash() {
     local string
-    string=$1
-    while [ "x${string:0:1}" == "x/" ]; do
+    string="$1"
+    while [[ "${string:0:1}" = "/" ]]; do
         string=${string:1}
     done
     echo $string
@@ -77,11 +79,11 @@ stripLeadingSlash() {
 
 containsItem () {
     local tgt
-    tgt=$1
+    tgt="$1"
     shift
     [[ $# -eq 0 ]] && return 1
     while true; do
-        [[ $1 == $tgt ]] && return 0
+        [[ "$1" = "$tgt" ]] && return 0
         [[ $# -eq 0 ]] && break
         shift
     done
@@ -90,17 +92,16 @@ containsItem () {
 
 containsItemStartsWith() {
     local tgt
-    tgt=$1
+    tgt="$1"
     shift
-    echo "tgt: $tgt"
     [[ $# -eq 0 ]] && return 1
     while true; do
         [[ $# -eq 0 ]] && break
-        if [ -z $1 ]; then
+        if [[ -z "$1" ]]; then
             shift
             continue
         fi
-        case $tgt in
+        case "$tgt" in
             "$1"*) return 0 ;;
         esac
         shift
@@ -130,8 +131,8 @@ setupNerscVFSRoot () {
     preSiteFsBindMount
 
     ### perform the bind mounts
-    for fs in $siteFs; do
-        mkdir $fs
+    for fs in "$siteFs"; do
+        mkdir "$fs"
         mount -o bind "/$fs" "$fs"
         mount -o bind,remount,nosuid,nodev "$udiMount/$fs"
     done
@@ -156,23 +157,23 @@ setupNerscVFSRoot () {
     mount -o bind /tmp tmp
     
     # mount the image into the new mount
-    for dir in `ls "$imageDir"`; do
+    for dir in $(ls "$imageDir"); do
         # don't do anything to "reserved" paths
-        if [ -e "$dir" ]; then
+        if [[ -e "$dir" ]]; then
             continue
         fi
         # properly copy symlinks
-        if [ -L "$imageDir/$dir" ]; then
+        if [[ -L "$imageDir/$dir" ]]; then
             cp -P "$imageDir/$dir" "$dir"
             continue
         fi
         # copy files
-        if [ -f "$imageDir/$dir" ]; then
+        if [[ -f "$imageDir/$dir" ]]; then
             cp -p "$imageDir/$dir" "$dir"
             continue
         fi
         # bind mount directories
-        if [ -d "$imageDir/$dir" ]; then
+        if [[ -d "$imageDir/$dir" ]]; then
             mkdir "$dir"
             mount --bind "$imageDir/$dir" "$udiMount/$dir"
             mount -o bind,remount,nodev,nosuid "$udiMount/$dir"
@@ -180,26 +181,26 @@ setupNerscVFSRoot () {
     done
 
     ## merge image etc, site customizations, and local customizations into /etc
-    if [ -e "$imageDir/etc" ]; then
+    if [[ -e "$imageDir/etc" ]]; then
         mount -o bind "$imageDir/etc" etc/udiImage
         mount -o bind,remount,nodev,nosuid "$udiMount/etc/udiImage"
         cd etc
-        for item in `ls udiImage`; do
+        for item in $(ls udiImage); do
             ln -s "udiImage/$item" .
         done
-        for item in `ls $etcDir`; do
+        for item in $(ls "$etcDir"); do
             cp -p "$etcDir/$item" "$udiMount/etc/site"
-            if [ -e "$item" ]; then
+            if [[ -e "$item" ]]; then
                 rm "$item"
             fi
             ln -s "site/$item" "$item"
         done
         ## take care of passwd
-        if [ -e passwd ]; then
+        if [[ -e passwd ]]; then
             rm passwd
         fi
         ln -s site/udi_passwd passwd
-        if [ -e group ]; then
+        if [[ -e group ]]; then
             rm group
         fi
         ln -s site/udi_group group
@@ -216,21 +217,21 @@ setupNerscVFSRoot () {
     cd "$udiMount"
     REGIFS=$IFS
     IFS="|"
-    for volMap in $VOLUMES; do
+    for volMap in "$VOLUMES"; do
         IFS=":"
         set x $volMap
         src=$(stripLeadingSlash $2)
         dest=$(stripLeadingSlash $3)
         option=NONE
         shift 3
-        if [ ! -z $1 ]; then
+        if [[ ! -z $1 ]]; then
             option=$1
             shift
         fi
         IFS=$REGIFS
-        if [ -e "$src" -a -e "$dest" ]; then
+        if [[ -e "$src" -a -e "$dest" ]]; then
             mount -o bind "$src" "$dest"
-            if [ "x$option" == "xro" ]; then
+            if [[ "$option" == "ro" ]]; then
                 mount -o bind,remount,ro "$dest"
             fi
         fi
@@ -253,9 +254,9 @@ loadKernelModule() {
     kmodPath=$2
     loadModule=0
     /sbin/lsmod | egrep "^$kmodName$" || loadModule=1
-    if [ $loadModule -eq 1 -a -e $kmodPath ]; then
-        /sbin/insmod $kmodPath || return 1
-        echo $kmodName >> $kmodCache
+    if [[ $loadModule -eq 1 -a -e "$kmodPath" ]]; then
+        /sbin/insmod "$kmodPath" || return 1
+        echo "$kmodName" >> "$kmodCache"
     fi
     return 0
 }
@@ -264,79 +265,79 @@ setupLoopbackMount() {
     local imageFile
     local kmodPath
     local fstype
-    imageFile=$1
-    kmodPath=$2
-    fstype=$3
+    imageFile="$1"
+    kmodPath="$2"
+    fstype="$3"
 
-    [[ -n $loopMount ]] || die "Unknown location for loopMount"
+    [[ -n "$loopMount" ]] || die "Unknown location for loopMount"
 
-    loadKernelModule "loop"    $kmodPath/drivers/block/loop.ko
-    loadKernelModule "mbcache" $kmodPath/fs/mbcache.ko
-    loadKernelModule "jbd2"    $kmodPath/fs/jbd2/jbd2.ko
-    loadKernelModule "ext4"    $kmodPath/fs/ext4/ext4.ko
-    loadKernelModule "cramfs"  $kmodPath/fs/cramfs/cramfs.ko
+    loadKernelModule "loop"    "$kmodPath"/drivers/block/loop.ko
+    loadKernelModule "mbcache" "$kmodPath"/fs/mbcache.ko
+    loadKernelModule "jbd2"    "$kmodPath"/fs/jbd2/jbd2.ko
+    loadKernelModule "ext4"    "$kmodPath"/fs/ext4/ext4.ko
+    loadKernelModule "cramfs"  "$kmodPath"/fs/cramfs/cramfs.ko
 
-    mkdir -p $loopMount || die "Failed to create mount point $loopMount"
-    mount -t $fstype -o loop,ro,nodev,nosuid $imageFile $loopMount || die "Failed to mount image file $imageFile"
-    setupNerscVFSRoot $loopMount
+    mkdir -p "$loopMount" || die "Failed to create mount point $loopMount"
+    mount -t "$fstype" -o loop,ro,nodev,nosuid "$imageFile" "$loopMount" || die "Failed to mount image file $imageFile"
+    setupNerscVFSRoot "$loopMount"
 }
 
 
-if [ "x$CHOS" != "x" ]; then
+if [[ -n "$CHOS"  ]]; then
     targetType="chos"
-    target=$CHOS
+    target="$CHOS"
 fi
 
-if [ "x$DOCKER" != "x" ]; then
+if [[ -n "$DOCKER"  ]]; then
     targetType="docker"
-    target=$DOCKER
+    target="$DOCKER"
 fi
 
-if [ "x$UDI_ROOT_TYPE" == "xCHOS" ]; then
+if [[ "$UDI_ROOT_TYPE" = "CHOS" ]]; then
     targetType="chos"
 fi
-if [ "x$UDI_ROOT_TYPE" == "xDOCKER" ]; then
+if [[ "$UDI_ROOT_TYPE" = "DOCKER" ]]; then
     targetType="docker"
 fi
-if [ "x$UDI_ROOT_VALUE" != "x" ]; then
-    target=$UDI_ROOT_VALUE
+if [[ -n "$UDI_ROOT_VALUE" ]]; then
+    target="$UDI_ROOT_VALUE"
 fi
 
-containsItem $targetType "chos" "docker" || die "Invalid image target type: $targetType"
+containsItem "$targetType" "chos" "docker" || die "Invalid image target type: $targetType"
 
 ## since $target is user provided, need to sanitize
 target=${target//[^a-zA-Z0-9_:\.]/}
 
 linePrefix="$targetType;$target;"
-if [ "x$targetType" == "xdocker" ]; then
+if [[ "$targetType" = "docker" ]]; then
     imageType="ext4Image"
-    image="$target.ext4"
+    image="${target}.ext4"
 else
-    line=$( egrep "^$linePrefix" $mapPath ) || die "Cannot find $targetType image \"$target\". Failed."
-    image=$( echo $line | awk -F ';' '{print $3}' ) || die "Cannot identify path for $targetType image \"$target\". Failed."
-    imageType=$( echo $line | awk -F ';' '{print $4}' ) || die "Cannot identify imageType for $targetType image \"$target\". Failed."
+    line=$( egrep "^$linePrefix" "$mapPath" ) || die "Cannot find $targetType image \"$target\". Failed."
+    image=$( echo "$line" | awk -F ';' '{print $3}' ) || die "Cannot identify path for $targetType image \"$target\". Failed."
+    imageType=$( echo "$line" | awk -F ';' '{print $4}' ) || die "Cannot identify imageType for $targetType image \"$target\". Failed."
 fi
 
-containsItem $imageType "vfs" "ext4Image" "cramfsImage" || die "Invalid imageType for $targetType image \"$target\". Failed."
+containsItem "$imageType" "vfs" "ext4Image" "cramfsImage" || die "Invalid imageType for $targetType image \"$target\". Failed."
 
 ## get base path for this target type
 pathVar="${targetType}Path"
 eval basePath=\$$pathVar
-[[ "x$basePath" != "x" ]] || die "Invalid base path for $targetType"
-[[ "x$basePath" != "x/" ]] || die "Base path cannot be /"
+[[ -n "$basePath" ]] || die "Invalid base path for $targetType"
+[[ "$basePath" != "/" ]] || die "Base path cannot be /"
 
 ## get final path to image
 fullPath="${basePath}/${image}"
-[[ -e $fullPath ]] || die "Path to $targetType image \"$target\" does not exist: $fullPath"
+[[ -e "$fullPath" ]] || die "Path to $targetType image \"$target\" does not exist: $fullPath"
 
 ## start doing bind mounts
 mkdir -p $udiMount
-if [ "x$imageType" == "xvfs" ]; then
+if [[ "$imageType" = "vfs" ]]; then
     setupNerscVFSRoot $fullPath
-elif [ "x$imageType" == "xext4Image" ]; then
-    setupLoopbackMount $fullPath $kmodDir "ext4"
-elif [ "x$imageType" == "xcramfsImage" ]; then
-    setupLoopbackMount $fullPath $kmodDir "cramfs"
+elif [[ "$imageType" = "ext4Image" ]]; then
+    setupLoopbackMount "$fullPath" "$kmodDir" "ext4"
+elif [[ "$imageType" = "cramfsImage" ]]; then
+    setupLoopbackMount "$fullPath" "$kmodDir" "cramfs"
 else
     exit 1
 fi
