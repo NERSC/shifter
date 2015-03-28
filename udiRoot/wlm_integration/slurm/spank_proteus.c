@@ -38,14 +38,16 @@ char *trim(char *string) {
 
 int _opt_image(int val, const char *optarg, int remote) {
     if (optarg != NULL && strlen(optarg) > 0) {
-        char *p = strchr(optarg, ':');
+        char *tmp = strdup(optarg);
+        char *p = strchr(tmp, ':');
         if (p == NULL) {
-            slurm_error("Invalid image input: must specify image type.");
+            slurm_error("Invalid image input: must specify image type: %s", optarg);
             exit(-1);
         }
         *p++ = 0;
-        snprintf(image_type, IMAGE_MAXLEN, "%s", optarg);
+        snprintf(image_type, IMAGE_MAXLEN, "%s", tmp);
         snprintf(image, IMAGE_MAXLEN, "%s", p);
+        free(tmp);
         p = trim(image);
         if (p != image) memmove(image, p, strlen(p) + 1);
         p = trim(image_type);
@@ -127,21 +129,22 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     spank_context_t context;
     int rc = ESPANK_SUCCESS;
     char *image_id = NULL;
+    int verbose_lookup = 0;
 
     // only perform this validation at submit time
     context = spank_context();
     if (context == S_CTX_ALLOCATOR) {
-
+        verbose_lookup = 1;
+    }
     if (imagevolume != NULL && image == NULL) {
         slurm_error("Cannot specify proteus volumes without specifying the image first!");
         exit(-1);
     }
     
-    lookup_image(1, &image_id);
+    lookup_image(verbose_lookup, &image_id);
     if (image_id == NULL) {
         slurm_error("Failed to lookup image.  Aborting.");
         exit(-1);
-    }
     }
     if (strlen(image) == 0) {
         return rc;
@@ -158,7 +161,6 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     return rc;
 }
 
-/*
 int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     int rc = ESPANK_SUCCESS;
     const char *config_file = NULL;
@@ -184,4 +186,3 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     
     return rc;
 } 
-*/
