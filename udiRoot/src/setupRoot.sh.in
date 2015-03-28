@@ -15,7 +15,12 @@ set -o noglob
 export PATH="/usr/bin:/bin"
 export LD_LIBRARY_PATH=""
 export LD_PRELOAD=""
+unset IFS
 
+CONFIG_FILE=@@@CONFIG_FILE@@@
+INCLUDE_FILE=@@@INCLUDE_FILE@@@
+readonly CONFIG_FILE
+readonly INCLUDE_FILE
 
 ## stub functions to be replaced by site-specific include file
 preSiteFsBindMount() {
@@ -25,57 +30,127 @@ postSiteFsBindMount() {
     return 0
 }
 
-## read configuration
-CONFIG_FILE=@@@CONFIG_FILE@@@
-if [[ -e $CONFIG_FILE ]]; then
-    . $CONFIG_FILE
-fi
-
-if [[ -z "$udiRootIncludeFile"  ]]; then
-    . $udiRootIncludeFile
-fi
-
-## parse command line arguments
-UDI_ROOT_TYPE=$1
-UDI_ROOT_VALUE=$2
-shift 2
-VOLUMES=""
-while getopts ":v:" opt; do
-    case $opt in
-        v)
-            if [[ -z "$VOLUMES" ]]; then
-                VOLUMES=$OPTARG
-            else
-                VOLUMES="$VOLUMES|$OPTARG"
-            fi
-            ;;
-        \?)
-            echo "Invalid option: -$OPTARG" >&2
-            exit 1
-            ;;
-        :)
-            echo "Option -$OPTARG requires an argument" >&2
-            exit 1
-            ;;
-    esac
-done
-
-targetType=""
-target=""
-
-die () {
+die() {
     echo "$1"
     exit 1
 }
+readonly -f die
+
+validateFile() {
+    local fname
+    local statdata
+    local perm
+    local uid
+    local gid
+    fname="$1"
+    expected_perm="$2"
+    shift
+    if [[ -z "${fname}" || -z "${expected_perm}" ]]; then
+        return 1
+    fi
+    if [[ ! -e "${fname}" ]]; then
+        echo "${fname} does not exist!" 1>&2
+        return 1
+    fi
+    statdata=$(/usr/bin/stat --printf "%a %u %g\n" "${fname}")
+    if [[ $? -ne 0 ]]; then
+        echo "Failed to stat ${fname}"
+    fi
+    set -- ${statdata} ## cannot quote
+    perm="$1"
+    uid="$2"
+    gid="$3"
+    if [[ "$perm" != "$expected_perm" ]]; then
+        echo "Incorrect permissions on $fname, expected $expected_perm" 1>&2
+        return 1
+    fi
+    if [[ "$uid" != "0" || "$gid" != "0" ]]; then
+        echo "Incorrect ownership of $fname" 1>&2
+        return 1
+    fi
+    return 0
+}
+readonly -f validateFile
+
+parseConfiguration() {
+    ## read configuration
+    validateFile "${CONFIG_FILE}" "444" || die "Invalid configuration file"
+    source "${CONFIG_FILE}"
+    readonly udiMount
+    readonly loopMount
+    readonly chosPath
+    readonly dockerPath
+    readonly udiRootPath
+    readonly mapPath
+    readonly etcDir
+    readonly kmodDir
+    readonly kmodCache
+    readonly siteFs
+    readonly system
+
+    if [[ -z "${udiMount}" ]]; then die "Unknown root path"; fi
+    if [[ -z "${loopMount}" ]]; then die "Unknown loop mount path"; fi
+    if [[ ! -d "${dockerPath}" ]]; then die "Inaccessible docker path"; fi
+    if [[ ! -d "${chosPath}" ]]; then die "Inaccessible chos path"; fi
+    if [[ ! -d "${udiRootPath}" ]]; then die "Inaccessible installation dir"; fi
+    validateFile "${udiRootPath}" "555" || die "Incorrect permissions on installation dir"; fi
+    validateFile "${mapPath}" "400" || die "Invalid map file"
+    if [[ ! -d "${etcPath}" ]]; then die "Inaccessible site etc dir"; fi
+    validateFile "${etcPath}" "555" || die "Incorrect permissions on site etc dir"; fi
+    if [[ ! -d "${kmodPath}" ]]; then die "Inaccessible kernel module dir"; fi
+    validateFile "${kmodPath}" "555" || die "Incorrect permissions on kernel module dir"; fi
+    if [[ -z "${kmodCache}" ]]; then die "Unknown kernel module cache file location"; fi
+    if [[ -z "${system}" ]]; then die "Unknown system"; fi
+
+    validateFile "${INCLUDLE_FILE}" "400" || die "Invalid include file"
+    source "${INCLUDE_FILE}"
+    readonly -f preSiteFsBindMount
+    readonly -f postSiteFsBindMount
+}
+
+## parse command line arguments
+## global variables:
+##  udiRootType
+##  udiRootValue
+##  volumes
+parseArguments() {
+    udiRootType="$1"
+    udiRootValue="$2"
+    readonly udiRootType
+    readonly udiRootValue
+    shift 2
+    volumes=""
+    while getopts ":v:" opt; do
+        case "${opt}" in
+            v)
+                volumes="${volumes}|${OPTARG}"
+                ;;
+            \?)
+                echo "Invalid option: -${OPTARG}" >&2
+                exit 1
+                ;;
+            :)
+                echo "Option -${OPTARG} requires an argument" >&2
+                exit 1
+                ;;
+        esac
+    done
+    if [[ -n "${volumes}" ]]; then
+        volumes="${volumes:1}" ## remove leading |
+    fi
+    readonly volumes
+}
+readonly -f parseArguments
 
 stripLeadingSlash() {
     local string
     string="$1"
     while [[ "${string:0:1}" = "/" ]]; do
-        string=${string:1}
+        string="${string:1}"
     done
-    echo $string
+    echo "${string}"
 }
+readonly -f stripLeadingSlash
 
 containsItem () {
     local tgt
@@ -89,27 +164,11 @@ containsItem () {
     done
     return 1
 }
+readonly -f containsItem
 
-containsItemStartsWith() {
-    local tgt
-    tgt="$1"
-    shift
-    [[ $# -eq 0 ]] && return 1
-    while true; do
-        [[ $# -eq 0 ]] && break
-        if [[ -z "$1" ]]; then
-            shift
-            continue
-        fi
-        case "$tgt" in
-            "$1"*) return 0 ;;
-        esac
-        shift
-    done
-    return 1
-}
-
-setupNerscVFSRoot () {
+setupVFSMount () {
+    set -e
+    local mntPoint
     local fs
     local dir
     local item
@@ -120,32 +179,38 @@ setupNerscVFSRoot () {
     local option
     local ok
     local REGIFS
-    imageDir="$1"
+    mntPoint="$1"
+    imageDir="$2"
 
     ## create tmpfs/rootfs for our /
     ## this is to ensure there are writeable areas for manipulating the image
-    mount -o nosuid,nodev -t rootfs none "$udiMount"
-    cd "$udiMount"
+    mount -o nosuid,nodev -t rootfs none "${mntPoint}"
+    cd "${mntPoint}"
 
     ### premount -- should be defined in include file
     preSiteFsBindMount
+    cd "${mntPoint}"
 
     ### perform the bind mounts
-    for fs in "$siteFs"; do
-        mkdir "$fs"
-        mount -o bind "/$fs" "$fs"
-        mount -o bind,remount,nosuid,nodev "$udiMount/$fs"
-    done
+    if [[ -n "$siteFs" ]]; then
+        for fs in $siteFs; do
+            mkdir "$fs"
+            mount -o bind "/$fs" "$fs"
+            mount -o bind,remount,nosuid,nodev "${mntPoint}/$fs"
+        done
+    fi
 
     ### postmount -- should be defined in include file
     postSiteFsBindMount
+    cd "${mntPoint}"
 
     ## make some aspects of the local environment available
     mkdir -p local/etc
     mount -o bind /dsl/etc local/etc
-    mount -o bind,remount,nodev,nosuid "$udiMount/local/etc"
+    mount -o bind,remount,nodev,nosuid "${mntPoint}/local/etc"
     mkdir -p .shared
     mount -o bind /dsl/.shared .shared
+    mount -o bind,remount,nodev,nosuid .shared
 
     ## reserve some directories in "/" that will be handled explicitly
     mkdir -p etc/udiImage
@@ -155,9 +220,15 @@ setupNerscVFSRoot () {
     mkdir -p dev
     mkdir -p tmp
     mount -o bind /tmp tmp
+    mount -o bind,remount,nosuid,nodev tmp
     
     # mount the image into the new mount
     for dir in $(ls "$imageDir"); do
+        ## weed out possibly dangerous items
+        dir="${dir//[^a-zA-Z0-9_+\-\.]/}"
+        if [[ ! -e "${imageDir}/${dir}" ]]; then
+            continue
+        fi
         # don't do anything to "reserved" paths
         if [[ -e "$dir" ]]; then
             continue
@@ -175,21 +246,31 @@ setupNerscVFSRoot () {
         # bind mount directories
         if [[ -d "$imageDir/$dir" ]]; then
             mkdir "$dir"
-            mount --bind "$imageDir/$dir" "$udiMount/$dir"
-            mount -o bind,remount,nodev,nosuid "$udiMount/$dir"
+            mount --bind "$imageDir/$dir" "${mntPoint}/$dir"
+            mount -o bind,remount,nodev,nosuid "${mntPoint}/$dir"
         fi
     done
 
     ## merge image etc, site customizations, and local customizations into /etc
     if [[ -e "$imageDir/etc" ]]; then
         mount -o bind "$imageDir/etc" etc/udiImage
-        mount -o bind,remount,nodev,nosuid "$udiMount/etc/udiImage"
+        mount -o bind,remount,nodev,nosuid "${mntPoint}/etc/udiImage"
         cd etc
         for item in $(ls udiImage); do
+            ## weed out possibly dangerous items
+            item="${item//[^a-zA-Z0-9_+\-\.]/}"
+            if [[ ! -e "udiImage/${item}" ]]; then
+                continue
+            fi
             ln -s "udiImage/$item" .
         done
         for item in $(ls "$etcDir"); do
-            cp -p "$etcDir/$item" "$udiMount/etc/site"
+            ## weed out possibly dangerous items
+            item="${item//[^a-zA-Z0-9_+\-\.]/}"
+            if [[ ! -e "$etcDir/${item}" ]]; then
+                continue
+            fi
+            cp -p "$etcDir/$item" "${mntPoint}/etc/site"
             if [[ -e "$item" ]]; then
                 rm "$item"
             fi
@@ -207,38 +288,42 @@ setupNerscVFSRoot () {
     fi
 
     ## mount up linux needs
-    mount -t proc none "$udiMount/proc"
-    mount -o bind /dev "$udiMount/dev"
-    mount -o bind /sys "$udiMount/sys"
+    mount -t proc none "${mntPoint}/proc"
+    mount -o bind /dev "${mntPoint}/dev"
+    mount -o bind,remount,nosuid "${mntPoint}/dev"
+    mount -o bind /sys "${mntPoint}/sys"
+    mount -o bind,remount,nosuid "${mntPoint}/sys"
 
     ## perform any user-requested bind-mounts
     ##    any leading slashes are stripped to force the bind mount to *only*
     ##    occur within the chroot area
-    cd "$udiMount"
-    REGIFS=$IFS
+    cd "${mntPoint}"
     IFS="|"
-    for volMap in "$VOLUMES"; do
+    for volMap in ${volumes}; do
         IFS=":"
-        set x $volMap
-        src=$(stripLeadingSlash $2)
-        dest=$(stripLeadingSlash $3)
-        option=NONE
-        shift 3
-        if [[ ! -z $1 ]]; then
-            option=$1
+        set -- ${volMap} ## cannot quote
+        unset IFS
+        src=$(stripLeadingSlash "$1")
+        dest=$(stripLeadingSlash "$2")
+        option="NONE"
+        shift 2
+        if [[ -n "$1" ]]; then
+            option="$1"
             shift
         fi
-        IFS=$REGIFS
         if [[ -e "$src" -a -e "$dest" ]]; then
             mount -o bind "$src" "$dest"
             if [[ "$option" == "ro" ]]; then
-                mount -o bind,remount,ro "$dest"
+                mount -o bind,remount,ro,nodev,nosuid "$dest"
+            else
+                mount -o bind,remount,nodev,nosuid "$dest"
             fi
         fi
-        IFS="|"
     done
-    IFS=$REGIFS
+    unset IFS
+    set +e
 }
+readonly -f setupVFSMount
 
 ## loadKernelModule - ensure specified kernel module is loaded
 ##   checks to see if kernel module is loaded.  if it isn't the module is loaded
@@ -250,8 +335,8 @@ loadKernelModule() {
     local kmodName
     local kmodPath
     local loadModule
-    kmodName=$1
-    kmodPath=$2
+    kmodName="$1"
+    kmodPath="$2"
     loadModule=0
     /sbin/lsmod | egrep "^$kmodName$" || loadModule=1
     if [[ $loadModule -eq 1 -a -e "$kmodPath" ]]; then
@@ -260,84 +345,109 @@ loadKernelModule() {
     fi
     return 0
 }
+readonly -f loadKernelModule
 
 setupLoopbackMount() {
     local imageFile
     local kmodPath
     local fstype
-    imageFile="$1"
-    kmodPath="$2"
-    fstype="$3"
+    local loopMount
+    loopMount="$1"
+    imageFile="$2"
+    kmodPath="$3"
+    fstype="$4"
 
-    [[ -n "$loopMount" ]] || die "Unknown location for loopMount"
+    [[ -n "${loopMount}" ]] || die "Unknown location for loopMount"
 
-    loadKernelModule "loop"    "$kmodPath"/drivers/block/loop.ko
-    loadKernelModule "mbcache" "$kmodPath"/fs/mbcache.ko
-    loadKernelModule "jbd2"    "$kmodPath"/fs/jbd2/jbd2.ko
-    loadKernelModule "ext4"    "$kmodPath"/fs/ext4/ext4.ko
-    loadKernelModule "cramfs"  "$kmodPath"/fs/cramfs/cramfs.ko
+    loadKernelModule "loop"    "${kmodPath}"/drivers/block/loop.ko
+    loadKernelModule "mbcache" "${kmodPath}"/fs/mbcache.ko
+    loadKernelModule "jbd2"    "${kmodPath}"/fs/jbd2/jbd2.ko
+    loadKernelModule "ext4"    "${kmodPath}"/fs/ext4/ext4.ko
+    loadKernelModule "cramfs"  "${kmodPath}"/fs/cramfs/cramfs.ko
 
-    mkdir -p "$loopMount" || die "Failed to create mount point $loopMount"
-    mount -t "$fstype" -o loop,ro,nodev,nosuid "$imageFile" "$loopMount" || die "Failed to mount image file $imageFile"
-    setupNerscVFSRoot "$loopMount"
+    mkdir -p "${loopMount}" || die "Failed to create mount point ${loopMount}"
+    mount -t "${fstype}" -o loop,ro,nodev,nosuid "${imageFile}" "${loopMount}" || die "Failed to mount image file ${imageFile}"
 }
+readonly -f setupLoopbackMount
 
+# global variables
+# udiRootType ## argument
+# udiRootValue ## argument
+# volumes ## arguments
+# mapPath ## config
+# dockerPath ## config
+# chosPath   ## config
 
-if [[ -n "$CHOS"  ]]; then
-    targetType="chos"
-    target="$CHOS"
-fi
+main() {
+    local targetType
+    local target
+    local line
+    local linePrefix
+    local image
+    local imageType
+    local basePath
+    local fullPath
 
-if [[ -n "$DOCKER"  ]]; then
-    targetType="docker"
-    target="$DOCKER"
-fi
+    parseArguments "$@" || die "Unable to parse arguments"
+    parseConfiguration || die "Unable to parse configuration"
+    if [[ "$udiRootType" = "CHOS" ]]; then
+        targetType="chos"
+    fi
+    if [[ "$udiRootType" = "DOCKER" ]]; then
+        targetType="docker"
+    fi
+    if [[ -n "$udiRootType" ]]; then
+        target="$udiRootType"
+    fi
 
-if [[ "$UDI_ROOT_TYPE" = "CHOS" ]]; then
-    targetType="chos"
-fi
-if [[ "$UDI_ROOT_TYPE" = "DOCKER" ]]; then
-    targetType="docker"
-fi
-if [[ -n "$UDI_ROOT_VALUE" ]]; then
-    target="$UDI_ROOT_VALUE"
-fi
+    containsItem "$targetType" "chos" "docker" || die "Invalid image target type: $targetType"
 
-containsItem "$targetType" "chos" "docker" || die "Invalid image target type: $targetType"
+    ## since $target is user provided, need to sanitize
+    target=${target//[^a-zA-Z0-9_:\.]/}
 
-## since $target is user provided, need to sanitize
-target=${target//[^a-zA-Z0-9_:\.]/}
+    linePrefix="$targetType;$target;"
+    if [[ "$targetType" = "docker" ]]; then
+        imageType="ext4Image"
+        image="${target}.ext4"
+    else
+        line=$( egrep "^$linePrefix" "$mapPath" ) || die "Cannot find $targetType image \"$target\". Failed."
+        image=$( echo "$line" | awk -F ';' '{print $3}' ) || die "Cannot identify path for $targetType image \"$target\". Failed."
+        imageType=$( echo "$line" | awk -F ';' '{print $4}' ) || die "Cannot identify imageType for $targetType image \"$target\". Failed."
+    fi
 
-linePrefix="$targetType;$target;"
-if [[ "$targetType" = "docker" ]]; then
-    imageType="ext4Image"
-    image="${target}.ext4"
-else
-    line=$( egrep "^$linePrefix" "$mapPath" ) || die "Cannot find $targetType image \"$target\". Failed."
-    image=$( echo "$line" | awk -F ';' '{print $3}' ) || die "Cannot identify path for $targetType image \"$target\". Failed."
-    imageType=$( echo "$line" | awk -F ';' '{print $4}' ) || die "Cannot identify imageType for $targetType image \"$target\". Failed."
-fi
+    containsItem "$imageType" "vfs" "ext4Image" "cramfsImage" || die "Invalid imageType for $targetType image \"$target\". Failed."
 
-containsItem "$imageType" "vfs" "ext4Image" "cramfsImage" || die "Invalid imageType for $targetType image \"$target\". Failed."
+    ## get base path for this target type
+    basePath="NONE"
+    case "${targetType}" in
+        docker) basePath="${dockerPath}" ;;
+        chos)   basePath="${chosPath}"   ;;
+        *)      die "Invalid target!"
+    esac
+  
+    [[ -n "$basePath" ]] || die "Invalid base path for $targetType"
+    [[ "$basePath" != "/" ]] || die "Base path cannot be /"
 
-## get base path for this target type
-pathVar="${targetType}Path"
-eval basePath=\$$pathVar
-[[ -n "$basePath" ]] || die "Invalid base path for $targetType"
-[[ "$basePath" != "/" ]] || die "Base path cannot be /"
+    ## get final path to image
+    fullPath="${basePath}/${image}"
+    [[ -e "$fullPath" ]] || die "Path to $targetType image \"$target\" does not exist: $fullPath"
 
-## get final path to image
-fullPath="${basePath}/${image}"
-[[ -e "$fullPath" ]] || die "Path to $targetType image \"$target\" does not exist: $fullPath"
+    ## start doing bind mounts
+    mkdir -p "$udiMount"
+    if [[ "$imageType" = "vfs" ]]; then
+        setupVFSMount "$udiMount" "$fullPath"
+    elif [[ "$imageType" = "ext4Image" ]]; then
+        setupLoopbackMount "$loopMount" "$fullPath" "$kmodDir" "ext4" || die "Failed to setup image mount"
+        setupVFSMount "$udiMount" "$loopMount"
+    elif [[ "$imageType" = "cramfsImage" ]]; then
+        setupLoopbackMount "$loopMount" "$fullPath" "$kmodDir" "cramfs" || die "Failed to setup image mount"
+        setupVFSMount "$udiMount" "$loopMount"
+    else
+        exit 1
+    fi
+}
+readonly -f main
 
-## start doing bind mounts
-mkdir -p $udiMount
-if [[ "$imageType" = "vfs" ]]; then
-    setupNerscVFSRoot $fullPath
-elif [[ "$imageType" = "ext4Image" ]]; then
-    setupLoopbackMount "$fullPath" "$kmodDir" "ext4"
-elif [[ "$imageType" = "cramfsImage" ]]; then
-    setupLoopbackMount "$fullPath" "$kmodDir" "cramfs"
-else
-    exit 1
+if [[ -z "${DEBUG_UDIROOT}" ]]; then
+    main "$@"
 fi
