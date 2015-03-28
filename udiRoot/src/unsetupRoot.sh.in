@@ -1,38 +1,90 @@
 #!/bin/sh
 
+set -o noglob
+set -o privileged
+
 export PATH="/usr/bin:/bin"
 export LD_LIBRARY_PATH=""
 export LD_PRELOAD=""
 
 CONFIG_FILE=@@@CONFIG_FILE@@@
-if [ -e $CONFIG_FILE ]; then
-    . $CONFIG_FILE
-fi
+INCLUDE_FILE=@@@INCLUDE_FILE@@@
+readonly CONFIG_FILE
+readonly INCLUDE_FILE
 
-if [ -z $udiMount ]; then
-	echo "Unknown udiMount location" 1>&2
+die() {
+    echo "$1"
     exit 1
-fi
-if [ -z $loopMount ]; then
-    echo "Unknown loop mount location" 1>&2
-    exit 1
-fi
-ret=0
+}
+readonly -f die
 
-for i in `cat /proc/mounts | grep "$udiMount" | sort -k2 -r | awk '{print $2}'`; do
-    umount "$i" || ret=1
-done
+parseConfiguration() {
+    ## read configuration
+    validateFile "${CONFIG_FILE}" "444" || die "Invalid configuration file"
+    source "${CONFIG_FILE}"
+    readonly udiMount
+    readonly loopMount
+    readonly chosPath
+    readonly dockerPath
+    readonly udiRootPath
+    readonly mapPath
+    readonly etcDir
+    readonly kmodDir
+    readonly kmodCache
+    readonly siteFs
+    readonly system
 
-grep "$loopMount" /proc/mounts >/dev/null 2>&1 || ret=1
+    if [[ -z "${udiMount}" ]]; then die "Unknown root path"; fi
+    if [[ -z "${loopMount}" ]]; then die "Unknown loop mount path"; fi
+    if [[ ! -d "${dockerPath}" ]]; then die "Inaccessible docker path"; fi
+    if [[ ! -d "${chosPath}" ]]; then die "Inaccessible chos path"; fi
+    if [[ ! -d "${udiRootPath}" ]]; then die "Inaccessible installation dir"; fi
+    validateFile "${udiRootPath}" "555" || die "Incorrect permissions on installation dir"
+    validateFile "${mapPath}" "400" || die "Invalid map file"
+    if [[ ! -d "${etcDir}" ]]; then die "Inaccessible site etc dir"; fi
+    validateFile "${etcDir}" "555" || die "Incorrect permissions on site etc dir"
+    if [[ ! -d "${kmodPath}" ]]; then die "Inaccessible kernel module dir"; fi
+    validateFile "${kmodPath}" "555" || die "Incorrect permissions on kernel module dir"
+    if [[ -z "${kmodCache}" ]]; then die "Unknown kernel module cache file location"; fi
+    if [[ -z "${system}" ]]; then die "Unknown system"; fi
 
-## must be a loop mount to clean up
-umount "$loopMount" || ret=1
+    validateFile "${INCLUDE_FILE}" "400" || die "Invalid include file"
+    source "${INCLUDE_FILE}"
+}
+readonly -f parseConfiguration
 
-## remove any kernel modules loaded (in reverse order)
-if [ -n $kmodCache -a -e "$kmodCache" ]; then
-    for kmod in `cat "$kmodCache" | awk '{ L[n++] = $0 } END{ while(n--) { print L[n] } }'`; do
-        /sbin/rmmod "$kmod"
+unmountVFS() {
+    IFS=$'\n'
+    for i in $(cat /proc/mounts | grep "$udiMount" | sort -k2 -r | awk '{print $2}'); do
+        unset IFS
+        umount "$i" || ret=1
     done
-    rm "$kmodCache"
-fi
+}
+readonly -f unmountVFS
+
+unmountLoop() {
+    unmountLoop=0
+    grep "$loopMount" /proc/mounts >/dev/null 2>&1 || unmountLoop=1
+
+    ## must be a loop mount to clean up
+    if [[ $unmountLoop -eq 1 ]]; then
+        umount "$loopMount" || ret=1
+    fi
+
+    ## remove any kernel modules loaded (in reverse order)
+    if [[ -e "$kmodCache" ]]; then
+        IFS=$'\n'
+        for kmod in $(cat "$kmodCache" | awk '{ L[n++] = $0 } END{ while(n--) { print L[n] } }'); do
+            unset IFS
+            /sbin/rmmod "$kmod"
+        done
+        rm "$kmodCache"
+    fi
+}
+readonly -f unmountLoop
+
+ret=0
+parseConfiguration
+unmountVFS
+unmountLoop
 exit $ret
