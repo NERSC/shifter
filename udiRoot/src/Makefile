@@ -14,10 +14,10 @@ LDFLAGS=
 all: udiRootEnter setupRoot.sh unsetupRoot.sh getDockerImage.pl
 
 setupRoot.sh: setupRoot.sh.in
-	cat $< | sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' > $@
+	cat $< | sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g' | sed 's|@@@INCLUDE_FILE@@@|$(INCLUDE_FILE)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' > $@
 
 unsetupRoot.sh: unsetupRoot.sh.in
-	cat $< | sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' > $@
+	cat $< | sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g' | sed 's|@@@INCLUDE_FILE@@@|$(INCLUDE_FILE)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' > $@
 
 udiRootEnter: udiRootEnter.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" $< -o $@
