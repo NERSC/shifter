@@ -50,7 +50,7 @@ int _opt_image(int val, const char *optarg, int remote) {
         char *p = strchr(tmp, ':');
         if (p == NULL) {
             slurm_error("Invalid image input: must specify image type: %s", optarg);
-            exit(-1);
+            return ESPANK_ERROR;
         }
         *p++ = 0;
         snprintf(image_type, IMAGE_MAXLEN, "%s", tmp);
@@ -64,19 +64,19 @@ int _opt_image(int val, const char *optarg, int remote) {
         for (p = image_type; *p != 0 && p-image_type < IMAGE_MAXLEN; ++p) {
             if (!isalpha(*p)) {
                 slurm_error("Invalid image type - alphabetic characters only");
-                exit(-1);
+                return ESPANK_ERROR;
             }
         }
         for (p = image; *p != 0 && p-image < IMAGE_MAXLEN; ++p) {
             if (!isalnum(*p) && (*p!=':') && (*p!='_') && (*p!='-') && (*p!='.')) {
                 slurm_error("Invalid image type - A-Za-z:-_. characters only");
-                exit(-1);
+                return ESPANK_ERROR;
             }
         }
         return ESPANK_SUCCESS;
     }
     slurm_error("Invalid image - must not be zero length");
-    exit(-1);
+    return ESPANK_ERROR;
 }
 int _opt_imagevolume(int val, const char *optarg, int remote) {
     if (optarg != NULL && strlen(optarg) > 0) {
@@ -85,7 +85,7 @@ int _opt_imagevolume(int val, const char *optarg, int remote) {
         return ESPANK_SUCCESS;
     }
     slurm_error("Invalid image volume options - if specified, must not be zero length");
-    exit(-1);
+    return ESPANK_ERROR;
 }
 
 int read_config(const char *filename) {
@@ -133,7 +133,7 @@ int read_config(const char *filename) {
             if (ptr != NULL) {
                 snprintf(chroot_path, 1024, "%s", ptr);
             }
-        } else if (strcmp(ptr, "udiRootPrefix") == 0) {
+        } else if (strcmp(ptr, "udiRootPath") == 0) {
             ptr = strtok(NULL, "=\n");
             ptr = trim(ptr);
             if (ptr != NULL) {
@@ -142,17 +142,8 @@ int read_config(const char *filename) {
         }
     }
     fclose(fp);
-    if (strlen(chroot_path) != 0) {
-        memset(&st_data, 0, sizeof(struct stat));
-        if (stat(chroot_path, &st_data) != 0) {
-            perror("Could not stat target root path: ");
-            return 1;
-        }
-        if (st_data.st_uid != 0 || st_data.st_gid != 0 || (st_data.st_mode & S_IWOTH)) {
-            fprintf(stderr, "%s\n", "Target / path is not owned by root, or is globally writable.");
-            return 1;
-        }
-    } else {
+    if (strlen(chroot_path) == 0) {
+        fprintf(stderr, "udiMount path invalid (len=0)\n");
         return 1;
     }
     if (strlen(udiRoot_prefix) != 0) {
@@ -166,6 +157,7 @@ int read_config(const char *filename) {
             return 1;
         }
     } else {
+        fprintf(stderr, "udiRootPath invalid (len=0)\n");
         return 1;
     }
     return 0;
@@ -283,6 +275,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     char config_file[1024] = "";
     char *ptr = NULL;
     int idx = 0;
+    int i,j;
     pid_t child = 0;
     unsigned int job;
     uid_t uid;
@@ -308,14 +301,29 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         return rc;
     }
 
-    if (spank_job_control_getenv(sp, "SLURM_PROTEUS_IMAGE", image, 1024) != ESPANK_SUCCESS) {
-        slurm_error("NO proteus image");
+    for (i = 0; spank_option_array[i].name != NULL; ++i) {
+        char *optarg = NULL;
+        j = spank_option_getopt(sp, &spank_option_array[i], &optarg);
+        if (j != ESPANK_SUCCESS) {
+            continue;
+        }
+        (spank_option_array[i].cb)(spank_option_array[i].val, optarg, 1);
+    }
+    if (strlen(image) == 0 || strlen(image_type) == 0) {
+        slurm_error("NO proteus image: len=0");
         return rc;
     }
-    if (spank_job_control_getenv(sp, "SLURM_PROTEUS_IMAGETYPE", image_type, 1024) != ESPANK_SUCCESS) {
-        slurm_error("NO proteus imagetype");
-        return rc;
+    if (strncmp(image_type, "docker", IMAGE_MAXLEN) == 0) {
+        char *image_id = NULL;
+        lookup_image(0, &image_id);
+        if (image_id == NULL) {
+            slurm_error("Failed to lookup image.  Aborting.");
+            return rc;
+        }
+        snprintf(image, IMAGE_MAXLEN, "%s", image_id);
+        free(image_id);
     }
+
     if (spank_get_item(sp, S_JOB_ID, &job) != ESPANK_SUCCESS) {
         slurm_error("FAIL: cannot deterime job userid");
         return rc;
@@ -337,6 +345,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
             return rc;
         }
     }
+    /*
     if (spank_get_item(sp, S_JOB_GID, &gid) != ESPANK_SUCCESS) {
         slurm_error("FAIL: cannot determine job group");
         return rc;
@@ -352,6 +361,8 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
             return rc;
         }
     }
+    */
+    snprintf(group_str, 128, "%s", user_str); //hack workaround because spank_get_item S_JOB_GID fails
     child = fork();
     if (child == 0) {
         char buffer[PATH_MAX];
@@ -389,6 +400,7 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     char config_file[1024] = "";
     char *ptr = NULL;
     int idx = 0;
+    int i,j;
     pid_t child = 0;
     unsigned int job;
     uid_t uid;
@@ -412,15 +424,19 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
         slurm_error("Failed to parse proteus config. Cannot use proteus.");
         return rc;
     }
+    for (i = 0; spank_option_array[i].name != NULL; ++i) {
+        char *optarg = NULL;
+        j = spank_option_getopt(sp, &spank_option_array[i], &optarg);
+        if (j != ESPANK_SUCCESS) {
+            continue;
+        }
+        (spank_option_array[i].cb)(spank_option_array[i].val, optarg, 1);
+    }
+    if (strlen(image) == 0) {
+        slurm_error("NO proteus image: len=0");
+        return rc;
+    }
 
-    if (spank_job_control_getenv(sp, "SLURM_PROTEUS_IMAGE", image, 1024) != ESPANK_SUCCESS) {
-        slurm_error("NO proteus image");
-        return rc;
-    }
-    if (spank_job_control_getenv(sp, "SLURM_PROTEUS_IMAGETYPE", image_type, 1024) != ESPANK_SUCCESS) {
-        slurm_error("NO proteus imagetype");
-        return rc;
-    }
     if (spank_get_item(sp, S_JOB_ID, &job) != ESPANK_SUCCESS) {
         slurm_error("FAIL: cannot deterime job userid");
         return rc;
@@ -442,6 +458,7 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
             return rc;
         }
     }
+    /*
     if (spank_get_item(sp, S_JOB_GID, &gid) != ESPANK_SUCCESS) {
         slurm_error("FAIL: cannot determine job group");
         return rc;
@@ -457,6 +474,8 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
             return rc;
         }
     }
+    */
+    snprintf(group_str, 128, "%s", user_str);
     child = fork();
     if (child == 0) {
         char buffer[PATH_MAX];
