@@ -7,6 +7,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <limits.h>
+#include <pwd.h>
+#include <grp.h>
 
 #include <slurm/spank.h>
 
@@ -282,6 +284,14 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     char *ptr = NULL;
     int idx = 0;
     pid_t child = 0;
+    unsigned int job;
+    uid_t uid;
+    gid_t gid;
+
+    char job_str[128];
+    char user_str[128];
+    char group_str[128];
+
     for (idx = 0; idx < argc; ++idx) {
         if (strncmp("proteus_config=", argv[idx], 15) == 0) {
             snprintf(config_file, 1024, "%s", (argv[idx] + 15));
@@ -306,16 +316,55 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         slurm_error("NO proteus imagetype");
         return rc;
     }
+    if (spank_get_item(sp, S_JOB_ID, &job) != ESPANK_SUCCESS) {
+        slurm_error("FAIL: cannot deterime job userid");
+        return rc;
+    } else {
+        snprintf(job_str, 128, "%u", job);
+    }
+    if (spank_get_item(sp, S_JOB_UID, &uid) != ESPANK_SUCCESS) {
+        slurm_error("FAIL: cannot determine job userid");
+        return rc;
+    } else {
+        struct passwd pwd;
+        struct passwd *ptr = NULL;
+        char buffer[4096];
+        getpwuid_r(uid, &pwd, buffer, 4096, &ptr);
+        if (ptr != NULL) {
+            snprintf(user_str, 128, "%s", pwd.pw_name);
+        } else {
+            slurm_error("FAIL cannot lookup username");
+            return rc;
+        }
+    }
+    if (spank_get_item(sp, S_JOB_GID, &gid) != ESPANK_SUCCESS) {
+        slurm_error("FAIL: cannot determine job group");
+        return rc;
+    } else {
+        struct group grp;
+        struct group *ptr;
+        char buffer[4096];
+        getgrgid_r(gid, &grp, buffer, 4096, &ptr);
+        if (ptr != NULL) {
+            snprintf(group_str, 128, "%s", grp.gr_name);
+        } else {
+            slurm_error("FAIL cannot lookup group name");
+            return rc;
+        }
+    }
     child = fork();
     if (child == 0) {
         char buffer[PATH_MAX];
-        char *args[4];
+        char *args[7];
         clearenv();
-        snprintf(buffer, PATH_MAX, "%s/libexec/slurm_cray_hybrid_prologue", udiRoot_prefix);
+        snprintf(buffer, PATH_MAX, "%s/libexec/udiRoot_prologue", udiRoot_prefix);
         args[0] = buffer;
-        args[1] = image_type;
-        args[2] = image;
-        args[3] = NULL;
+        args[1] = job_str;
+        args[2] = user_str;
+        args[3] = group_str;
+        args[4] = image_type;
+        args[5] = image;
+        args[6] = NULL;
         execv(args[0], args);
     } else if (child > 0) {
         int status = 0;
@@ -341,6 +390,13 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     char *ptr = NULL;
     int idx = 0;
     pid_t child = 0;
+    unsigned int job;
+    uid_t uid;
+    gid_t gid;
+
+    char job_str[128];
+    char user_str[128];
+    char group_str[128];
     for (idx = 0; idx < argc; ++idx) {
         if (strncmp("proteus_config=", argv[idx], 15) == 0) {
             snprintf(config_file, 1024, "%s", (argv[idx] + 15));
@@ -365,16 +421,55 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
         slurm_error("NO proteus imagetype");
         return rc;
     }
+    if (spank_get_item(sp, S_JOB_ID, &job) != ESPANK_SUCCESS) {
+        slurm_error("FAIL: cannot deterime job userid");
+        return rc;
+    } else {
+        snprintf(job_str, 128, "%u", job);
+    }
+    if (spank_get_item(sp, S_JOB_UID, &uid) != ESPANK_SUCCESS) {
+        slurm_error("FAIL: cannot determine job userid");
+        return rc;
+    } else {
+        struct passwd pwd;
+        struct passwd *ptr = NULL;
+        char buffer[4096];
+        getpwuid_r(uid, &pwd, buffer, 4096, &ptr);
+        if (ptr != NULL) {
+            snprintf(user_str, 128, "%s", pwd.pw_name);
+        } else {
+            slurm_error("FAIL cannot lookup username");
+            return rc;
+        }
+    }
+    if (spank_get_item(sp, S_JOB_GID, &gid) != ESPANK_SUCCESS) {
+        slurm_error("FAIL: cannot determine job group");
+        return rc;
+    } else {
+        struct group grp;
+        struct group *ptr;
+        char buffer[4096];
+        getgrgid_r(gid, &grp, buffer, 4096, &ptr);
+        if (ptr != NULL) {
+            snprintf(group_str, 128, "%s", grp.gr_name);
+        } else {
+            slurm_error("FAIL cannot lookup group name");
+            return rc;
+        }
+    }
     child = fork();
     if (child == 0) {
         char buffer[PATH_MAX];
-        char *args[4];
+        char *args[7];
         clearenv();
-        snprintf(buffer, PATH_MAX, "%s/libexec/slurm_cray_hybrid_epilogue", udiRoot_prefix);
+        snprintf(buffer, PATH_MAX, "%s/libexec/udiRoot_epilogue", udiRoot_prefix);
         args[0] = buffer;
-        args[1] = image_type;
-        args[2] = image;
-        args[3] = NULL;
+        args[1] = job_str;
+        args[2] = user_str;
+        args[3] = group_str;
+        args[4] = image_type;
+        args[5] = image;
+        args[6] = NULL;
         execv(args[0], args);
     } else if (child > 0) {
         int status = 0;
@@ -393,6 +488,7 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     return rc;
 }
 
+/*
 int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     int rc = ESPANK_SUCCESS;
     char config_file[1024] = "";
@@ -427,3 +523,4 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     }
     return rc;
 }
+*/
