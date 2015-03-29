@@ -11,7 +11,6 @@
 ##################
 
 set -o noglob      ## do not expand filenames
-set -o privileged  ## limit how much is sourced by the environment
 
 export PATH="/usr/bin:/bin"
 export LD_LIBRARY_PATH=""
@@ -35,11 +34,10 @@ die() {
     echo "$1"
     exit 1
 }
-readonly -f die
 
 validateFile() {
     local fname
-    local statdata
+    local lsdata
     local perm
     local uid
     local gid
@@ -53,14 +51,14 @@ validateFile() {
         echo "${fname} does not exist!" 1>&2
         return 1
     fi
-    statdata=$(/usr/bin/stat --printf "%a %u %g\n" "${fname}")
+    lsdata=$(ls -lnd "${fname}")
     if [[ $? -ne 0 ]]; then
-        echo "Failed to stat ${fname}"
+        echo "Failed to list ${fname}"
     fi
-    set -- ${statdata} ## cannot quote
+    set -- ${lsdata} ## cannot quote
     perm="$1"
-    uid="$2"
-    gid="$3"
+    uid="$3"
+    gid="$4"
     if [[ "$perm" != "$expected_perm" ]]; then
         echo "Incorrect permissions on $fname, expected $expected_perm" 1>&2
         return 1
@@ -71,11 +69,10 @@ validateFile() {
     fi
     return 0
 }
-readonly -f validateFile
 
 parseConfiguration() {
     ## read configuration
-    validateFile "${CONFIG_FILE}" "444" || die "Invalid configuration file"
+    validateFile "${CONFIG_FILE}" "-r--r--r--" || die "Invalid configuration file"
     source "${CONFIG_FILE}"
     readonly udiMount
     readonly loopMount
@@ -94,19 +91,17 @@ parseConfiguration() {
     if [[ ! -d "${dockerPath}" ]]; then die "Inaccessible docker path"; fi
     if [[ ! -d "${chosPath}" ]]; then die "Inaccessible chos path"; fi
     if [[ ! -d "${udiRootPath}" ]]; then die "Inaccessible installation dir"; fi
-    validateFile "${udiRootPath}" "555" || die "Incorrect permissions on installation dir"
-    validateFile "${mapPath}" "400" || die "Invalid map file"
+    validateFile "${udiRootPath}" "drwxr-xr-x" || die "Incorrect permissions on installation dir"
+    validateFile "${mapPath}" "-r--------" || die "Invalid map file"
     if [[ ! -d "${etcDir}" ]]; then die "Inaccessible site etc dir"; fi
-    validateFile "${etcDir}" "555" || die "Incorrect permissions on site etc dir"
-    if [[ ! -d "${kmodPath}" ]]; then die "Inaccessible kernel module dir"; fi
-    validateFile "${kmodPath}" "555" || die "Incorrect permissions on kernel module dir"
+    validateFile "${etcDir}" "drwxr-xr-x" || die "Incorrect permissions on site etc dir"
+    if [[ ! -d "${kmodDir}" ]]; then die "Inaccessible kernel module dir"; fi
+    validateFile "${kmodDir}" "drwxr-xr-x" || die "Incorrect permissions on kernel module dir"
     if [[ -z "${kmodCache}" ]]; then die "Unknown kernel module cache file location"; fi
     if [[ -z "${system}" ]]; then die "Unknown system"; fi
 
-    validateFile "${INCLUDE_FILE}" "400" || die "Invalid include file"
+    validateFile "${INCLUDE_FILE}" "-r--------" || die "Invalid include file"
     source "${INCLUDE_FILE}"
-    readonly -f preSiteFsBindMount
-    readonly -f postSiteFsBindMount
 }
 
 ## parse command line arguments
@@ -141,7 +136,6 @@ parseArguments() {
     fi
     readonly volumes
 }
-readonly -f parseArguments
 
 stripLeadingSlash() {
     local string
@@ -151,7 +145,6 @@ stripLeadingSlash() {
     done
     echo "${string}"
 }
-readonly -f stripLeadingSlash
 
 containsItem () {
     local tgt
@@ -165,7 +158,6 @@ containsItem () {
     done
     return 1
 }
-readonly -f containsItem
 
 setupVFSMount () {
     set -e
@@ -328,7 +320,6 @@ setupVFSMount () {
     unset IFS
     set +e
 }
-readonly -f setupVFSMount
 
 ## loadKernelModule - ensure specified kernel module is loaded
 ##   checks to see if kernel module is loaded.  if it isn't the module is loaded
@@ -350,19 +341,18 @@ loadKernelModule() {
     fi
     return 0
 }
-readonly -f loadKernelModule
 
 setupLoopbackMount() {
     local imageFile
     local kmodPath
     local fstype
-    local loopMount
-    loopMount="$1"
+    local mntPoint
+    mntPoint="$1"
     imageFile="$2"
     kmodPath="$3"
     fstype="$4"
 
-    [[ -n "${loopMount}" ]] || die "Unknown location for loopMount"
+    [[ -n "${mntPoint}" ]] || die "Unknown location for mntPoint"
 
     loadKernelModule "loop"    "${kmodPath}"/drivers/block/loop.ko
     loadKernelModule "mbcache" "${kmodPath}"/fs/mbcache.ko
@@ -370,10 +360,9 @@ setupLoopbackMount() {
     loadKernelModule "ext4"    "${kmodPath}"/fs/ext4/ext4.ko
     loadKernelModule "cramfs"  "${kmodPath}"/fs/cramfs/cramfs.ko
 
-    mkdir -p "${loopMount}" || die "Failed to create mount point ${loopMount}"
-    mount -t "${fstype}" -o loop,ro,nodev,nosuid "${imageFile}" "${loopMount}" || die "Failed to mount image file ${imageFile}"
+    mkdir -p "${mntPoint}" || die "Failed to create mount point ${mntPoint}"
+    mount -t "${fstype}" -o loop,ro,nodev,nosuid "${imageFile}" "${mntPoint}" || die "Failed to mount image file ${imageFile}"
 }
-readonly -f setupLoopbackMount
 
 # global variables
 # udiRootType ## argument
@@ -402,7 +391,7 @@ main() {
         targetType="docker"
     fi
     if [[ -n "$udiRootType" ]]; then
-        target="$udiRootType"
+        target="$udiRootValue"
     fi
 
     containsItem "$targetType" "chos" "docker" || die "Invalid image target type: $targetType"
@@ -451,7 +440,6 @@ main() {
         exit 1
     fi
 }
-readonly -f main
 
 if [[ -z "${DEBUG_UDIROOT}" ]]; then
     main "$@"

@@ -16,11 +16,45 @@ die() {
     echo "$1"
     exit 1
 }
-readonly -f die
+
+validateFile() {
+    local fname
+    local lsdata
+    local perm
+    local uid
+    local gid
+    fname="$1"
+    expected_perm="$2"
+    shift
+    if [[ -z "${fname}" || -z "${expected_perm}" ]]; then
+        return 1
+    fi
+    if [[ ! -e "${fname}" ]]; then
+        echo "${fname} does not exist!" 1>&2
+        return 1
+    fi
+    lsdata=$(ls -lnd "${fname}")
+    if [[ $? -ne 0 ]]; then
+        echo "Failed to list ${fname}"
+    fi
+    set -- ${lsdata} ## cannot quote
+    perm="$1"
+    uid="$3"
+    gid="$4"
+    if [[ "$perm" != "$expected_perm" ]]; then
+        echo "Incorrect permissions on $fname, expected $expected_perm" 1>&2
+        return 1
+    fi
+    if [[ "$uid" != "0" || "$gid" != "0" ]]; then
+        echo "Incorrect ownership of $fname" 1>&2
+        return 1
+    fi
+    return 0
+}
 
 parseConfiguration() {
     ## read configuration
-    validateFile "${CONFIG_FILE}" "444" || die "Invalid configuration file"
+    validateFile "${CONFIG_FILE}" "-r--r--r--" || die "Invalid configuration file"
     source "${CONFIG_FILE}"
     readonly udiMount
     readonly loopMount
@@ -39,19 +73,18 @@ parseConfiguration() {
     if [[ ! -d "${dockerPath}" ]]; then die "Inaccessible docker path"; fi
     if [[ ! -d "${chosPath}" ]]; then die "Inaccessible chos path"; fi
     if [[ ! -d "${udiRootPath}" ]]; then die "Inaccessible installation dir"; fi
-    validateFile "${udiRootPath}" "555" || die "Incorrect permissions on installation dir"
-    validateFile "${mapPath}" "400" || die "Invalid map file"
+    validateFile "${udiRootPath}" "drwxr-xr-x" || die "Incorrect permissions on installation dir"
+    validateFile "${mapPath}" "-r--------" || die "Invalid map file"
     if [[ ! -d "${etcDir}" ]]; then die "Inaccessible site etc dir"; fi
-    validateFile "${etcDir}" "555" || die "Incorrect permissions on site etc dir"
-    if [[ ! -d "${kmodPath}" ]]; then die "Inaccessible kernel module dir"; fi
-    validateFile "${kmodPath}" "555" || die "Incorrect permissions on kernel module dir"
+    validateFile "${etcDir}" "drwxr-xr-x" || die "Incorrect permissions on site etc dir"
+    if [[ ! -d "${kmodDir}" ]]; then die "Inaccessible kernel module dir"; fi
+    validateFile "${kmodDir}" "drwxr-xr-x" || die "Incorrect permissions on kernel module dir"
     if [[ -z "${kmodCache}" ]]; then die "Unknown kernel module cache file location"; fi
     if [[ -z "${system}" ]]; then die "Unknown system"; fi
 
-    validateFile "${INCLUDE_FILE}" "400" || die "Invalid include file"
+    validateFile "${INCLUDE_FILE}" "-r--------" || die "Invalid include file"
     source "${INCLUDE_FILE}"
 }
-readonly -f parseConfiguration
 
 unmountVFS() {
     IFS=$'\n'
@@ -60,14 +93,13 @@ unmountVFS() {
         umount "$i" || ret=1
     done
 }
-readonly -f unmountVFS
 
 unmountLoop() {
-    unmountLoop=0
-    grep "$loopMount" /proc/mounts >/dev/null 2>&1 || unmountLoop=1
+    unmountLoopFlag=1
+    grep "$loopMount" /proc/mounts >/dev/null 2>&1 || unmountLoopFlag=0
 
     ## must be a loop mount to clean up
-    if [[ $unmountLoop -eq 1 ]]; then
+    if [[ $unmountLoopFlag -eq 1 ]]; then
         umount "$loopMount" || ret=1
     fi
 
@@ -81,7 +113,6 @@ unmountLoop() {
         rm "$kmodCache"
     fi
 }
-readonly -f unmountLoop
 
 ret=0
 parseConfiguration
