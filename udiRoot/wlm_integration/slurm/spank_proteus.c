@@ -2,6 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <limits.h>
 
 #include <slurm/spank.h>
 
@@ -9,9 +14,11 @@ SPANK_PLUGIN(proteus, 1)
 
 #define IMAGE_MAXLEN 1024
 #define IMAGEVOLUME_MAXLEN 2048
-static char image[IMAGE_MAXLEN];
-static char image_type[IMAGE_MAXLEN];
-static char imagevolume[IMAGEVOLUME_MAXLEN];
+static char image[IMAGE_MAXLEN] = "";
+static char image_type[IMAGE_MAXLEN] = "";
+static char imagevolume[IMAGEVOLUME_MAXLEN] = "";
+static char udiRoot_prefix[1024] = "";
+static char chroot_path[1024] = "";
 
 static int _opt_image(int val, const char *optarg, int remote);
 static int _opt_imagevolume(int val, const char *optarg, int remote);
@@ -34,7 +41,6 @@ char *trim(char *string) {
     }
     return ptr;
 }
-
 
 int _opt_image(int val, const char *optarg, int remote) {
     if (optarg != NULL && strlen(optarg) > 0) {
@@ -80,6 +86,89 @@ int _opt_imagevolume(int val, const char *optarg, int remote) {
     exit(-1);
 }
 
+int read_config(const char *filename) {
+    FILE *fp = fopen(filename, "r");
+    int fd = fileno(fp);
+    struct stat st_data;
+    size_t nBytes = 0;
+    size_t nRead = 0;
+    char *buffer = NULL;
+    char *tokptr = NULL;
+    char *ptr = NULL;
+
+    chroot_path[0] = 0;
+    udiRoot_prefix[0] = 0;
+
+    memset(&st_data, 0, sizeof(struct stat));
+    if (fstat(fd, &st_data) != 0) {
+        perror("Failed to stat config file: ");
+        return 1;
+    }
+    nBytes = st_data.st_size;
+    if (st_data.st_uid != 0 || st_data.st_gid != 0 || (st_data.st_mode & S_IWOTH)) {
+        fprintf(stderr, "Configuration file not owned by root, or is writable by others.\n");
+        return 1;
+    }
+    buffer = (char *) malloc(sizeof(char)*nBytes);
+    nRead = fread(buffer, 1, nBytes, fp);
+    if (nRead == 0) {
+        fprintf(stderr, "Failed to read configuration file.\n");
+        return 1;
+    }
+    tokptr = buffer;
+    while ((ptr = strtok(tokptr, "=\n")) != NULL) {
+        tokptr = NULL;
+        while (isspace(*ptr)) {
+            ptr++;
+        }
+        if (*ptr == 0) {
+            continue;
+        }
+        ptr = trim(ptr);
+        if (strcmp(ptr, "udiMount") == 0) {
+            ptr = strtok(NULL, "=\n");
+            ptr = trim(ptr);
+            if (ptr != NULL) {
+                snprintf(chroot_path, 1024, "%s", ptr);
+            }
+        } else if (strcmp(ptr, "udiRootPrefix") == 0) {
+            ptr = strtok(NULL, "=\n");
+            ptr = trim(ptr);
+            if (ptr != NULL) {
+                snprintf(udiRoot_prefix, 1024, "%s", ptr);
+            }
+        }
+    }
+    fclose(fp);
+    if (strlen(chroot_path) != 0) {
+        memset(&st_data, 0, sizeof(struct stat));
+        if (stat(chroot_path, &st_data) != 0) {
+            perror("Could not stat target root path: ");
+            return 1;
+        }
+        if (st_data.st_uid != 0 || st_data.st_gid != 0 || (st_data.st_mode & S_IWOTH)) {
+            fprintf(stderr, "%s\n", "Target / path is not owned by root, or is globally writable.");
+            return 1;
+        }
+    } else {
+        return 1;
+    }
+    if (strlen(udiRoot_prefix) != 0) {
+        memset(&st_data, 0, sizeof(struct stat));
+        if (stat(udiRoot_prefix, &st_data) != 0) {
+            perror("Could not stat udiRoot prefix");
+            return 1;
+        }
+        if (st_data.st_uid != 0 || st_data.st_gid != 0 || (st_data.st_mode & S_IWOTH)) {
+            fprintf(stderr, "udiRoot installation not owned by root, or is globally writable.\n");
+            return 1;
+        }
+    } else {
+        return 1;
+    }
+    return 0;
+}
+
 int lookup_image(int verbose, char **image_id) {
     int rc = 0;
     char buffer[4096];
@@ -87,7 +176,7 @@ int lookup_image(int verbose, char **image_id) {
     size_t nread = 0;
     size_t image_id_bufSize = 0;
     /* perform image lookup */
-    snprintf(buffer, 4096, "/data/homes/dmj/lookup.pl %s", image);
+    snprintf(buffer, 4096, "%s/bin/getDockerImage.pl %s", udiRoot_prefix, image);
     fp = popen(buffer, "r");
     while (!feof(fp) && !ferror(fp)) {
         char *ptr = NULL;
@@ -109,6 +198,26 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
     spank_context_t context;
     int rc = ESPANK_SUCCESS;
     int i, j;
+
+    char config_file[1024] = "";
+    char *ptr = NULL;
+    int idx = 0;
+    for (idx = 0; idx < argc; ++idx) {
+        if (strncmp("proteus_config=", argv[idx], 15) == 0) {
+            snprintf(config_file, 1024, "%s", (argv[idx] + 15));
+            ptr = trim(config_file);
+            if (ptr != config_file) memmove(config_file, ptr, strlen(ptr) + 1);
+        }
+    }
+    if (strlen(config_file) == 0) {
+        slurm_debug("proteus_config not set, cannot use proteus");
+        return rc;
+    }
+    if (read_config(config_file) != 0) {
+        slurm_error("Failed to parse proteus config. Cannot use proteus.");
+        return rc;
+    }
+
     image[0] = 0;
     imagevolume[0] = 0;
 
@@ -128,7 +237,6 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
 int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     spank_context_t context;
     int rc = ESPANK_SUCCESS;
-    char *image_id = NULL;
     int verbose_lookup = 0;
 
     // only perform this validation at submit time
@@ -141,19 +249,25 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
         exit(-1);
     }
     
-    lookup_image(verbose_lookup, &image_id);
-    if (image_id == NULL) {
-        slurm_error("Failed to lookup image.  Aborting.");
-        exit(-1);
+    if (strncmp(image_type, "docker", IMAGE_MAXLEN) == 0) {
+        char *image_id = NULL;
+        lookup_image(verbose_lookup, &image_id);
+        if (image_id == NULL) {
+            slurm_error("Failed to lookup image.  Aborting.");
+            exit(-1);
+        }
+        snprintf(image, IMAGE_MAXLEN, "%s", image_id);
+        free(image_id);
     }
     if (strlen(image) == 0) {
         return rc;
     }
     
     spank_setenv(sp, "CRAY_ROOTFS", "UDI", 1);
-    spank_setenv(sp, "SLURM_PROTEUS_IMAGE", image_id, 1);
+    spank_setenv(sp, "SLURM_PROTEUS_IMAGE", image, 1);
     spank_setenv(sp, "SLURM_PROTEUS_IMAGETYPE", image_type, 1);
-    free(image_id);
+    spank_job_control_setenv(sp, "SLURM_PROTEUS_IMAGE", image, 1);
+    spank_job_control_setenv(sp, "SLURM_PROTEUS_IMAGETYPE", image_type, 1);
     
     if (imagevolume != NULL) {
          spank_setenv(sp, "SLURM_PROTEUS_VOLUME", imagevolume, 1);
@@ -163,26 +277,153 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
 
 int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     int rc = ESPANK_SUCCESS;
-    const char *config_file = NULL;
-    char image_id[1024];
+
+    char config_file[1024] = "";
+    char *ptr = NULL;
     int idx = 0;
+    pid_t child = 0;
     for (idx = 0; idx < argc; ++idx) {
-        if (strncmp("proteus_config", argv[idx], 14) == 0) {
-            config_file = argv[idx] + 14;
-            slurm_error("proteus_config file: %s", config_file);
+        if (strncmp("proteus_config=", argv[idx], 15) == 0) {
+            snprintf(config_file, 1024, "%s", (argv[idx] + 15));
+            ptr = trim(config_file);
+            if (ptr != config_file) memmove(config_file, ptr, strlen(ptr) + 1);
         }
     }
-    if (config_file == NULL) {
+    if (strlen(config_file) == 0) {
         slurm_debug("proteus_config not set, cannot use proteus");
         return rc;
     }
+    if (read_config(config_file) != 0) {
+        slurm_error("Failed to parse proteus config. Cannot use proteus.");
+        return rc;
+    }
 
-    if (spank_getenv(sp, "SLURM_PROTEUS_IMAGE", image_id, 1024) != ESPANK_SUCCESS) {
+    if (spank_job_control_getenv(sp, "SLURM_PROTEUS_IMAGE", image, 1024) != ESPANK_SUCCESS) {
+        slurm_error("NO proteus image");
+        return rc;
+    }
+    if (spank_job_control_getenv(sp, "SLURM_PROTEUS_IMAGETYPE", image_type, 1024) != ESPANK_SUCCESS) {
+        slurm_error("NO proteus imagetype");
+        return rc;
+    }
+    child = fork();
+    if (child == 0) {
+        char buffer[PATH_MAX];
+        char *args[4];
+        clearenv();
+        snprintf(buffer, PATH_MAX, "%s/libexec/slurm_cray_hybrid_prologue", udiRoot_prefix);
+        args[0] = buffer;
+        args[1] = image_type;
+        args[2] = image;
+        args[3] = NULL;
+        execv(args[0], args);
+    } else if (child > 0) {
+        int status = 0;
+        waitpid(child, &status, 0);
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            /* chroot area should be ready! */
+        } else {
+            slurm_error("proteus: failed to setup image");
+            rc = ESPANK_ERROR;
+        }
+    } else {
+        slurm_error("proteus: failed to fork setupRoot");
+        rc = ESPANK_ERROR;
+    }
+    
+    return rc;
+} 
+
+int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
+    int rc = ESPANK_SUCCESS;
+
+    char config_file[1024] = "";
+    char *ptr = NULL;
+    int idx = 0;
+    pid_t child = 0;
+    for (idx = 0; idx < argc; ++idx) {
+        if (strncmp("proteus_config=", argv[idx], 15) == 0) {
+            snprintf(config_file, 1024, "%s", (argv[idx] + 15));
+            ptr = trim(config_file);
+            if (ptr != config_file) memmove(config_file, ptr, strlen(ptr) + 1);
+        }
+    }
+    if (strlen(config_file) == 0) {
+        slurm_debug("proteus_config not set, cannot use proteus");
+        return rc;
+    }
+    if (read_config(config_file) != 0) {
+        slurm_error("Failed to parse proteus config. Cannot use proteus.");
+        return rc;
+    }
+
+    if (spank_job_control_getenv(sp, "SLURM_PROTEUS_IMAGE", image, 1024) != ESPANK_SUCCESS) {
+        slurm_error("NO proteus image");
+        return rc;
+    }
+    if (spank_job_control_getenv(sp, "SLURM_PROTEUS_IMAGETYPE", image_type, 1024) != ESPANK_SUCCESS) {
+        slurm_error("NO proteus imagetype");
+        return rc;
+    }
+    child = fork();
+    if (child == 0) {
+        char buffer[PATH_MAX];
+        char *args[4];
+        clearenv();
+        snprintf(buffer, PATH_MAX, "%s/libexec/slurm_cray_hybrid_epilogue", udiRoot_prefix);
+        args[0] = buffer;
+        args[1] = image_type;
+        args[2] = image;
+        args[3] = NULL;
+        execv(args[0], args);
+    } else if (child > 0) {
+        int status = 0;
+        waitpid(child, &status, 0);
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            /* chroot area should be ready! */
+        } else {
+            slurm_error("proteus: failed to deconstruct image");
+            rc = ESPANK_ERROR;
+        }
+    } else {
+        slurm_error("proteus: failed to fork epilogue script");
+        rc = ESPANK_ERROR;
+    }
+    
+    return rc;
+}
+
+int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
+    int rc = ESPANK_SUCCESS;
+    char config_file[1024] = "";
+    char *ptr = NULL;
+    int idx = 0;
+    for (idx = 0; idx < argc; ++idx) {
+        if (strncmp("proteus_config=", argv[idx], 15) == 0) {
+            snprintf(config_file, 1024, "%s", (argv[idx] + 15));
+            ptr = trim(config_file);
+            if (ptr != config_file) memmove(config_file, ptr, strlen(ptr) + 1);
+        }
+    }
+    if (strlen(config_file) == 0) {
+        slurm_debug("proteus_config not set, cannot use proteus");
+        return rc;
+    }
+    if (spank_getenv(sp, "SLURM_PROTEUS_IMAGE", image, 1024) != ESPANK_SUCCESS) {
         return rc;
     }
     if (spank_getenv(sp, "SLURM_PROTEUS_IMAGETYPE", image_type, 1024) != ESPANK_SUCCESS) {
         return rc;
     }
-    
+    if (read_config(config_file) != 0) {
+        slurm_error("Failed to parse proteus config. Cannot use proteus.");
+        return rc;
+    }
+    if (strlen(chroot_path) > 0) {
+        if (chroot(chroot_path) != 0) {
+            slurm_error("FAILED to chroot to designated image");
+            return ESPANK_ERROR;
+        }
+    }
     return rc;
-} 
+}
