@@ -8,13 +8,20 @@
 ##
 ## Authors:  Douglas Jacobsen, Shane Canon
 ## 2015/02/27
+##
+## Note:  This script has been written for the busybox ash, meaning that some
+## security features the authors would like to use for a more general purpose
+## bash have been omitted.  These include: use of privileged mode (sh -p),
+## marking critical functions as readonly (no readonly -f), use of stat instead
+## of ls (busybox stat does not offer deterministic formatting), process
+## substitution/read instead of set -- $var then examine $1, $2,..., and more.
 ##################
 
 set -o noglob      ## do not expand filenames
 
 export PATH="/usr/bin:/bin"
-export LD_LIBRARY_PATH=""
-export LD_PRELOAD=""
+unset LD_LIBRARY_PATH
+unset LD_PRELOAD
 unset IFS
 
 CONFIG_FILE=@@@CONFIG_FILE@@@
@@ -29,6 +36,8 @@ preSiteFsBindMount() {
 postSiteFsBindMount() {
     return 0
 }
+
+
 
 die() {
     echo "$1"
@@ -74,6 +83,10 @@ parseConfiguration() {
     ## read configuration
     validateFile "${CONFIG_FILE}" "-r--r--r--" || die "Invalid configuration file"
     source "${CONFIG_FILE}"
+    export PATH="/usr/bin:/bin"
+    unset LD_LIBRARY_PATH
+    unset LD_PRELOAD
+    unset IFS
     readonly udiMount
     readonly loopMount
     readonly chosPath
@@ -102,6 +115,10 @@ parseConfiguration() {
 
     validateFile "${INCLUDE_FILE}" "-r--------" || die "Invalid include file"
     source "${INCLUDE_FILE}"
+    export PATH="/usr/bin:/bin"
+    unset LD_LIBRARY_PATH
+    unset LD_PRELOAD
+    unset IFS
 }
 
 ## parse command line arguments

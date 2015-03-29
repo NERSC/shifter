@@ -1,11 +1,11 @@
 #!/bin/sh
 
 set -o noglob
-set -o privileged
 
 export PATH="/usr/bin:/bin"
-export LD_LIBRARY_PATH=""
-export LD_PRELOAD=""
+unset LD_LIBRARY_PATH
+unset LD_PRELOAD
+unset IFS
 
 CONFIG_FILE=@@@CONFIG_FILE@@@
 INCLUDE_FILE=@@@INCLUDE_FILE@@@
@@ -56,6 +56,10 @@ parseConfiguration() {
     ## read configuration
     validateFile "${CONFIG_FILE}" "-r--r--r--" || die "Invalid configuration file"
     source "${CONFIG_FILE}"
+    export PATH="/usr/bin:/bin"
+    unset LD_LIBRARY_PATH
+    unset LD_PRELOAD
+    unset IFS
     readonly udiMount
     readonly loopMount
     readonly chosPath
@@ -84,6 +88,10 @@ parseConfiguration() {
 
     validateFile "${INCLUDE_FILE}" "-r--------" || die "Invalid include file"
     source "${INCLUDE_FILE}"
+    export PATH="/usr/bin:/bin"
+    unset LD_LIBRARY_PATH
+    unset LD_PRELOAD
+    unset IFS
 }
 
 unmountVFS() {
