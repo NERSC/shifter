@@ -345,10 +345,9 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
             return rc;
         }
     }
-    /*
     if (spank_get_item(sp, S_JOB_GID, &gid) != ESPANK_SUCCESS) {
-        slurm_error("FAIL: cannot determine job group");
-        return rc;
+        slurm_error("FAIL: cannot determine job group, gonna fake it");
+        snprintf(group_str, 128, "%s", user_str); //hack workaround because spank_get_item S_JOB_GID fails
     } else {
         struct group grp;
         struct group *ptr;
@@ -361,8 +360,6 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
             return rc;
         }
     }
-    */
-    snprintf(group_str, 128, "%s", user_str); //hack workaround because spank_get_item S_JOB_GID fails
     child = fork();
     if (child == 0) {
         char buffer[PATH_MAX];
@@ -458,10 +455,9 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
             return rc;
         }
     }
-    /*
     if (spank_get_item(sp, S_JOB_GID, &gid) != ESPANK_SUCCESS) {
-        slurm_error("FAIL: cannot determine job group");
-        return rc;
+        slurm_error("FAIL: cannot determine job group, gonna fake it");
+        snprintf(group_str, 128, "%s", user_str);
     } else {
         struct group grp;
         struct group *ptr;
@@ -474,8 +470,6 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
             return rc;
         }
     }
-    */
-    snprintf(group_str, 128, "%s", user_str);
     child = fork();
     if (child == 0) {
         char buffer[PATH_MAX];
