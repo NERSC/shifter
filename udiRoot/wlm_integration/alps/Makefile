@@ -8,13 +8,15 @@
 
 include ../../config.mk
 
-all: udiRoot-epilogue udiRoot-prologue
+all: udiRoot-epilogue udiRoot-prologue udiRoot-nhc-plugin
 
 udiRoot-epilogue: udiRoot-epilogue.in
 	cat $< | sed 's|@@@SYSTEM@@@|$(SYSTEM)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' > $@
 
 udiRoot-prologue: udiRoot-prologue.in
 	cat $< | sed 's|@@@SYSTEM@@@|$(SYSTEM)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' > $@
+udiRoot-nhc-plugin:udiRoot-nhc-plugin.in
+	cat $< | sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g' > $@
 
 
 install: all
@@ -29,3 +31,4 @@ install: all
 clean:
 	if [ -a udiRoot-prologue ]; then $(RM) udiRoot-prologue; fi
 	if [ -a udiRoot-epilogue ]; then $(RM) udiRoot-epilogue; fi
+	if [ -a udiRoot-nhc-plugin ]; then $(RM) udiRoot-nhc-plugin; fi

@@ -33,13 +33,6 @@ export apstat_nodeTable="NID,Arch,State,HW,Rv,Pl,PgSz,Avl,Conf,Placed,PEs,Apids"
 
 PATH=${PATH}:/opt/cray/alps/default/bin/
 
-DOCKER=$( /usr/syscom/nsg/sbin/qgetenv $1 DOCKER 2>/dev/null )
-CHOS=$( /usr/syscom/nsg/sbin/qgetenv $1 CHOS 2>/dev/null )
-if [ "x${DOCKER}${CHOS}" == "x" ]; then
-    exit
-fi
-
-
 echo "Deconstructing UdiRoot environment, Please Wait"
 
         if [ -z "$CCM_BATCH_RUNDIR" ] ; then

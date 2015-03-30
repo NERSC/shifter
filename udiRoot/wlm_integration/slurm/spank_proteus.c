@@ -365,7 +365,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         char buffer[PATH_MAX];
         char *args[7];
         clearenv();
-        snprintf(buffer, PATH_MAX, "%s/libexec/udiRoot_prologue", udiRoot_prefix);
+        snprintf(buffer, PATH_MAX, "%s/libexec/udiRoot-prologue", udiRoot_prefix);
         args[0] = buffer;
         args[1] = job_str;
         args[2] = user_str;
@@ -373,6 +373,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         args[4] = image_type;
         args[5] = image;
         args[6] = NULL;
+        slurm_info("prolog: %s, %s, %s, %s, %s, %s", args[0], args[1], args[2], args[3], args[4], args[5]);
         execv(args[0], args);
     } else if (child > 0) {
         int status = 0;
@@ -475,7 +476,7 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
         char buffer[PATH_MAX];
         char *args[7];
         clearenv();
-        snprintf(buffer, PATH_MAX, "%s/libexec/udiRoot_epilogue", udiRoot_prefix);
+        snprintf(buffer, PATH_MAX, "%s/libexec/udiRoot-epilogue", udiRoot_prefix);
         args[0] = buffer;
         args[1] = job_str;
         args[2] = user_str;
