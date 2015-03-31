@@ -103,6 +103,7 @@ parseConfiguration() {
     readonly kmodCache
     readonly siteFs
     readonly system
+    readonly sshTarBall
 
     if [[ -z "${udiMount}" ]]; then die "Unknown root path"; fi
     if [[ -z "${loopMount}" ]]; then die "Unknown loop mount path"; fi
@@ -115,6 +116,7 @@ parseConfiguration() {
     validateFile "${etcDir}" "drwxr-xr-x" || die "Incorrect permissions on site etc dir"
     if [[ ! -d "${kmodDir}" ]]; then die "Inaccessible kernel module dir"; fi
     validateFile "${kmodDir}" "drwxr-xr-x" || die "Incorrect permissions on kernel module dir"
+    validateFile "${sshTarBall}" "-r--------" || die "Incorrect permissions on ssh tarball"
     if [[ -z "${kmodCache}" ]]; then die "Unknown kernel module cache file location"; fi
     if [[ -z "${system}" ]]; then die "Unknown system"; fi
 
@@ -130,18 +132,26 @@ parseConfiguration() {
 ## global variables:
 ##  udiRootType
 ##  udiRootValue
+##  udiUser
 ##  volumes
 parseArguments() {
     udiRootType="$1"
     udiRootValue="$2"
+    udiUser="invalidUser"
     readonly udiRootType
     readonly udiRootValue
     shift 2
     volumes=""
-    while getopts ":v:" opt; do
+    while getopts ":v:s:u:" opt; do
         case "${opt}" in
             v)
                 volumes="${volumes}|${OPTARG}"
+                ;;
+            s)
+                sshPubKey="${OPTARG}"
+                ;;
+            u)
+                udiUser="${OPTARG}"
                 ;;
             \?)
                 echo "Invalid option: -${OPTARG}" >&2
@@ -157,6 +167,8 @@ parseArguments() {
         volumes="${volumes:1}" ## remove leading |
     fi
     readonly volumes
+    readonly sshPubKey
+    readonly udiUser
 }
 
 stripLeadingSlash() {
@@ -180,7 +192,6 @@ containsItem () {
     done
     return 1
 }
-
 
 bindImageIntoMnt() {
     local localDir
@@ -224,17 +235,32 @@ bindImageIntoMnt() {
 setupImageSsh() {
     local mntPoint
     mntPoint="$1"
-    if [[ -d "$sshPath" ]]; then
-        cp -rp "$sshPath" "${mntPoint}/opt/udiImage"
+    if [[ -f "$sshTarBall" ]]; then
         cd "${mntPoint}/opt/udiImage"
+        tar xf "$sshTarBall" ./opt/udiImage --strip-components=3
         ./bin/ssh-keygen -t dsa -f ./etc/ssh_host_dsa_key -N '' > /dev/null 2>&1
         ./bin/ssh-keygen -t rsa -f ./etc/ssh_host_rsa_key -N '' > /dev/null 2>&1
         ./bin/ssh-keygen -t ed25519 -f ./etc/ssh_host_ed25519_key -N '' > /dev/null 2>&1
         ./bin/ssh-keygen -t ecdsa -f ./etc/ssh_host_ecdsa_key -N '' > /dev/null 2>&1
-        if [[ -n "$userSshPubKey" ]]; then
-            echo "$userSshPubKey" > ./etc/user_auth_keys
+        if [[ -n "$sshPubKey" ]]; then
+            echo "$sshPubKey" > ./etc/user_auth_keys
         fi
+        ed -s ./etc/sshd_config <<EOF
+/AllowUsers/s/ToBeReplaced/$udiUser/g
+w
+EOF
         chmod -R a+rX etc
+
+        ## replace ssh in any "normal" location in the image
+        if [[ -f "${mntPoint}/usr/bin/ssh" && -f "${mntPoint}/opt/udiImage/bin/ssh" ]]; then
+            mount --bind "${mntPoint}/opt/udiImage/bin/ssh" "${mntPoint}/usr/bin/ssh"
+        fi
+        if [[ -f "${mntPoint}/bin/ssh" && -f "${mntPoint}/opt/udiImage/bin/ssh" ]]; then
+            mount --bind "${mntPoint}/opt/udiImage/bin/ssh" "${mntPoint}/bin/ssh"
+        fi
+        if [[ -f "${mntPoint}/etc/ssh/ssh_config" ]]; then
+            cp -p "${mntPoint}/opt/udiImage/etc/ssh_config" "${mntPoint}/etc/ssh/ssh_config"
+        fi
     fi
 }
 
