@@ -24,10 +24,15 @@ unset LD_LIBRARY_PATH
 unset LD_PRELOAD
 unset IFS
 
-CONFIG_FILE=@@@CONFIG_FILE@@@
-INCLUDE_FILE=@@@INCLUDE_FILE@@@
+context=""
+if [[ -z "$NOCONTEXT" ]]; then
+    context="/dsl"
+fi
+CONFIG_FILE="${context}@@@CONFIG_FILE@@@"
+INCLUDE_FILE="${context}@@@INCLUDE_FILE@@@"
 readonly CONFIG_FILE
 readonly INCLUDE_FILE
+readonly context
 
 ## stub functions to be replaced by site-specific include file
 preSiteFsBindMount() {
@@ -401,10 +406,10 @@ main() {
 
     parseArguments "$@" || die "Unable to parse arguments"
     parseConfiguration || die "Unable to parse configuration"
-    if [[ "$udiRootType" = "CHOS" ]]; then
+    if [[ "$udiRootType" = "CHOS" || "$udiRootType" = "chos" ]]; then
         targetType="chos"
     fi
-    if [[ "$udiRootType" = "DOCKER" ]]; then
+    if [[ "$udiRootType" = "DOCKER" || "$udiRootType" = "docker" ]]; then
         targetType="docker"
     fi
     if [[ -n "$udiRootType" ]]; then

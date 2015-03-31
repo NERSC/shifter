@@ -1,9 +1,12 @@
+if [[ -z "$context" ]]; then
+    context=""
+fi
 udiMount=/var/udiMount
 loopMount=/var/loopUdiMount
 chosPath=/scratch/chos
 dockerPath=/scratch/scratchdirs/craydock/docker
-udiRootPath=@@@PREFIX@@@
-udiRootIncludeFile=@@@INCLUDE_FILE@@@
+udiRootPath="$context/@@@PREFIX@@@"
+udiRootIncludeFile="$context/@@@INCLUDE_FILE@@@"
 mapPath=$udiRootPath/fsMap.conf
 etcDir=$udiRootPath/etc_files
 kmodDir=$udiRootPath/kmod/$( uname -r )

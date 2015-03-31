@@ -7,10 +7,15 @@ unset LD_LIBRARY_PATH
 unset LD_PRELOAD
 unset IFS
 
-CONFIG_FILE=@@@CONFIG_FILE@@@
-INCLUDE_FILE=@@@INCLUDE_FILE@@@
+context=""
+if [[ -z "$NOCONTEXT" ]]; then
+    context="/dsl"
+fi
+CONFIG_FILE="${context}@@@CONFIG_FILE@@@"
+INCLUDE_FILE="${context}@@@INCLUDE_FILE@@@"
 readonly CONFIG_FILE
 readonly INCLUDE_FILE
+readonly context
 
 die() {
     echo "$1"

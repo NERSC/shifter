@@ -27,6 +27,9 @@ install: all
 	if ! $(CMP) -s udiRoot-epilogue $(PREFIX)/libexec/udiRoot-epilogue; then \
 	    $(INSTALL) --owner=root --group=root --mode=555  udiRoot-epilogue $(PREFIX)/libexec/udiRoot-epilogue; \
 	fi
+	if ! $(CMP) -s udiRoot-nhc-plugin $(PREFIX)/libexec/udiRoot-nhc-plugin; then \
+	    $(INSTALL) --owner=root --group=root --mode=555  udiRoot-nhc-plugin $(PREFIX)/libexec/udiRoot-nhc-plugin; \
+	fi
 
 clean:
 	if [ -a udiRoot-prologue ]; then $(RM) udiRoot-prologue; fi

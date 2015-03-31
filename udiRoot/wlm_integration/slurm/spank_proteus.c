@@ -92,9 +92,9 @@ int read_config(const char *filename) {
     FILE *fp = fopen(filename, "r");
     int fd = fileno(fp);
     struct stat st_data;
-    size_t nBytes = 0;
-    size_t nRead = 0;
-    char *buffer = NULL;
+    size_t nread = 0;
+    int rc = 0;
+    char buffer[4096];
     char *tokptr = NULL;
     char *ptr = NULL;
 
@@ -106,42 +106,38 @@ int read_config(const char *filename) {
         perror("Failed to stat config file: ");
         return 1;
     }
-    nBytes = st_data.st_size;
     if (st_data.st_uid != 0 || st_data.st_gid != 0 || (st_data.st_mode & S_IWOTH)) {
         fprintf(stderr, "Configuration file not owned by root, or is writable by others.\n");
         return 1;
     }
-    buffer = (char *) malloc(sizeof(char)*nBytes);
-    nRead = fread(buffer, 1, nBytes, fp);
-    if (nRead == 0) {
-        fprintf(stderr, "Failed to read configuration file.\n");
-        return 1;
+    snprintf(buffer, 4096, "/bin/sh -c 'source %s; echo $%s'", filename, "udiMount");
+    fp = popen(buffer, "r");
+    while (!feof(fp) && !ferror(fp)) {
+        char *ptr = NULL;
+        nread = fread(buffer,1,4096,fp);
+        if (nread == 0 || nread >= 4096) break;
+        buffer[nread] = 0;
+        ptr = trim(buffer);
+        snprintf(chroot_path, 1024, "%s", buffer);
+    } 
+    if ((rc = pclose(fp)) != 0) {
+        slurm_error("Failed to read configuration file: %d", rc);
+        exit(-1);
     }
-    tokptr = buffer;
-    while ((ptr = strtok(tokptr, "=\n")) != NULL) {
-        tokptr = NULL;
-        while (isspace(*ptr)) {
-            ptr++;
-        }
-        if (*ptr == 0) {
-            continue;
-        }
-        ptr = trim(ptr);
-        if (strcmp(ptr, "udiMount") == 0) {
-            ptr = strtok(NULL, "=\n");
-            ptr = trim(ptr);
-            if (ptr != NULL) {
-                snprintf(chroot_path, 1024, "%s", ptr);
-            }
-        } else if (strcmp(ptr, "udiRootPath") == 0) {
-            ptr = strtok(NULL, "=\n");
-            ptr = trim(ptr);
-            if (ptr != NULL) {
-                snprintf(udiRoot_prefix, 1024, "%s", ptr);
-            }
-        }
+    snprintf(buffer, 4096, "/bin/sh -c 'source %s; echo $%s'", filename, "udiRootPath");
+    fp = popen(buffer, "r");
+    while (!feof(fp) && !ferror(fp)) {
+        char *ptr = NULL;
+        nread = fread(buffer,1,4096,fp);
+        if (nread == 0 || nread >= 4096) break;
+        buffer[nread] = 0;
+        ptr = trim(buffer);
+        snprintf(udiRoot_prefix, 1024, "%s", ptr);
+    } 
+    if ((rc = pclose(fp)) != 0) {
+        slurm_error("Failed to read configuration file: %d", rc);
+        exit(-1);
     }
-    fclose(fp);
     if (strlen(chroot_path) == 0) {
         fprintf(stderr, "udiMount path invalid (len=0)\n");
         return 1;
