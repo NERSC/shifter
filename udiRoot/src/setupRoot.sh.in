@@ -181,6 +181,63 @@ containsItem () {
     return 1
 }
 
+
+bindImageIntoMnt() {
+    local localDir
+    local remoteDir
+    remoteDir="$1"
+    localDir="$2"
+
+    # mount the image into the new mount
+    cd "$localDir"
+    IFS=$'\n'
+    for item in $(ls "$remoteDir"); do
+        unset IFS
+        ## weed out possibly dangerous items
+        dir="${item//[^a-zA-Z0-9_+\-\.]/}"
+        if [[ ! -e "${remoteDir}/${item}" ]]; then
+            continue
+        fi
+        # don't do anything to "reserved" paths
+        if [[ -e "$item" ]]; then
+            continue
+        fi
+        # properly copy symlinks
+        if [[ -L "$remoteDir/$item" ]]; then
+            cp -P "$remoteDir/$item" "$item"
+            continue
+        fi
+        # copy files
+        if [[ -f "$remoteDir/$item" ]]; then
+            cp -p "$remoteDir/$item" "$item"
+            continue
+        fi
+        # bind mount directories
+        if [[ -d "$remoteDir/$item" ]]; then
+            mkdir "$remoteDir"
+            mount --bind "$remoteDir/$item" "${localDir}/$item"
+            mount -o bind,remount,nodev,nosuid "${localDir}/$item"
+        fi
+    done
+}
+
+setupImageSsh() {
+    local mntPoint
+    mntPoint="$1"
+    if [[ -d "$sshPath" ]]; then
+        cp -rp "$sshPath" "${mntPoint}/opt/udiImage"
+        cd "${mntPoint}/opt/udiImage"
+        ./bin/ssh-keygen -t dsa -f ./etc/ssh_host_dsa_key -N '' > /dev/null 2>&1
+        ./bin/ssh-keygen -t rsa -f ./etc/ssh_host_rsa_key -N '' > /dev/null 2>&1
+        ./bin/ssh-keygen -t ed25519 -f ./etc/ssh_host_ed25519_key -N '' > /dev/null 2>&1
+        ./bin/ssh-keygen -t ecdsa -f ./etc/ssh_host_ecdsa_key -N '' > /dev/null 2>&1
+        if [[ -n "$userSshPubKey" ]]; then
+            echo "$userSshPubKey" > ./etc/user_auth_keys
+        fi
+        chmod -R a+rX etc
+    fi
+}
+
 setupVFSMount () {
     set -e
     local mntPoint
@@ -227,6 +284,7 @@ setupVFSMount () {
 
     ## reserve some directories in "/" that will be handled explicitly
     mkdir -p etc/udiImage
+    mkdir -p opt/udiImage
     mkdir -p etc/site
     mkdir -p proc
     mkdir -p sys
@@ -236,37 +294,19 @@ setupVFSMount () {
     mount -o bind,remount,nosuid,nodev tmp
     
     # mount the image into the new mount
-    IFS=$'\n'
-    for dir in $(ls "$imageDir"); do
-        unset IFS
-        ## weed out possibly dangerous items
-        dir="${dir//[^a-zA-Z0-9_+\-\.]/}"
-        if [[ ! -e "${imageDir}/${dir}" ]]; then
-            continue
-        fi
-        # don't do anything to "reserved" paths
-        if [[ -e "$dir" ]]; then
-            continue
-        fi
-        # properly copy symlinks
-        if [[ -L "$imageDir/$dir" ]]; then
-            cp -P "$imageDir/$dir" "$dir"
-            continue
-        fi
-        # copy files
-        if [[ -f "$imageDir/$dir" ]]; then
-            cp -p "$imageDir/$dir" "$dir"
-            continue
-        fi
-        # bind mount directories
-        if [[ -d "$imageDir/$dir" ]]; then
-            mkdir "$dir"
-            mount --bind "$imageDir/$dir" "${mntPoint}/$dir"
-            mount -o bind,remount,nodev,nosuid "${mntPoint}/$dir"
-        fi
-    done
+    bindImageIntoMnt "$imageDir" "$mntPoint"
+
+    # take care of opt separately
+    if [[ -e "$imageDir/opt" ]]; then
+        bindImageIntoMnt "$imageDir/opt" "$mntPoint/opt"
+    fi
+
+    # setup image ssh
+    cd "${mntPoint}"
+    setupImageSsh "$mntPoint"
 
     ## merge image etc, site customizations, and local customizations into /etc
+    cd "${mntPoint}"
     if [[ -e "$imageDir/etc" ]]; then
         mount -o bind "$imageDir/etc" etc/udiImage
         mount -o bind,remount,nodev,nosuid "${mntPoint}/etc/udiImage"
@@ -340,6 +380,7 @@ setupVFSMount () {
         fi
     done
     unset IFS
+    mount -o remount,ro,nosuid,nodev "${mntPoint}"
     set +e
 }
 
@@ -385,6 +426,7 @@ setupLoopbackMount() {
     mkdir -p "${mntPoint}" || die "Failed to create mount point ${mntPoint}"
     mount -t "${fstype}" -o loop,ro,nodev,nosuid "${imageFile}" "${mntPoint}" || die "Failed to mount image file ${imageFile}"
 }
+
 
 # global variables
 # udiRootType ## argument
@@ -460,6 +502,9 @@ main() {
         setupVFSMount "$udiMount" "$loopMount"
     else
         exit 1
+    fi
+    if [[ -e /proc/sys/net/krsip/request ]]; then 
+        echo "ccm on" > /proc/sys/net/krsip/request
     fi
 }
 

@@ -131,4 +131,7 @@ ret=0
 parseConfiguration
 unmountVFS
 unmountLoop
+if [[ -e /proc/sys/net/krsip/request ]]; then
+    echo "ccm off" > /proc/sys/net/krsip/request
+fi
 exit $ret
