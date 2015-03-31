@@ -1,46 +1,107 @@
 #!/bin/bash
 set -e
 
-PREFIX=/opt/proteus
+INST_PREFIX=${INST_PREFIX:-/opt/udiImage}
+SPRT_PREFIX=$( mktemp -d )
+PREFIX=$( mktemp -d )
 MUSL_VERSION=1.1.8
 LIBRESSL_VERSION=2.1.6
 ZLIB_VERSION=1.2.8
 OPENSSH_VERSION=6.8p1
 
-BASEDIR=$( pwd )
-#mkdir -p musl
-#tar xf "musl-${MUSL_VERSION}.tar.gz" -C musl --strip-components=1
-#cd musl
-#./configure "--prefix=${PREFIX}" --enable-static --disable-shared
-#make
-#make install
-#cd "${BASEDIR}"
+origdir=$( pwd )
+mkdir -p build
+cd build
+builddir=$( pwd )
+
+if [[ -z "$INST_PREFIX" || "$INST_PREFIX" == "/" ]]; then
+    echo "Invalid installation target: $INST_PREFIX" 1>&2
+    exit 1
+fi
+
+if [[ ! -e "musl-${MUSL_VERSION}.tar.gz" ]]; then
+    curl -o "musl-${MUSL_VERSION}.tar.gz" "http://www.musl-libc.org/releases/musl-${MUSL_VERSION}.tar.gz"
+fi
+if [[ ! -e "libressl-${LIBRESSL_VERSION}.tar.gz" ]]; then
+    curl -o "libressl-${LIBRESSL_VERSION}.tar.gz" "http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-${LIBRESSL_VERSION}.tar.gz"
+fi
+if [[ ! -e "zlib-${ZLIB_VERSION}.tar.gz" ]]; then
+    curl -o "zlib-${ZLIB_VERSION}.tar.gz" "http://zlib.net/zlib-${ZLIB_VERSION}.tar.gz"
+fi
+if [[ ! -e "openssh-${OPENSSH_VERSION}.tar.gz" ]]; then
+    curl -o "openssh-${OPENSSH_VERSION}.tar.gz" "http://mirrors.sonic.net/pub/OpenBSD/OpenSSH/portable/openssh-${OPENSSH_VERSION}.tar.gz"
+fi
+
+mkdir -p musl
+tar xf "musl-${MUSL_VERSION}.tar.gz" -C musl --strip-components=1
+cd musl
+./configure "--prefix=${SPRT_PREFIX}" --enable-static --disable-shared
+make
+make install
+cd "${builddir}"
 
 dirs="linux asm asm-generic"
 for dir in $dirs; do
-    cp -rp "/usr/include/$dir" "${PREFIX}/include/"
+    if [[ -L "/usr/include/$dir" ]]; then
+        # SLES has symlinks for asm
+        realpath=$(readlink -f "/usr/include/$dir")
+        cp -rp "$realpath" "${SPRT_PREFIX}/include/"
+    fi
+    cp -rp "/usr/include/$dir" "${SPRT_PREFIX}/include/"
 done
 
 mkdir -p libressl
 tar xf "libressl-${LIBRESSL_VERSION}.tar.gz" -C libressl --strip-components=1
 cd libressl
-CC="${PREFIX}/bin/musl-gcc" ./configure "--prefix=${PREFIX}" --enable-static --disable-shared
+CC="${SPRT_PREFIX}/bin/musl-gcc" ./configure "--prefix=${SPRT_PREFIX}" --enable-static --disable-shared
 make
 make install
 
-cd "${BASEDIR}"
+cd "${builddir}"
 mkdir -p zlib
 tar xf "zlib-${ZLIB_VERSION}.tar.gz" -C zlib --strip-components=1
 cd zlib
-CC="${PREFIX}/bin/musl-gcc" ./configure "--prefix=${PREFIX}"
+CC="${SPRT_PREFIX}/bin/musl-gcc" ./configure "--prefix=${SPRT_PREFIX}"
 make
 make install
 
-cd "${BASEDIR}"
+cd "${builddir}"
 mkdir -p openssh
 tar xf "openssh-${OPENSSH_VERSION}.tar.gz" -C openssh --strip-components=1
 cd openssh
-CC="${PREFIX}/bin/musl-gcc" ./configure --without-pam "--with-ssl-dir=${PREFIX}" --without-ssh1 --enable-static --disable-shared "--with-zlib=${PREFIX}" "--prefix=${PREFIX}"
+CC="${SPRT_PREFIX}/bin/musl-gcc" ./configure --without-pam "--with-ssl-dir=${SPRT_PREFIX}" --without-ssh1 --enable-static --disable-shared "--with-zlib=${SPRT_PREFIX}" "--prefix=${INST_PREFIX}"
 make
-make install
-cd "${BASEDIR}"
+make install "DESTDIR=${PREFIX}"
+cd "${builddir}"
+
+cat <<EOF > "${PREFIX}${INST_PREFIX}/etc/sshd_config"
+Port 6822
+StrictModes no
+PermitRootLogin no
+AuthorizedKeysFile ${INST_PREFIX}/etc/user_auth_keys
+IgnoreUserKnownHosts yes
+PasswordAuthentication no
+ChallengeResponseAuthentication no
+UsePAM no
+X11Forwarding yes
+PermitUserEnvironment no
+UseDNS no
+Subsystem sftp ${INST_PREFIX}/libexec/sftp-server
+AcceptEnv PBS_HOSTFILE
+AcceptEnv SLURM_JOB_NODELIST
+AcceptEnv SLURM_NODELIST
+AcceptEnv BASIL_RESERVATION_ID
+AllowUsers ToBeReplaced
+EOF
+cat <<EOF > ${PREFIX}${INST_PREFIX}/etc/ssh_config
+Host *
+  StrictHostKeyChecking no
+  Port 6822
+# IdentityFile ...
+EOF
+
+cd "${PREFIX}"
+tar cf "${origdir}/udiRoot_sshd.tar" .
+cd "${origdir}"
+rm -r "${PREFIX}"
+rm -r "${SPRT_PREFIX}"
