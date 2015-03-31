@@ -1,240 +1,135 @@
 #!/bin/sh 
+##  Based on the Cray CCM Prologue, Heavily modified by NERSC
 # Copyright 2011 Cray Inc.  All Rights Reserved.
 # Unpublished Proprietary Information.  This unpublished work is protected 
 # to trade secret, copyright and other laws.  Except as permitted by 
 # contract or express written permission of Cray Inc., no part of this work 
 # or its content may be used, reproduced or disclosed in any form.
-# prologue gets 3 arguments:
-# 1 -- jobid
-# 2 -- user
-# 3 -- grp
-#
-CCM_JOBID=$1
-CCM_JID=`echo $CCM_JOBID | awk -F. '{print $1}'`
-CCM_USER=$2
-CCM_GROUP=$3
-UDI_ROOT_TYPE=$4
-UDI_ROOT_VALUE=$5
 
-CCM_APID_TIMEOUT=15
+jobIdRaw="$1"
+jobId=$( echo $jobIdRaw | awk -F. '{print $1}'` )
+user="$2"
+udiRootType="$3"
+udiRootValue="$4"
+shift 4
 
-CRAY_QSTAT_PATH="/opt/pbs/default/bin"
-CRAY_BATCH_VAR="/var/spool/PBS"
-CCM_QUEUES="ccm_queue"
-
-LLMLOGGER="/opt/cray/llm/default/bin/xtlog"
-LLMCONF="/etc/opt/cray/llm/llm.conf"
+volumes=""
+while getopts ":v:" opt; do
+    case "${opt}" in
+        v)
+            volumes="${volumes}|${OPTARG}"
+            ;;
+        \?)
+            echo "Invalid option: -${OPTARG}" >&2
+            exit 1
+            ;;
+        :)
+            echo "Option -${OPTARG} requires an argument" >&2
+            exit 1
+            ;;
+    esac
+done
+if [[ -n "${volumes}" ]]; then
+    volumes="${volumes:1}" ## remove leading |
+fi
 
 udiRootSetupPath=@@@PREFIX@@@
 exit_code=0
 
-# Set apstat -n output columns
-export apstat_nodeTable="NID,Arch,State,HW,Rv,Pl,PgSz,Avl,Conf,Placed,PEs,Apids"
-
 PATH=${PATH}:/opt/cray/alps/default/bin/
 
+die() {
+    local msg
+    msg="$1"
+    echo "$msg" 1>&2
+    exit 1
+}
 
-echo "Initializing UdiRoot environment, Please Wait"
-if [ "x$UDI_ROOT_TYPE" == "xDOCKER" ]; then
+[[ -n "$jobId" ]] || die "Job ID is undefined"
+[[ -n "$user" ]]  || die "user is undefined"
+[[ -n "$udiRootType" ]] || die "udi image type is undefined"
+[[ -n "$udiRootValue" ]] || die "udi image value is undefined"
+
+echo "Initializing udiRoot, please wait."
+if [[ "$udiRootType" = "DOCKER" ]]; then
     echo "Retrieving Docker Image"
-    image=$( $udiRootSetupPath/bin/getDockerImage.pl -quiet $UDI_ROOT_VALUE )
+    image=$( $udiRootSetupPath/bin/getDockerImage.pl -quiet "$udiRootValue" )
     ret=$?
-    if [ "x$image" == "x" -o $ret -ne 0 ]; then
+    if [[ -z "$image" || $ret -ne 0 ]]; then
         echo "Failed to get udi image: $UDI_ROOT_VALUE"
         exit 1
     else
-        UDI_ROOT_VALUE=$image
+        udiRootValue=$image
     fi
 fi
 
-        if [ -z "$CCM_BATCH_RUNDIR" ] ; then
-            ccm_rundir=/var/run/crayccm_udiroot
-        else
-            ccm_rundir=$CCM_BATCH_RUNDIR 
+datadir="/var/run/udiRoot_jobs/$user/$jobId"
+mkdir -p "$datadir"
+chmod a+x /var/run/udiRoot_jobs
+chmod a+x "/var/run/udiRoot_jobs/$user"
+chmod a+x "/var/run/udiRoot_jobs/$user/$jobId"
+
+ssh-keygen -t rsa -f "$datadir/id_rsa.key" -N '' >/dev/null 2>&1
+chown "$user" "$datadir/id_rsa.key" "$datadir/id_rsa.key.pub"
+chmod 600 "$datadir/id_rsa.key" "$datadir/id_rsa.key.pub"
+sshPubKey="$datadir/id_rsa.key.pub"
+
+## stole this from ccm prologue, unsure how it is helpful/useful
+xtprocadmin_cmd="/opt/cray/sdb/default/bin/xtprocadmin"
+[[ -x "$xtprocadmin_cmd" ]] || die "No xtprocadmin"
+"$xtprocadmin_cmd" -E > /dev/null
+
+job_nodelist="$datadir/ccm_nodelist.$jobId"
+[[ -e "$job_nodelist" ]] && rm -f "$job_nodelist"
+
+job_count=0
+max_count=15
+
+reservation=""
+if [[ -n "$BASIL_RESERVATION_ID" ]]; then
+    reservation="$BASIL_RESERVATION_ID"
+else
+    while [ $job_count -lt $max_count ] ; do
+        reservation=$( apstat -r  | grep "batch:$jobId " | egrep -v "^A" | awk '{print $1}' )
+        if [[ -n "$reservation" ]]; then
+            break;
         fi
+        echo "waiting for reservation identifier"
+        sleep 1
+        job_count=$(( $job_count + 1))
+    done
+    [[ $job_count < $max_count ]] || die "Failed to identify job reservation"
+fi
 
-        mkdir -p $ccm_rundir
-        chmod 755 $ccm_rundir
+[[ -z "$reservation" ]] && die "Failed to identify job reservation"
 
-        # create running pid dir for ccmlaunch
-        if [ ! -d $ccm_rundir/$CCM_USER ] ; then
-            mkdir -p $ccm_rundir/$CCM_USER
-            chmod 1755 $ccm_rundir 
-            chmod 700 $ccm_rundir/$CCM_USER
-            chown $CCM_USER $ccm_rundir/$CCM_USER
-        fi
+apstat -rvvv -R $jid | awk '/^[ ]*PE / { printf "nid%05d\n", $6 }' | sort > $job_nodelist
+chmod a+r $job_nodelist
 
-        touch $ccm_rundir/$CCM_USER/$CCM_JOBID.run
-        chmod a+r $ccm_rundir/$CCM_USER/$CCM_JOBID.run
+xtxqtcmd_log="$datadir/log.$jobId"
+xtxqtcmd="/opt/cray/nodehealth/default/bin/xtxqtcmd"
+[[ -x "$xtxqtcmd" ]] || die "Could not find xtxqtcmd. Exiting"
 
-        user_data=`/opt/cray/ccm/default/bin/xtgetpwi -d -u $CCM_USER | tr -s "\n" " "`
-        CCM_HOMEDIR=$(echo $user_data | awk '{print $1}')
-        CCM_UID=$(echo $user_data | awk '{print $2}')
+unqiue_nodes=$datadir/unique_nodes.$CCM_JOBID
+[[ -e "$unique_nodes" ]] || die "nodelist file already exists!"
 
-        if [ -f /opt/xt-boot/default/bin/snos64/xtprocadmin ] ; then 
-            xtprocadmin_cmd=/opt/xt-boot/default/bin/snos64/xtprocadmin
-        else
-            xtprocadmin_cmd=/opt/cray/sdb/default/bin/xtprocadmin
-        fi
+cat "$job_nodelist" | sort -u > "$unique_nodes"
 
-        $xtprocadmin_cmd -E > /dev/null
+cmdStr="$udiRootSetupPath/sbin/setupRoot.sh \"$udiRootType\" \"$udiRootValue\" -s \"$sshPubKey\" -u \"$user\""
+IFS="|"
+for volume in ${volumes}; do
+    unset IFS
+    cmdStr="$cmdStr -v \"$volume\""
+done
 
-        job_nodelist=$ccm_rundir/ccm_nodelist.$CCM_JOBID
-        placed_nodelist=$ccm_rundir/placed_nodelist.$CCM_JOBID
+echo "$xtxqtcmd $unique_nodes $cmdStr"
+"$xtxqtcmd" "$unique_nodes" "$cmdStr" >> $xtxqtcmd_log 2>&1
+ok=$( grep "(complete)" $xtxqtcmd_log | wc -l )
+expected=$( wc -l "$unique_nodes" )
 
-        # remove any old temporary file of type nodelist
-        rm -f $job_nodelist
-        rm -f $placed_nodelist
-
-        job_count=0
-
-        while [ $job_count -lt $CCM_APID_TIMEOUT ] ; do
-            # under certain edge cases, CCM_JOBID might not be bound.  Specifically this seems
-            # to occur a lot when multiple qsubs are initiated quickly.  Always reobtain the reservation
-            # id on every iteration to maximize chance of success 
-            rid=`echo $CCM_JOBID | awk -F. '{print $1}'`
-            # CCM_JOBID is the batchid passed in from the batch system, typically in the format
-            # 123.sdb.  We only want the numeric portion.
-
-            jid=`apstat -r | grep "batch:$rid " | grep -v ^A | awk '{print $1}'`
-            # We are trying to get the ResId.
-            # apstat -r output looks like:
-            #  ResId     ApId From           Arch   PEs N d Memory State
-            #    524  5385733 batch:2274371    XT   500 32 1   1024 conf,claim
-            # A  524  5385734 batch:2274371    XT   384 - -   1024 conf,claim
-            if [ "$jid" != "" ]; then
-    	        break
-            fi
-            echo waiting for jid....
-            sleep 1
-            job_count=$(($job_count+1))
-        done
-
-        if [ $job_count -eq $CCM_APID_TIMEOUT ] ; then 
-            echo "CCM could not get job reservation"
-            exit 1 
-        fi 
-
-        #
-        # Create nodelist
-        #
-        declare -a nodelist
-        nodelist=(`apstat -n -R $jid | grep "XT" | grep "UP" | awk '{printf "nid%05d\n", $1}'`)
-        # The nodelist is list of hostname entries in the format nidxxxxx, one per line.
-        # We build this out of the first column of the apstat -n -R <jobid> output:
-        #  NID Arch State HW Rv Pl PgSz     Avl    Conf  Placed  PEs Apids
-        #  140   XT UP  B 32 32 32   4K 8388608 8388608 8388608   32 6968951
-
-        declare -a placedlist
-        placedlist=(`apstat -n -R $jid | grep "XT" | grep "UP" | awk '{print $1}'`)
-        # The placed is list of nids, one per line.
-        # We build this out of the first column of the apstat -n -R <jobid> output:
-        #  NID Arch State HW Rv Pl PgSz     Avl    Conf  Placed  PEs Apids
-        #  140   XT UP  B 32 32 32   4K 8388608 8388608 8388608   32 6968951
-        
-        placed_length=${#placedlist[@]}
-        i=0
-        while [ $i -lt $placed_length ] ; do
-            echo ${placedlist[$i]} >> $placed_nodelist
-            let i=$i+1
-        done 
-
-        chmod a+r $placed_nodelist
-
-        # determine nodelist by processing the following output format
-        #     PE 0, cmd 0, nid 20, CPU 0x1, map 0x1, accels 0
-        #     PE 1, cmd 0, nid 20, CPU 0x2, map 0x1, accels 0
-        #     PE 2, cmd 0, nid 21, CPU 0x1, map 0x1, accels 0
-        #     PE 3, cmd 0, nid 21, CPU 0x2, map 0x1, accels 0
-
-        apstat -rvvv -R $jid | awk '/^[ ]*PE / { printf "nid%05d\n", $6 }' | sort >$job_nodelist
-
-        # make job nodelist readable by all
-        chmod a+r $job_nodelist
-
-        ccm_nodelist=`cat $job_nodelist | sort -u | /usr/bin/tr -s '\n' ' '`
-
-        ccm_init_log=$ccm_rundir/ccm_initlog.$CCM_JOBID
- 
-        # create an empty nodelist to avoid special casing of the
-        # exec commandline later on
-        rhosts_nodelist=$ccm_rundir/ccm_rhosts.$CCM_JOBID
-
-        if [ "$CCM_ENABLERSH" == "yes" ] || [ "$CCM_ENABLERSH" == "y" ] ; then
-            for ccm_node in $ccm_nodelist;  do 
-                echo $ccm_node " " $CCM_USER >>  $rhosts_nodelist
-            done 
-        else
-          touch $rhosts_nodelist
-        fi
-        
-            chown $CCM_USER $rhosts_nodelist
-        
-
-        #su $CCM_USER -c "/opt/cray/ccm/default/sbin/ccm_userenv $CCM_USER $CCM_HOMEDIR $CCM_JOBID /var/run/crayccm 1"
-        ## CANT CALL because ccm_userenv has default ccm_runder baked-in
-
-
-        #
-        # Parallel launch using xtxqtcmd
-        #
-
-        if [ -f /opt/cray/nodehealth/default/bin/xtxqtcmd ]; then
-          xtxqtcmd_path=/opt/cray/nodehealth/default/bin/xtxqtcmd
-        else
-           echo "CCM could not find xtxqtcmd. Exiting"
-           exit 1
-        fi
-
-        ccm_init_nodelist=$ccm_rundir/ccm_init_nodelist.prologue.$CCM_JOBID
-
-        if [ ! -f $ccm_init_nodelist ] ; then 
-            cat $job_nodelist | sort -u > $ccm_init_nodelist
-            chown root:root $ccm_init_nodelist
-            chmod 600 $ccm_init_nodelist
-        # should only ever hit this path if the epilogue is running
-        else 
-            echo "CCM Resuming on partially initialized nodes."
-            echo "Nodelist is `cat $ccm_init_nodelist`"
-            rm -f $ccm_init_nodelist
-            exit 1
-        fi
-
-        #
-        # Exec start on each node
-        #
-#msg_severity=6 ; msg_type="ccm_prologue_mark"
-#        echo "${CCM_JOBID} `/bin/date +%c`" 2>&1 | logmsg
-        echo $xtxqtcmd_path $ccm_init_nodelist $udiRootSetupPath/sbin/setupRoot.sh \"$UDI_ROOT_TYPE\" \"$UDI_ROOT_VALUE\"
-        $xtxqtcmd_path $ccm_init_nodelist "$udiRootSetupPath/sbin/setupRoot.sh \"$UDI_ROOT_TYPE\" \"$UDI_ROOT_VALUE\"" >> $ccm_init_log 2>&1
-        okcnt=`grep "(complete)" $ccm_init_log | wc -l`
-
-#        CCM_PATH=/var/crayccm
-
-#	$xtxqtcmd_path $ccm_init_nodelist "mkdir -p  $DSL/$CCM_PATH; echo \"`cat $job_nodelist`\" > $CCM_PATH/ccm_nodelist; echo \"`cat $rhosts_nodelist`\" > $CCM_PATH/ccm_rhosts;  echo \"`su $CCM_USER -c \"cat $CCM_HOMEDIR/.ssh/id_rsa.pub\"`\" > $CCM_PATH/id_rsa.pub;  echo \"`su $CCM_USER -c \"cat $CCM_HOMEDIR/.ssh/id_dsa.pub\"`\" > $CCM_PATH/id_dsa.pub;  $DSL/$ccm_init_path $CCM_USER $CCM_HOMEDIR $CCM_UID $CCM_JOBID $DSL start" >> $ccm_init_log 2>&1
-
-#        echo "`/bin/date +%c`" >> $ccm_init_log 2>&1 
-
-#        msg_severity=6 ; msg_type="ccm_prologue_node"
-#        cat $ccm_init_log 2>&1 | logmsg
-
-#        okcnt=`grep "y (complete)" $ccm_init_log|grep "exit code: 0$"|wc -l`
-        expcnt=`cat $ccm_init_nodelist | wc -l`
-
-        # store count of nodes in this job
-        echo $expcnt > $ccm_rundir/$CCM_USER/$CCM_JOBID.run
-
-        if [ "$expcnt" == "$okcnt" ]; then
-                echo UdiRoot Start success, $okcnt of $expcnt responses
-#rm -f $ccm_init_log
-                exit_code=0
-        else
-                echo UdiRoot Start failed, $okcnt of $expcnt responses
-                echo Log on $ccm_init_log
-                chmod 644 $ccm_init_log
-                exit_code=1
-        fi
-
-        rm -f $ccm_init_nodelist
-
-exit $exit_code
+ret=0
+if [[ "$ok" != "$expected" ]]; then
+    echo "udiRoot Start FAILURE, $ok of $expected responses"
+    ret=1
+fi
+exit $ret
