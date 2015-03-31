@@ -1,4 +1,4 @@
-DIRS := config src kmod
+DIRS := config src kmod ssh
 
 include config.mk
 

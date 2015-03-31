@@ -8,6 +8,7 @@ dockerPath=/scratch1/scratchdirs/craydock/docker
 udiRootPath="$context/@@@PREFIX@@@"
 udiRootIncludeFile="$context/@@@INCLUDE_FILE@@@"
 mapPath=$udiRootPath/fsMap.conf
+sshTarBall=$udiRootPath/udiRoot_sshd.tar
 etcDir=$udiRootPath/etc_files
 kmodDir=$udiRootPath/kmod/$( uname -r )
 kmodCache=/tmp/udiRootLoadedModules.txt
