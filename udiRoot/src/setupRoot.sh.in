@@ -314,12 +314,20 @@ setupVFSMount () {
     cd "${mntPoint}"
 
     ## make some aspects of the local environment available
+    mkdir -p etc
     mkdir -p local/etc
     mount -o bind /dsl/etc local/etc
-    mount -o bind,remount,nodev,nosuid "${mntPoint}/local/etc"
+    mount -o bind,remount,ro,nodev,nosuid "${mntPoint}/local/etc"
+
+    ## /etc/hosts needs to match the local machine for safe and correct communication
+    cd etc
+    ln -s /local/etc/hosts hosts
+
+    ## cray shared-root etc needs /.shared
+    cd "${mntPoint}"
     mkdir -p .shared
     mount -o bind /dsl/.shared .shared
-    mount -o bind,remount,nodev,nosuid .shared
+    mount -o bind,remount,ro,nodev,nosuid .shared
 
     ## reserve some directories in "/" that will be handled explicitly
     mkdir -p etc/udiImage
