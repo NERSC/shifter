@@ -25,10 +25,10 @@ install: all
 	    $(INSTALL) --owner=root --group=root --mode=444  udiRoot.conf $(CONFIG_FILE); \
 	fi
 	if ! $(CMP) -s udiRoot.include $(INCLUDE_FILE); then \
-	    $(INSTALL) --owner=root --group=root --mode=444  udiRoot.include $(INCLUDE_FILE); \
+	    $(INSTALL) --owner=root --group=root --mode=400  udiRoot.include $(INCLUDE_FILE); \
 	fi
 	if ! $(CMP) -s fsMap.conf $(PREFIX)/fsMap.conf; then \
-	    $(INSTALL) --owner=root --group=root --mode=400  udiRoot.include $(PREFIX)/fsMap.conf; \
+	    $(INSTALL) --owner=root --group=root --mode=400  fsMap.conf $(PREFIX)/fsMap.conf; \
 	fi
 
 clean:
