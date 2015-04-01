@@ -7,7 +7,7 @@
 # or its content may be used, reproduced or disclosed in any form.
 
 jobIdRaw="$1"
-jobId=$( echo $jobIdRaw | awk -F. '{print $1}'` )
+jobId=$( echo $jobIdRaw | awk -F. '{print $1}' )
 user="$2"
 shift 2
 
@@ -39,7 +39,7 @@ xtprocadmin_cmd="/opt/cray/sdb/default/bin/xtprocadmin"
 [[ -x "$xtprocadmin_cmd" ]] || die "No xtprocadmin"
 "$xtprocadmin_cmd" -E > /dev/null
 
-job_nodelist="$datadir/ccm_nodelist.$jobId"
+job_nodelist="$datadir/nodelist.$jobId"
 [[ -e "$job_nodelist" ]] && rm -f "$job_nodelist"
 
 job_count=0
@@ -63,14 +63,14 @@ fi
 
 [[ -z "$reservation" ]] && die "Failed to identify job reservation"
 
-apstat -rvvv -R $jid | awk '/^[ ]*PE / { printf "nid%05d\n", $6 }' | sort > $job_nodelist
+apstat -rvvv -R $reservation | awk '/^[ ]*PE / { printf "nid%05d\n", $6 }' | sort > $job_nodelist
 chmod a+r $job_nodelist
 
 xtxqtcmd_log="$datadir/log.$jobId"
 xtxqtcmd="/opt/cray/nodehealth/default/bin/xtxqtcmd"
 [[ -x "$xtxqtcmd" ]] || die "Could not find xtxqtcmd. Exiting"
 
-unqiue_nodes=$datadir/unique_nodes.$CCM_JOBID
+unique_nodes=$datadir/unique_nodes.$jobId
 cat "$job_nodelist" | sort -u > "$unique_nodes"
 
 cmdStr="${nodeContext}${udiRootSetupPath}/sbin/unsetupRoot.sh"

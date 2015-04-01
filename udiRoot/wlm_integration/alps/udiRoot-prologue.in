@@ -7,7 +7,7 @@
 # or its content may be used, reproduced or disclosed in any form.
 
 jobIdRaw="$1"
-jobId=$( echo $jobIdRaw | awk -F. '{print $1}'` )
+jobId=$( echo $jobIdRaw | awk -F. '{print $1}' )
 user="$2"
 udiRootType="$3"
 udiRootValue="$4"
@@ -74,14 +74,14 @@ chmod a+x "/var/run/udiRoot_jobs/$user/$jobId"
 ssh-keygen -t rsa -f "$datadir/id_rsa.key" -N '' >/dev/null 2>&1
 chown "$user" "$datadir/id_rsa.key" "$datadir/id_rsa.key.pub"
 chmod 600 "$datadir/id_rsa.key" "$datadir/id_rsa.key.pub"
-sshPubKey="$datadir/id_rsa.key.pub"
+sshPubKey=$( cat "$datadir/id_rsa.key.pub" )
 
 ## stole this from ccm prologue, unsure how it is helpful/useful
 xtprocadmin_cmd="/opt/cray/sdb/default/bin/xtprocadmin"
 [[ -x "$xtprocadmin_cmd" ]] || die "No xtprocadmin"
 "$xtprocadmin_cmd" -E > /dev/null
 
-job_nodelist="$datadir/ccm_nodelist.$jobId"
+job_nodelist="$datadir/nodelist.$jobId"
 [[ -e "$job_nodelist" ]] && rm -f "$job_nodelist"
 
 job_count=0
@@ -105,15 +105,15 @@ fi
 
 [[ -z "$reservation" ]] && die "Failed to identify job reservation"
 
-apstat -rvvv -R $jid | awk '/^[ ]*PE / { printf "nid%05d\n", $6 }' | sort > $job_nodelist
+apstat -rvvv -R $reservation | awk '/^[ ]*PE / { printf "nid%05d\n", $6 }' | sort > $job_nodelist
 chmod a+r $job_nodelist
 
 xtxqtcmd_log="$datadir/log.$jobId"
 xtxqtcmd="/opt/cray/nodehealth/default/bin/xtxqtcmd"
 [[ -x "$xtxqtcmd" ]] || die "Could not find xtxqtcmd. Exiting"
 
-unqiue_nodes=$datadir/unique_nodes.$CCM_JOBID
-[[ -e "$unique_nodes" ]] || die "nodelist file already exists!"
+unique_nodes=$datadir/unique_nodes.$jobId
+[[ -e "$unique_nodes" ]] && die "nodelist file already exists!"
 
 cat "$job_nodelist" | sort -u > "$unique_nodes"
 
