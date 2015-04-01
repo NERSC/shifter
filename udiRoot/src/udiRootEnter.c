@@ -28,6 +28,8 @@ struct options {
     int udiRoot_flag;
     char *udiRoot_type;
     char *udiRoot_value;
+    uid_t tgtUid;
+    gid_t tgtGid;
     char **args;
 };
 
@@ -78,13 +80,10 @@ char *trim(char *str) {
 
 int read_config(int argc, char **argv, struct options *opts) {
     const char *filename = CONFIG_FILE;
-    FILE *fp = fopen(filename, "r");
-    int fd = fileno(fp);
+    FILE *fp = NULL;
     struct stat st_data;
-    size_t nBytes = 0;
     size_t nRead = 0;
-    char *buffer = NULL;
-    char *tokptr = NULL;
+    char buffer[1024];
     char *ptr = NULL;
     int idx, aidx;
 
@@ -94,52 +93,38 @@ int read_config(int argc, char **argv, struct options *opts) {
     }
 
     memset(&st_data, 0, sizeof(struct stat));
-    if (fstat(fd, &st_data) != 0) {
+    if (stat(filename, &st_data) != 0) {
         perror("Failed to stat config file: ");
         exit(1);
     }
-    nBytes = st_data.st_size;
     if (st_data.st_uid != 0 || st_data.st_gid != 0 || (st_data.st_mode & S_IWOTH)) {
         fprintf(stderr, "Configuration file not owned by root, or is writable by others.\n");
         exit(1);
     }
-    buffer = (char *) malloc(sizeof(char)*nBytes);
-    nRead = fread(buffer, 1, nBytes, fp);
+    snprintf(buffer, 1024, "/bin/sh -c \"source %s; echo $%s\"", filename, "udiMount");
+    fp = popen(buffer, "r");
+    nRead = fread(buffer, 1, 1024, fp);
+    pclose(fp);
     if (nRead == 0) {
         fprintf(stderr, "Failed to read configuration file.\n");
         exit(1);
     }
-    tokptr = buffer;
-    while ((ptr = strtok(tokptr, "=\n")) != NULL) {
-        tokptr = NULL;
-        while (isspace(*ptr)) {
-            ptr++;
-        }
-        if (*ptr == 0) {
-            continue;
-        }
-        ptr = trim(ptr);
-        if (strcmp(ptr, "udiMount") == 0) {
-            ptr = strtok(NULL, "=\n");
-            ptr = trim(ptr);
-            if (ptr != NULL) {
-                if (opts->chroot_path != NULL) {
-                    free(opts->chroot_path);
-                }
-                opts->chroot_path = strdup(ptr);
-            }
-        } else if (strcmp(ptr, "udiRootPrefix") == 0) {
-            ptr = strtok(NULL, "=\n");
-            ptr = trim(ptr);
-            if (ptr != NULL) {
-                if (opts->udiRoot_prefix != NULL) {
-                    free(opts->udiRoot_prefix);
-                }
-                opts->udiRoot_prefix = strdup(ptr);
-            }
-        }
+    buffer[nRead] = 0;
+    ptr = trim(buffer);
+
+    opts->chroot_path = strdup(ptr);
+    snprintf(buffer, 1024, "/bin/sh -c \"source %s; echo $%s\"", filename, "udiRootPrefix");
+    fp = popen(buffer, "r");
+    nRead = fread(buffer, 1, 1024, fp);
+    pclose(fp);
+    if (nRead == 0) {
+        fprintf(stderr, "Failed to read configuration file.\n");
+        exit(1);
     }
-    fclose(fp);
+    buffer[nRead] = 0;
+    ptr = trim(buffer);
+    opts->udiRoot_prefix = strdup(ptr);
+
     if (opts->chroot_path != NULL && strlen(opts->chroot_path) != 0) {
         memset(&st_data, 0, sizeof(struct stat));
         if (stat(opts->chroot_path, &st_data) != 0) {
@@ -186,6 +171,28 @@ int read_config(int argc, char **argv, struct options *opts) {
         } else if (strcmp(argv[idx], "--version") == 0 || strcmp(argv[idx], "-V") == 0) {
             version();
             exit(0);
+        } else if (strcmp(argv[idx], "--uid") == 0 || strcmp(argv[idx], "-u") == 0) {
+            idx++;
+            opts->tgtUid = 0;
+            if (idx < argc) {
+                opts->tgtUid = atoi(argv[idx]);
+            }
+            if (opts->tgtUid == 0) {
+                fprintf(stderr, "Could not interpret uid (cannot be 0)\n");
+                usage(1);
+                exit(1);
+            }
+        } else if (strcmp(argv[idx], "--gid") == 0 || strcmp(argv[idx], "-g") == 0) {
+            idx++;
+            opts->tgtGid = 0;
+            if (idx < argc) {
+                opts->tgtGid = atoi(argv[idx]);
+            }
+            if (opts->tgtGid == 0) {
+                fprintf(stderr, "Could not interpret gid (cannot be 0)\n");
+                usage(1);
+                exit(1);
+            }
         } else {
             break;
         }
@@ -208,8 +215,8 @@ int main(int argc, char **argv) {
     /* declare needed variables */
     const size_t pathbuf_sz = PATH_MAX+1;
     char wd[pathbuf_sz];
-    uid_t tgtUid, eUid;
-    gid_t tgtGid, eGid;
+    uid_t uid,eUid;
+    gid_t gid,eGid;
     gid_t *gidList = NULL;
     int nGroups = 0;
     int idx = 0;
@@ -220,12 +227,19 @@ int main(int argc, char **argv) {
     /* destroy this environment */
     clearenv();
 
+    /* parse config file and command line options */
+    read_config(argc, argv, &opts);
+
 
     /* figure out who we are and who we want to be */
-    tgtUid = getuid();
-    eUid   = geteuid();
-    tgtGid = getgid();
-    eGid   = getegid();
+    uid = getuid();
+    eUid = geteuid();
+    gid = getgid();
+    eGid = getegid();
+
+    if (opts.tgtUid == 0) opts.tgtUid = uid;
+    if (opts.tgtGid == 0) opts.tgtGid = gid;
+
     nGroups = getgroups(0, NULL);
     if (nGroups > 0) {
         gidList = (gid_t *) malloc(sizeof(gid_t) * nGroups);
@@ -240,13 +254,13 @@ int main(int argc, char **argv) {
         for (idx = 0; idx < nGroups; ++idx) {
             printf("gidList entry: %d\n", gidList[idx]);
             if (gidList[idx] == 0) {
-                gidList[idx] = tgtGid;
+                gidList[idx] = opts.tgtGid;
             }
         }
         for (idx = 0; idx < nGroups; ++idx) {
             printf("revised gidList entry: %d\n", gidList[idx]);
             if (gidList[idx] == 0) {
-                gidList[idx] = tgtGid;
+                gidList[idx] = opts.tgtGid;
             }
         }
     }
@@ -255,13 +269,11 @@ int main(int argc, char **argv) {
         fprintf(stderr, "%s\n", "Not running with root privileges, will fail.");
         exit(1);
     }
-    if (tgtUid == 0 || tgtGid == 0) {
+    if (opts.tgtUid == 0 || opts.tgtGid == 0) {
         fprintf(stderr, "%s\n", "Will not run as root.");
         exit(1);
     }
 
-    /* parse config file and command line options */
-    read_config(argc, argv, &opts);
 
     if (opts.udiRoot_flag == 1) {
         /* call setup root */
@@ -332,12 +344,12 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to setgroups\n");
         exit(1);
     }
-    if (setresgid(tgtGid, tgtGid, tgtGid) != 0) {
-        fprintf(stderr, "Failed to setgid to %d\n", tgtGid);
+    if (setresgid(opts.tgtGid, opts.tgtGid, opts.tgtGid) != 0) {
+        fprintf(stderr, "Failed to setgid to %d\n", opts.tgtGid);
         exit(1);
     }
-    if (setresuid(tgtUid, tgtUid, tgtUid) != 0) {
-        fprintf(stderr, "Failed to setuid to %d\n", tgtUid);
+    if (setresuid(opts.tgtUid, opts.tgtUid, opts.tgtUid) != 0) {
+        fprintf(stderr, "Failed to setuid to %d\n", opts.tgtUid);
         exit(1);
     }
 
