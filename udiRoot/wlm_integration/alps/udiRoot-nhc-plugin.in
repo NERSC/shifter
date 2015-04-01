@@ -1,13 +1,14 @@
-#!/bin/sh
+#!/usr/bin/ksh
 
 if [[ -e /opt/cray/nodehealth/default/bin/libplugin.sh ]]; then
     . /opt/cray/nodehealth/default/bin/libplugin.sh
 fi
 
-CONFIG_FILE=@@@CONFIG_FILE@@@
+context=/dsl
+CONFIG_FILE="$context/@@@CONFIG_FILE@@@"
 readonly CONFIG_FILE
 
-source $CONFIG_FILE
+. $CONFIG_FILE
 
 foundVFSMounts=1
 (cat /proc/mounts | awk '{print $2}' | egrep "^$udiMount" > /dev/null 2>&1) || foundVFSMounts=0
