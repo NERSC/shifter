@@ -7,8 +7,9 @@
 # or its content may be used, reproduced or disclosed in any form.
 
 jobIdRaw="$1"
-jobId=$( echo $jobIdRaw | awk -F. '{print $1}' )
+jobId=""
 user="$2"
+userUid=""
 udiRootType="$3"
 udiRootValue="$4"
 shift 4
@@ -47,10 +48,16 @@ die() {
     exit 1
 }
 
-[[ -n "$jobId" ]] || die "Job ID is undefined"
+[[ -n "$jobIdRaw" ]] || die "Job ID is undefined"
 [[ -n "$user" ]]  || die "user is undefined"
 [[ -n "$udiRootType" ]] || die "udi image type is undefined"
 [[ -n "$udiRootValue" ]] || die "udi image value is undefined"
+
+jobId=$( echo "$jobIdRaw" | awk -F. '{print $1}' )
+userUid=$( id -u "$user" )
+
+[[ -n "$jobId" ]] || die "Job ID is undefined"
+[[ -n "$userUid" ]] || die "user Uid is unknown"
 
 echo "Initializing udiRoot, please wait."
 if [[ "$udiRootType" = "DOCKER" ]]; then
@@ -117,7 +124,7 @@ unique_nodes=$datadir/unique_nodes.$jobId
 
 cat "$job_nodelist" | sort -u > "$unique_nodes"
 
-cmdStr="${nodeContext}/${udiRootSetupPath}/sbin/setupRoot.sh \"$udiRootType\" \"$udiRootValue\" -s \"$sshPubKey\" -u \"$user\""
+cmdStr="${nodeContext}/${udiRootSetupPath}/sbin/setupRoot.sh \"$udiRootType\" \"$udiRootValue\" -s \"$sshPubKey\" -u \"$user\" -U \"$userUid\""
 IFS="|"
 for volume in ${volumes}; do
     unset IFS
