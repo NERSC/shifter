@@ -243,12 +243,16 @@ setupImageSsh() {
         ./bin/ssh-keygen -t rsa -f ./etc/ssh_host_rsa_key -N '' > /dev/null 2>&1
         ./bin/ssh-keygen -t ed25519 -f ./etc/ssh_host_ed25519_key -N '' > /dev/null 2>&1
         ./bin/ssh-keygen -t ecdsa -f ./etc/ssh_host_ecdsa_key -N '' > /dev/null 2>&1
-        if [[ -n "$sshPubKey" ]]; then
-            echo "$sshPubKey" > ./etc/user_auth_keys
-        fi
         cat ./etc/sshd_config | sed "s|AllowUsers ToBeReplaced|AllowUsers $udiUser|g" > ./etc/sshd_config.new
         mv ./etc/sshd_config.new ./etc/sshd_config
         chmod -R a+rX etc
+        if [[ -n "$sshPubKey" && -n "$udiUser" ]]; then
+            echo "$sshPubKey" > ./etc/user_auth_keys
+            chown "$udiUser" ./etc/user_auth_keys
+            chmod 600 ./etc/user_auth_keys
+        fi
+        chmod 600 ./etc/sshd_config
+        chmod 600 ./etc/ssh_host*
 
         ## replace ssh in any "normal" location in the image
         if [[ -f "${mntPoint}/usr/bin/ssh" && -f "${mntPoint}/opt/udiImage/bin/ssh" ]]; then
@@ -261,6 +265,12 @@ setupImageSsh() {
             cp -p "${mntPoint}/opt/udiImage/etc/ssh_config" "${mntPoint}/etc/ssh/ssh_config"
         fi
     fi
+}
+
+startSshd() {
+    local mntPoint
+    mntPoint="$1"
+    /sbin/chroot "$mntPoint" /opt/udiImage/sbin/sshd
 }
 
 setupVFSMount () {
@@ -375,6 +385,7 @@ setupVFSMount () {
     mount -t proc none "${mntPoint}/proc"
     mount -o bind /dev "${mntPoint}/dev"
     mount -o bind,remount,nosuid "${mntPoint}/dev"
+    mount -t devpts none "${mntPoint}/dev/pts"
     mount -o bind /sys "${mntPoint}/sys"
     mount -o bind,remount,nosuid "${mntPoint}/sys"
 
@@ -530,6 +541,9 @@ main() {
     fi
     if [[ -e /proc/sys/net/krsip/request ]]; then 
         echo "ccm on" > /proc/sys/net/krsip/request
+    fi
+    if [[ -n "$sshPubKey" ]]; then
+        startSsh
     fi
 }
 

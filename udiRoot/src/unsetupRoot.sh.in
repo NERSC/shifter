@@ -129,6 +129,10 @@ unmountLoop() {
 
 ret=0
 parseConfiguration
+sshdPid=$( ps -efww | grep /opt/udiImage/sbin/sshd | grep -v grep )
+if [[ -n "$sshdPid" ]]; then
+    kill "$sshdPid"
+fi
 unmountVFS
 unmountLoop
 if [[ -e /proc/sys/net/krsip/request ]]; then

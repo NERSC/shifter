@@ -79,80 +79,22 @@ char *trim(char *str) {
 }
 
 int read_config(int argc, char **argv, struct options *opts) {
-    const char *filename = CONFIG_FILE;
+    const char *cn_filename = CONFIG_FILE;
+    const char *filename = cn_filename;
     FILE *fp = NULL;
     struct stat st_data;
     size_t nRead = 0;
-    char buffer[1024];
+    char buffer[PATH_MAX];
     char *ptr = NULL;
     int idx, aidx;
+    int computeContext = 0;
 
     if (opts == NULL) {
         fprintf(stderr, "Invalid configuration structure, abort.\n");
         exit(1);
     }
-
-    memset(&st_data, 0, sizeof(struct stat));
-    if (stat(filename, &st_data) != 0) {
-        perror("Failed to stat config file: ");
-        exit(1);
-    }
-    if (st_data.st_uid != 0 || st_data.st_gid != 0 || (st_data.st_mode & S_IWOTH)) {
-        fprintf(stderr, "Configuration file not owned by root, or is writable by others.\n");
-        exit(1);
-    }
-    snprintf(buffer, 1024, "/bin/sh -c \"source %s; echo $%s\"", filename, "udiMount");
-    fp = popen(buffer, "r");
-    nRead = fread(buffer, 1, 1024, fp);
-    pclose(fp);
-    if (nRead == 0) {
-        fprintf(stderr, "Failed to read configuration file.\n");
-        exit(1);
-    }
-    buffer[nRead] = 0;
-    ptr = trim(buffer);
-
-    opts->chroot_path = strdup(ptr);
-    snprintf(buffer, 1024, "/bin/sh -c \"source %s; echo $%s\"", filename, "udiRootPrefix");
-    fp = popen(buffer, "r");
-    nRead = fread(buffer, 1, 1024, fp);
-    pclose(fp);
-    if (nRead == 0) {
-        fprintf(stderr, "Failed to read configuration file.\n");
-        exit(1);
-    }
-    buffer[nRead] = 0;
-    ptr = trim(buffer);
-    opts->udiRoot_prefix = strdup(ptr);
-
-    if (opts->chroot_path != NULL && strlen(opts->chroot_path) != 0) {
-        memset(&st_data, 0, sizeof(struct stat));
-        if (stat(opts->chroot_path, &st_data) != 0) {
-            perror("Could not stat target root path: ");
-            exit(1);
-        }
-        if (st_data.st_uid != 0 || st_data.st_gid != 0 || (st_data.st_mode & S_IWOTH)) {
-            fprintf(stderr, "%s\n", "Target / path is not owned by root, or is globally writable.");
-            exit(1);
-        }
-    } else {
-        return 1;
-    }
-    if (opts->udiRoot_prefix != NULL && strlen(opts->udiRoot_prefix) != 0) {
-        memset(&st_data, 0, sizeof(struct stat));
-        if (stat(opts->udiRoot_prefix, &st_data) != 0) {
-            perror("Could not stat udiRoot prefix");
-            exit(1);
-        }
-        if (st_data.st_uid != 0 || st_data.st_gid != 0 || (st_data.st_mode & S_IWOTH)) {
-            fprintf(stderr, "udiRoot installation not owned by root, or is globally writable.\n");
-            exit(1);
-        }
-    } else {
-        return 1;
-    }
-
     opts->udiRoot_flag = 0;
+
     /* parse very simple command line options */
     for (idx = 1; idx < argc; ++idx) {
         if (strcmp(argv[idx], "--setup") == 0) {
@@ -193,10 +135,82 @@ int read_config(int argc, char **argv, struct options *opts) {
                 usage(1);
                 exit(1);
             }
+        } else if (strcmp(argv[idx], "--compute") == 0) {
+            computeContext = 1;
         } else {
             break;
         }
     }
+
+    if (computeContext) {
+        snprintf(buffer, PATH_MAX, "%s%s", "/dsl", cn_filename);
+        filename = strdup(buffer);
+        setenv("context", "/dsl", 1);
+    }
+
+    memset(&st_data, 0, sizeof(struct stat));
+    if (stat(filename, &st_data) != 0) {
+        perror("Failed to stat config file: ");
+        exit(1);
+    }
+    if (st_data.st_uid != 0 || st_data.st_gid != 0 || (st_data.st_mode & S_IWOTH)) {
+        fprintf(stderr, "Configuration file not owned by root, or is writable by others.\n");
+        exit(1);
+    }
+    snprintf(buffer, 1024, "/bin/sh -c 'source %s; echo $%s'", filename, "udiMount");
+    printf("cmd: %s\n", buffer);
+    fp = popen(buffer, "r");
+    nRead = fread(buffer, 1, 1024, fp);
+    pclose(fp);
+    if (nRead == 0) {
+        fprintf(stderr, "Failed to read configuration file.\n");
+        exit(1);
+    }
+    buffer[nRead] = 0;
+    ptr = trim(buffer);
+    printf("got %d bytes: %s\n", nRead, ptr);
+    opts->chroot_path = strdup(ptr);
+    snprintf(buffer, 1024, "/bin/sh -c 'source %s; echo $%s'", filename, "udiRootPath");
+    printf("cmd: %s\n", buffer);
+    fp = popen(buffer, "r");
+    nRead = fread(buffer, 1, 1024, fp);
+    pclose(fp);
+    if (nRead == 0) {
+        fprintf(stderr, "Failed to read configuration file.\n");
+        exit(1);
+    }
+    buffer[nRead] = 0;
+    ptr = trim(buffer);
+    opts->udiRoot_prefix = strdup(ptr);
+    printf("got %d bytes: %s\n", nRead, ptr);
+
+    if (opts->chroot_path != NULL && strlen(opts->chroot_path) != 0) {
+        memset(&st_data, 0, sizeof(struct stat));
+        if (stat(opts->chroot_path, &st_data) != 0) {
+            perror("Could not stat target root path: ");
+            exit(1);
+        }
+        if (st_data.st_uid != 0 || st_data.st_gid != 0 || (st_data.st_mode & S_IWOTH)) {
+            fprintf(stderr, "%s\n", "Target / path is not owned by root, or is globally writable.");
+            exit(1);
+        }
+    } else {
+        return 1;
+    }
+    if (opts->udiRoot_prefix != NULL && strlen(opts->udiRoot_prefix) != 0) {
+        memset(&st_data, 0, sizeof(struct stat));
+        if (stat(opts->udiRoot_prefix, &st_data) != 0) {
+            perror("Could not stat udiRoot prefix");
+            exit(1);
+        }
+        if (st_data.st_uid != 0 || st_data.st_gid != 0 || (st_data.st_mode & S_IWOTH)) {
+            fprintf(stderr, "udiRoot installation not owned by root, or is globally writable.\n");
+            exit(1);
+        }
+    } else {
+        return 1;
+    }
+
     /* remainder of arguments are for the application to be executed */
     opts->args = (char **) malloc(sizeof(char *) * ((argc - idx) + 1));
     for (aidx = 0; idx < argc; ++idx, ++aidx) {
@@ -340,25 +354,30 @@ int main(int argc, char **argv) {
     }
 
     /* drop privileges */
+    printf("setgroups\n");
     if (setgroups(nGroups, gidList) != 0) {
         fprintf(stderr, "Failed to setgroups\n");
         exit(1);
     }
+    printf("setresgid\n");
     if (setresgid(opts.tgtGid, opts.tgtGid, opts.tgtGid) != 0) {
         fprintf(stderr, "Failed to setgid to %d\n", opts.tgtGid);
         exit(1);
     }
+    printf("setresuid\n");
     if (setresuid(opts.tgtUid, opts.tgtUid, opts.tgtUid) != 0) {
         fprintf(stderr, "Failed to setuid to %d\n", opts.tgtUid);
         exit(1);
     }
 
     /* chdir (within chroot) to where we belong again */
+    printf("cd to wd\n");
     if (chdir(wd) != 0) {
         fprintf(stderr, "Failed to switch to original cwd: %s\n", wd);
         exit(1);
     }
 
+    printf("execve\n");
     execve(opts.args[0], opts.args, environ_copy);
     return 0;
 }

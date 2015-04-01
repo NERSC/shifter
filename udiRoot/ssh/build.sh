@@ -75,14 +75,13 @@ make install "DESTDIR=${PREFIX}"
 cd "${builddir}"
 
 cat <<EOF > "${PREFIX}${INST_PREFIX}/etc/sshd_config"
-Port 6822
-StrictModes no
+Port 204
+StrictModes yes
 PermitRootLogin no
 AuthorizedKeysFile ${INST_PREFIX}/etc/user_auth_keys
 IgnoreUserKnownHosts yes
 PasswordAuthentication no
 ChallengeResponseAuthentication no
-UsePAM no
 X11Forwarding yes
 PermitUserEnvironment no
 UseDNS no
@@ -96,7 +95,7 @@ EOF
 cat <<EOF > ${PREFIX}${INST_PREFIX}/etc/ssh_config
 Host *
   StrictHostKeyChecking no
-  Port 6822
+  Port 204
 # IdentityFile ...
 EOF
 
