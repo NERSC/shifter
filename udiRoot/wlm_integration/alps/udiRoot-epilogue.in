@@ -12,6 +12,7 @@ user="$2"
 shift 2
 
 udiRootSetupPath=@@@PREFIX@@@
+nodeContext="/dsl"
 
 PATH=${PATH}:/opt/cray/alps/default/bin/
 
@@ -72,7 +73,7 @@ xtxqtcmd="/opt/cray/nodehealth/default/bin/xtxqtcmd"
 unqiue_nodes=$datadir/unique_nodes.$CCM_JOBID
 cat "$job_nodelist" | sort -u > "$unique_nodes"
 
-cmdStr="$udiRootSetupPath/sbin/unsetupRoot.sh"
+cmdStr="${nodeContext}${udiRootSetupPath}/sbin/unsetupRoot.sh"
 
 echo "$xtxqtcmd $unique_nodes $cmdStr"
 "$xtxqtcmd" "$unique_nodes" "$cmdStr" >> $xtxqtcmd_log 2>&1
