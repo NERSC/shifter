@@ -18,7 +18,8 @@ udiRoot_sshd.tar:
 	./build.sh
 
 install: all
-	install --mode=0400 udiRoot_sshd.tar $(PREFIX)/udiRoot_sshd.tar
+	mkdir -p $(PREFIX)/sshd
+	tar xf udiRoot_sshd.tar -C $(PREFIX)/sshd --strip-components=2
 
 clean:
 	if [ -a udiRoot_sshd.tar ]; then $(RM) udiRoot_sshd.tar; fi

@@ -225,7 +225,7 @@ bindImageIntoMnt() {
         fi
         # bind mount directories
         if [[ -d "$remoteDir/$item" ]]; then
-            mkdir "$remoteDir"
+            mkdir "$localDir/$item"
             mount --bind "$remoteDir/$item" "${localDir}/$item"
             mount -o bind,remount,nodev,nosuid "${localDir}/$item"
         fi
@@ -236,6 +236,8 @@ setupImageSsh() {
     local mntPoint
     mntPoint="$1"
     if [[ -f "$sshTarBall" ]]; then
+        cd "${mntPoint}"
+        cp -rp "$sshPath"/udiImage ./opt/
         cd "${mntPoint}/opt/udiImage"
         tar xf "$sshTarBall" ./opt/udiImage --strip-components=3
         ./bin/ssh-keygen -t dsa -f ./etc/ssh_host_dsa_key -N '' > /dev/null 2>&1
