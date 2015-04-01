@@ -1,5 +1,9 @@
 #!/bin/sh
 
+if [[ -e /opt/cray/nodehealth/default/bin/libplugin.sh ]]; then
+    . /opt/cray/nodehealth/default/bin/libplugin.sh
+fi
+
 CONFIG_FILE=@@@CONFIG_FILE@@@
 readonly CONFIG_FILE
 
@@ -44,7 +48,7 @@ fi
 
 if [[ -n "$errMessage" ]]; then
     errMessage="${errMessage:1}"
-    echo "$errMessage" > /dev/kmsg
+    log_output "$errMessage"
     exit 1
 fi
 exit 0
