@@ -365,11 +365,10 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         args[0] = buffer;
         args[1] = job_str;
         args[2] = user_str;
-        args[3] = group_str;
-        args[4] = image_type;
-        args[5] = image;
-        args[6] = NULL;
-        slurm_info("prolog: %s, %s, %s, %s, %s, %s", args[0], args[1], args[2], args[3], args[4], args[5]);
+        args[3] = image_type;
+        args[4] = image;
+        args[5] = NULL;
+        slurm_info("prolog: %s, %s, %s, %s, %s", args[0], args[1], args[2], args[3], args[4]);
         execv(args[0], args);
     } else if (child > 0) {
         int status = 0;
@@ -476,10 +475,9 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
         args[0] = buffer;
         args[1] = job_str;
         args[2] = user_str;
-        args[3] = group_str;
-        args[4] = image_type;
-        args[5] = image;
-        args[6] = NULL;
+        args[3] = image_type;
+        args[4] = image;
+        args[5] = NULL;
         execv(args[0], args);
     } else if (child > 0) {
         int status = 0;
