@@ -235,7 +235,7 @@ bindImageIntoMnt() {
 setupImageSsh() {
     local mntPoint
     mntPoint="$1"
-    if [[ -f "$sshTarBall" ]]; then
+    if [[ -d "$sshPath" ]]; then
         cd "${mntPoint}"
         cp -rp "$sshPath"/udiImage ./opt/
         cd "${mntPoint}/opt/udiImage"
@@ -246,10 +246,8 @@ setupImageSsh() {
         if [[ -n "$sshPubKey" ]]; then
             echo "$sshPubKey" > ./etc/user_auth_keys
         fi
-        ed -s ./etc/sshd_config <<EOF
-/AllowUsers/s/ToBeReplaced/$udiUser/g
-w
-EOF
+        cat ./etc/sshd_config | sed "s|AllowUsers ToBeReplaced|AllowUsers $udiUser|g" > ./etc/sshd_config.new
+        mv ./etc/sshd_config.new ./etc/sshd_config
         chmod -R a+rX etc
 
         ## replace ssh in any "normal" location in the image
