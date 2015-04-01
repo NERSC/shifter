@@ -138,11 +138,12 @@ parseArguments() {
     udiRootType="$1"
     udiRootValue="$2"
     udiUser="invalidUser"
+    udiUid="UNSET"
     readonly udiRootType
     readonly udiRootValue
     shift 2
     volumes=""
-    while getopts ":v:s:u:" opt; do
+    while getopts ":v:s:u:U:" opt; do
         case "${opt}" in
             v)
                 volumes="${volumes}|${OPTARG}"
@@ -152,6 +153,9 @@ parseArguments() {
                 ;;
             u)
                 udiUser="${OPTARG}"
+                ;;
+            U)
+                udiUid="${OPTARG}"
                 ;;
             \?)
                 echo "Invalid option: -${OPTARG}" >&2
@@ -169,6 +173,7 @@ parseArguments() {
     readonly volumes
     readonly sshPubKey
     readonly udiUser
+    readonly udiUid
 }
 
 stripLeadingSlash() {
@@ -239,20 +244,19 @@ setupImageSsh() {
         cd "${mntPoint}"
         cp -rp "$sshPath"/udiImage ./opt/
         cd "${mntPoint}/opt/udiImage"
+        chmod -R a+rX .
         ./bin/ssh-keygen -t dsa -f ./etc/ssh_host_dsa_key -N '' > /dev/null 2>&1
         ./bin/ssh-keygen -t rsa -f ./etc/ssh_host_rsa_key -N '' > /dev/null 2>&1
         ./bin/ssh-keygen -t ed25519 -f ./etc/ssh_host_ed25519_key -N '' > /dev/null 2>&1
         ./bin/ssh-keygen -t ecdsa -f ./etc/ssh_host_ecdsa_key -N '' > /dev/null 2>&1
         cat ./etc/sshd_config | sed "s|AllowUsers ToBeReplaced|AllowUsers $udiUser|g" > ./etc/sshd_config.new
         mv ./etc/sshd_config.new ./etc/sshd_config
-        chmod -R a+rX etc
         if [[ -n "$sshPubKey" && -n "$udiUser" ]]; then
             echo "$sshPubKey" > ./etc/user_auth_keys
-            chown "$udiUser" ./etc/user_auth_keys
+            chown "$udiUid" ./etc/user_auth_keys
             chmod 600 ./etc/user_auth_keys
         fi
         chmod 600 ./etc/sshd_config
-        chmod 600 ./etc/ssh_host*
 
         ## replace ssh in any "normal" location in the image
         if [[ -f "${mntPoint}/usr/bin/ssh" && -f "${mntPoint}/opt/udiImage/bin/ssh" ]]; then
@@ -371,14 +375,12 @@ setupVFSMount () {
             ln -s "site/$item" "$item"
         done
         ## take care of passwd
-        if [[ -e passwd ]]; then
-            rm passwd
-        fi
+        [[ -e passwd ]] && rm passwd
         ln -s site/udi_passwd passwd
-        if [[ -e group ]]; then
-            rm group
-        fi
+        [[ -e group ]] && rm group
         ln -s site/udi_group group
+        [[ -e nsswitch.conf ]] && rm nsswitch.conf
+        ln -s site/nsswitch.conf nsswitch.conf
     fi
 
     ## mount up linux needs
@@ -543,7 +545,7 @@ main() {
         echo "ccm on" > /proc/sys/net/krsip/request
     fi
     if [[ -n "$sshPubKey" ]]; then
-        startSsh
+        startSshd "$udiMount"
     fi
 }
 
