@@ -324,6 +324,8 @@ setupVFSMount () {
     ## reserve some directories in "/" that will be handled explicitly
     mkdir -p etc/udiImage
     mkdir -p opt/udiImage
+    mkdir -p var/empty
+    mkdir -p var/run
     mkdir -p etc/site
     mkdir -p proc
     mkdir -p sys
@@ -338,6 +340,10 @@ setupVFSMount () {
     # take care of opt separately
     if [[ -e "$imageDir/opt" ]]; then
         bindImageIntoMnt "$imageDir/opt" "$mntPoint/opt"
+    fi
+
+    if [[ -e "$imageDir/var" ]]; then
+        bindImageIntoMnt "$imageDir/var" "$mntPoint/var"
     fi
 
     # setup image ssh
