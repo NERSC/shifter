@@ -40,6 +40,9 @@ install: all
 	if ! $(CMP) -s udiRootEnter $(PREFIX)/sbin/udiRootEnter; then \
 		$(INSTALL) --owner=root --group=root --mode=4555  udiRootEnter $(PREFIX)/sbin/udiRootEnter; \
 	fi
+	if ! $(CMP) -s shiftsh $(PREFIX)/bin/shiftsh; then \
+		$(INSTALL) --owner=root --group=root --mode=555  shiftsh $(PREFIX)/bin/shiftsh; \
+	fi
 
 clean:
 	if [ -a setupRoot.sh ]; then $(RM) setupRoot.sh; fi

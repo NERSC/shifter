@@ -1,0 +1,20 @@
+#!/bin/sh
+
+datadir() {
+    echo "$1" 1>&2
+    exit 1
+}
+
+job=0
+[[ -n "$PBS_JOBID" ]] && job="$PBS_JOBID"
+[[ -n "$SLURM_JOBID" ]] && job="$SLURM_JOBID"
+datadir="/var/run/udiRoot_run/$USER/$job"
+[[ -d "$datadir" ]] || die "Cannot find data directory: $datadir"
+keyFile="$datadir/id_rsa.key"
+[[ -f "$keyFile" ]] || die "Cannot find credentials"
+unique_nodes="$datadir/unique_nodes.$job"
+[[ -f "$unique_nodes" ]] || die "Cannot find node list"
+headNode=$( head -n 1 "$unique_nodes" )
+
+
+ssh -A -i "${keyFile}" -p 204 -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "${headNode}"
