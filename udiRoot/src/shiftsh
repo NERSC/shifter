@@ -16,5 +16,7 @@ unique_nodes="$datadir/unique_nodes.$job"
 [[ -f "$unique_nodes" ]] || die "Cannot find node list"
 headNode=$( head -n 1 "$unique_nodes" )
 
+export HOSTFILE=/var/hostsfile
+export PBS_NODEFILE=/var/hostsfile
 
 ssh -A -i "${keyFile}" -p 204 -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "${headNode}"

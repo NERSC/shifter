@@ -123,8 +123,9 @@ unique_nodes=$datadir/unique_nodes.$jobId
 [[ -e "$unique_nodes" ]] && die "nodelist file already exists!"
 
 cat "$job_nodelist" | sort -u > "$unique_nodes"
+minNodes=$( cat "$job_nodelist" | sort | uniq -c | awk '{print $2 "/" $1}' | xargs )
 
-cmdStr="${nodeContext}/${udiRootSetupPath}/sbin/setupRoot.sh \"$udiRootType\" \"$udiRootValue\" -s \"$sshPubKey\" -u \"$user\" -U \"$userUid\""
+cmdStr="${nodeContext}/${udiRootSetupPath}/sbin/setupRoot.sh \"$udiRootType\" \"$udiRootValue\" -s \"$sshPubKey\" -u \"$user\" -U \"$userUid\" -N \"$minNodes\""
 IFS="|"
 for volume in ${volumes}; do
     unset IFS

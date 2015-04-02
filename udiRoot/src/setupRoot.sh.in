@@ -139,11 +139,12 @@ parseArguments() {
     udiRootValue="$2"
     udiUser="invalidUser"
     udiUid="UNSET"
+    minNodes=""
     readonly udiRootType
     readonly udiRootValue
     shift 2
     volumes=""
-    while getopts ":v:s:u:U:" opt; do
+    while getopts ":v:s:u:U:N:" opt; do
         case "${opt}" in
             v)
                 volumes="${volumes}|${OPTARG}"
@@ -156,6 +157,9 @@ parseArguments() {
                 ;;
             U)
                 udiUid="${OPTARG}"
+                ;;
+            N)
+                minNodes="${OPTARGS}"
                 ;;
             \?)
                 echo "Invalid option: -${OPTARG}" >&2
@@ -271,6 +275,25 @@ setupImageSsh() {
     fi
 }
 
+setupHostlistFile() {
+    local mntPoint
+    mntPoint="$1"
+    if [[ -n "$minNodes" ]]; then
+        for node in $minNodes; do
+            IFS="/"
+            set -- $node
+            unset IFS
+            name="$1"
+            count="$2"
+            idx=0
+            while [[ $idx -lt $count ]]; do
+                echo "$name" >> /var/hostsfile
+                idx=$(( $idx + 1 ))
+            done
+        done
+    fi
+}
+
 startSshd() {
     local mntPoint
     mntPoint="$1"
@@ -357,6 +380,9 @@ setupVFSMount () {
     # setup image ssh
     cd "${mntPoint}"
     setupImageSsh "$mntPoint"
+
+    # setup hostslist
+    setupHostlistFile "$mntPoint"
 
     ## merge image etc, site customizations, and local customizations into /etc
     cd "${mntPoint}"
