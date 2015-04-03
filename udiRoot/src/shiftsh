@@ -1,6 +1,6 @@
 #!/bin/sh
 
-datadir() {
+die() {
     echo "$1" 1>&2
     exit 1
 }
@@ -19,4 +19,16 @@ headNode=$( head -n 1 "$unique_nodes" )
 export HOSTFILE=/var/hostsfile
 export PBS_NODEFILE=/var/hostsfile
 
+startedSshAgent=0
+if [ -z "$SSH_AUTH_SOCK" ] ; then
+    eval $( ssh-agent -s ) > /dev/null
+    startedSshAgent=1
+fi
+ssh-add $keyFile
+
 ssh -A -i "${keyFile}" -p 204 -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "${headNode}"
+
+ssh-add -d $keyFile > /dev/null
+if [[ -n "$SSH_AGENT_PID" && $startedSshAgent -eq 1 ]]; then
+    kill "$SSH_AGENT_PID"
+fi
