@@ -3,6 +3,7 @@
 APRUN=`which aprun`
 SRUN=`which srun`
 
+declare -a args=("$@")
 job=0
 [[ -n "$PBS_JOBID" ]] && job="$PBS_JOBID"
 [[ -n "$SLURM_JOBID" ]] && job="$SLURM_JOBID"
@@ -11,8 +12,8 @@ datadir="/var/run/udiRoot_run/$USER/$job"
 [[ "$job" == "0" ]] && die "Couldn't identify job"
 
 ## allowed environment variables
-whiteListPrefix="SLURM PBS BASH_FUNC"
-whiteList="NERSC_HOST"
+whiteListPrefix="SLURM PBS BASH_FUNC ALPS"
+whiteList="NERSC_HOST CRAY_ROOTFS"
 
 ## strip environment
 while IFS= read -r -d '' item; do
@@ -48,17 +49,18 @@ if [[ -e "$datadir/env" ]]; then
 fi
 
 ## ensure that udiRoot ssh is superior in path
-export PATH="/opt/udiImage/bin:$PATH"
+export PATH="/opt/udiImage/bin:$PATH:/usr/bin:/bin"
 
-declare -a aprunCmd=("$APRUN", "-b")
+aprunCmd=("$APRUN" "-b")
 while IFS= read -r  -d '' item; do
     IFS="="
     set -- $item
     unset IFS
     varName="$1"
-    value=$( echo $item | awk '{ $1=""; print $0; }' )
-    aprunCmd=("${aprunCmd[@]}", "-e", "$varName=\"$value\"")
-done
+    [[ "$varName" = "BASH_FUNC"* ]] && continue
+    value=$( echo $item | awk -F= '{ $1=""; print $0; }' | sed 's/^ //g' )
+    aprunCmd=("${aprunCmd[@]}" "-e" "$varName=\"$value\"")
+done < <(env -0)
 
-aprunCmd=("${aprunCmd[@]}", "$@")
+aprunCmd=("${aprunCmd[@]}" "${args[@]}")
 exec "${aprunCmd[@]}"
