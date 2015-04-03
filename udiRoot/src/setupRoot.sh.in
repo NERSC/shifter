@@ -395,11 +395,12 @@ setupVFSMount () {
             unset IFS
             ## weed out possibly dangerous items
             item="${item//[^a-zA-Z0-9_+\-\.]/}"
-            if [[ ! -e "udiImage/${item}" ]]; then
-                continue
-            fi
+            [[ ! -e "udiImage/${item}" ]] && continue
+            [[ -e "$item" || -L "$item" ]] && continue
             ln -s "udiImage/$item" .
         done
+    fi
+    if [[ -e "$etcDir" ]]; then
         IFS=$'\n'
         for item in $(ls "$etcDir"); do
             unset IFS
