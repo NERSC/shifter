@@ -17,7 +17,14 @@ systems = {
         'host': '128.55.34.74',
         'path': '/scratch/scratchdirs/craydock/docker',
         'rsyncOptions': ['-e', 'ssh -o StrictHostKeyChecking=no -l craydock -i /home/docker/craydock.id_dsa'],
-    }
+        'sshOptions': ['-o','StrictHostKeyChecking=no','-l','craydock','-i','/home/docker/craydock.id_dsa'],
+    },
+    'alva':  {
+        'host': 'alva01-eth4',
+        'path': '/scratch1/scratchdirs/craydock/docker',
+        'rsyncOptions': ['-e', 'ssh -o StrictHostKeyChecking=no -l craydock -i /home/docker/craydock.id_dsa'],
+        'sshOptions': ['-o','StrictHostKeyChecking=no','-l','craydock','-i','/home/docker/craydock.id_dsa'],
+    },
 }
 
 c = Client(base_url='unix://var/run/docker.sock')
@@ -118,20 +125,42 @@ def generateCramFSImage(id, layersPath):
     
     return imageTempPath
 
+def getmetadata(name, id):
+    metadataPath=os.path.join(imagePath, id + ".json")
+    if os.path.exists(metadataPath):
+        fd = open(metadataPath, 'r')
+        outdata = {}
+        data = json.load(fd)
+        fd.close()
+        if 'config' in data:
+            if 'Env' in data['config']:
+                for envItem in data['config']['Env']:
+                    if 'env' not in outdata:
+                        outdata['env'] = []
+                    outdata['env'].append(envItem)
+            if 'Entrypoint' in data['config']:
+                entry = data['config']['Entrypoint']
+                if type(entry) is list:
+                    entry = ' '.join(entry)
+                outdata['entry'] = entry
+        return outdata
+    return None
+        
 def package(name, id):
     global imagePath
     global c
     returnValue = None
     finalPath = os.path.join(imagePath, id + ".ext4")
     tarPath = os.path.join(imagePath, id + ".tar")
-    metadataPath = os.path.join(imagePath, id + ".json")
-    if os.path.exists(finalPath) and os.path.exists(metadataPath):
-        return finalPath
+    jsonPath = os.path.join(imagePath, id + ".json")
+    metadataPath = os.path.join(imagePath, id + ".meta")
+    if os.path.exists(finalPath) and os.path.exists(jsonPath) and os.path.exists(metadataPath):
+        return (finalPath,jsonPath,metadataPath)
 
     lockPath = os.path.join(imagePath, id + ".lock")
     lfd = lockfile(lockPath)
     if lfd is None:
-        return None
+        return (None,None,None)
 
     ## get the tarball
     if os.path.exists(tarPath):
@@ -143,7 +172,7 @@ def package(name, id):
     finally:
         if ret != 0 and os.path.exists(tarPath):
             os.unlink(tarPath)
-            return None
+            return (None,None,None)
 
     ## expand the tar file
     layersPath = os.path.join(imagePath, id + ".layers")
@@ -156,13 +185,24 @@ def package(name, id):
     finally:
         if ret != 0 and os.path.exists(layersPath):
             shutil.rmtree(layersPath)
-            return None
+            return (None,None,None)
 
-    if not os.path.exists(metadataPath):
+    if not os.path.exists(jsonPath):
     	imageMetadata = extractDockerMetadata(layersPath, id)
-        fd = open(metadataPath, 'w')
+        fd = open(jsonPath, 'w')
         json.dump(imageMetadata, fd)
         fd.close()
+
+    if not os.path.exists(metadataPath):
+        metadata = getmetadata(name, id)
+        if metadata is not None:
+            fd = open(metadataPath, 'w')
+            if 'env' in metadata:
+                for item in metadata['env']:
+                    fd.write("ENV: %s\n" % item)
+            if 'entry' in metadata:
+                fd.write("ENTRY: %s\n" % metadata['entry'])
+            fd.close()
     
     if not os.path.exists(finalPath):
         imageTempPath = generateExt4Image(id, layersPath)
@@ -174,12 +214,31 @@ def package(name, id):
     os.unlink(tarPath)
     lfd.close()
     os.unlink(lockPath) 
-    return returnValue
+    return (returnValue,jsonPath,metadataPath)
 
 
 def rsync(filename,system):
     (basePath,imageFilename) = os.path.split(filename)
     remoteFilename = os.path.join(systems[system]['path'], imageFilename)
+    # test to see if the file is reasonably likely to already be there
+    if 1==0:
+	    statCmd = ['stat', '-t', filename]
+	    proc = subprocess.Popen(statCmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	    (stdout,stderr) = proc.communicate()
+	    if proc.returncode != 0:
+		return False
+	    statData = stdout.strip().split(' ')
+	    sshCmd = ['ssh'] 
+	    if 'sshOptions' in systems[system]:
+		sshCmd.extend(systems[system]['sshOptions'])
+		sshCmd.extend([systems[system]['host'], 'stat', '-t', remoteFilename])
+		proc = subprocess.Popen(sshCmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+		(stdout,stderr) = proc.communicate()
+		if proc.returncode == 0:
+		    data = stdout.strip().split(" ")
+		    if statData[1] == data[1]:
+			return True
+        
     rsyncCmd = ['rsync', '-aS']
     if 'rsyncOptions' in systems[system]:
         rsyncCmd.extend(systems[system]['rsyncOptions'])
@@ -201,6 +260,7 @@ def main():
         print "ERR: unknown system"
         sys.exit(0)
 
+    mode="default"
     registry = 'https://index.docker.io/v1/'
     username = None
     password = None
@@ -213,17 +273,32 @@ def main():
             password = v
         if k == "registry":
             registry = v
+        if k == "mode":
+            mode=v
     if username is not None and password is not None:
         val = c.login(username=username, password=password, registry=registry)
         logged_in = True
+    if mode not in ['default','images','nopull','gopull']:
+        print "ERR: invalid mode"
+        sys.exit(0)
+    if mode == 'images':
+        images = c.images()
+        for image in images:
+            if 'RepoTags' in image:
+                for tag in image['RepoTags']:
+                    print "IMAGE: %s,%s,%s,%s" % (tag, image['Id'], image['VirtualSize'], image['Created'])
+        sys.exit(0)
     print "INFO: looking up image"
-    image = lookup(name, username, password)
-    if image is None:
+    if mode != "gopull":
+        image = lookup(name, username, password)
+    if image is None and mode != "nopull":
         print "INFO: pulling image"
         if verbose:
             for line in c.pull(name, stream=True):
                 d = json.loads(line)
-                print "INFO: PULL %s,%s" % (d['status'], json.dumps(d))
+                if 'status' in d and d['status'] == "Downloading" and 'id' in d and 'progress' in d:
+                     print "INFO: PULL,%s,%s,%s" % (d['status'],d['id'],d['progress'])
+                     sys.stdout.flush()
         else:
             c.pull(name)
         
@@ -236,11 +311,20 @@ def main():
         sys.exit(0)
     id = image['Id']
 
-    path = package(name, id)
-    if path is None:
+    (imagePath,jsonPath,metadataPath) = package(name, id)
+    metadata = getmetadata(name, id)
+    if metadata is not None:
+        if 'env' in metadata:
+            for item in metadata['env']:
+                print "ENV: %s" % item
+        if 'entry' in metadata:
+            print "ENTRY: %s" % metadata['entry']
+    if imagePath is None:
         print 'ERR: failed to package image'
         sys.exit(0)
-    if rsync(path,system):
+    if metadataPath is not None:
+        rsync(metadataPath, system)
+    if rsync(imagePath,system):
         print "ID: %s" % id
         sys.exit(0)
     print "ERR: Failed to transfer image"
