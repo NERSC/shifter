@@ -1,5 +1,5 @@
-PREFIX=/global/syscom/sc/nsg/opt/udiRoot
-CONFIG_DIR=/global/syscom/sc/nsg/etc
+PREFIX=/opt/nersc/udiRoot/tag
+CONFIG_DIR=$(PREFIX)/etc
 CONFIG_FILE=$(CONFIG_DIR)/udiRoot.conf
 INCLUDE_FILE=$(CONFIG_DIR)/udiRoot.include
 CRAY_NETTYPE=gem
