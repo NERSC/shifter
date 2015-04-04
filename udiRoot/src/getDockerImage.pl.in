@@ -172,6 +172,11 @@ if ($mode eq "images") {
     exit
 }
 if ($verbosity_level == 0) {
+    foreach my $envItem (@imageEnv) {
+        $envItem =~ s/^\s+//g;
+        $envItem =~ s/\s+$//g;
+        print "ENV:$envItem\n";
+    }
     print "$result\n";
 } elsif ($ret == 0 && $result ne "") {
     print "Retrieved docker image $image resolving to ID $result\n\n";
