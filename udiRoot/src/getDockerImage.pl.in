@@ -1,33 +1,31 @@
 #!/usr/bin/perl
+$|=1;
 
 use IO::Socket::INET;
 use Getopt::Long;
+use POSIX qw(strftime);
+
+use strict;
+use warnings;
 
 my $config_file = "@@@CONFIG_FILE@@@";
-open(my $cfd, "<", $config_file) or die "Couldn't open configuration file";
-while (<$cfd>) {
-    my ($key,$value) = split(/=/, $_, 2);
-    $key =~ s/^\s+//g;
-    $key =~ s/\s$//g; 
-    $value =~ s/^\s+//g;
-    $value =~ s/\s$//g; 
-    if ($key =~ /dockergw_host/) {
-        $dockergw_host = $value;
-    } elsif ($key =~ /dockergw_port/) {
-        $dockergw_port = $value;
-    }
-}
+my $dockergw_host = `. $config_file; echo \$dockergw_host`;
+my $dockergw_port = `. $config_file; echo \$dockergw_port`;
+my $batchType = `. $config_file; echo \$batchType`;
+
 my $ret = 0;
 
 my $verbosity_level=1;
-my $quiet=FALSE;
-my $verbose=FALSE;
-my $help=FALSE;
+my $quiet;
+my $verbose;
+my $help;
 my $username = undef;
 my $password = undef;
 my $image = undef;
 my $registry = undef;
 my $system = undef;
+my $extra = "";
+my $mode = undef;
 GetOptions('help|h!'       => \$help,
            'verbose|v!'    => \$verbose,
            'quiet|q!'      => \$quiet,
@@ -45,17 +43,38 @@ if ($quiet) {
     $verbosity_level -= 1;
 }
 if (!defined($image)) {
-    if (scalar(@ARGV) != 1) {
+    if (scalar(@ARGV) > 0) {
+        $mode = shift @ARGV;
+    }
+    if (scalar(@ARGV) > 0) {
+        $image = shift @ARGV;
+    }
+    if (scalar(@ARGV) > 0) {
         usage(1);
     }
-    $image = $ARGV[0];
 }
-if ($image !~ /:/) {
+my @modes = qw(pull images lookup);
+if (!grep(/$mode/, @modes)) {
+    $image = $mode;
+    $mode = "pull";
+}
+if ((!defined($image) || $image !~ /:/) && $mode ne "images") {
     usage(1);
+}
+if ($mode eq "images") {
+    $image = "fake:ignore";
+    $extra .= " mode=images";
+}
+if ($mode eq "lookup") {
+    $extra .= " mode=nopull";
+}
+if ($mode eq "pull") {
+    $extra .= " mode=gopull";
 }
 if (!defined($system)) {
     if (-e "/etc/clustername") {
         $system = `cat /etc/clustername`;
+        chomp($system);
     }
 }
 if (!defined($system)) {
@@ -68,8 +87,15 @@ my $socket = new IO::Socket::INET (
     PeerPort => $dockergw_port,
     Proto => 'tcp',
 ) or die("Failed to connect to dockergw");
-$socket->send("$image $system\n");
+$socket->send("$image $system$extra\n");
+my @imageEnv;
+my $entryPoint = undef;
 my $result = "";
+my $screenStatus = { };
+my $currLine = 0;
+my $managedLines = 0;
+my $displayedPull = 0;
+my @images;
 while (<$socket>) {
     my $data = $_;
     $data =~ s/^s\+//g;
@@ -81,9 +107,98 @@ while (<$socket>) {
         $result = $1;
         $ret = 1;
     }
+    if ($data =~ /^ENV:\s+(.*)$/) {
+        push(@imageEnv, $1);
+    }
+    if ($data =~ /^ENTRY:\s+(.*)$/) {
+        $entryPoint = $1;
+    }
+    if ($data =~ /^IMAGE:\s+(.*)$/) {
+        my @data = split /,/, $1;
+        push(@images, \@data);
+    }
+    if ($verbosity_level > 0 && $data =~ /^INFO: PULL,(\S+),(\S+),(.*)$/) {
+        $displayedPull = 1;
+        my $state = $1;
+        my $id = $2;
+        my $status = $3;
+        my $output = "$state: $id $status";
+        if (!defined($screenStatus->{$id})) {
+            print "\n";
+            $managedLines += 1;
+            foreach my $tid (keys(%{$screenStatus})) {
+                $screenStatus->{$id}->{"line"} += 1;
+            }
+            $screenStatus->{$id} = {
+                "line" => 0,
+                "text" => $output,
+            }
+        }
+        $screenStatus->{$id}->{"text"} = $output;
+        my $left = length($screenStatus->{$id}->{"text"});
+        my $count = $currLine - $screenStatus->{$id}->{"line"};
+        my $dir = "B"; #down
+        $currLine += $count;
+        if ( $count < 0) {
+            $count *= -1;
+            $dir = "A"; #up
+        }
+        if ( $count > 0 ) {
+            print "\033[$count$dir";
+        }
+        print "\033[0K " . $screenStatus->{$id}->{"text"};
+        $dir="D";
+        print "\033[$left$dir";
+    }
+    if ($verbosity_level > 0 && $data =~ /^META/) {
+        print $data . "\n";
+    }
 }
 $socket->close();
-print "$result\n";
+if ($displayedPull > 0) { print "\n\n"; }
+if ($mode eq "images") {
+    @images = sort {$a->[0] cmp $b->[0]} @images;
+    foreach my $image (@images) {
+        my ($tag,$id,$size,$created) = @{$image};
+
+        my $exp = 0;
+        while ($size > 1024 && $exp < 5) {
+            $size /= 1024;
+            $exp += 1;
+        }
+        my @suffix = qw(Bytes KB MB GB TB);
+        printf "Image: $tag ($id), Size: %0.2f$suffix[$exp], Date: %s\n", $size, strftime("%Y/%m/%d %H:%M:%S", localtime $created);
+    }
+    exit
+}
+if ($verbosity_level == 0) {
+    print "$result\n";
+} elsif ($ret == 0 && $result ne "") {
+    print "Retrieved docker image $image resolving to ID $result\n\n";
+    print "EXAMPLE Batch Script\n";
+    print "#!/bin/bash -l\n";
+    if ($batchType=="PBS") {
+        print "#PBS -v DOCKER=\"$image\",CRAY_ROOTFS=UDI\n";
+        print "export PBS_NODEFILE=/var/hostsfile\n";
+    }
+    print "module load shifter\n";
+    foreach my $envItem (@imageEnv) {
+        my @tmp = split(/=/,$envItem);
+        my $var=$tmp[0];
+        $var =~ s/^\s+//g;
+        $var =~ s/\s+$//g;
+        if ($var eq "HOME") { next; }
+        print "export $envItem\n";
+    }
+    if ($batchType == "PBS" || $batchType == "slurmHybrid") {
+        my $app = "<your application>";
+        if (defined($entryPoint)) {
+            $app = $entryPoint;
+        }
+        print "shiftrun $app\n";
+    }
+}
+
 exit $ret;
 
 
