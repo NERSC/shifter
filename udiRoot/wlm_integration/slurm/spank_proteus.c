@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -88,21 +89,51 @@ int _opt_imagevolume(int val, const char *optarg, int remote) {
     return ESPANK_ERROR;
 }
 
-int read_config(const char *filename) {
-    FILE *fp = fopen(filename, "r");
-    int fd = fileno(fp);
-    struct stat st_data;
-    size_t nread = 0;
-    int rc = 0;
-    char buffer[4096];
-    char *tokptr = NULL;
+int read_config_item(const char *filename, const char *item, char *buffer, size_t buflen) {
+    char cmdBuffer[1024];
+    ssize_t nread;
+    size_t linePtrSize;
+    char *linePtr = NULL;
     char *ptr = NULL;
+    FILE *fp = NULL;
+    int rc = 0;
+
+    if (filename == NULL || strlen(filename) == 0) {
+        return 1;
+    }
+    if (item == NULL || strlen(item) == 0) {
+        return 1;
+    }
+
+    snprintf(cmdBuffer, 1024, "/bin/sh -c 'source %s; echo $%s'", filename, item);
+    fp = popen(cmdBuffer, "r");
+    while ((nread = getline(&linePtr, &linePtrSize, fp)) > 0) {
+        linePtr[nread] = 0;
+        ptr = trim(linePtr);
+        snprintf(buffer, buflen, "%s", ptr);
+    }
+    if (linePtr != NULL) {
+        free(linePtr);
+        linePtr = NULL;
+        linePtrSize = 0;
+    }
+    if ((rc = pclose(fp)) != 0) {
+        slurm_error("Failed to read configuration file: %d", rc);
+        return 1;
+    }
+    return strlen(buffer);;
+}
+
+
+
+int read_config(const char *filename) {
+    struct stat st_data;
 
     chroot_path[0] = 0;
     udiRoot_prefix[0] = 0;
 
     memset(&st_data, 0, sizeof(struct stat));
-    if (fstat(fd, &st_data) != 0) {
+    if (stat(filename, &st_data) != 0) {
         perror("Failed to stat config file: ");
         return 1;
     }
@@ -110,39 +141,14 @@ int read_config(const char *filename) {
         fprintf(stderr, "Configuration file not owned by root, or is writable by others.\n");
         return 1;
     }
-    snprintf(buffer, 4096, "/bin/sh -c 'source %s; echo $%s'", filename, "udiMount");
-    fp = popen(buffer, "r");
-    while (!feof(fp) && !ferror(fp)) {
-        char *ptr = NULL;
-        nread = fread(buffer,1,4096,fp);
-        if (nread == 0 || nread >= 4096) break;
-        buffer[nread] = 0;
-        ptr = trim(buffer);
-        snprintf(chroot_path, 1024, "%s", buffer);
-    } 
-    if ((rc = pclose(fp)) != 0) {
-        slurm_error("Failed to read configuration file: %d", rc);
-        exit(-1);
-    }
-    snprintf(buffer, 4096, "/bin/sh -c 'source %s; echo $%s'", filename, "udiRootPath");
-    fp = popen(buffer, "r");
-    while (!feof(fp) && !ferror(fp)) {
-        char *ptr = NULL;
-        nread = fread(buffer,1,4096,fp);
-        if (nread == 0 || nread >= 4096) break;
-        buffer[nread] = 0;
-        ptr = trim(buffer);
-        snprintf(udiRoot_prefix, 1024, "%s", ptr);
-    } 
-    if ((rc = pclose(fp)) != 0) {
-        slurm_error("Failed to read configuration file: %d", rc);
-        exit(-1);
-    }
-    if (strlen(chroot_path) == 0) {
+    if (read_config_item(filename, "udiMount", chroot_path, 1024) <= 0) {
         fprintf(stderr, "udiMount path invalid (len=0)\n");
         return 1;
     }
-    if (strlen(udiRoot_prefix) != 0) {
+    if (read_config_item(filename, "udiRootPath", chroot_path, 1024) <= 0) {
+        fprintf(stderr, "udiRootPath invalid (len=0)\n");
+        return 1;
+    } else {
         memset(&st_data, 0, sizeof(struct stat));
         if (stat(udiRoot_prefix, &st_data) != 0) {
             perror("Could not stat udiRoot prefix");
@@ -152,31 +158,73 @@ int read_config(const char *filename) {
             fprintf(stderr, "udiRoot installation not owned by root, or is globally writable.\n");
             return 1;
         }
-    } else {
-        fprintf(stderr, "udiRootPath invalid (len=0)\n");
-        return 1;
     }
     return 0;
 }
 
-int lookup_image(int verbose, char **image_id) {
+int lookup_image(int verbose, const char *mode, char **image_id, char ***env, char **entrypoint) {
     int rc = 0;
     char buffer[4096];
+    char buff1[1024];
+    char buff2[1024];
     FILE *fp = NULL;
-    size_t nread = 0;
-    size_t image_id_bufSize = 0;
+    ssize_t nread = 0;
+    char *ptr = NULL;
+    char *linePtr = NULL;
+    size_t linePtrSize = 0;
+    size_t envCnt = 0;
     /* perform image lookup */
-    snprintf(buffer, 4096, "%s/bin/getDockerImage.pl %s", udiRoot_prefix, image);
+    snprintf(buffer, 4096, "%s/bin/getDockerImage.pl %s%s %s", udiRoot_prefix, (verbose == 1 ? "-quiet " : ""), mode, image);
     fp = popen(buffer, "r");
-    while (!feof(fp) && !ferror(fp)) {
-        char *ptr = NULL;
-        nread = fread(buffer,1,4096,fp);
-        if (nread == 0) break;
-        *image_id = (char *) realloc(*image_id, image_id_bufSize + nread + 1);
-        ptr = *image_id + image_id_bufSize;
-        snprintf(ptr, nread, "%s", buffer); 
-        image_id_bufSize += nread;
-    } 
+    while ((nread = getline(&linePtr, &linePtrSize, fp)) > 0) {
+        linePtr[nread] = 0;
+        ptr = trim(linePtr);
+        if (verbose) {
+            int val = sscanf(buffer, "Retrieved docker image %1024s resolving to ID %1024s", buff1, buff2);
+            if (val != 2) {
+                continue;
+            }
+            if (strcmp(buff1, image) != 0) {
+                slurm_error("Got wrong image back!");
+                return ESPANK_ERROR;
+            }
+            *image_id = (char *) realloc(*image_id, sizeof(char) * (strlen(buff2) + 1));
+            snprintf(*image_id, strlen(buff2), "%s", buff2);
+            if (*env != NULL) {
+                free(*env);
+                *env = NULL;
+            }
+            if (*entrypoint != NULL) {
+                free(*entrypoint);
+                *entrypoint = NULL;
+            }
+
+        } else {
+            if (strncmp(ptr, "ENV:", 4) == 0) {
+                ptr += 4;
+                ptr = trim(ptr);
+                *env = (char **) realloc(*env, sizeof(char *) * (++envCnt + 1));
+                *env[envCnt-1] = strdup(ptr);
+                *env[envCnt] = NULL;
+            } else if (strncmp(ptr, "ENTRY:", 6) == 0) {
+                ptr += 6;
+                ptr = trim(ptr);
+                *entrypoint = (char *) realloc(*entrypoint, sizeof(char) * (strlen(ptr) + 1));
+                snprintf(*entrypoint, strlen(ptr), "%s", ptr);
+            } else {
+                /* this is the image id */
+                ptr = trim(ptr);
+                *image_id = (char *) realloc(*image_id, sizeof(char) * (strlen(ptr) + 1));
+                snprintf(*image_id, strlen(ptr), "%s", ptr);
+            }
+        }
+
+    }
+    if (linePtr != NULL) {
+        free(linePtr);
+        linePtr = NULL;
+        linePtrSize = 0;
+    }
     if ((rc = pclose(fp)) != 0) {
         slurm_error("Image lookup process failed, exit status: %d", rc);
         exit(-1);
@@ -241,13 +289,25 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     
     if (strncmp(image_type, "docker", IMAGE_MAXLEN) == 0) {
         char *image_id = NULL;
-        lookup_image(verbose_lookup, &image_id);
+        char **env = NULL;
+        char *entrypoint = NULL;
+        lookup_image(verbose_lookup, "pull", &image_id, &env, &entrypoint);
         if (image_id == NULL) {
             slurm_error("Failed to lookup image.  Aborting.");
             exit(-1);
         }
         snprintf(image, IMAGE_MAXLEN, "%s", image_id);
         free(image_id);
+        if (*env != NULL) {
+            char **ptr = env;
+            while (*ptr != NULL) {
+                free(*ptr++);
+            }
+            free(*env);
+        }
+        if (entrypoint != NULL) {
+            free(entrypoint);
+        }
     }
     if (strlen(image) == 0) {
         return rc;
@@ -311,13 +371,25 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     }
     if (strncmp(image_type, "docker", IMAGE_MAXLEN) == 0) {
         char *image_id = NULL;
-        lookup_image(0, &image_id);
+        char **env = NULL;
+        char *entrypoint = NULL;
+        lookup_image(0, "lookup", &image_id, &env, &entrypoint);
         if (image_id == NULL) {
             slurm_error("Failed to lookup image.  Aborting.");
             return rc;
         }
         snprintf(image, IMAGE_MAXLEN, "%s", image_id);
         free(image_id);
+        if (*env != NULL) {
+            char **ptr = env;
+            while (*ptr != NULL) {
+                free(*ptr++);
+            }
+            free(*env);
+        }
+        if (entrypoint != NULL) {
+            free(entrypoint);
+        }
     }
 
     if (spank_get_item(sp, S_JOB_ID, &job) != ESPANK_SUCCESS) {
