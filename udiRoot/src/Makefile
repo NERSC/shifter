@@ -10,20 +10,31 @@ include ../config.mk
 ## configuration
 CFLAGS=-O2 -Wall
 LDFLAGS=
+SED_MODIFY=sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g' |\
+           sed 's|@@@INCLUDE_FILE@@@|$(INCLUDE_FILE)|g' |\
+           sed 's|@@@PREFIX@@@|$(PREFIX)|g' |\
+           sed  -e '/@@@INCLUDE shifterLibFancyShell.sh@@@/{r shifterLibFancyShell.sh' -e 'd}' |\
+           sed  -e '/@@@INCLUDE shifterLibCore.sh@@@/{r shifterLibCore.sh' -e 'd}'
+define CLEANFILES
+    for file in $(1); do echo $$file; done
+endef
 
-all: udiRootEnter setupRoot.sh unsetupRoot.sh getDockerImage.pl
+all: udiRootEnter setupRoot.sh unsetupRoot.sh shiftsh shiftrun getDockerImage.pl
 
 setupRoot.sh: setupRoot.sh.in
-	cat $< | sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g' | sed 's|@@@INCLUDE_FILE@@@|$(INCLUDE_FILE)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' > $@
-
+	cat $< | $(SED_MODIFY) > $@
 unsetupRoot.sh: unsetupRoot.sh.in
-	cat $< | sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g' | sed 's|@@@INCLUDE_FILE@@@|$(INCLUDE_FILE)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' > $@
+	cat $< | $(SED_MODIFY) > $@
+getDockerImage.pl: getDockerImage.pl.in
+	cat $< | $(SED_MODIFY) > $@
+shiftsh: shiftsh.in
+	cat $< | $(SED_MODIFY) > $@
+shiftrun: shiftrun.in
+	cat $< | $(SED_MODIFY) > $@
 
 udiRootEnter: udiRootEnter.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" $< -o $@
 
-getDockerImage.pl: getDockerImage.pl.in
-	cat $< | sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' > $@
 	
 install: all
 	mkdir -p $(PREFIX)/sbin
@@ -44,9 +55,5 @@ install: all
 		$(INSTALL) --owner=root --group=root --mode=555  shiftsh $(PREFIX)/bin/shiftsh; \
 	fi
 
-clean:
-	if [ -a setupRoot.sh ]; then $(RM) setupRoot.sh; fi
-	if [ -a unsetupRoot.sh ]; then $(RM) unsetupRoot.sh; fi
-	if [ -a getDockerImage.pl ]; then $(RM) getDockerImage.pl; fi
-	if [ -a udiRootEnter ]; then $(RM) udiRootEnter; fi
-
+clean: setupRoot.sh unsetupRoot.sh getDockerImage.pl udiRootEnter shiftsh shiftrun
+	for file in $^; do if [[ -e "$$file" ]]; then rm "$$file"; fi; done
