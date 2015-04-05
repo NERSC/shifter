@@ -90,6 +90,10 @@ AcceptEnv PBS_HOSTFILE
 AcceptEnv SLURM_JOB_NODELIST
 AcceptEnv SLURM_NODELIST
 AcceptEnv BASIL_RESERVATION_ID
+## The following is typically a bad practice -- but is ok here since all our security is
+## to protect the system from the container not the other way around.  Allowing all variables
+## through should be safe within the clustered environment.
+AcceptEnv *
 AllowUsers ToBeReplaced
 EOF
 cat <<EOF > ${PREFIX}${INST_PREFIX}/etc/ssh_config

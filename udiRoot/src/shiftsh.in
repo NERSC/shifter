@@ -24,7 +24,7 @@ if [ -z "$SSH_AUTH_SOCK" ] ; then
 fi
 ssh-add $keyFile
 
-ssh -A -i "${keyFile}" -p 204 -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "${headNode}"
+ssh -A -i "${keyFile}" -p 204 -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o 'SendEnv=*' "${headNode}"
 
 ssh-add -d $keyFile > /dev/null
 if [[ -n "$SSH_AGENT_PID" && $startedSshAgent -eq 1 ]]; then
