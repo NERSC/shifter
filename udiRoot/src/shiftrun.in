@@ -16,6 +16,7 @@ datadir="/var/run/udiRoot_run/$USER/$job"
 
 
 prepareEnvironment "$datadir/env"
+export CRAY_ROOTFS="UDI" ## temporary
 
 aprunCmd=("$APRUN" "-b")
 while IFS= read -r  -d '' item; do
