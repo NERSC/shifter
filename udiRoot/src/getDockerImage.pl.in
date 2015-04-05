@@ -190,14 +190,6 @@ if ($verbosity_level == 0) {
         print "export PBS_NODEFILE=/var/hostsfile\n";
     }
     print "module load shifter\n";
-    foreach my $envItem (@imageEnv) {
-        my @tmp = split(/=/,$envItem);
-        my $var=$tmp[0];
-        $var =~ s/^\s+//g;
-        $var =~ s/\s+$//g;
-        if ($var eq "HOME") { next; }
-        print "export $envItem\n";
-    }
     if ($batchType == "PBS" || $batchType == "slurmHybrid") {
         my $app = "<your application>";
         if (defined($entryPoint)) {
