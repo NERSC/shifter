@@ -200,7 +200,7 @@ def package(name, id):
             if 'env' in metadata:
                 for item in metadata['env']:
                     fd.write("ENV: %s\n" % item)
-            if 'entry' in metadata:
+            if 'entry' in metadata and metadata['entry'] is not None:
                 fd.write("ENTRY: %s\n" % metadata['entry'])
             fd.close()
     
@@ -289,6 +289,7 @@ def main():
                     print "IMAGE: %s,%s,%s,%s" % (tag, image['Id'], image['VirtualSize'], image['Created'])
         sys.exit(0)
     print "INFO: looking up image"
+    image = None
     if mode != "gopull":
         image = lookup(name, username, password)
     if image is None and mode != "nopull":
@@ -317,10 +318,13 @@ def main():
         if 'env' in metadata:
             for item in metadata['env']:
                 print "ENV: %s" % item
-        if 'entry' in metadata:
+        if 'entry' in metadata and metadata['entry'] is not None:
             print "ENTRY: %s" % metadata['entry']
     if imagePath is None:
         print 'ERR: failed to package image'
+        sys.exit(0)
+    if mode == "nopull":
+        print "ID: %s" % id
         sys.exit(0)
     if metadataPath is not None:
         rsync(metadataPath, system)
