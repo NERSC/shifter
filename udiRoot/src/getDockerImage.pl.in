@@ -177,6 +177,9 @@ if ($verbosity_level == 0) {
         $envItem =~ s/\s+$//g;
         print "ENV:$envItem\n";
     }
+    if (defined($entryPoint)) {
+        print "ENTRY:$entryPoint\n";
+    }
     print "$result\n";
 } elsif ($ret == 0 && $result ne "") {
     print "Retrieved docker image $image resolving to ID $result\n\n";
