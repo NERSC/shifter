@@ -145,7 +145,7 @@ int read_config(const char *filename) {
         fprintf(stderr, "udiMount path invalid (len=0)\n");
         return 1;
     }
-    if (read_config_item(filename, "udiRootPath", chroot_path, 1024) <= 0) {
+    if (read_config_item(filename, "udiRootPath", udiRoot_prefix, 1024) <= 0) {
         fprintf(stderr, "udiRootPath invalid (len=0)\n");
         return 1;
     } else {
@@ -162,7 +162,7 @@ int read_config(const char *filename) {
     return 0;
 }
 
-int lookup_image(int verbose, const char *mode, char **image_id, char ***env, char **entrypoint) {
+int lookup_image(int verbose, const char *mode, char **image_id) {
     int rc = 0;
     char buffer[4096];
     char buff1[1024];
@@ -172,15 +172,15 @@ int lookup_image(int verbose, const char *mode, char **image_id, char ***env, ch
     char *ptr = NULL;
     char *linePtr = NULL;
     size_t linePtrSize = 0;
-    size_t envCnt = 0;
     /* perform image lookup */
-    snprintf(buffer, 4096, "%s/bin/getDockerImage.pl %s%s %s", udiRoot_prefix, (verbose == 1 ? "-quiet " : ""), mode, image);
+    snprintf(buffer, 4096, "%s/bin/getDockerImage.pl %s%s %s", udiRoot_prefix, (verbose == 0 ? "-quiet " : ""), mode, image);
     fp = popen(buffer, "r");
     while ((nread = getline(&linePtr, &linePtrSize, fp)) > 0) {
         linePtr[nread] = 0;
         ptr = trim(linePtr);
         if (verbose) {
-            int val = sscanf(buffer, "Retrieved docker image %1024s resolving to ID %1024s", buff1, buff2);
+            printf("%s\n", linePtr);
+            int val = sscanf(linePtr, "Retrieved docker image %1024s resolving to ID %1024s", buff1, buff2);
             if (val != 2) {
                 continue;
             }
@@ -189,28 +189,16 @@ int lookup_image(int verbose, const char *mode, char **image_id, char ***env, ch
                 return ESPANK_ERROR;
             }
             *image_id = (char *) realloc(*image_id, sizeof(char) * (strlen(buff2) + 1));
-            snprintf(*image_id, strlen(buff2), "%s", buff2);
-            if (*env != NULL) {
-                free(*env);
-                *env = NULL;
-            }
-            if (*entrypoint != NULL) {
-                free(*entrypoint);
-                *entrypoint = NULL;
-            }
+            snprintf(*image_id, strlen(buff2)+1, "%s", buff2);
+            slurm_error("got id: %s", *image_id);
 
         } else {
             if (strncmp(ptr, "ENV:", 4) == 0) {
                 ptr += 4;
                 ptr = trim(ptr);
-                *env = (char **) realloc(*env, sizeof(char *) * (++envCnt + 1));
-                *env[envCnt-1] = strdup(ptr);
-                *env[envCnt] = NULL;
             } else if (strncmp(ptr, "ENTRY:", 6) == 0) {
                 ptr += 6;
                 ptr = trim(ptr);
-                *entrypoint = (char *) realloc(*entrypoint, sizeof(char) * (strlen(ptr) + 1));
-                snprintf(*entrypoint, strlen(ptr), "%s", ptr);
             } else {
                 /* this is the image id */
                 ptr = trim(ptr);
@@ -289,25 +277,13 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     
     if (strncmp(image_type, "docker", IMAGE_MAXLEN) == 0) {
         char *image_id = NULL;
-        char **env = NULL;
-        char *entrypoint = NULL;
-        lookup_image(verbose_lookup, "pull", &image_id, &env, &entrypoint);
+        lookup_image(verbose_lookup, "pull", &image_id);
         if (image_id == NULL) {
             slurm_error("Failed to lookup image.  Aborting.");
             exit(-1);
         }
         snprintf(image, IMAGE_MAXLEN, "%s", image_id);
         free(image_id);
-        if (*env != NULL) {
-            char **ptr = env;
-            while (*ptr != NULL) {
-                free(*ptr++);
-            }
-            free(*env);
-        }
-        if (entrypoint != NULL) {
-            free(entrypoint);
-        }
     }
     if (strlen(image) == 0) {
         return rc;
@@ -369,27 +345,20 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         slurm_error("NO shifter image: len=0");
         return rc;
     }
+    /*
     if (strncmp(image_type, "docker", IMAGE_MAXLEN) == 0) {
         char *image_id = NULL;
-        char **env = NULL;
-        char *entrypoint = NULL;
-        lookup_image(0, "lookup", &image_id, &env, &entrypoint);
+        lookup_image(0, "lookup", &image_id); //, &env, &entrypoint);
         if (image_id == NULL) {
             slurm_error("Failed to lookup image.  Aborting.");
             return rc;
         }
         snprintf(image, IMAGE_MAXLEN, "%s", image_id);
         free(image_id);
-        if (*env != NULL) {
-            char **ptr = env;
-            while (*ptr != NULL) {
-                free(*ptr++);
-            }
-            free(*env);
-        }
-        if (entrypoint != NULL) {
-            free(entrypoint);
-        }
+    }
+    */
+    for (ptr = image_type; ptr - image_type < strlen(image_type); ptr++) {
+        *ptr = toupper(*ptr);
     }
 
     if (spank_get_item(sp, S_JOB_ID, &job) != ESPANK_SUCCESS) {
