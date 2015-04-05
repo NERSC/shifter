@@ -131,11 +131,11 @@ bindImageIntoMnt() {
         unset IFS
         ## weed out possibly dangerous items
         dir="${item//[^a-zA-Z0-9_+\-\.]/}"
-        if [[ ! -e "${remoteDir}/${item}" ]]; then
+        if [[ ! -e "${remoteDir}/${item}" && ! -L "${remoteDir}/${item}" ]]; then
             continue
         fi
         # don't do anything to "reserved" paths
-        if [[ -e "$item" ]]; then
+        if [[ -e "$item" || -L "$item" ]]; then
             continue
         fi
         # properly copy symlinks
@@ -311,7 +311,7 @@ setupVFSMount () {
             unset IFS
             ## weed out possibly dangerous items
             item="${item//[^a-zA-Z0-9_+\-\.]/}"
-            [[ ! -e "udiImage/${item}" ]] && continue
+            [[ ! -e "udiImage/${item}"  && ! -L "udiImage/${item}" ]] && continue
             [[ -e "$item" || -L "$item" ]] && continue
             ln -s "udiImage/$item" .
         done
@@ -322,11 +322,11 @@ setupVFSMount () {
             unset IFS
             ## weed out possibly dangerous items
             item="${item//[^a-zA-Z0-9_+\-\.]/}"
-            if [[ ! -e "$etcDir/${item}" ]]; then
+            if [[ ! -e "$etcDir/${item}" && ! -L "$etcDir/${item}" ]]; then
                 continue
             fi
             cp -p "$etcDir/$item" "${mntPoint}/etc/site"
-            if [[ -e "$item" ]]; then
+            if [[ -e "$item" || -L "$item" ]]; then
                 rm "$item"
             fi
             ln -s "site/$item" "$item"
