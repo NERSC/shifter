@@ -15,4 +15,5 @@ kmodCache=/tmp/udiRootLoadedModules.txt
 siteFs="scratch global/u1 global/u2 global/project global/syscom global/common global/scratch2"
 dockergw_host=128.55.50.83
 dockergw_port=7777
+batchType=torque
 system=@@@SYSTEM@@@

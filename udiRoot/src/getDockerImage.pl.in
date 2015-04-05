@@ -185,12 +185,12 @@ if ($verbosity_level == 0) {
     print "Retrieved docker image $image resolving to ID $result\n\n";
     print "EXAMPLE Batch Script\n";
     print "#!/bin/bash -l\n";
-    if ($batchType=="PBS") {
+    if ($batchType=="torque") {
         print "#PBS -v DOCKER=\"$image\",CRAY_ROOTFS=UDI\n";
         print "export PBS_NODEFILE=/var/hostsfile\n";
     }
     print "module load shifter\n";
-    if ($batchType == "PBS" || $batchType == "slurmHybrid") {
+    if ($batchType == "torque" || $batchType == "slurmHybrid") {
         my $app = "<your application>";
         if (defined($entryPoint)) {
             $app = $entryPoint;
