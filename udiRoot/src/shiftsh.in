@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 @@@INCLUDE shifterLibCore.sh@@@
 @@@INCLUDE shifterLibFancyShell.sh@@@
@@ -6,7 +6,7 @@
 job=0
 [[ -n "$PBS_JOBID" ]] && job="$PBS_JOBID"
 [[ -n "$SLURM_JOBID" ]] && job="$SLURM_JOBID"
-datadir="/var/run/udiRoot_run/$USER/$job"
+datadir="/var/run/udiRoot_jobs/$USER/$job"
 [[ -d "$datadir" ]] || die "Cannot find data directory: $datadir"
 keyFile="$datadir/id_rsa.key"
 [[ -f "$keyFile" ]] || die "Cannot find credentials"
@@ -24,9 +24,11 @@ if [ -z "$SSH_AUTH_SOCK" ] ; then
 fi
 ssh-add $keyFile
 
+prepareEnvironment "$datadir/env"
+export _PATH="$PATH"
 ssh -A -i "${keyFile}" -p 204 -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o 'SendEnv=*' "${headNode}"
 
-ssh-add -d $keyFile > /dev/null
+ssh-add -d $keyFile > /dev/null 2>&1
 if [[ -n "$SSH_AGENT_PID" && $startedSshAgent -eq 1 ]]; then
     kill "$SSH_AGENT_PID"
 fi
