@@ -69,8 +69,8 @@ int _opt_image(int val, const char *optarg, int remote) {
             }
         }
         for (p = image; *p != 0 && p-image < IMAGE_MAXLEN; ++p) {
-            if (!isalnum(*p) && (*p!=':') && (*p!='_') && (*p!='-') && (*p!='.')) {
-                slurm_error("Invalid image type - A-Za-z:-_. characters only");
+            if (!isalnum(*p) && (*p!=':') && (*p!='_') && (*p!='-') && (*p!='.') && (*p!='/')) {
+                slurm_error("Invalid image type - A-Za-z:-_./ characters only");
                 return ESPANK_ERROR;
             }
         }
@@ -316,6 +316,8 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     char job_str[128];
     char user_str[128];
     char group_str[128];
+    char **volArgs = NULL;
+    size_t n_volArgs = 0;
 
     for (idx = 0; idx < argc; ++idx) {
         if (strncmp("shifter_config=", argv[idx], 15) == 0) {
@@ -361,6 +363,21 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         *ptr = toupper(*ptr);
     }
 
+    if (strlen(imagevolume) > 0) {
+        char *ptr = imagevolume;
+        for ( ; ; ) {
+            char *limit = strchr(ptr, ',');
+            volArgs = (char **) realloc(volArgs,sizeof(char *) * (n_volArgs+2));
+            if (limit != NULL) *limit = 0;
+            volArgs[n_volArgs++] = strdup(ptr);
+            volArgs[n_volArgs] = NULL;
+            if (limit == NULL) {
+                break;
+            }
+            ptr = limit + 1;
+        }
+    }
+
     if (spank_get_item(sp, S_JOB_ID, &job) != ESPANK_SUCCESS) {
         slurm_error("FAIL: cannot deterime job userid");
         return rc;
@@ -400,16 +417,25 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     child = fork();
     if (child == 0) {
         char buffer[PATH_MAX];
-        char *args[7];
+        char *args[6 + n_volArgs*2];
+        char **argPtr = args;
+        size_t idx = 0;
         clearenv();
         snprintf(buffer, PATH_MAX, "%s/libexec/udiRoot-prologue", udiRoot_prefix);
+        memset(args, 0, sizeof(char*) * (6 + n_volArgs*2));
         args[0] = buffer;
         args[1] = job_str;
         args[2] = user_str;
         args[3] = image_type;
         args[4] = image;
-        args[5] = NULL;
-        slurm_info("prolog: %s, %s, %s, %s, %s", args[0], args[1], args[2], args[3], args[4]);
+        for (idx = 0; idx < n_volArgs; idx++) {
+            args[5 + 2*idx] = "-v";
+            args[6 + 2*idx] = volArgs[idx];
+        }
+        /* null termination set by memset above */
+        while (*argPtr != NULL) {
+            slurm_info("prolog arg: %s", *argPtr++);
+        }
         execv(args[0], args);
     } else if (child > 0) {
         int status = 0;
