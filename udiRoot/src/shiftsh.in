@@ -1,9 +1,7 @@
 #!/bin/sh
 
-die() {
-    echo "$1" 1>&2
-    exit 1
-}
+@@@INCLUDE shifterLibCore.sh@@@
+@@@INCLUDE shifterLibFancyShell.sh@@@
 
 job=0
 [[ -n "$PBS_JOBID" ]] && job="$PBS_JOBID"

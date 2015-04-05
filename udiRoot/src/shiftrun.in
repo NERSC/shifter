@@ -1,0 +1,32 @@
+#!/bin/bash
+
+@@@INCLUDE shifterLibCore.sh@@@
+@@@INCLUDE shifterLibFancyShell.sh@@@
+
+APRUN=`which aprun`
+SRUN=`which srun`
+
+declare -a args=("$@")
+job=0
+[[ -n "$PBS_JOBID" ]] && job="$PBS_JOBID"
+[[ -n "$SLURM_JOBID" ]] && job="$SLURM_JOBID"
+datadir="/var/run/udiRoot_run/$USER/$job"
+
+[[ "$job" == "0" ]] && die "Couldn't identify job"
+
+
+prepareEnvironment "$datadir/env"
+
+aprunCmd=("$APRUN" "-b")
+while IFS= read -r  -d '' item; do
+    IFS="="
+    set -- $item
+    unset IFS
+    varName="$1"
+    [[ "$varName" = "BASH_FUNC"* ]] && continue
+    value=$( echo $item | awk -F= '{ $1=""; print $0; }' | sed 's/^ //g' )
+    aprunCmd=("${aprunCmd[@]}" "-e" "$varName=\"$value\"")
+done < <(env -0)
+
+aprunCmd=("${aprunCmd[@]}" "${args[@]}")
+exec "${aprunCmd[@]}"
