@@ -13,7 +13,7 @@
 
 #include <slurm/spank.h>
 
-SPANK_PLUGIN(proteus, 1)
+SPANK_PLUGIN(shifter, 1)
 
 #define IMAGE_MAXLEN 1024
 #define IMAGEVOLUME_MAXLEN 2048
@@ -27,8 +27,8 @@ static int _opt_image(int val, const char *optarg, int remote);
 static int _opt_imagevolume(int val, const char *optarg, int remote);
 
 struct spank_option spank_option_array[] = {
-    { "image", "image", "proteus image to use", 1, 0, (spank_opt_cb_f) _opt_image},
-    { "imagevolume", "imagevolume", "proteus image bindings", 1, 0, (spank_opt_cb_f) _opt_imagevolume },
+    { "image", "image", "shifter image to use", 1, 0, (spank_opt_cb_f) _opt_image},
+    { "imagevolume", "imagevolume", "shifter image bindings", 1, 0, (spank_opt_cb_f) _opt_imagevolume },
     SPANK_OPTIONS_TABLE_END
 };
 
@@ -241,18 +241,18 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
     char *ptr = NULL;
     int idx = 0;
     for (idx = 0; idx < argc; ++idx) {
-        if (strncmp("proteus_config=", argv[idx], 15) == 0) {
+        if (strncmp("shifter_config=", argv[idx], 15) == 0) {
             snprintf(config_file, 1024, "%s", (argv[idx] + 15));
             ptr = trim(config_file);
             if (ptr != config_file) memmove(config_file, ptr, strlen(ptr) + 1);
         }
     }
     if (strlen(config_file) == 0) {
-        slurm_debug("proteus_config not set, cannot use proteus");
+        slurm_debug("shifter_config not set, cannot use shifter");
         return rc;
     }
     if (read_config(config_file) != 0) {
-        slurm_error("Failed to parse proteus config. Cannot use proteus.");
+        slurm_error("Failed to parse shifter config. Cannot use shifter.");
         return rc;
     }
 
@@ -283,7 +283,7 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
         verbose_lookup = 1;
     }
     if (imagevolume != NULL && image == NULL) {
-        slurm_error("Cannot specify proteus volumes without specifying the image first!");
+        slurm_error("Cannot specify shifter volumes without specifying the image first!");
         exit(-1);
     }
     
@@ -342,18 +342,18 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     char group_str[128];
 
     for (idx = 0; idx < argc; ++idx) {
-        if (strncmp("proteus_config=", argv[idx], 15) == 0) {
+        if (strncmp("shifter_config=", argv[idx], 15) == 0) {
             snprintf(config_file, 1024, "%s", (argv[idx] + 15));
             ptr = trim(config_file);
             if (ptr != config_file) memmove(config_file, ptr, strlen(ptr) + 1);
         }
     }
     if (strlen(config_file) == 0) {
-        slurm_debug("proteus_config not set, cannot use proteus");
+        slurm_debug("shifter_config not set, cannot use shifter");
         return rc;
     }
     if (read_config(config_file) != 0) {
-        slurm_error("Failed to parse proteus config. Cannot use proteus.");
+        slurm_error("Failed to parse shifter config. Cannot use shifter.");
         return rc;
     }
 
@@ -366,7 +366,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         (spank_option_array[i].cb)(spank_option_array[i].val, optarg, 1);
     }
     if (strlen(image) == 0 || strlen(image_type) == 0) {
-        slurm_error("NO proteus image: len=0");
+        slurm_error("NO shifter image: len=0");
         return rc;
     }
     if (strncmp(image_type, "docker", IMAGE_MAXLEN) == 0) {
@@ -448,11 +448,11 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
             /* chroot area should be ready! */
         } else {
-            slurm_error("proteus: failed to setup image");
+            slurm_error("shifter: failed to setup image");
             rc = ESPANK_ERROR;
         }
     } else {
-        slurm_error("proteus: failed to fork setupRoot");
+        slurm_error("shifter: failed to fork setupRoot");
         rc = ESPANK_ERROR;
     }
     
@@ -475,18 +475,18 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     char user_str[128];
     char group_str[128];
     for (idx = 0; idx < argc; ++idx) {
-        if (strncmp("proteus_config=", argv[idx], 15) == 0) {
+        if (strncmp("shifter_config=", argv[idx], 15) == 0) {
             snprintf(config_file, 1024, "%s", (argv[idx] + 15));
             ptr = trim(config_file);
             if (ptr != config_file) memmove(config_file, ptr, strlen(ptr) + 1);
         }
     }
     if (strlen(config_file) == 0) {
-        slurm_debug("proteus_config not set, cannot use proteus");
+        slurm_debug("shifter_config not set, cannot use shifter");
         return rc;
     }
     if (read_config(config_file) != 0) {
-        slurm_error("Failed to parse proteus config. Cannot use proteus.");
+        slurm_error("Failed to parse shifter config. Cannot use shifter.");
         return rc;
     }
     for (i = 0; spank_option_array[i].name != NULL; ++i) {
@@ -498,7 +498,7 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
         (spank_option_array[i].cb)(spank_option_array[i].val, optarg, 1);
     }
     if (strlen(image) == 0) {
-        slurm_error("NO proteus image: len=0");
+        slurm_error("NO shifter image: len=0");
         return rc;
     }
 
@@ -557,11 +557,11 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
         if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
             /* chroot area should be ready! */
         } else {
-            slurm_error("proteus: failed to deconstruct image");
+            slurm_error("shifter: failed to deconstruct image");
             rc = ESPANK_ERROR;
         }
     } else {
-        slurm_error("proteus: failed to fork epilogue script");
+        slurm_error("shifter: failed to fork epilogue script");
         rc = ESPANK_ERROR;
     }
     
@@ -575,14 +575,14 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     char *ptr = NULL;
     int idx = 0;
     for (idx = 0; idx < argc; ++idx) {
-        if (strncmp("proteus_config=", argv[idx], 15) == 0) {
+        if (strncmp("shifter_config=", argv[idx], 15) == 0) {
             snprintf(config_file, 1024, "%s", (argv[idx] + 15));
             ptr = trim(config_file);
             if (ptr != config_file) memmove(config_file, ptr, strlen(ptr) + 1);
         }
     }
     if (strlen(config_file) == 0) {
-        slurm_debug("proteus_config not set, cannot use proteus");
+        slurm_debug("shifter_config not set, cannot use shifter");
         return rc;
     }
     if (spank_getenv(sp, "SLURM_PROTEUS_IMAGE", image, 1024) != ESPANK_SUCCESS) {
@@ -592,7 +592,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
         return rc;
     }
     if (read_config(config_file) != 0) {
-        slurm_error("Failed to parse proteus config. Cannot use proteus.");
+        slurm_error("Failed to parse shifter config. Cannot use shifter.");
         return rc;
     }
     if (strlen(chroot_path) > 0) {
