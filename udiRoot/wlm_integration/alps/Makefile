@@ -7,29 +7,27 @@
 ########
 
 include ../../config.mk
+SED_UPDATE=sed 's|@@@SYSTEM@@@|$(SYSTEM)|g' |\
+           sed 's|@@@PREFIX@@@|$(PREFIX)|g' |\
+           sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g'
 
 all: udiRoot-epilogue udiRoot-prologue udiRoot-nhc-plugin
 
 udiRoot-epilogue: udiRoot-epilogue.in
-	cat $< | sed 's|@@@SYSTEM@@@|$(SYSTEM)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' > $@
+	cat $< | $(SED_UPDATE) > $@
 
 udiRoot-prologue: udiRoot-prologue.in
-	cat $< | sed 's|@@@SYSTEM@@@|$(SYSTEM)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' > $@
+	cat $< | $(SED_UPDATE) > $@
+
 udiRoot-nhc-plugin:udiRoot-nhc-plugin.in
-	cat $< | sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g' > $@
+	cat $< | $(SED_UPDATE) > $@
 
 
 install: all
 	mkdir -p $(PREFIX)/libexec
-	if ! $(CMP) -s udiRoot-prologue $(PREFIX)/libexec/udiRoot-prologue; then \
-	    $(INSTALL) --owner=root --group=root --mode=555  udiRoot-prologue $(PREFIX)/libexec/udiRoot-prologue; \
-	fi
-	if ! $(CMP) -s udiRoot-epilogue $(PREFIX)/libexec/udiRoot-epilogue; then \
-	    $(INSTALL) --owner=root --group=root --mode=555  udiRoot-epilogue $(PREFIX)/libexec/udiRoot-epilogue; \
-	fi
-	if ! $(CMP) -s udiRoot-nhc-plugin $(PREFIX)/libexec/udiRoot-nhc-plugin; then \
-	    $(INSTALL) --owner=root --group=root --mode=555  udiRoot-nhc-plugin $(PREFIX)/libexec/udiRoot-nhc-plugin; \
-	fi
+	$(INSTALL) --owner=root --group=root --mode=555  udiRoot-prologue $(PREFIX)/libexec/udiRoot-prologue
+	$(INSTALL) --owner=root --group=root --mode=555  udiRoot-epilogue $(PREFIX)/libexec/udiRoot-epilogue
+	$(INSTALL) --owner=root --group=root --mode=555  udiRoot-nhc-plugin $(PREFIX)/libexec/udiRoot-nhc-plugin
 
 clean:
 	if [ -a udiRoot-prologue ]; then $(RM) udiRoot-prologue; fi
