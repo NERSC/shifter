@@ -7,6 +7,7 @@
 ########
 
 include ../../config.mk
+-include ../../config.inc
 SED_UPDATE=sed 's|@@@SYSTEM@@@|$(SYSTEM)|g' |\
            sed 's|@@@PREFIX@@@|$(PREFIX)|g' |\
            sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g'

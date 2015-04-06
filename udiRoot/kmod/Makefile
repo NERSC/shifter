@@ -7,6 +7,7 @@
 ########
 
 include ../config.mk
+-include ../config.inc
 KVER := $(shell uname -r | sed 's|\(.*\)-cray_.*|\1|g' )
 
 ## configuration

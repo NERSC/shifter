@@ -7,6 +7,7 @@
 ########
 
 include ../config.mk
+-include ../config.inc
 
 ## configuration
 CFLAGS=-O2 -Wall

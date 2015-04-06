@@ -1,4 +1,5 @@
 PREFIX=/opt/nersc/udiRoot/tag
+DESTDIR=$(PREFIX)
 CONFIG_DIR=$(PREFIX)/etc
 CONFIG_FILE=$(CONFIG_DIR)/udiRoot.conf
 INCLUDE_FILE=$(CONFIG_DIR)/udiRoot.include

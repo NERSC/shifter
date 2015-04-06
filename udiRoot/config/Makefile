@@ -7,6 +7,7 @@
 ########
 
 include ../config.mk
+-include ../config.inc
 
 udiRoot.conf: udiRoot.conf.$(SYSTEM).in
 	cat $< | sed 's|@@@SYSTEM@@@|$(SYSTEM)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' | sed 's|@@@INCLUDE_FILE@@@|$(INCLUDE_FILE)|g' > $@

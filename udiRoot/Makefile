@@ -1,14 +1,20 @@
 DIRS := config src kmod ssh
 
 include config.mk
+-include config.inc
 
 ifeq ($(WLM_INT),alps)
     DIRS += wlm_integration/alps
 endif
 
+config.inc:
+	echo PREFIX=$(PREFIX) > config.inc; \
+    echo DESTDIR=$(DESTDIR) >> config.inc
 
-all: 
-	for dir in $(DIRS); do (cd $$dir; make all || exit 1) || exit 1; done
+recurse:
+	echo $(PREFIX)
+#for dir in $(DIRS); do (cd $$dir; make all || exit 1) || exit 1; done
+all: config.inc recurse
 
 test:
 	for dir in $(DIRS); do (cd $$dir; make test || exit 1) || exit 1; done
