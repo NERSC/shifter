@@ -21,16 +21,10 @@ fsMap.conf: fsMap.conf.$(SYSTEM).in
 all: udiRoot.conf udiRoot.include fsMap.conf
 
 install: all
-	mkdir -p $(CONFIG_DIR)
-	if ! $(CMP) -s udiRoot.conf $(CONFIG_FILE); then \
-	    $(INSTALL) --owner=root --group=root --mode=444  udiRoot.conf $(CONFIG_FILE); \
-	fi
-	if ! $(CMP) -s udiRoot.include $(INCLUDE_FILE); then \
-	    $(INSTALL) --owner=root --group=root --mode=400  udiRoot.include $(INCLUDE_FILE); \
-	fi
-	if ! $(CMP) -s fsMap.conf $(PREFIX)/fsMap.conf; then \
-	    $(INSTALL) --owner=root --group=root --mode=400  fsMap.conf $(PREFIX)/fsMap.conf; \
-	fi
+	mkdir -p $(DESTDIR)/etc
+	$(INSTALL) --owner=root --group=root --mode=444  udiRoot.conf $(DESTDIR)/etc/udiRoot.conf
+	$(INSTALL) --owner=root --group=root --mode=400  udiRoot.include $(DESTDIR)/etc/udiRoot.include; \
+	$(INSTALL) --owner=root --group=root --mode=400  fsMap.conf $(DESTDIR)/fsMap.conf; \
 
 clean:
 	if [ -a udiRoot.conf ]; then $(RM) udiRoot.conf; fi

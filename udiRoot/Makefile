@@ -12,20 +12,20 @@ config.inc:
     echo DESTDIR=$(DESTDIR) >> config.inc
 
 recurse:
-	echo $(PREFIX)
-#for dir in $(DIRS); do (cd $$dir; make all || exit 1) || exit 1; done
+	echo $(PREFIX); \
+	for dir in $(DIRS); do (cd $$dir; make all || exit 1) || exit 1; done
 all: config.inc recurse
 
 test:
 	for dir in $(DIRS); do (cd $$dir; make test || exit 1) || exit 1; done
 
 install:
-	mkdir -p $(PREFIX)
-	mkdir -p $(PREFIX)/sbin
-	mkdir -p $(PREFIX)/bin
-	mkdir -p $(PREFIX)/share/udiRoot
-	PREFIX=$(PREFIX) ./setup_udiRoot_etc_files.sh
-	$(INSTALL) --owner=root --group=root --mode=500  setup_udiRoot_etc_files.sh $(PREFIX)/share/udiRoot
+	mkdir -p $(DESTDIR)
+	mkdir -p $(DESTDIR)/sbin
+	mkdir -p $(DESTDIR)/bin
+	mkdir -p $(DESTDIR)/share/udiRoot
+	PREFIX=$(DESTDIR) ./setup_udiRoot_etc_files.sh
+	$(INSTALL) --owner=root --group=root --mode=500  setup_udiRoot_etc_files.sh $(DESTDIR)/share/udiRoot
 	for dir in $(DIRS); do (cd $$dir; make install || exit 1) || exit 1; done
 
 clean:

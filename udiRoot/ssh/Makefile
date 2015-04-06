@@ -19,9 +19,9 @@ udiRoot_sshd.tar:
 	./build.sh
 
 install: all
-	mkdir -p $(PREFIX)/sshd
-	tar xf udiRoot_sshd.tar -C $(PREFIX)/sshd --strip-components=2
-	chmod -R u+rX,go-rwx $(PREFIX)/sshd
+	mkdir -p $(DESTDIR)/sshd
+	tar xf udiRoot_sshd.tar -C $(DESTDIR)/sshd --strip-components=2
+	chmod -R u+rX,go-rwx $(DESTDIR)/sshd
 
 clean:
 	if [ -a udiRoot_sshd.tar ]; then $(RM) udiRoot_sshd.tar; fi

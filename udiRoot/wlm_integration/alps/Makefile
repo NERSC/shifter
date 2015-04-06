@@ -25,10 +25,10 @@ udiRoot-nhc-plugin:udiRoot-nhc-plugin.in
 
 
 install: all
-	mkdir -p $(PREFIX)/libexec
-	$(INSTALL) --owner=root --group=root --mode=555  udiRoot-prologue $(PREFIX)/libexec/udiRoot-prologue
-	$(INSTALL) --owner=root --group=root --mode=555  udiRoot-epilogue $(PREFIX)/libexec/udiRoot-epilogue
-	$(INSTALL) --owner=root --group=root --mode=555  udiRoot-nhc-plugin $(PREFIX)/libexec/udiRoot-nhc-plugin
+	mkdir -p $(DESTDIR)/libexec
+	$(INSTALL) --owner=root --group=root --mode=555  udiRoot-prologue $(DESTDIR)/libexec/udiRoot-prologue
+	$(INSTALL) --owner=root --group=root --mode=555  udiRoot-epilogue $(DESTDIR)/libexec/udiRoot-epilogue
+	$(INSTALL) --owner=root --group=root --mode=555  udiRoot-nhc-plugin $(DESTDIR)/libexec/udiRoot-nhc-plugin
 
 clean:
 	if [ -a udiRoot-prologue ]; then $(RM) udiRoot-prologue; fi
