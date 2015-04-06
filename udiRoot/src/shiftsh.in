@@ -6,6 +6,7 @@
 job=0
 [[ -n "$PBS_JOBID" ]] && job="$PBS_JOBID"
 [[ -n "$SLURM_JOBID" ]] && job="$SLURM_JOBID"
+job=$( echo "$job" | awk -F. '{print $1}' )
 datadir="/var/run/udiRoot_jobs/$USER/$job"
 [[ -d "$datadir" ]] || die "Cannot find data directory: $datadir"
 keyFile="$datadir/id_rsa.key"
