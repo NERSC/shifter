@@ -39,21 +39,12 @@ udiRootEnter: udiRootEnter.c
 install: all
 	mkdir -p $(PREFIX)/sbin
 	mkdir -p $(PREFIX)/bin
-	if ! $(CMP) -s setupRoot.sh $(PREFIX)/sbin/setupRoot.sh; then \
-		$(INSTALL) --owner=root --group=root --mode=555  setupRoot.sh $(PREFIX)/sbin/setupRoot.sh; \
-	fi
-	if ! $(CMP) -s unsetupRoot.sh $(PREFIX)/sbin/unsetupRoot.sh; then \
-		$(INSTALL) --owner=root --group=root --mode=555  unsetupRoot.sh $(PREFIX)/sbin/unsetupRoot.sh; \
-	fi
-	if ! $(CMP) -s getDockerImage.pl $(PREFIX)/bin/getDockerImage.pl; then \
-		$(INSTALL) --owner=root --group=root --mode=555  getDockerImage.pl $(PREFIX)/bin/getDockerImage.pl; \
-	fi
-	if ! $(CMP) -s udiRootEnter $(PREFIX)/sbin/udiRootEnter; then \
-		$(INSTALL) --owner=root --group=root --mode=4555  udiRootEnter $(PREFIX)/sbin/udiRootEnter; \
-	fi
-	if ! $(CMP) -s shiftsh $(PREFIX)/bin/shiftsh; then \
-		$(INSTALL) --owner=root --group=root --mode=555  shiftsh $(PREFIX)/bin/shiftsh; \
-	fi
+	$(INSTALL) --owner=root --group=root --mode=555  setupRoot.sh $(PREFIX)/sbin/setupRoot.sh
+	$(INSTALL) --owner=root --group=root --mode=555  unsetupRoot.sh $(PREFIX)/sbin/unsetupRoot.sh
+	$(INSTALL) --owner=root --group=root --mode=555  getDockerImage.pl $(PREFIX)/bin/getDockerImage.pl
+	$(INSTALL) --owner=root --group=root --mode=4555  udiRootEnter $(PREFIX)/sbin/udiRootEnter
+	$(INSTALL) --owner=root --group=root --mode=555  shiftsh $(PREFIX)/bin/shiftsh
+	$(INSTALL) --owner=root --group=root --mode=555  shiftrun $(PREFIX)/bin/shiftrun
 
 clean: setupRoot.sh unsetupRoot.sh getDockerImage.pl udiRootEnter shiftsh shiftrun
 	for file in $^; do if [[ -e "$$file" ]]; then rm "$$file"; fi; done
