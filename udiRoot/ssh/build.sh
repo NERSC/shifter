@@ -69,6 +69,11 @@ cd "${builddir}"
 mkdir -p openssh
 tar xf "openssh-${OPENSSH_VERSION}.tar.gz" -C openssh --strip-components=1
 cd openssh
+
+## it is important to change PATH here so that the default PATH when ssh'd into
+## the image is not infected with all kinds of silly paths (sshd sets PATH to
+## very nearly the path it was built with)
+export PATH="/usr/bin:/bin"
 CC="${SPRT_PREFIX}/bin/musl-gcc" ./configure --without-pam "--with-ssl-dir=${SPRT_PREFIX}" --without-ssh1 --enable-static --disable-shared "--with-zlib=${SPRT_PREFIX}" "--prefix=${INST_PREFIX}"
 make
 make install "DESTDIR=${PREFIX}"
