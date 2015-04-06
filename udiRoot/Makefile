@@ -29,4 +29,5 @@ install:
 	for dir in $(DIRS); do (cd $$dir; make install || exit 1) || exit 1; done
 
 clean:
+	if [[ -e config.inc ]]; then rm config.inc; done; \
 	for dir in $(DIRS); do (cd $$dir; make clean || exit 1) || exit 1; done
