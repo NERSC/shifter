@@ -44,9 +44,11 @@ if [[ -n "${volumes}" ]]; then
     volumes="${volumes:1}" ## remove leading |
 fi
 context="$nodeContext"
-readonly context
 export context
-readonly mode
+
+if [[ -z "$context" ]]; then
+    export NOCONTEXT="true"
+fi
 
 udiRootSetupPath=@@@PREFIX@@@
 exit_code=0

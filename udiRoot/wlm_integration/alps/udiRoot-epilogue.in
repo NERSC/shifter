@@ -34,9 +34,10 @@ while getopts ":m:" opt; do
     esac
 done
 context="$nodeContext"
-readonly context
 export context
-readonly mode
+if [[ -z "$context" ]]; then
+    export NOCONTEXT="true"
+fi
 
 PATH=${PATH}:/opt/cray/alps/default/bin/
 
