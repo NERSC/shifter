@@ -578,12 +578,13 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     return rc;
 }
 
-/*
 int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     int rc = ESPANK_SUCCESS;
     char config_file[1024] = "";
     char *ptr = NULL;
     int idx = 0;
+    int i,j;
+
     for (idx = 0; idx < argc; ++idx) {
         if (strncmp("shifter_config=", argv[idx], 15) == 0) {
             snprintf(config_file, 1024, "%s", (argv[idx] + 15));
@@ -595,16 +596,24 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
         slurm_debug("shifter_config not set, cannot use shifter");
         return rc;
     }
-    if (spank_getenv(sp, "SLURM_PROTEUS_IMAGE", image, 1024) != ESPANK_SUCCESS) {
-        return rc;
-    }
-    if (spank_getenv(sp, "SLURM_PROTEUS_IMAGETYPE", image_type, 1024) != ESPANK_SUCCESS) {
-        return rc;
-    }
     if (read_config(config_file) != 0) {
         slurm_error("Failed to parse shifter config. Cannot use shifter.");
         return rc;
     }
+
+    for (i = 0; spank_option_array[i].name != NULL; ++i) {
+        char *optarg = NULL;
+        j = spank_option_getopt(sp, &spank_option_array[i], &optarg);
+        if (j != ESPANK_SUCCESS) {
+            continue;
+        }
+        (spank_option_array[i].cb)(spank_option_array[i].val, optarg, 1);
+    }
+    if (strlen(image) == 0 || strlen(image_type) == 0) {
+        slurm_error("NO shifter image: len=0");
+        return rc;
+    }
+
     if (strlen(chroot_path) > 0) {
         if (chroot(chroot_path) != 0) {
             slurm_error("FAILED to chroot to designated image");
@@ -613,4 +622,3 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     }
     return rc;
 }
-*/

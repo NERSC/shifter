@@ -20,9 +20,9 @@ test:
 	for dir in $(DIRS); do (cd $$dir; make test || exit 1) || exit 1; done
 
 install:
-	mkdir -p $(DESTDIR)
-	mkdir -p $(DESTDIR)/sbin
-	mkdir -p $(DESTDIR)/bin
+	mkdir -m 755 -p $(DESTDIR)
+	mkdir -m 750 -p $(DESTDIR)/sbin
+	mkdir -m 755 -p $(DESTDIR)/bin
 	mkdir -p $(DESTDIR)/share/udiRoot
 	PREFIX=$(DESTDIR) ./setup_udiRoot_etc_files.sh
 	$(INSTALL) --owner=root --group=root --mode=500  setup_udiRoot_etc_files.sh $(DESTDIR)/share/udiRoot

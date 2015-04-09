@@ -255,7 +255,7 @@ setupVFSMount () {
     ## make some aspects of the local environment available
     mkdir -p etc
     mkdir -p local/etc
-    mount -o bind /dsl/etc local/etc
+    mount -o bind $context/etc local/etc
     mount -o bind,remount,ro,nodev,nosuid "${mntPoint}/local/etc"
 
     ## /etc/hosts needs to match the local machine for safe and correct communication
