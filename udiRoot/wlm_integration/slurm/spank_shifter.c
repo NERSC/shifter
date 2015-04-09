@@ -15,6 +15,10 @@
 
 SPANK_PLUGIN(shifter, 1)
 
+#ifndef IS_NATIVE_SLURM
+#define IS_NATIVE_SLURM 0
+#endif
+
 #define IMAGE_MAXLEN 1024
 #define IMAGEVOLUME_MAXLEN 2048
 static char image[IMAGE_MAXLEN] = "";
@@ -22,6 +26,7 @@ static char image_type[IMAGE_MAXLEN] = "";
 static char imagevolume[IMAGEVOLUME_MAXLEN] = "";
 static char udiRoot_prefix[1024] = "";
 static char chroot_path[1024] = "";
+static int nativeSlurm = IS_NATIVE_SLURM;
 
 static int _opt_image(int val, const char *optarg, int remote);
 static int _opt_imagevolume(int val, const char *optarg, int remote);
@@ -417,20 +422,25 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     child = fork();
     if (child == 0) {
         char buffer[PATH_MAX];
-        char *args[6 + n_volArgs*2];
+        char *args[6 + n_volArgs*2 + 2];
         char **argPtr = args;
         size_t idx = 0;
+        size_t idx2 = 0;
         clearenv();
         snprintf(buffer, PATH_MAX, "%s/libexec/udiRoot-prologue", udiRoot_prefix);
         memset(args, 0, sizeof(char*) * (6 + n_volArgs*2));
-        args[0] = buffer;
-        args[1] = job_str;
-        args[2] = user_str;
-        args[3] = image_type;
-        args[4] = image;
-        for (idx = 0; idx < n_volArgs; idx++) {
-            args[5 + 2*idx] = "-v";
-            args[6 + 2*idx] = volArgs[idx];
+        args[idx++] = buffer;
+        args[idx++] = job_str;
+        args[idx++] = user_str;
+        args[idx++] = image_type;
+        args[idx++] = image;
+        for (idx2 = 0; idx2 < n_volArgs; idx2++) {
+            args[idx++] = "-v";
+            args[idx++] = volArgs[idx2];
+        }
+        if (nativeSlurm != 0) {
+            args[idx++] = "-m";
+            args[idx++] = "local";
         }
         /* null termination set by memset above */
         while (*argPtr != NULL) {
@@ -536,15 +546,20 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     child = fork();
     if (child == 0) {
         char buffer[PATH_MAX];
-        char *args[7];
+        char *args[9];
+        size_t idx = 0;
         clearenv();
         snprintf(buffer, PATH_MAX, "%s/libexec/udiRoot-epilogue", udiRoot_prefix);
-        args[0] = buffer;
-        args[1] = job_str;
-        args[2] = user_str;
-        args[3] = image_type;
-        args[4] = image;
-        args[5] = NULL;
+        args[idx++] = buffer;
+        args[idx++] = job_str;
+        args[idx++] = user_str;
+        args[idx++] = image_type;
+        args[idx++] = image;
+        if (nativeSlurm != 0) {
+            args[idx++] = "-m";
+            args[idx++] = "local";
+        }
+        args[idx++] = NULL;
         execv(args[0], args);
     } else if (child > 0) {
         int status = 0;
