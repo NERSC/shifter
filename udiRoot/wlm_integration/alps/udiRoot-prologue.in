@@ -12,16 +12,23 @@ user="$2"
 userUid=""
 udiRootType="$3"
 udiRootValue="$4"
+mode="alps"
 shift 4
 
 nodeContext="/dsl"
 
 volumes=""
 image=""
-while getopts ":v:" opt; do
+while getopts ":v:m:" opt; do
     case "${opt}" in
         v)
             volumes="${volumes}|${OPTARG}"
+            ;;
+        m)
+            mode="${OPTARG}"
+            if [[ -n "$mode" && "$mode" == "local" ]]; then
+                nodeContext="";
+            fi
             ;;
         \?)
             echo "Invalid option: -${OPTARG}" >&2
@@ -36,6 +43,10 @@ done
 if [[ -n "${volumes}" ]]; then
     volumes="${volumes:1}" ## remove leading |
 fi
+context="$nodeContext"
+readonly context
+export context
+readonly mode
 
 udiRootSetupPath=@@@PREFIX@@@
 exit_code=0
@@ -122,7 +133,9 @@ job_count=0
 max_count=15
 
 reservation=""
-if [[ -n "$BASIL_RESERVATION_ID" ]]; then
+if [[ "$mode" == "local" ]]; then
+    reservation="local";
+elif [[ -n "$BASIL_RESERVATION_ID" ]]; then
     reservation="$BASIL_RESERVATION_ID"
 else
     while [ $job_count -lt $max_count ] ; do
@@ -139,8 +152,12 @@ fi
 
 [[ -z "$reservation" ]] && die "Failed to identify job reservation"
 
-apstat -rvvv -R $reservation | awk '/^[ ]*PE / { printf "nid%05d\n", $6 }' | sort > $job_nodelist
-chmod a+r $job_nodelist
+if [[ "$mode" == "local" ]]; then
+    hostname > "$job_nodelist"
+else
+    apstat -rvvv -R "$reservation" | awk '/^[ ]*PE / { printf "nid%05d\n", $6 }' | sort > "$job_nodelist"
+fi
+chmod a+r "$job_nodelist"
 
 xtxqtcmd_log="$datadir/log.$jobId"
 xtxqtcmd="/opt/cray/nodehealth/default/bin/xtxqtcmd"
@@ -161,10 +178,20 @@ for volume in ${volumes}; do
     cmdStr="$cmdStr -v \"$volume\""
 done
 
-echo "$xtxqtcmd $unique_nodes $cmdStr"
-"$xtxqtcmd" "$unique_nodes" "$cmdStr" >> $xtxqtcmd_log 2>&1
-ok=$( grep "(complete)" $xtxqtcmd_log | wc -l )
-expected=$( wc -l "$unique_nodes" )
+if [[ "$mode" == "local" ]]; then
+    echo $cmdStr > $xtxqtcmd_log
+    $cmdStr
+    ok=0
+    expected=1
+    if [[ $? -eq 0 ]]; then
+        ok=1
+    fi
+else
+    echo "$xtxqtcmd $unique_nodes $cmdStr" >> $xtxqtcmd_log
+    "$xtxqtcmd" "$unique_nodes" "$cmdStr" >> $xtxqtcmd_log 2>&1
+    ok=$( grep "(complete)" $xtxqtcmd_log | wc -l )
+    expected=$( wc -l "$unique_nodes" )
+fi
 
 ret=0
 if [[ "$ok" != "$expected" ]]; then
