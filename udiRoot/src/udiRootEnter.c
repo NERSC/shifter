@@ -158,7 +158,6 @@ int read_config(int argc, char **argv, struct options *opts) {
         exit(1);
     }
     snprintf(buffer, 1024, "/bin/sh -c 'source %s; echo $%s'", filename, "udiMount");
-    printf("cmd: %s\n", buffer);
     fp = popen(buffer, "r");
     nRead = fread(buffer, 1, 1024, fp);
     pclose(fp);
@@ -168,10 +167,8 @@ int read_config(int argc, char **argv, struct options *opts) {
     }
     buffer[nRead] = 0;
     ptr = trim(buffer);
-    printf("got %d bytes: %s\n", nRead, ptr);
     opts->chroot_path = strdup(ptr);
     snprintf(buffer, 1024, "/bin/sh -c 'source %s; echo $%s'", filename, "udiRootPath");
-    printf("cmd: %s\n", buffer);
     fp = popen(buffer, "r");
     nRead = fread(buffer, 1, 1024, fp);
     pclose(fp);
@@ -182,7 +179,6 @@ int read_config(int argc, char **argv, struct options *opts) {
     buffer[nRead] = 0;
     ptr = trim(buffer);
     opts->udiRoot_prefix = strdup(ptr);
-    printf("got %d bytes: %s\n", nRead, ptr);
 
     if (opts->chroot_path != NULL && strlen(opts->chroot_path) != 0) {
         memset(&st_data, 0, sizeof(struct stat));
@@ -212,11 +208,15 @@ int read_config(int argc, char **argv, struct options *opts) {
     }
 
     /* remainder of arguments are for the application to be executed */
-    opts->args = (char **) malloc(sizeof(char *) * ((argc - idx) + 1));
-    for (aidx = 0; idx < argc; ++idx, ++aidx) {
-        opts->args[aidx] = strdup(argv[idx]);
+    opts->args = (char **) malloc(sizeof(char *) * (argc + 1));
+    for (aidx = 0; idx < argc; ++idx) {
+        opts->args[aidx++] = strdup(argv[idx]);
     }
     opts->args[aidx] = NULL;
+
+    for (idx = 0; idx < aidx; ++idx) {
+        printf("arg: %s\n", opts->args[idx]);
+    }
 
     return 0;
 }
@@ -266,20 +266,18 @@ int main(int argc, char **argv) {
             exit(1);
         }
         for (idx = 0; idx < nGroups; ++idx) {
-            printf("gidList entry: %d\n", gidList[idx]);
             if (gidList[idx] == 0) {
                 gidList[idx] = opts.tgtGid;
             }
         }
         for (idx = 0; idx < nGroups; ++idx) {
-            printf("revised gidList entry: %d\n", gidList[idx]);
             if (gidList[idx] == 0) {
                 gidList[idx] = opts.tgtGid;
             }
         }
     }
 
-    if (eUid != 0 || eGid != 0) {
+    if (eUid != 0 && eGid != 0) {
         fprintf(stderr, "%s\n", "Not running with root privileges, will fail.");
         exit(1);
     }
@@ -287,7 +285,6 @@ int main(int argc, char **argv) {
         fprintf(stderr, "%s\n", "Will not run as root.");
         exit(1);
     }
-
 
     if (opts.udiRoot_flag == 1) {
         /* call setup root */
@@ -354,30 +351,25 @@ int main(int argc, char **argv) {
     }
 
     /* drop privileges */
-    printf("setgroups\n");
     if (setgroups(nGroups, gidList) != 0) {
         fprintf(stderr, "Failed to setgroups\n");
         exit(1);
     }
-    printf("setresgid\n");
     if (setresgid(opts.tgtGid, opts.tgtGid, opts.tgtGid) != 0) {
         fprintf(stderr, "Failed to setgid to %d\n", opts.tgtGid);
         exit(1);
     }
-    printf("setresuid\n");
     if (setresuid(opts.tgtUid, opts.tgtUid, opts.tgtUid) != 0) {
         fprintf(stderr, "Failed to setuid to %d\n", opts.tgtUid);
         exit(1);
     }
 
     /* chdir (within chroot) to where we belong again */
-    printf("cd to wd\n");
     if (chdir(wd) != 0) {
         fprintf(stderr, "Failed to switch to original cwd: %s\n", wd);
         exit(1);
     }
 
-    printf("execve\n");
     execve(opts.args[0], opts.args, environ_copy);
     return 0;
 }

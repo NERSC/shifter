@@ -38,7 +38,7 @@ udiRootEnter: udiRootEnter.c
 
 	
 install: all
-	mkdir -m 750 -p $(DESTDIR)/sbin
+	mkdir -m 755 -p $(DESTDIR)/sbin
 	mkdir -m 755 -p $(DESTDIR)/bin
 	$(INSTALL) --owner=root --group=root --mode=555  setupRoot.sh $(DESTDIR)/sbin/setupRoot.sh
 	$(INSTALL) --owner=root --group=root --mode=555  unsetupRoot.sh $(DESTDIR)/sbin/unsetupRoot.sh

@@ -19,7 +19,7 @@
 
 set -o noglob      ## do not expand filenames
 
-export PATH="/usr/bin:/bin"
+export PATH="/usr/bin:/bin:/usr:sbin:/sbin"
 unset LD_LIBRARY_PATH
 unset LD_PRELOAD
 unset IFS
@@ -213,7 +213,7 @@ setupHostlistFile() {
 startSshd() {
     local mntPoint
     mntPoint="$1"
-    /sbin/chroot "$mntPoint" /opt/udiImage/sbin/sshd
+    chroot "$mntPoint" /opt/udiImage/sbin/sshd
 }
 
 setupVFSMount () {
@@ -265,7 +265,7 @@ setupVFSMount () {
     ## cray shared-root etc needs /.shared
     cd "${mntPoint}"
     mkdir -p .shared
-    mount -o bind /dsl/.shared .shared
+    mount -o bind $context/.shared .shared
     mount -o bind,remount,ro,nodev,nosuid .shared
 
     ## reserve some directories in "/" that will be handled explicitly

@@ -182,7 +182,7 @@ done
 
 if [[ "$mode" == "local" ]]; then
     echo $cmdStr > $xtxqtcmd_log
-    $cmdStr
+    eval $cmdStr
     ok=0
     expected=1
     if [[ $? -eq 0 ]]; then

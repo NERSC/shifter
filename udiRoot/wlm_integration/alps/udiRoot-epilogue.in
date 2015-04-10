@@ -109,7 +109,7 @@ cmdStr="${nodeContext}${udiRootSetupPath}/sbin/unsetupRoot.sh"
 if [[ "$mode" == "local" ]]; then
     ok=0
     echo $cmdStr >> $xtxqtcmd_log
-    $cmdStr
+    eval $cmdStr
     if [[ $? == 0 ]]; then
         ok=1
     fi

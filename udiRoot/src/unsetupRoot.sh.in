@@ -49,7 +49,7 @@ unmountLoop() {
 
 ret=0
 parseConfiguration
-sshdPid=$( pgrep /opt/udiImage/sbin/sshd )
+sshdPid=$( ps -e -o pid,args | grep "/opt/udiImage/sbin/sshd" | grep -v grep | awk '{print $1}' )
 if [[ -n "$sshdPid" ]]; then
     kill "$sshdPid"
 fi

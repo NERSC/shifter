@@ -233,6 +233,12 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
     char config_file[1024] = "";
     char *ptr = NULL;
     int idx = 0;
+
+    context = spank_context();
+    if (context != S_CTX_ALLOCATOR) {
+        return ESPANK_SUCCESS;
+    }
+
     for (idx = 0; idx < argc; ++idx) {
         if (strncmp("shifter_config=", argv[idx], 15) == 0) {
             snprintf(config_file, 1024, "%s", (argv[idx] + 15));
@@ -553,8 +559,6 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
         args[idx++] = buffer;
         args[idx++] = job_str;
         args[idx++] = user_str;
-        args[idx++] = image_type;
-        args[idx++] = image;
         if (nativeSlurm != 0) {
             args[idx++] = "-m";
             args[idx++] = "local";
@@ -578,6 +582,8 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     return rc;
 }
 
+#if IS_SLURM_NATIVE == 1
+/* DISABLE - chroot here messes up cgroup additions
 int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     int rc = ESPANK_SUCCESS;
     char config_file[1024] = "";
@@ -622,3 +628,5 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     }
     return rc;
 }
+*/
+#endif /* IS_SLURM_NATIVE == 1 */

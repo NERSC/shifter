@@ -21,7 +21,7 @@ test:
 
 install:
 	mkdir -m 755 -p $(DESTDIR)
-	mkdir -m 750 -p $(DESTDIR)/sbin
+	mkdir -m 755 -p $(DESTDIR)/sbin
 	mkdir -m 755 -p $(DESTDIR)/bin
 	mkdir -p $(DESTDIR)/share/udiRoot
 	PREFIX=$(DESTDIR) ./setup_udiRoot_etc_files.sh

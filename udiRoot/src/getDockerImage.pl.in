@@ -183,20 +183,20 @@ if ($verbosity_level == 0) {
     print "$result\n";
 } elsif ($ret == 0 && $result ne "") {
     print "Retrieved docker image $image resolving to ID $result\n\n";
-    print "EXAMPLE Batch Script\n";
-    print "#!/bin/bash -l\n";
-    if ($batchType=="torque") {
-        print "#PBS -v DOCKER=\"$image\",CRAY_ROOTFS=UDI\n";
-        print "export PBS_NODEFILE=/var/hostsfile\n";
-    }
-    print "module load shifter\n";
-    if ($batchType == "torque" || $batchType == "slurmHybrid") {
-        my $app = "<your application>";
-        if (defined($entryPoint)) {
-            $app = $entryPoint;
-        }
-        print "shiftrun $app\n";
-    }
+#    print "EXAMPLE Batch Script\n";
+#    print "#!/bin/bash -l\n";
+#    if ($batchType eq "torque") {
+#        print "#PBS -v DOCKER=\"$image\",CRAY_ROOTFS=UDI\n";
+#        print "export PBS_NODEFILE=/var/hostsfile\n";
+#    }
+#    print "module load shifter\n";
+#    if ($batchType eq "torque" || $batchType eq "slurmHybrid") {
+#        my $app = "<your application>";
+#        if (defined($entryPoint)) {
+#            $app = $entryPoint;
+#        }
+#        print "shiftrun $app\n";
+#    }
 }
 
 exit $ret;
