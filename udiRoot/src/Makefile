@@ -40,12 +40,14 @@ udiRootEnter: udiRootEnter.c
 install: all
 	mkdir -m 755 -p $(DESTDIR)/sbin
 	mkdir -m 755 -p $(DESTDIR)/bin
+	ln -s getDockerImage.pl docker
 	$(INSTALL) --owner=root --group=root --mode=555  setupRoot.sh $(DESTDIR)/sbin/setupRoot.sh
 	$(INSTALL) --owner=root --group=root --mode=555  unsetupRoot.sh $(DESTDIR)/sbin/unsetupRoot.sh
 	$(INSTALL) --owner=root --group=root --mode=555  getDockerImage.pl $(DESTDIR)/bin/getDockerImage.pl
 	$(INSTALL) --owner=root --group=root --mode=4555  udiRootEnter $(DESTDIR)/sbin/udiRootEnter
 	$(INSTALL) --owner=root --group=root --mode=555  shiftsh $(DESTDIR)/bin/shiftsh
 	$(INSTALL) --owner=root --group=root --mode=555  shiftrun $(DESTDIR)/bin/shiftrun
+	$(INSTALL) --owner=root --group=root docker $(DESTDIR)/bin/docker
 
 clean: setupRoot.sh unsetupRoot.sh getDockerImage.pl udiRootEnter shiftsh shiftrun
 	for file in $^; do if [[ -e "$$file" ]]; then rm "$$file"; fi; done

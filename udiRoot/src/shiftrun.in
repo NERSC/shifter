@@ -3,8 +3,8 @@
 @@@INCLUDE shifterLibCore.sh@@@
 @@@INCLUDE shifterLibFancyShell.sh@@@
 
-APRUN=`which aprun`
-SRUN=`which srun`
+APRUN=`which aprun 2>/dev/null`
+SRUN=`which srun 2>/dev/null`
 
 declare -a args=("$@")
 job=0

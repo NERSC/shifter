@@ -32,7 +32,6 @@ CONFIG_FILE="${context}@@@CONFIG_FILE@@@"
 INCLUDE_FILE="${context}@@@INCLUDE_FILE@@@"
 readonly CONFIG_FILE
 readonly INCLUDE_FILE
-readonly context
 
 ## stub functions to be replaced by site-specific include file
 preSiteFsBindMount() {

@@ -42,7 +42,7 @@ parseConfiguration() {
     ## read configuration
     validateFile "${CONFIG_FILE}" "-r--r--r--" || die "Invalid configuration file"
     source "${CONFIG_FILE}"
-    export PATH="/usr/bin:/bin"
+    export PATH="/usr/bin:/bin:/usr/sbin:/sbin"
     unset LD_LIBRARY_PATH
     unset LD_PRELOAD
     unset IFS
@@ -76,7 +76,7 @@ parseConfiguration() {
 
     validateFile "${INCLUDE_FILE}" "-r--------" || die "Invalid include file"
     source "${INCLUDE_FILE}"
-    export PATH="/usr/bin:/bin"
+    export PATH="/usr/bin:/bin:/usr/sbin:/sbin"
     unset LD_LIBRARY_PATH
     unset LD_PRELOAD
     unset IFS

@@ -214,10 +214,6 @@ int read_config(int argc, char **argv, struct options *opts) {
     }
     opts->args[aidx] = NULL;
 
-    for (idx = 0; idx < aidx; ++idx) {
-        printf("arg: %s\n", opts->args[idx]);
-    }
-
     return 0;
 }
 
@@ -225,6 +221,7 @@ int main(int argc, char **argv) {
 
     /* save a copy of the environment for the exec */
     char **environ_copy = copyenv();
+    char **arg;
 
     /* declare needed variables */
     const size_t pathbuf_sz = PATH_MAX+1;
@@ -370,6 +367,11 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
+    arg = opts.args;
+    while (*arg != NULL) {
+        printf("arg: %s\n", *arg);
+        arg++;
+    }
     execve(opts.args[0], opts.args, environ_copy);
     return 0;
 }

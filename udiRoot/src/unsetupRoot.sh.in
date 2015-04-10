@@ -15,7 +15,6 @@ CONFIG_FILE="${context}@@@CONFIG_FILE@@@"
 INCLUDE_FILE="${context}@@@INCLUDE_FILE@@@"
 readonly CONFIG_FILE
 readonly INCLUDE_FILE
-readonly context
 
 @@@INCLUDE shifterLibCore.sh@@@
 

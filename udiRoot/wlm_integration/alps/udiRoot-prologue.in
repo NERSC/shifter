@@ -182,7 +182,7 @@ done
 
 if [[ "$mode" == "local" ]]; then
     echo $cmdStr > $xtxqtcmd_log
-    eval $cmdStr
+    /bin/sh -c "$cmdStr"
     ok=0
     expected=1
     if [[ $? -eq 0 ]]; then
@@ -196,7 +196,7 @@ else
 fi
 
 ret=0
-if [[ "$ok" != "$expected" ]]; then
+if [[ "$ok" -eq "$expected" ]]; then
     echo "udiRoot Start FAILURE, $ok of $expected responses"
     ret=1
 fi

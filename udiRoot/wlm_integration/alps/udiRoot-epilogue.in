@@ -51,13 +51,9 @@ die() {
 [[ -n "$jobId" ]] || die "Job ID is undefined"
 [[ -n "$user" ]]  || die "user is undefined"
 
-echo "Destroying udiRoot environment, please wait."
-
 datadir="/var/run/udiRoot_jobs/$user/$jobId"
-mkdir -p "$datadir"
-chmod a+x /var/run/udiRoot_jobs
-chmod a+x "/var/run/udiRoot_jobs/$user"
-chmod a+x "/var/run/udiRoot_jobs/$user/$jobId"
+
+[[ -d "$datadir" ]] || exit
 
 ## stole this from ccm prologue, unsure how it is helpful/useful
 xtprocadmin_cmd="/opt/cray/sdb/default/bin/xtprocadmin"
@@ -122,8 +118,11 @@ else
 fi
 
 ret=0
-if [[ "$ok" != "$expected" ]]; then
+if [[ "$ok" -ne "$expected" ]]; then
     echo "udiRoot cleanup FAILURE, $ok of $expected responses"
     ret=1
+fi
+if [[ $ret -eq 0 && -e "$datadir" && "$datadir" != "/" ]]; then
+    rm -r "$datadir"
 fi
 exit $ret
