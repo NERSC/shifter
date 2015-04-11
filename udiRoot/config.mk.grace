@@ -8,6 +8,7 @@ CRAY_NODETYPE=c
 SYSTEM=grace
 VERSION=0.5
 WLM_INT=alps
+KEYLEN=512
 
 CC      = /usr/bin/gcc
 RM      = /bin/rm
