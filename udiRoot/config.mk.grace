@@ -7,8 +7,9 @@ CRAY_NETTYPE=gem
 CRAY_NODETYPE=c
 SYSTEM=grace
 VERSION=0.5
-WLM_INT=alps
+WLM_INT=torque
 KEYLEN=512
+CRAY_SUPPORT=1
 
 CC      = /usr/bin/gcc
 RM      = /bin/rm

@@ -3,8 +3,14 @@ DIRS := config src kmod ssh
 include config.mk
 -include config.inc
 
-ifeq ($(WLM_INT),alps)
-    DIRS += wlm_integration/alps
+ifeq ($(CRAY_SUPPORT),1)
+    DIRS += wlm_integration/cray
+endif
+ifeq ($(WLM_INT),torque)
+    DIRS += wlm_integration/torque
+endif
+ifeq ($(WLM_INT),slurm)
+    DIRS += wlm_integration/slurm
 endif
 
 config.inc:
