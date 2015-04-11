@@ -1,0 +1,60 @@
+qsetenv(8)                  Administration Commands                 qsetenv(8)
+
+
+
+[1mNAME[0m
+       qsetenv - set environmental variable in pending job
+
+[1mSYNOPSIS[0m
+       [1mqsetenv [22m[ [1m-v [22m] [ [1m-h [22m] [4mpbs_server[24m [4mjob_descriptor[24m [4mVarName[24m [4mValue[0m
+
+[1mDESCRIPTION[0m
+       [1mqsetenv  [22mAppends  a single environmental variable key=value pair to the
+       list of environmental variables in a pending job.  qsetenv will  create
+       the  list in the job record if it does not previously exist.  No exist-
+       ing records will be removed, but only appended.  Therefore if  a  vari-
+       able has an existing value the shell within the job should evaluate the
+       appended (qsetenv-set) value last.   To  change  another  user's  jobs,
+       administrative access to the scheduler is required.
+
+[1mOPTIONS[0m
+       -h,--help
+              Show help message (and exit 0 without changing any jobs)
+
+       -V,--version
+              Show qsetenv version and linked torque version (and exit 0 with-
+              out changing any jobs)
+
+       pbs_server
+              PBS/torque server to connect to
+
+       job_descriptor
+              full job identifier (e.g., 12345.hopque02)
+
+       VarName
+              the environment variable name to set
+
+       Value  the environment variable value to set
+
+[1mEXAMPLE[0m
+       [1mqsetenv [22mcvrsvc09-ib 123456.cvrsvc09-ib CHOS sl5carver
+
+[1mEXIT STATUS[0m
+       Upon successful job modification the exit status will be zero.  If help
+       or version options are specified, qsetenv with exit with status zero.
+
+       If  qsetenv  fails  to  modify the job (pbs_alterjob(3) fails), an exit
+       status of one is returned.
+
+[1mBUGS[0m
+       Not fully tested yet.
+
+[1mAUTHOR[0m
+       Douglas Jacobsen <dmj@nersc.gov>
+
+[1mSEE ALSO[0m
+       [1mqsub[22m(1B), [1mqalter[22m(1B), [1mpbs_alterjob[22m(3B)
+
+
+
+LBNL/NERSC                        10 Sep 2014                       qsetenv(8)

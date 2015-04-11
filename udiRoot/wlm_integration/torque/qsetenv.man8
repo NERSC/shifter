@@ -1,0 +1,52 @@
+.TH qsetenv 8 "10 Sep 2014" "LBNL/NERSC" "Administration Commands"
+.SH NAME
+qsetenv \- set environmental variable in pending job
+.SH SYNOPSIS
+.B qsetenv
+[
+.B -v
+] [
+.B -h
+]
+.I pbs_server
+.I job_descriptor
+.I VarName
+.I Value
+.SH DESCRIPTION
+.B qsetenv
+Appends a single environmental variable key=value pair to the list of
+environmental variables in a pending job.  qsetenv will create the list in the
+job record if it does not previously exist.  No existing records will be
+removed, but only appended.  Therefore if a variable has an existing value
+the shell within the job should evaluate the appended (qsetenv-set) value
+last.  To change another user's jobs, administrative access to the scheduler is
+required.
+.SH OPTIONS
+.IP -h,--help
+Show help message (and exit 0 without changing any jobs)
+.IP -V,--version
+Show qsetenv version and linked torque version (and exit 0 without changing any jobs)
+.IP pbs_server
+PBS/torque server to connect to
+.IP job_descriptor
+full job identifier (e.g., 12345.hopque02)
+.IP VarName
+the environment variable name to set
+.IP Value
+the environment variable value to set
+.SH EXAMPLE
+.B qsetenv
+cvrsvc09-ib 123456.cvrsvc09-ib CHOS sl5carver
+.SH "EXIT STATUS"
+Upon successful job modification the exit status will be zero.
+If help or version options are specified, qsetenv with exit with status zero.
+
+If qsetenv fails to modify the job (pbs_alterjob(3) fails), an exit status of one is returned.
+.SH BUGS
+Not fully tested yet.
+.SH AUTHOR
+Douglas Jacobsen <dmj@nersc.gov>
+.SH "SEE ALSO"
+.BR qsub (1B),
+.BR qalter (1B),
+.BR pbs_alterjob (3B)

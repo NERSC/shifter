@@ -1,0 +1,10 @@
+qsetenv
+Douglas Jacobsen <dmj@nersc.gov>
+
+Simple tool to append an environment variable to the list of
+variables of a pending job.  Clearly, if the job is already
+running it will have no effect unless the job is rescheduled.
+
+See qsetenv(8) for more information.
+
+Source is stored in scm:/data/svn-nsg/common/cmd/qsetenv
