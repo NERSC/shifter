@@ -583,7 +583,6 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
 }
 
 #if IS_SLURM_NATIVE == 1
-/* DISABLE - chroot here messes up cgroup additions
 int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     int rc = ESPANK_SUCCESS;
     char config_file[1024] = "";
@@ -628,5 +627,4 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     }
     return rc;
 }
-*/
 #endif /* IS_SLURM_NATIVE == 1 */
