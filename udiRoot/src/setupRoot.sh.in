@@ -343,7 +343,12 @@ setupVFSMount () {
     mount -t proc none "${mntPoint}/proc"
     mount -o bind /dev "${mntPoint}/dev"
     mount -o bind,remount,nosuid "${mntPoint}/dev"
-    mount -t devpts none "${mntPoint}/dev/pts"
+    IFS=$'\n'
+    for devmnt in $(cat /proc/mounts | awk '/\S+\s+\/dev\/.+/ {print $2}'); do
+        unset IFS
+        mount -o bind "$devmnt" "${mntPoint}${devmnt}"
+        mount -o bind,remount,nosuid "${mntPoint}${devmnt}"
+    done
     mount -o bind /sys "${mntPoint}/sys"
     mount -o bind,remount,nosuid "${mntPoint}/sys"
 
