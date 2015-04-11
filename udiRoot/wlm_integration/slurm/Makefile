@@ -11,9 +11,6 @@ include ../../config.mk
 ## configuration
 CFLAGS=-O2 -Wall -I$(SLURM_ROOT)/include
 LDFLAGS=
-define CLEANFILES
-    for file in $(1); do echo $$file; done
-endef
 
 all: shifter.so
 
