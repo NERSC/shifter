@@ -9,6 +9,8 @@ SYSTEM=alva
 VERSION=0.5
 WLM_INT=alps
 KEYLEN=512
+SLURM_ROOT=/opt/slurm/default
+IS_NATIVE_SLURM=1
 
 CC      = /usr/bin/gcc
 RM      = /bin/rm
