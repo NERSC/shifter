@@ -129,7 +129,8 @@ bindImageIntoMnt() {
     for item in $(ls "$remoteDir"); do
         unset IFS
         ## weed out possibly dangerous items
-        dir="${item//[^a-zA-Z0-9_+\-\.]/}"
+        item="${item//[^a-zA-Z0-9_+\-\.]/}"
+        [[ -n "$item" ]] || continue
         if [[ ! -e "${remoteDir}/${item}" && ! -L "${remoteDir}/${item}" ]]; then
             continue
         fi
@@ -448,17 +449,18 @@ main() {
 
     parseArguments "$@" || die "Unable to parse arguments"
     parseConfiguration || die "Unable to parse configuration"
+    if [[ -n "$udiRootType" ]]; then
+        targetType="$udiRootType"
+        target="$udiRootValue"
+    fi
     if [[ "$udiRootType" = "CHOS" || "$udiRootType" = "chos" ]]; then
         targetType="chos"
     fi
     if [[ "$udiRootType" = "DOCKER" || "$udiRootType" = "docker" ]]; then
         targetType="docker"
     fi
-    if [[ -n "$udiRootType" ]]; then
-        target="$udiRootValue"
-    fi
 
-    containsItem "$targetType" "chos" "docker" || die "Invalid image target type: $targetType"
+    containsItem "$targetType" "chos" "docker" "local" || die "Invalid image target type: $targetType"
 
     ## since $target is user provided, need to sanitize
     target=${target//[^a-zA-Z0-9_:\.]/}
@@ -480,11 +482,11 @@ main() {
     case "${targetType}" in
         docker) basePath="${dockerPath}" ;;
         chos)   basePath="${chosPath}"   ;;
+        local)  basePath="/"             ;;
         *)      die "Invalid target!"
     esac
   
     [[ -n "$basePath" ]] || die "Invalid base path for $targetType"
-    [[ "$basePath" != "/" ]] || die "Base path cannot be /"
 
     ## get final path to image
     fullPath="${basePath}/${image}"
