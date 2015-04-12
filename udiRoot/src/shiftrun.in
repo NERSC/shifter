@@ -3,8 +3,13 @@
 @@@INCLUDE shifterLibCore.sh@@@
 @@@INCLUDE shifterLibFancyShell.sh@@@
 
-APRUN=`which aprun 2>/dev/null`
-SRUN=`which srun 2>/dev/null`
+parseConfiguration
+[[ -z "$batchType" ]] && die "Unknown batch system type"
+if [[ "$batchType" == "nativeSlurm" ]]; then
+    SRUN=`which srun 2>/dev/null`
+else
+    APRUN=`which aprun 2>/dev/null`
+fi
 
 declare -a args=("$@")
 job=0
@@ -14,20 +19,25 @@ datadir="/var/run/udiRoot_run/$USER/$job"
 
 [[ "$job" == "0" ]] && die "Couldn't identify job"
 
-
 prepareEnvironment "$datadir/env"
-export CRAY_ROOTFS="UDI" ## temporary
+if [[ "$batchType" == "nativeSlurm" ]]; then
+    srunCmd=("$SRUN")
+    srunCmd=("${srunCmd[@]}" "${args[@]}")
+    exec "${srunCmd[@]}"
+else
+    export CRAY_ROOTFS="UDI" ## temporary
 
-aprunCmd=("$APRUN" "-b")
-while IFS= read -r  -d '' item; do
-    IFS="="
-    set -- $item
-    unset IFS
-    varName="$1"
-    [[ "$varName" = "BASH_FUNC"* ]] && continue
-    value=$( echo $item | awk -F= '{ $1=""; print $0; }' | sed 's/^ //g' )
-    aprunCmd=("${aprunCmd[@]}" "-e" "$varName=\"$value\"")
-done < <(env -0)
+    aprunCmd=("$APRUN" "-b")
+    while IFS= read -r  -d '' item; do
+        IFS="="
+        set -- $item
+        unset IFS
+        varName="$1"
+        [[ "$varName" = "BASH_FUNC"* ]] && continue
+        value=$( echo $item | awk -F= '{ $1=""; print $0; }' | sed 's/^ //g' )
+        aprunCmd=("${aprunCmd[@]}" "-e" "$varName=\"$value\"")
+    done < <(env -0)
 
-aprunCmd=("${aprunCmd[@]}" "${args[@]}")
-exec "${aprunCmd[@]}"
+    aprunCmd=("${aprunCmd[@]}" "${args[@]}")
+    exec "${aprunCmd[@]}"
+fi
