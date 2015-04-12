@@ -272,6 +272,7 @@ setupVFSMount () {
     mkdir -p opt/udiImage
     mkdir -p var/empty
     mkdir -p var/run
+    mkdir -p var/opt/cray/alps/spool
     mkdir -p etc/site
     mkdir -p proc
     mkdir -p sys
@@ -344,7 +345,7 @@ setupVFSMount () {
     mount -o bind /dev "${mntPoint}/dev"
     mount -o bind,remount,nosuid "${mntPoint}/dev"
     IFS=$'\n'
-    for devmnt in $(cat /proc/mounts | awk '/\S+\s+\/dev\/.+/ {print $2}'); do
+    for devmnt in $(cat /proc/mounts | awk '{if ($2 ~ /^\/dev\/.+/) { print $2 }}' | sort -u); do
         unset IFS
         mount -o bind "$devmnt" "${mntPoint}${devmnt}"
         mount -o bind,remount,nosuid "${mntPoint}${devmnt}"
@@ -379,7 +380,7 @@ setupVFSMount () {
         fi
     done
     unset IFS
-    mount -o remount,ro,nosuid,nodev "${mntPoint}"
+    mount -o remount,nosuid,nodev "${mntPoint}"
     set +e
 }
 

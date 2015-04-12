@@ -195,8 +195,6 @@ int lookup_image(int verbose, const char *mode, char **image_id) {
             }
             *image_id = (char *) realloc(*image_id, sizeof(char) * (strlen(buff2) + 1));
             snprintf(*image_id, strlen(buff2)+1, "%s", buff2);
-            slurm_error("got id: %s", *image_id);
-
         } else {
             if (strncmp(ptr, "ENV:", 4) == 0) {
                 ptr += 4;
@@ -235,9 +233,6 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
     int idx = 0;
 
     context = spank_context();
-    if (context != S_CTX_ALLOCATOR) {
-        return ESPANK_SUCCESS;
-    }
 
     for (idx = 0; idx < argc; ++idx) {
         if (strncmp("shifter_config=", argv[idx], 15) == 0) {
@@ -278,9 +273,10 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
 
     // only perform this validation at submit time
     context = spank_context();
-    if (context == S_CTX_ALLOCATOR) {
-        verbose_lookup = 1;
+    if (context != S_CTX_ALLOCATOR) {
+        return ESPANK_SUCCESS;
     }
+    verbose_lookup = 1;
     if (imagevolume != NULL && image == NULL) {
         slurm_error("Cannot specify shifter volumes without specifying the image first!");
         exit(-1);
@@ -428,13 +424,13 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     child = fork();
     if (child == 0) {
         char buffer[PATH_MAX];
-        char *args[6 + n_volArgs*2 + 2];
+        char *args[6 + n_volArgs*2 + 3];
         char **argPtr = args;
         size_t idx = 0;
         size_t idx2 = 0;
         clearenv();
         snprintf(buffer, PATH_MAX, "%s/libexec/udiRoot-prologue", udiRoot_prefix);
-        memset(args, 0, sizeof(char*) * (6 + n_volArgs*2));
+        memset(args, 0, sizeof(char*) * (6 + n_volArgs*2 + 3));
         args[idx++] = buffer;
         args[idx++] = job_str;
         args[idx++] = user_str;
@@ -448,6 +444,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
             args[idx++] = "-m";
             args[idx++] = "local";
         }
+        args[idx++] = NULL;
         /* null termination set by memset above */
         while (*argPtr != NULL) {
             slurm_info("prolog arg: %s", *argPtr++);
@@ -582,38 +579,11 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     return rc;
 }
 
-#if IS_SLURM_NATIVE == 1
 int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     int rc = ESPANK_SUCCESS;
-    char config_file[1024] = "";
-    char *ptr = NULL;
-    int idx = 0;
-    int i,j;
 
-    for (idx = 0; idx < argc; ++idx) {
-        if (strncmp("shifter_config=", argv[idx], 15) == 0) {
-            snprintf(config_file, 1024, "%s", (argv[idx] + 15));
-            ptr = trim(config_file);
-            if (ptr != config_file) memmove(config_file, ptr, strlen(ptr) + 1);
-        }
-    }
-    if (strlen(config_file) == 0) {
-        slurm_debug("shifter_config not set, cannot use shifter");
-        return rc;
-    }
-    if (read_config(config_file) != 0) {
-        slurm_error("Failed to parse shifter config. Cannot use shifter.");
-        return rc;
-    }
+    if (nativeSlurm == 0) return ESPANK_SUCCESS;
 
-    for (i = 0; spank_option_array[i].name != NULL; ++i) {
-        char *optarg = NULL;
-        j = spank_option_getopt(sp, &spank_option_array[i], &optarg);
-        if (j != ESPANK_SUCCESS) {
-            continue;
-        }
-        (spank_option_array[i].cb)(spank_option_array[i].val, optarg, 1);
-    }
     if (strlen(image) == 0 || strlen(image_type) == 0) {
         slurm_error("NO shifter image: len=0");
         return rc;
@@ -627,4 +597,3 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     }
     return rc;
 }
-#endif /* IS_SLURM_NATIVE == 1 */
