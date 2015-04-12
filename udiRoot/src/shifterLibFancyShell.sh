@@ -33,6 +33,7 @@ prepareEnvironment() {
 
     ## source special image environment
     newVars=""
+    PATH="${PATH}:/usr/bin:/bin"
     if [[ -e "$envFile" ]]; then
         while IFS= read -r -d '' item; do
             IFS="="
