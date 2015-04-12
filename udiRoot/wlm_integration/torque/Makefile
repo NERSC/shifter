@@ -11,7 +11,7 @@ include ../../config.mk
 ## configuration
 CFLAGS=-O2 -Wall
 TORQUE_DIR=$(shell qsub --about 2>&1 | awk '{ i=0; while (i++ < NF) { if ($$i == "InstallDir:") { print $$(i+1) } } }' )
-TORQUE_VERSION=$(shell qsub --about 2>&1 | awk '{ i=0; while (i++ < NF) { if ($$i == "Version:") { print $$(i+1) } } }' )
+TORQUE_VERSION=$(shell qsub --about 2>&1 | awk '/Version:/{ print $$2}')
 CFLAGS+= -DTORQUE_VERSION="\"$(TORQUE_VERSION)\""
 CPPFLAGS=-I$(TORQUE_DIR)/include
 LDFLAGS=-L$(TORQUE_DIR)/lib -Wl,-rpath,$(TORQUE_DIR)/lib
@@ -19,16 +19,16 @@ LDFLAGS=-L$(TORQUE_DIR)/lib -Wl,-rpath,$(TORQUE_DIR)/lib
 all: qsetenv qgetenv qstatenv qsetenv.8
 
 qsetenv: qsetenv.c
-	$(CC) $(LDFLAGS) $< -ltorque -o $@
+	$(CC) $(LDFLAGS) $(CPPFLAGS) $(CFLAGS) $< -ltorque -o $@
 
 qstatenv: qstatenv.c
-	$(CC) $(LDFLAGS) $< -ltorque -o $@
+	$(CC) $(LDFLAGS) $(CPPFLAGS) $(CFLAGS) $< -ltorque -o $@
 
 qgetenv: qgetenv.c
-	$(CC) $(LDFLAGS) $< -ltorque -o $@
+	$(CC) $(LDFLAGS) $(CPPFLAGS) $(CFLAGS)  $< -ltorque -o $@
 
 qsetenv.8: qsetenv.man8
-	$(GROFF) $(@:.8=.man8) > $@
+	groff $(@:.8=.man8) > $@
 
 install: all
 	mkdir -p -m 755 $(DESTDIR)/libexec
