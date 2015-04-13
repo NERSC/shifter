@@ -196,7 +196,7 @@ else
     echo "$xtxqtcmd $unique_nodes $cmdStr" >> $xtxqtcmd_log
     "$xtxqtcmd" "$unique_nodes" "$cmdStr" >> $xtxqtcmd_log 2>&1
     ok=$( grep "(complete)" $xtxqtcmd_log | wc -l )
-    expected=$( wc -l "$unique_nodes" )
+    expected=$( cat "$unique_nodes" | wc -l )
 fi
 
 ret=0
