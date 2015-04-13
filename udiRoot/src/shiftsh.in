@@ -10,6 +10,7 @@ job=$( echo "$job" | awk -F. '{print $1}' )
 datadir="/var/run/udiRoot_jobs/$USER/$job"
 [[ -d "$datadir" ]] || die "Cannot find data directory: $datadir"
 keyFile="$datadir/id_rsa.key"
+[[ -f "$keyFile" ]] || keyFile="~/.udiRoot/id_rsa.key"
 [[ -f "$keyFile" ]] || die "Cannot find credentials"
 unique_nodes="$datadir/unique_nodes.$job"
 [[ -f "$unique_nodes" ]] || die "Cannot find node list"

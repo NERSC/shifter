@@ -105,7 +105,7 @@ cat <<EOF > ${PREFIX}${INST_PREFIX}/etc/ssh_config
 Host *
   StrictHostKeyChecking no
   Port 204
-# IdentityFile ...
+  IdentityFile ~/.udiRoot/id_rsa.key
 EOF
 
 cd "${PREFIX}"

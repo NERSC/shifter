@@ -110,10 +110,14 @@ chmod a+x "/var/run/udiRoot_jobs/$user/$jobId"
 oldUmask=$(umask)
 umask 022
 
-ssh-keygen -t rsa -f "$datadir/id_rsa.key" -N '' >/dev/null 2>&1
-chown "$user" "$datadir/id_rsa.key" "$datadir/id_rsa.key.pub"
-chmod 600 "$datadir/id_rsa.key" "$datadir/id_rsa.key.pub"
-sshPubKey=$( cat "$datadir/id_rsa.key.pub" )
+if [[ "$mode" == "local" ]]; then
+    sshPubKey=$( su -c "cat ~/.udiRoot/id_rsa.key.pub" "$user" ) 
+else
+    ssh-keygen -t rsa -f "$datadir/id_rsa.key" -N '' >/dev/null 2>&1
+    chown "$user" "$datadir/id_rsa.key" "$datadir/id_rsa.key.pub"
+    chmod 600 "$datadir/id_rsa.key" "$datadir/id_rsa.key.pub"
+    sshPubKey=$( cat "$datadir/id_rsa.key.pub" )
+fi
 
 envFile="$datadir/env";
 for envItem in "${jobEnv[@]}"; do

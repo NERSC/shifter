@@ -94,6 +94,44 @@ int _opt_imagevolume(int val, const char *optarg, int remote) {
     return ESPANK_ERROR;
 }
 
+int generateSshKey() {
+    struct stat st_data;
+
+    char filename[1024];
+    char buffer[4096];
+    struct passwd pwd;
+    struct passwd *ptr = NULL;
+    int generateKey = 0;
+    getpwuid_r(getuid(), &pwd, buffer, 4096, &ptr);
+    if (ptr == NULL) {
+        slurm_error("FAIL cannot lookup current_user");
+        return 1;
+    }
+    snprintf(filename, 1024, "%s/.udiRoot/id_rsa.key", pwd.pw_dir);
+
+    memset(&st_data, 0, sizeof(struct stat));
+    if (stat(filename, &st_data) != 0) {
+        generateKey = 1;
+    }
+    snprintf(filename, 1024, "%s/.udiRoot/id_rsa.key.pub", pwd.pw_dir);
+    memset(&st_data, 0, sizeof(struct stat));
+    if (stat(filename, &st_data) != 0) {
+        generateKey = 1;
+    }
+
+    if (generateKey) {
+        char cmd[1024];
+        int rc = 0;
+        snprintf(filename, 1024, "%s/.udiRoot", pwd.pw_dir);
+        mkdir(filename, 0700); // intentionally ignoring errors for this
+        snprintf(filename, 1024, "%s/.udiRoot/id_rsa.key", pwd.pw_dir);
+        snprintf(cmd, 1024, "ssh-keygen -t rsa -f %s -N '' >/dev/null 2>/dev/null", filename);
+        rc = system(cmd);
+        return rc;
+    }
+    return 0;
+}
+
 int read_config_item(const char *filename, const char *item, char *buffer, size_t buflen) {
     char cmdBuffer[1024];
     ssize_t nread;
@@ -294,6 +332,11 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     }
     if (strlen(image) == 0) {
         return rc;
+    }
+
+    if (nativeSlurm) {
+        /* for slurm native, generate ssh keys here */
+        generateSshKey();
     }
     
     spank_setenv(sp, "CRAY_ROOTFS", "UDI", 1);
