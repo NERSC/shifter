@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <ctype.h>
 #include <sys/stat.h>
@@ -12,6 +13,7 @@
 #include <grp.h>
 
 #include <slurm/spank.h>
+#include <slurm/slurm.h> // for job prolog where job data structure is loaded
 
 SPANK_PLUGIN(shifter, 1)
 
@@ -30,10 +32,12 @@ static int nativeSlurm = IS_NATIVE_SLURM;
 
 static int _opt_image(int val, const char *optarg, int remote);
 static int _opt_imagevolume(int val, const char *optarg, int remote);
+static int _opt_ccm(int val, const char *optarg, int remote);
 
 struct spank_option spank_option_array[] = {
     { "image", "image", "shifter image to use", 1, 0, (spank_opt_cb_f) _opt_image},
     { "imagevolume", "imagevolume", "shifter image bindings", 1, 0, (spank_opt_cb_f) _opt_imagevolume },
+    { "ccm", "ccm", "ccm emulation mode", 0, 0, (spank_opt_cb_f) _opt_ccm},
     SPANK_OPTIONS_TABLE_END
 };
 
@@ -48,6 +52,12 @@ char *trim(char *string) {
         *(ptr + len) = 0;
     }
     return ptr;
+}
+
+int _opt_ccm(int val, const char *optarg, int remote) {
+    snprintf(image, IMAGE_MAXLEN, "dsl");
+    snprintf(image_type, IMAGE_MAXLEN, "local");
+    return ESPANK_SUCCESS;
 }
 
 int _opt_image(int val, const char *optarg, int remote) {
@@ -368,6 +378,8 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     char group_str[128];
     char **volArgs = NULL;
     size_t n_volArgs = 0;
+    char *nodelist = NULL;
+    size_t tasksPerNode = 0;
 
     for (idx = 0; idx < argc; ++idx) {
         if (strncmp("shifter_config=", argv[idx], 15) == 0) {
@@ -394,23 +406,32 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         (spank_option_array[i].cb)(spank_option_array[i].val, optarg, 1);
     }
     if (strlen(image) == 0 || strlen(image_type) == 0) {
-        slurm_error("NO shifter image: len=0");
         return rc;
     }
-    /*
-    if (strncmp(image_type, "docker", IMAGE_MAXLEN) == 0) {
-        char *image_id = NULL;
-        lookup_image(0, "lookup", &image_id); //, &env, &entrypoint);
-        if (image_id == NULL) {
-            slurm_error("Failed to lookup image.  Aborting.");
-            return rc;
-        }
-        snprintf(image, IMAGE_MAXLEN, "%s", image_id);
-        free(image_id);
-    }
-    */
+
     for (ptr = image_type; ptr - image_type < strlen(image_type); ptr++) {
         *ptr = toupper(*ptr);
+    }
+
+    if (nativeSlurm) {
+        uint32_t jobid;
+        job_info_msg_t *job_buf;
+        if (spank_get_item(sp, S_JOB_ID, &jobid) != ESPANK_SUCCESS) {
+            slurm_error("Couldnt get job id");
+            return rc;
+        }
+        if (slurm_load_job(&job_buf, jobid, SHOW_ALL) != 0) {
+            slurm_error("Couldn't load job data");
+            return rc;
+        }
+        if (job_buf->record_count != 1) {
+            slurm_error("Can't deal with this job!");
+            slurm_free_job_info_msg(job_buf);
+            return rc;
+        }
+        nodelist = strdup(job_buf->job_array->nodes);
+        tasksPerNode = job_buf->job_array->num_cpus / job_buf->job_array->num_nodes;
+        slurm_free_job_info_msg(job_buf);
     }
 
     if (strlen(imagevolume) > 0) {
@@ -467,7 +488,8 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     child = fork();
     if (child == 0) {
         char buffer[PATH_MAX];
-        char *args[6 + n_volArgs*2 + 3];
+        char ntaskBuf[128];
+        char *args[6 + n_volArgs*2 + 3 + 4];
         char **argPtr = args;
         size_t idx = 0;
         size_t idx2 = 0;
@@ -486,6 +508,13 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         if (nativeSlurm != 0) {
             args[idx++] = "-m";
             args[idx++] = "local";
+        }
+        if (nodelist != NULL) {
+            snprintf(ntaskBuf, 128, "%lu", tasksPerNode);
+            args[idx++] = "-n";
+            args[idx++] = nodelist;
+            args[idx++] = "-N";
+            args[idx++] = ntaskBuf;
         }
         args[idx++] = NULL;
         /* null termination set by memset above */
@@ -506,6 +535,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         slurm_error("shifter: failed to fork setupRoot");
         rc = ESPANK_ERROR;
     }
+    if (nodelist != NULL) free(nodelist);
     
     return rc;
 } 
@@ -549,7 +579,6 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
         (spank_option_array[i].cb)(spank_option_array[i].val, optarg, 1);
     }
     if (strlen(image) == 0) {
-        slurm_error("NO shifter image: len=0");
         return rc;
     }
 
@@ -628,7 +657,6 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     if (nativeSlurm == 0) return ESPANK_SUCCESS;
 
     if (strlen(image) == 0 || strlen(image_type) == 0) {
-        slurm_error("NO shifter image: len=0");
         return rc;
     }
 

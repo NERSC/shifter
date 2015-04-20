@@ -327,6 +327,7 @@ setupVFSMount () {
                 continue
             fi
             cp -p "$etcDir/$item" "${mntPoint}/etc/site"
+            chmod a+rX "${mntPoint}/etc/site/$item"
             if [[ -e "$item" || -L "$item" ]]; then
                 rm "$item"
             fi
@@ -458,6 +459,9 @@ main() {
     fi
     if [[ "$udiRootType" = "DOCKER" || "$udiRootType" = "docker" ]]; then
         targetType="docker"
+    fi
+    if [[ "$udiRootType" = "LOCAL" || "$udiRootType" = "local" ]]; then
+        targetType="local"
     fi
 
     containsItem "$targetType" "chos" "docker" "local" || die "Invalid image target type: $targetType"

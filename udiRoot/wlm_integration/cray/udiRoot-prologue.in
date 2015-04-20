@@ -19,7 +19,9 @@ nodeContext="/dsl"
 
 volumes=""
 image=""
-while getopts ":v:m:" opt; do
+nodelist=""
+tasksPerNode=""
+while getopts ":v:m:n:N:" opt; do
     case "${opt}" in
         v)
             volumes="${volumes}|${OPTARG}"
@@ -29,6 +31,12 @@ while getopts ":v:m:" opt; do
             if [[ -n "$mode" && "$mode" == "local" ]]; then
                 nodeContext="";
             fi
+            ;;
+        n)
+            nodelist="${OPTARG}"
+            ;;
+        N)
+            tasksPerNode="${OPTARG}"
             ;;
         \?)
             echo "Invalid option: -${OPTARG}" >&2
@@ -176,6 +184,11 @@ cat "$job_nodelist" | sort -u > "$unique_nodes"
 
 ## minimize nodelist for putting hostsfile on the compute node
 minNodes=$( cat "$job_nodelist" | sort | uniq -c | awk '{print $2 "/" $1}' | xargs )
+if [[ "$mode" == "local" ]]; then
+    [[ -n "$tasksPerNode" ]] || tasksPerNode=1
+    minNodes=$( /opt/slurm/default/bin/scontrol show hostnames "$nodelist" | awk -v taskCount="$tasksPerNode" '{ print $1 "/" taskCount }' | xargs )
+    echo $minNodes >> $xtxqtcmd_log
+fi
 
 cmdStr="${nodeContext}/${udiRootSetupPath}/sbin/setupRoot.sh \"$udiRootType\" \"$udiRootValue\" -s \"$sshPubKey\" -u \"$user\" -U \"$userUid\" -N \"$minNodes\""
 IFS="|"
@@ -185,7 +198,7 @@ for volume in ${volumes}; do
 done
 
 if [[ "$mode" == "local" ]]; then
-    echo $cmdStr > $xtxqtcmd_log
+    echo $cmdStr >> $xtxqtcmd_log
     /bin/sh -c "$cmdStr"
     ok=0
     expected=1
