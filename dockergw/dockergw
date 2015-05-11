@@ -133,7 +133,7 @@ def getmetadata(name, id):
         data = json.load(fd)
         fd.close()
         if 'config' in data:
-            if 'Env' in data['config']:
+            if 'Env' in data['config'] and data['config']['Env'] is not None:
                 for envItem in data['config']['Env']:
                     if 'env' not in outdata:
                         outdata['env'] = []
