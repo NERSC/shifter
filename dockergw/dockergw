@@ -20,7 +20,7 @@ systems = {
         'sshOptions': ['-o','StrictHostKeyChecking=no','-l','craydock','-i','/home/docker/craydock.id_dsa'],
     },
     'alva':  {
-        'host': 'alva01-eth4',
+        'host': 'alvamom1',
         'path': '/scratch1/scratchdirs/craydock/docker',
         'rsyncOptions': ['-e', 'ssh -o StrictHostKeyChecking=no -l craydock -i /home/docker/craydock.id_dsa'],
         'sshOptions': ['-o','StrictHostKeyChecking=no','-l','craydock','-i','/home/docker/craydock.id_dsa'],
@@ -301,7 +301,7 @@ def main():
                      print "INFO: PULL,%s,%s,%s" % (d['status'],d['id'],d['progress'])
                      sys.stdout.flush()
         else:
-            c.pull(name)
+            obj = c.pull(name)
         
         image = lookup(name, username, password)
     if image is None:
