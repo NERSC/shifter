@@ -235,22 +235,6 @@ setupVFSMount () {
     mount -o nosuid,nodev -t rootfs none "${mntPoint}"
     cd "${mntPoint}"
 
-    ### premount -- should be defined in include file
-    preSiteFsBindMount
-    cd "${mntPoint}"
-
-    ### perform the bind mounts
-    if [[ -n "$siteFs" ]]; then
-        for fs in $siteFs; do
-            mkdir "$fs"
-            mount -o bind "/$fs" "$fs"
-            mount -o bind,remount,nosuid,nodev "${mntPoint}/$fs"
-        done
-    fi
-
-    ### postmount -- should be defined in include file
-    postSiteFsBindMount
-    cd "${mntPoint}"
 
     ## make some aspects of the local environment available
     mkdir -p etc
@@ -272,6 +256,7 @@ setupVFSMount () {
     mkdir -p etc/udiImage
     mkdir -p opt/udiImage
     mkdir -p var/empty
+    mkdir -p var/spool
     mkdir -p var/run
     mkdir -p var/opt/cray/alps/spool
     mkdir -p etc/site
@@ -354,6 +339,24 @@ setupVFSMount () {
     done
     mount -o bind /sys "${mntPoint}/sys"
     mount -o bind,remount,nosuid "${mntPoint}/sys"
+
+
+    ### premount -- should be defined in include file
+    cd "${mntPoint}"
+    preSiteFsBindMount
+    cd "${mntPoint}"
+
+    ### perform the bind mounts
+    if [[ -n "$siteFs" ]]; then
+        for fs in $siteFs; do
+            mkdir -p "$fs"
+            mount -o bind "/$fs" "$fs"
+            mount -o bind,remount,nosuid,nodev "${mntPoint}/$fs"
+        done
+    fi
+
+    ### postmount -- should be defined in include file
+    postSiteFsBindMount
 
     ## perform any user-requested bind-mounts
     ##    any leading slashes are stripped to force the bind mount to *only*
