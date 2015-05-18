@@ -661,6 +661,24 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     }
 
     if (strlen(chroot_path) > 0) {
+        char currcwd[PATH_MAX];
+        char newcwd[PATH_MAX];
+        struct stat st_data;
+        if (getcwd(currcwd, PATH_MAX) == NULL) {
+            slurm_error("FAILED to determine working directory");
+            return ESPANK_ERROR;
+        }
+
+        // check to see if newcwd exists, if not, just chdir to the new chroot base
+        snprintf(newcwd, PATH_MAX, "%s/%s", chroot_path, currcwd);
+        if (stat(newcwd, &st_data) != 0) {
+            snprintf(newcwd, PATH_MAX, "%s", chroot_path);
+        }
+        if (chdir(newcwd) != 0) {
+            slurm_error("FAILED to change directory to %s", newcwd);
+            return ESPANK_ERROR;
+        }
+
         if (chroot(chroot_path) != 0) {
             slurm_error("FAILED to chroot to designated image");
             return ESPANK_ERROR;
