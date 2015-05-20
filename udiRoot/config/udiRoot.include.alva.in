@@ -7,5 +7,5 @@ postSiteFsBindMount() {
     my_cwd=$( pwd )
     cd global
     ln -s u1 homes
-    cd $my_cwd
+    cd "$my_cwd"
 }
