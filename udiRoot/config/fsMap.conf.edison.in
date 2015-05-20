@@ -2,6 +2,7 @@ local;dsl;/;vfs
 chos;cvmfs_cms;cvmfs_cms.ext4;ext4Image
 chos;cvmfs_alice;cvmfs_alice.ext4;ext4Image
 chos;cvmfs_atlas;cvmfs_atlas.ext4;ext4Image
+chos;cvmfs_icecube;cvmfs_icecube.ext4;ext4Image
 chos;deb6gplogin;deb6gplogin.ext4;ext4Image
 chos;deb6gp;deb6gp.ext4;ext4Image
 chos;sl5carver;sl5carver.ext4;ext4Image
