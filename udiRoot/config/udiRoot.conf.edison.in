@@ -1,0 +1,19 @@
+if [[ -z "$context" ]]; then
+    context=""
+fi
+udiMount=/var/udiMount
+loopMount=/var/loopUdiMount
+chosPath=/scratch2/chos
+dockerPath=/scratch2/scratchdirs/craydock/docker
+udiRootPath="$context/@@@PREFIX@@@"
+udiRootIncludeFile="$context/@@@INCLUDE_FILE@@@"
+mapPath=$udiRootPath/fsMap.conf
+sshPath=$udiRootPath/sshd
+etcDir=$udiRootPath/etc_files
+kmodDir=$udiRootPath/kmod/$( uname -r )
+kmodCache=/tmp/udiRootLoadedModules.txt
+siteFs="scratch1 scratch2 scratch3 global/u1 global/u2 global/project global/syscom global/common global/scratch2 var/opt/cray/alps/spool"
+dockergw_host=128.55.50.83
+dockergw_port=7777
+batchType=torque
+system=@@@SYSTEM@@@
