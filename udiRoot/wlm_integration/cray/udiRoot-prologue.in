@@ -213,7 +213,7 @@ else
 fi
 
 ret=0
-if [[ "$ok" -eq "$expected" ]]; then
+if [[ "$ok" -ne "$expected" ]]; then
     echo "udiRoot Start FAILURE, $ok of $expected responses"
     ret=1
 fi
