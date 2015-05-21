@@ -3,7 +3,7 @@ if [[ -z "$context" ]]; then
 fi
 udiMount=/var/udiMount
 loopMount=/var/loopUdiMount
-chosPath=/scratch2/chos
+chosPath=/scratch2/shifter/chos
 dockerPath=/scratch2/scratchdirs/craydock/docker
 udiRootPath="$context/@@@PREFIX@@@"
 udiRootIncludeFile="$context/@@@INCLUDE_FILE@@@"
