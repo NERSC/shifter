@@ -25,6 +25,12 @@ systems = {
         'rsyncOptions': ['-e', 'ssh -o StrictHostKeyChecking=no -l craydock -i /home/docker/craydock.id_dsa'],
         'sshOptions': ['-o','StrictHostKeyChecking=no','-l','craydock','-i','/home/docker/craydock.id_dsa'],
     },
+    'edison':  {
+        'host': 'edison04-eth4',
+        'path': '/scratch2/scratchdirs/craydock/docker',
+        'rsyncOptions': ['-e', 'ssh -o StrictHostKeyChecking=no -l craydock -i /home/docker/craydock.id_dsa'],
+        'sshOptions': ['-o','StrictHostKeyChecking=no','-l','craydock','-i','/home/docker/craydock.id_dsa'],
+    },
 }
 
 c = Client(base_url='unix://var/run/docker.sock')
