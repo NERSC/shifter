@@ -222,6 +222,7 @@ def package(name, id, format="ext4"):
                     fd.write("ENV: %s\n" % item)
             if 'entry' in metadata and metadata['entry'] is not None:
                 fd.write("ENTRY: %s\n" % metadata['entry'])
+            fd.write("FORMAT: %s\n" % format)
             fd.close()
     
     if not os.path.exists(finalPath):
