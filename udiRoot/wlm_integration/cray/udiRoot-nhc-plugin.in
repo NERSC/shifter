@@ -19,7 +19,7 @@ foundLoopMount=1
 kmodCacheExists=1
 [[ -e "$kmodCache" ]] || kmodCacheExists=0
 
-possibleKernelModules="loop mbcache jbd2 ext4 cramfs"
+possibleKernelModules="loop mbcache jbd2 ext4 cramfs squashfs"
 foundModules=""
 for mod in $possibleKernelModules; do
     foundModule=1
