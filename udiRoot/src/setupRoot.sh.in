@@ -427,6 +427,7 @@ setupLoopbackMount() {
     loadKernelModule "jbd2"    "${kmodPath}"/fs/jbd2/jbd2.ko
     loadKernelModule "ext4"    "${kmodPath}"/fs/ext4/ext4.ko
     loadKernelModule "cramfs"  "${kmodPath}"/fs/cramfs/cramfs.ko
+    loadKernelModule "squashfs" "${kmodPath}"/fs/squashfs/squashfs.ko
 
     mkdir -p "${mntPoint}" || die "Failed to create mount point ${mntPoint}"
     mount -t "${fstype}" -o loop,ro,nodev,nosuid "${imageFile}" "${mntPoint}" || die "Failed to mount image file ${imageFile}"
@@ -448,6 +449,7 @@ main() {
     local linePrefix
     local image
     local imageType
+    local imageMetadata
     local basePath
     local fullPath
 
@@ -472,18 +474,6 @@ main() {
     ## since $target is user provided, need to sanitize
     target=${target//[^a-zA-Z0-9_:\.]/}
 
-    linePrefix="$targetType;$target;"
-    if [[ "$targetType" = "docker" ]]; then
-        imageType="ext4Image"
-        image="${target}.ext4"
-    else
-        line=$( egrep "^$linePrefix" "$mapPath" ) || die "Cannot find $targetType image \"$target\". Failed."
-        image=$( echo "$line" | awk -F ';' '{print $3}' ) || die "Cannot identify path for $targetType image \"$target\". Failed."
-        imageType=$( echo "$line" | awk -F ';' '{print $4}' ) || die "Cannot identify imageType for $targetType image \"$target\". Failed."
-    fi
-
-    containsItem "$imageType" "vfs" "ext4Image" "cramfsImage" || die "Invalid imageType for $targetType image \"$target\". Failed."
-
     ## get base path for this target type
     basePath="NONE"
     case "${targetType}" in
@@ -494,6 +484,28 @@ main() {
     esac
   
     [[ -n "$basePath" ]] || die "Invalid base path for $targetType"
+
+
+    linePrefix="$targetType;$target;"
+    if [[ "$targetType" = "docker" ]]; then
+        local format
+        format=""
+        imageMetadata="${basePath}/${target}.meta"
+        if [[ -e "$imageMetadata" ]]; then
+            format=$( egrep "^FORMAT:" "$imageMetadata" | awk -F: '{print $2}' )
+        fi
+        if [[ -z "$format" ]]; then
+            format="ext4"
+        fi
+        imageType="${format}Image"
+        image="${target}.${format}"
+    else
+        line=$( egrep "^$linePrefix" "$mapPath" ) || die "Cannot find $targetType image \"$target\". Failed."
+        image=$( echo "$line" | awk -F ';' '{print $3}' ) || die "Cannot identify path for $targetType image \"$target\". Failed."
+        imageType=$( echo "$line" | awk -F ';' '{print $4}' ) || die "Cannot identify imageType for $targetType image \"$target\". Failed."
+    fi
+
+    containsItem "$imageType" "vfs" "ext4Image" "cramfsImage" "squashfsImage" || die "Invalid imageType for $targetType image \"$target\". Failed."
 
     ## get final path to image
     fullPath="${basePath}/${image}"
@@ -508,6 +520,9 @@ main() {
         setupVFSMount "$udiMount" "$loopMount"
     elif [[ "$imageType" = "cramfsImage" ]]; then
         setupLoopbackMount "$loopMount" "$fullPath" "$kmodDir" "cramfs" || die "Failed to setup image mount"
+        setupVFSMount "$udiMount" "$loopMount"
+    elif [[ "$imageType" = "squashfsImage" ]]; then
+        setupLoopbackMount "$loopMount" "$fullPath" "$kmodDir" "squashfs" || die "Failed to setup image mount"
         setupVFSMount "$udiMount" "$loopMount"
     else
         exit 1
