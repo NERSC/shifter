@@ -492,7 +492,7 @@ main() {
         format=""
         imageMetadata="${basePath}/${target}.meta"
         if [[ -e "$imageMetadata" ]]; then
-            format=$( egrep "^FORMAT:" "$imageMetadata" | awk -F: '{print $2}' )
+            format=$( egrep "^FORMAT:" "$imageMetadata" | awk -F: '{print $2}' | sed 's/ //g' )
         fi
         if [[ -z "$format" ]]; then
             format="ext4"
