@@ -26,6 +26,7 @@ my $registry = undef;
 my $system = undef;
 my $extra = "";
 my $mode = undef;
+my $format = "squashfs";
 GetOptions('help|h!'       => \$help,
            'verbose|v!'    => \$verbose,
            'quiet|q!'      => \$quiet,
@@ -34,6 +35,7 @@ GetOptions('help|h!'       => \$help,
            'password|p=s' => \$password,
            'registry|r=s' => \$registry,
            'system|s=s'   => \$system,
+           'format|f=s'   => \$format,
 );
 
 if ($verbose) {
@@ -70,6 +72,9 @@ if ($mode eq "lookup") {
 }
 if ($mode eq "pull") {
     $extra .= " mode=gopull";
+}
+if ($format ne "") {
+    $extra .= " format=$format";
 }
 if (!defined($system)) {
     if (-e "/etc/clustername") {
