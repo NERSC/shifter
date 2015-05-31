@@ -102,6 +102,8 @@ cat "$job_nodelist" | sort -u > "$unique_nodes"
 
 cmdStr="${nodeContext}${udiRootSetupPath}/sbin/unsetupRoot.sh"
 
+ok=0
+expected=0
 if [[ "$mode" == "local" ]]; then
     ok=0
     echo $cmdStr >> $xtxqtcmd_log
@@ -111,14 +113,13 @@ if [[ "$mode" == "local" ]]; then
     fi
     expected=1
 else
-    echo "$xtxqtcmd $unique_nodes $cmdStr"
     "$xtxqtcmd" "$unique_nodes" "$cmdStr" >> $xtxqtcmd_log 2>&1
     ok=$( grep "(complete)" $xtxqtcmd_log | wc -l )
     expected=$( wc -l "$unique_nodes" )
 fi
 
 ret=0
-if [[ "$ok" -ne "$expected" ]]; then
+if [[ "$ok" == "$expected" ]]; then
     echo "udiRoot cleanup FAILURE, $ok of $expected responses"
     ret=1
 fi
