@@ -81,7 +81,7 @@ def expandDockerLayer(layersPath, id, mntPoint):
          if 'parent' in data:
              expandDockerLayer(layersPath, data['parent'], mntPoint)
     tarPath = os.path.join(layersPath, id, "layer.tar")
-    ret = subprocess.call(['tar', 'xf', tarPath, '-C', mntPoint], stdout=fdnull, stderr=fdnull)
+    ret = subprocess.call(['tar', 'xf', tarPath, '-C', mntPoint, '--no-same-owner'], stdout=fdnull, stderr=fdnull)
 
 def generateExt4Image(id, layersPath):
     global imagePath
@@ -128,6 +128,11 @@ def generateCramFSImage(id, layersPath):
     if ret != 0:
         # error handling
         pass
+    try:
+        shutil.rmtree(expandedPath)
+    except:
+        # error handling
+        pass
     
     return imageTempPath
 
@@ -140,6 +145,11 @@ def generateSquashFSImage(id, layersPath):
 
     ret = subprocess.call(["mksquashfs", expandedPath, imageTempPath, "-all-root"])
     if ret != 0:
+        # error handling
+        pass
+    try:
+        shutil.rmtree(expandedPath)
+    except:
         # error handling
         pass
 
