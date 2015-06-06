@@ -43,7 +43,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include <regex.h>
+#include <ctype.h>
 
 #include "UdiRootConfig.h"
 
@@ -65,7 +65,7 @@ static void _usage(int exitStatus);
 int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config);
 void free_SetupRootConfig(SetupRootConfig *config);
 void fprint_SetupRootConfig(FILE *, SetupRootConfig *config);
-int getImage(ImageData *, SetupRootConfig *, UdiRootConfig *);
+//int getImage(ImageData *, SetupRootConfig *, UdiRootConfig *);
 
 static char *_filterString(char *);
 
@@ -73,12 +73,12 @@ int main(int argc, char **argv) {
     UdiRootConfig udiConfig;
     SetupRootConfig config;
 
-    ImageData image;
+    //ImageData image;
 
     memset(&udiConfig, 0, sizeof(UdiRootConfig));
     memset(&config, 0, sizeof(SetupRootConfig));
 
-    clearenv();
+    //clearenv();
     setenv("PATH", "/usr/bin:/usr/sbin:/bin:/sbin", 1);
 
     if (parse_SetupRootConfig(argc, argv, &config) != 0) {
@@ -94,10 +94,12 @@ int main(int argc, char **argv) {
         fprint_UdiRootConfig(stdout, &udiConfig);
     }
 
+    /*
     if (getImage(&image, &config, &udiConfig) != 0) {
         fprintf(stderr, "FAILED to get image %s of type %s\n", config.imageIdentifier, config.imageType);
         exit(1);
     }
+    */
 }
 
 static void _usage(int exitStatus) {
@@ -106,7 +108,7 @@ static void _usage(int exitStatus) {
 
 int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
     int opt = 0;
-    optind = 0;
+    optind = 1;
 
     while ((opt = getopt(argc, argv, "v:s:u:U:N:V")) != -1) {
         switch (opt) {
@@ -162,6 +164,7 @@ int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
                 break;
         }
     }
+    printf("argc: %d, optind: %d\n", argc, optind);
 
     int remaining = argc - optind;
     if (remaining != 2) {
@@ -177,23 +180,18 @@ void free_SetupRootConfig(SetupRootConfig *config) {
     size_t idx = 0;
     if (config->sshPubKey != NULL) {
         free(config->sshPubKey);
-        config->sshPubKey = NULL;
     }
     if (config->user != NULL) {
         free(config->user);
-        config->user = NULL;
     }
     if (config->imageType != NULL) {
         free(config->imageType);
-        config->imageType = NULL;
     }
     if (config->imageIdentifier != NULL) {
         free(config->imageIdentifier);
-        config->imageIdentifier = NULL;
     }
     if (config->minNodeSpec != NULL) {
         free(config->minNodeSpec);
-        config->minNodeSpec = NULL;
     }
     for (idx = 0; idx < config->volumeMapCount; idx++) {
         if (config->volumeMapFrom && config->volumeMapFrom[idx]) {
@@ -208,16 +206,14 @@ void free_SetupRootConfig(SetupRootConfig *config) {
     }
     if (config->volumeMapFrom) {
         free(config->volumeMapFrom);
-        config->volumeMapFrom = NULL;
     }
     if (config->volumeMapTo) {
         free(config->volumeMapTo);
-        config->volumeMapTo = NULL;
     }
     if (config->volumeMapFlags) {
         free(config->volumeMapFlags);
-        config->volumeMapFlags = NULL;
     }
+    free(config);
 }
 
 void fprint_SetupRootConfig(FILE *fp, SetupRootConfig *config) {
@@ -227,7 +223,7 @@ void fprint_SetupRootConfig(FILE *fp, SetupRootConfig *config) {
     fprintf(fp, "imageIdentifier: %s\n", (config->imageIdentifier ? config->imageIdentifier : ""));
     fprintf(fp, "sshPubKey: %s\n", (config->sshPubKey ? config->sshPubKey : ""));
     fprintf(fp, "user: %s\n", (config->user ? config->user : ""));
-    fprintf(fp, "uid: %lu\n", config->uid);
+    fprintf(fp, "uid: %d\n", config->uid);
     fprintf(fp, "minNodeSpec: %s\n", (config->minNodeSpec ? config->minNodeSpec : ""));
     fprintf(fp, "volumeMap: %lu maps\n", config->volumeMapCount);
     if (config->volumeMapCount > 0) {

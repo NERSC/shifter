@@ -1,147 +1,113 @@
+/* Shifter, Copyright (c) 2015, The Regents of the University of California,
+## through Lawrence Berkeley National Laboratory (subject to receipt of any
+## required approvals from the U.S. Dept. of Energy).  All rights reserved.
+## 
+## Redistribution and use in source and binary forms, with or without
+## modification, are permitted provided that the following conditions are met:
+##  1. Redistributions of source code must retain the above copyright notice,
+##     this list of conditions and the following disclaimer.
+##  2. Redistributions in binary form must reproduce the above copyright notice,
+##     this list of conditions and the following disclaimer in the documentation
+##     and/or other materials provided with the distribution.
+##  3. Neither the name of the University of California, Lawrence Berkeley
+##     National Laboratory, U.S. Dept. of Energy nor the names of its
+##     contributors may be used to endorse or promote products derived from this
+##     software without specific prior written permission.
+## 
+## THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+## AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+## IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+## ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+## LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+## CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+## SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+## INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+## CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+## ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+## POSSIBILITY OF SUCH DAMAGE.
+##  
+## You are under no obligation whatsoever to provide any bug fixes, patches, or
+## upgrades to the features, functionality or performance of the source code
+## ("Enhancements") to anyone; however, if you choose to make your Enhancements
+## available either publicly, or directly to Lawrence Berkeley National
+## Laboratory, without imposing a separate written license agreement for such
+## Enhancements, then you hereby grant the following license: a  non-exclusive,
+## royalty-free perpetual license to install, use, modify, prepare derivative
+## works, incorporate into other computer software, distribute, and sublicense
+## such enhancements or derivative works thereof, in binary and source code
+## form.
+*/
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <ctype.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
 
 #include "UdiRootConfig.h"
+#include "utility.h"
 
 static char *_trim(char *);
-static int _assign(UdiRootConfig *config, char *key, char *value);
+static int _assign(char *key, char *value, void *tUdiRootConfig);
 static int _validateConfigFile();
 
 int parse_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
-    FILE *fp = NULL;
-    char *linePtr = NULL;
-    char *ptr = NULL;
-    size_t lineSize = 0;
-    ssize_t nRead = 0;
-    int multiline = 0;
-
-    char *key = NULL;
-    char *value = NULL;
-    char *tValue = NULL;
-    size_t valueLen = 0;
-    size_t tValueLen = 0;
 
     if (_validateConfigFile() != 0) {
         return UDIROOT_VAL_CFGFILE;
     }
 
-    fp = fopen(UDIROOT_CONFIG, "r");
-    if (fp == NULL) {
+    if (shifter_parseConfig(UDIROOT_CONFIG, config, _assign) != 0) {
         return UDIROOT_VAL_PARSE;
     }
-    while (!feof(fp) && !ferror(fp)) {
-        nRead = getline(&linePtr, &nRead, fp);
-        if (nRead <= 0) break;
 
-        // get key/value pair
-        if (!multiline) {
-            ptr = strchr(linePtr, '=');
-            if (ptr == NULL) continue;
-            *ptr++ = 0;
-            key = _trim(strdup(linePtr));
-            if (key == NULL) {
-                return 1;
-            }
-            tValue = _trim(ptr);
-        } else {
-            tValue = _trim(linePtr);
-            multiline = 0;
-        }
-
-        // check to see if value extends over multiple lines
-        if (tValue[strlen(tValue) - 1] == '\\') {
-            multiline = 1;
-            tValue[strlen(tValue) - 1] = 0;
-            tValue = _trim(tValue);
-        }
-
-        // merge value and tValue
-        tValueLen = strlen(tValue);
-        value = (char *) realloc(value, sizeof(char)*(valueLen + tValueLen + 2));
-        ptr = value + valueLen;
-        *ptr = 0;
-        strncat(value, " ", valueLen + 2);
-        strncat(value, tValue, valueLen + tValueLen + 2);
-        valueLen += tValueLen + 1;
-
-        // if value is complete, assign
-        if (multiline == 0) {
-            ptr = _trim(value);
-
-            _assign(config, key, ptr);
-            if (value != NULL) {
-                free(value);
-            }
-            if (key != NULL) {
-                free(key);
-            }
-            key = NULL;
-            value = NULL;
-            valueLen = 0;
-        }
-    }
     return validate_UdiRootConfig(config, validateFlags);
 }
 
 void free_UdiRootConfig(UdiRootConfig *config) {
     if (config->nodeContextPrefix != NULL) {
         free(config->nodeContextPrefix);
-        config->nodeContextPrefix = NULL;
     }
     if (config->udiMountPoint != NULL) {
         free(config->udiMountPoint);
-        config->udiMountPoint = NULL;
     }
     if (config->loopMountPoint != NULL) {
         free(config->loopMountPoint);
-        config->loopMountPoint = NULL;
     }
     if (config->batchType != NULL) {
         free(config->batchType);
-        config->batchType = NULL;
     }
     if (config->system != NULL) {
         free(config->system);
-        config->system = NULL;
     }
     if (config->imageBasePath != NULL) {
         free(config->imageBasePath);
-        config->imageBasePath = NULL;
     }
     if (config->udiRootPath != NULL) {
         free(config->udiRootPath);
-        config->udiRootPath = NULL;
     }
     if (config->udiRootSiteInclude != NULL) {
         free(config->udiRootSiteInclude);
-        config->udiRootSiteInclude = NULL;
     }
     if (config->sshPath != NULL) {
         free(config->sshPath);
-        config->sshPath = NULL;
     }
     if (config->etcPath != NULL) {
         free(config->etcPath);
-        config->etcPath = NULL;
     }
     if (config->kmodBasePath != NULL) {
         free(config->kmodBasePath);
-        config->kmodBasePath = NULL;
     }
     if (config->kmodPath != NULL) {
         free(config->kmodPath);
-        config->kmodPath = NULL;
     }
     if (config->kmodCacheFile != NULL) {
         free(config->kmodCacheFile);
-        config->kmodCacheFile = NULL;
     }
     if (config->servers != NULL) {
         size_t idx = 0;
@@ -150,8 +116,6 @@ void free_UdiRootConfig(UdiRootConfig *config) {
             free(config->servers[idx]);
         }
         free(config->servers);
-        config->servers = NULL;
-        config->serversCount = 0;
     }
     if (config->siteFs != NULL) {
         size_t idx = 0;
@@ -159,9 +123,8 @@ void free_UdiRootConfig(UdiRootConfig *config) {
             free(config->siteFs[idx]);
         }
         free(config->siteFs);
-        config->siteFs = NULL;
-        config->siteFsCount = 0;
     }
+    free(config);
 }
 
 void fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
@@ -196,12 +159,12 @@ void fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->kmodPath != NULL ? config->kmodPath : ""));
     fprintf(fp, "kmodCacheFile = %s\n", 
         (config->kmodCacheFile != NULL ? config->kmodCacheFile : ""));
-    fprintf(fp, "Image Gateway Servers = %d servers\n",  config->serversCount);
+    fprintf(fp, "Image Gateway Servers = %lu servers\n",  config->serversCount);
     for (idx = 0; idx < config->serversCount; idx++) {
         fprintf(fp, "    %s:%d\n", config->servers[idx]->server,
             config->servers[idx]->port);
     }
-    fprintf(fp, "Site FS Bind-mounts = %d fs\n", config->siteFsCount);
+    fprintf(fp, "Site FS Bind-mounts = %lu fs\n", config->siteFsCount);
     for (idx = 0; idx < config->siteFsCount; idx++) {
         fprintf(fp, "    %s\n", config->siteFs[idx]);
     }
@@ -227,7 +190,8 @@ static char *_trim(char *str) {
     return ptr;
 }
 
-static int _assign(UdiRootConfig *config, char *key, char *value) {
+static int _assign(char *key, char *value, void *t_config) {
+    UdiRootConfig *config = (UdiRootConfig *)t_config;
     if (strcmp(key, "udiMount") == 0) {
         config->udiMountPoint = strdup(value);
         if (config->udiMountPoint == NULL) return 1;
