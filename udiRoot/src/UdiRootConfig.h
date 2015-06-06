@@ -46,9 +46,15 @@
 #include <string.h>
 #include <unistd.h>
 
-#define UDI_VAL_SSH 1
-#define UDI_VAL_KMOD 2
-#define UDI_VAL_ALL 0xffffffff
+#define UDIROOT_VAL_CFGFILE 0x01
+#define UDIROOT_VAL_PARSE   0x02
+#define UDIROOT_VAL_SSH     0x04 
+#define UDIROOT_VAL_KMOD    0x08
+#define UDIROOT_VAL_ALL 0xffffffff
+
+#ifndef IMAGEGW_PORT_DEFAULT
+#define IMAGEGW_PORT_DEFAULT 7777
+#endif
 
 typedef struct _ImageGwServer {
     char *server;
@@ -72,13 +78,13 @@ typedef struct _UdiRootConfig {
     ImageGwServer **servers;
     char **siteFs;
 
-    ssize_t siteFsCount;
-    ssize_t serverCount;
+    size_t siteFsCount;
+    size_t serversCount;
 } UdiRootConfig;
 
-int parse_UdiRootConfig(UdiRootConfig * int validateFlags);
+int parse_UdiRootConfig(UdiRootConfig *, int validateFlags);
 void free_UdiRootConfig(UdiRootConfig *);
-void fprint_UdiRootConfig(UdiRootConfig *, FILE *);
+void fprint_UdiRootConfig(FILE *, UdiRootConfig *);
 int validate_UdiRootConfig(UdiRootConfig *, int validateFlags);
 
 #endif
