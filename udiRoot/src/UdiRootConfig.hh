@@ -37,36 +37,63 @@
 ## such enhancements or derivative works thereof, in binary and source code
 ## form.
 */
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
-#ifndef __IMAGEDATA_INCLUDE
-#define __IMAGEDATA_INCLUDE
+#include <vector>
+#include <string>
+#include <iostream>
 
-#include "UdiRootConfig.h"
+using namespace std;
 
-typedef enum _ImageFormat {
-    FORMAT_VFS = 0,
-    FORMAT_EXT4,
-    FORMAT_SQUASHFS,
-    FORMAT_CRAMFS,
-    FORMAT_INVALID
-} ImageFormat;
+/*
+   udiMount=/var/udiMount
+   loopMount=/var/loopUdiMount
+   chosPath=/scratch2/shifter/chos
+   dockerPath=/scratch2/scratchdirs/craydock/docker
+   udiRootPath="$context//opt/nersc/udiRoot/20150520_b2084ecb2593f1c5b33c2f36a726b3e5708eecf5"
+   udiRootIncludeFile="$context//opt/nersc/udiRoot/20150520_b2084ecb2593f1c5b33c2f36a726b3e5708eecf5/etc/udiRoot.include"
+   mapPath=$udiRootPath/fsMap.conf
+   sshPath=$udiRootPath/sshd
+   etcDir=$udiRootPath/etc_files
+   kmodDir=$udiRootPath/kmod/$( uname -r )
+   kmodCache=/tmp/udiRootLoadedModules.txt
+   siteFs="scratch1 scratch2 scratch3 global/u1 global/u2 global/project global/syscom global/common global/scratch2 var/opt/cray/alps/spool"
+   dockergw_host=128.55.50.83
+   dockergw_port=7777
+   batchType=torque
+   system=edison
+*/
 
-typedef struct _ImageData {
-    ImageFormat format;     //!< image format 
-    char *filename;         //!< path to image
-    char **env;             //!< array of environment variables
-    char *entryPoint;       //!< default command used
-    char **volume;          //!< array of volume mounts
-    int useLoopMount;       //!< flag if image requires loop mount
+class UdiRootConfig {
+    friend ostream& operator<<(ostream&, UdiRootConfig&);
 
-    size_t env_capacity;    //!< Current # of allocated char* in env
-    size_t volume_capacity; //!< Current # of allocated char* in volumes
-    char **envPtr;          //!< Temporary write pointer for env
-    char **volPtr;          //!< Temporary write pointer for volumes
-} ImageData;
+    private:
+    string nodeContextPrefix;
+    string udiMountPoint;
+    string loopMountPoint;
+    string batchType;
+    string system;
+    string imageBasePath;
+    string udiRootPath;
+    string udiRootSiteInclude;
+    string sshPath;
+    string etcPath;
+    string kmodBasePath;
+    string kmodCacheFile;
+    string imageGwHost;
+    int imageGwPort;
+    vector<string> siteFs;
 
-int parse_ImageData(char *type, char *identifier, UdiRootConfig *, ImageData *);
-void free_ImageData(ImageData *);
-void fprint_ImageData(FILE *, ImageData *);
+    void parse(const string& configFile);
 
-#endif
+    public:
+    UdiRootConfig();
+    bool validateConfigFile();
+    bool validateSiteIncludeFile();
+    bool validateKernelModulePath();
+
+};
+
+ostream& operator<<(ostream& os, UdiRootConfig& config);

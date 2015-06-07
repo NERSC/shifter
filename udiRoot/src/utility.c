@@ -48,7 +48,7 @@
 #include "utility.h"
 
 
-int shifter_parseConfig(char *filename, void *obj, int (*assign_fp)(char *, char *, void *)) {
+int shifter_parseConfig(char *filename, char delim, void *obj, int (*assign_fp)(char *, char *, void *)) {
     FILE *fp = NULL;
     char *linePtr = NULL;
     char *ptr = NULL;
@@ -67,12 +67,12 @@ int shifter_parseConfig(char *filename, void *obj, int (*assign_fp)(char *, char
         return 1;
     }
     while (!feof(fp) && !ferror(fp)) {
-        nRead = getline(&linePtr, &nRead, fp);
+        nRead = getline(&linePtr, &lineSize, fp);
         if (nRead <= 0) break;
 
         // get key/value pair
         if (!multiline) {
-            ptr = strchr(linePtr, '=');
+            ptr = strchr(linePtr, delim);
             if (ptr == NULL) continue;
             *ptr++ = 0;
             key = shifter_trim(strdup(linePtr));

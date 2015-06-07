@@ -20,7 +20,7 @@ define CLEANFILES
     for file in $(1); do echo $$file; done
 endef
 
-all: udiRootEnter setupRoot.sh unsetupRoot.sh shiftsh shiftrun getDockerImage.pl
+all: udiRootEnter setupRoot setupRoot.sh unsetupRoot.sh shiftsh shiftrun getDockerImage.pl
 
 setupRoot.sh: setupRoot.sh.in
 	cat $< | $(SED_MODIFY) > $@
@@ -37,6 +37,9 @@ udiRootEnter: udiRootEnter.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" $< -o $@
 distributeKeys: distributeKeys.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) $< -o $@
+setupRoot: setupRoot.c UdiRootConfig.c utility.c ImageData.c
+	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) -DNO_ROOT_OWN_CHECK $^ -o $@
+
 
 	
 install: all

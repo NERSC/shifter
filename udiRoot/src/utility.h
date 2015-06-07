@@ -48,6 +48,6 @@
 
 
 char *shifter_trim(char *);
-int shifter_parseConfig(char *fname, void *obj, int (*assign_fp)(char *, char *, void *));
+int shifter_parseConfig(char *fname, char delim, void *obj, int (*assign_fp)(char *, char *, void *));
 
 #endif

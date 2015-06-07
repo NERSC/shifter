@@ -51,39 +51,82 @@
 #include "UdiRootConfig.h"
 #include "utility.h"
 
-static char *_trim(char *);
+#define ENV_ALLOC_SIZE 512
+#define VOL_ALLOC_SIZE 256
+
 static int _assign(char *key, char *value, void *t_imageData);
 
 int parse_ImageData(char *type, char *identifier, UdiRootConfig *config, ImageData *image) {
-    char *md_fname = NULL;
-    size_t md_fname_len = 0;
+    char *fname = NULL;
+    size_t fname_len = 0;
+    const char *extension = NULL;
     int ret = 0;
 
-    md_fname_len = strlen(config->imageBasePath) + strlen(identifier) + 7;
-    md_fname = (char *) malloc(sizeof(char) * md_fname_len);
-    snprintf(md_fname, md_fname_len, "%s/%s.meta", config->imageBasePath, identifier);
+    fname_len = strlen(config->imageBasePath) + strlen(identifier) + 7;
+    fname = (char *) malloc(sizeof(char) * fname_len);
+    if (fname == NULL) {
+        return 1;
+    }
+    snprintf(fname, fname_len, "%s/%s.meta", config->imageBasePath, identifier);
 
-    ret = shifter_parseConfig(md_fname, image, _assign);
+    ret = shifter_parseConfig(fname, ':', image, _assign);
+    free(fname);
 
-    free(md_fname);
+    if (ret != 0) {
+        return ret;
+    }
 
-    return ret;
+    switch (image->format) {
+        case FORMAT_VFS:
+            extension = "";
+            image->useLoopMount = 0;
+            break;
+        case FORMAT_EXT4:
+            extension = "ext4";
+            image->useLoopMount = 1;
+            break;
+        case FORMAT_SQUASHFS:
+            extension = "squashfs";
+            image->useLoopMount = 1;
+            break;
+        case FORMAT_CRAMFS:
+            extension = "cramfs";
+            image->useLoopMount = 1;
+            break;
+        case FORMAT_INVALID:
+            extension = "invalid";
+            image->useLoopMount = 0;
+            break;
+    };
+
+    fname_len = strlen(config->imageBasePath) + strlen(identifier) + strlen(extension) + 3;
+    image->filename = (char *) malloc(sizeof(char)*fname_len);
+    if (image->filename == NULL) {
+        return 1;
+    }
+    snprintf(image->filename, fname_len, "%s/%s.%s", config->imageBasePath, identifier, extension);
+
+    return 0;
 }
 
 void free_ImageData(ImageData *image) {
-    size_t idx = 0;
     if (image->env != NULL) {
-        for (idx = 0; idx < image->envCount; idx++) {
-            free(image->env[idx]);
+        char **envPtr = NULL;
+        for (envPtr = image->env ; *envPtr != NULL; envPtr++) {
+            free(*envPtr);
         }
         free(image->env);
+    }
+    if (image->filename != NULL) {
+        free(image->filename);
     }
     if (image->entryPoint != NULL) {
         free(image->entryPoint);
     }
     if (image->volume != NULL) {
-        for (idx = 0; idx < image->volumeCount; idx++) {
-            free(image->volume[idx]);
+        char **volPtr = NULL;
+        for (volPtr = image->volume; *volPtr != NULL; volPtr++) {
+            free(*volPtr);
         }
         free(image->volume);
     }
@@ -91,8 +134,8 @@ void free_ImageData(ImageData *image) {
 }
 
 void fprint_ImageData(FILE *fp, ImageData *image) {
-    size_t idx = 0;
     const char *cptr = NULL;
+    char **tptr = NULL;
 
     if (image == NULL || fp == NULL) return;
 
@@ -105,6 +148,16 @@ void fprint_ImageData(FILE *fp, ImageData *image) {
         case FORMAT_INVALID: cptr = "INVALID"; break;
     }
     fprintf(fp, "Image Format: %s\n", cptr);
+    fprintf(fp, "Filename: %s\n", (image->filename ? image->filename : ""));
+    fprintf(fp, "Image Env: %lu defined variables\n", (image->envPtr - image->env));
+    for (tptr = image->env; tptr && *tptr; tptr++) {
+        fprintf(fp, "    %s\n", *tptr);
+    }
+    fprintf(fp, "EntryPoint: %s\n", (image->entryPoint != NULL ? image->entryPoint : ""));
+    fprintf(fp, "Volume Mounts: %lu mount points\n", (image->volPtr - image->volume));
+    for (tptr = image->volume; tptr && *tptr; tptr++) {
+        fprintf(fp, "    %s\n", *tptr);
+    }
     fprintf(fp, "***** END ImageData *****\n");
 }
 
@@ -124,24 +177,41 @@ static int _assign(char *key, char *value, void *t_image) {
             image->format = FORMAT_INVALID;
         }
     } else if (strcmp(key, "ENV") == 0) {
-        image->env = (char **) realloc(image->env, sizeof(char *) * (image->envCount + 1));
-        image->env[image->envCount] = strdup(value);
-        image->envCount++;
-        if (image->env[image->envCount - 1] == NULL) {
-            return 1;
+        char **tmp = NULL;
+        if (image->env == NULL || image->envPtr - image->env >= image->env_capacity) {
+            size_t cnt = image->envPtr - image->env;
+            tmp = realloc(image->env, sizeof(char*) * (image->env_capacity + ENV_ALLOC_SIZE));
+            if (tmp == NULL) {
+                return 1;
+            }
+            image->env_capacity += ENV_ALLOC_SIZE;
+            image->env = tmp;
+            image->envPtr = tmp + cnt;
         }
+        *(image->envPtr) = strdup(value);
+        image->envPtr++;
+        *(image->envPtr) = NULL;
+
     } else if (strcmp(key, "ENTRY") == 0) {
         image->entryPoint = strdup(value);
         if (image->entryPoint == NULL) {
             return 1;
         }
     } else if (strcmp(key, "VOLUME") == 0) {
-        image->volume = (char **) realloc(image->volume, sizeof(char *) * (image->volumeCount + 1));
-        image->volume[image->volumeCount] = strdup(value);
-        image->volumeCount++;
-        if (image->volume[image->volumeCount - 1] == NULL) {
-            return 1;
+        char **tmp = NULL;
+        if (image->volume == NULL || image->volPtr - image->volume >= image->volume_capacity) {
+            size_t cnt = image->volPtr - image->volume;
+            tmp = realloc(image->volume, sizeof(char*) * (image->volume_capacity + VOL_ALLOC_SIZE));
+            if (tmp == NULL) {
+                return 1;
+            }
+            image->volume_capacity += VOL_ALLOC_SIZE;
+            image->volume = tmp;
+            image->volPtr = tmp + cnt;
         }
+        *(image->volPtr) = strdup(value);
+        image->volPtr++;
+        *(image->volPtr) = NULL;
     } else {
         printf("Couldn't understand key: %s\n", key);
         return 2;

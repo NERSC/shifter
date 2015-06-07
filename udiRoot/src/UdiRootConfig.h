@@ -69,7 +69,8 @@ typedef struct _UdiRootConfig {
     char *system;
     char *imageBasePath;
     char *udiRootPath;
-    char *udiRootSiteInclude;
+    char *sitePreMountHook;
+    char *sitePostMountHook;
     char *sshPath;
     char *etcPath;
     char *kmodBasePath;
@@ -78,8 +79,10 @@ typedef struct _UdiRootConfig {
     ImageGwServer **servers;
     char **siteFs;
 
-    size_t siteFsCount;
-    size_t serversCount;
+    ImageGwServer **svrPtr;
+    char **siteFsPtr;
+    size_t siteFs_capacity;
+    size_t servers_capacity;
 } UdiRootConfig;
 
 int parse_UdiRootConfig(UdiRootConfig *, int validateFlags);

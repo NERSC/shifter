@@ -52,7 +52,9 @@
 #include "UdiRootConfig.h"
 #include "utility.h"
 
-static char *_trim(char *);
+#define SITEFS_ALLOC_BLOCK 16
+#define SERVER_ALLOC_BLOCK 3
+
 static int _assign(char *key, char *value, void *tUdiRootConfig);
 static int _validateConfigFile();
 
@@ -62,7 +64,7 @@ int parse_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
         return UDIROOT_VAL_CFGFILE;
     }
 
-    if (shifter_parseConfig(UDIROOT_CONFIG, config, _assign) != 0) {
+    if (shifter_parseConfig(CONFIG_FILE, '=', config, _assign) != 0) {
         return UDIROOT_VAL_PARSE;
     }
 
@@ -91,8 +93,11 @@ void free_UdiRootConfig(UdiRootConfig *config) {
     if (config->udiRootPath != NULL) {
         free(config->udiRootPath);
     }
-    if (config->udiRootSiteInclude != NULL) {
-        free(config->udiRootSiteInclude);
+    if (config->sitePreMountHook != NULL) {
+        free(config->sitePreMountHook);
+    }
+    if (config->sitePostMountHook != NULL) {
+        free(config->sitePostMountHook);
     }
     if (config->sshPath != NULL) {
         free(config->sshPath);
@@ -110,17 +115,17 @@ void free_UdiRootConfig(UdiRootConfig *config) {
         free(config->kmodCacheFile);
     }
     if (config->servers != NULL) {
-        size_t idx = 0;
-        for (idx = 0; idx < config->serversCount; idx++) {
-            free(config->servers[idx]->server);
-            free(config->servers[idx]);
+        ImageGwServer **ptr = NULL;
+        for (ptr = config->servers; *ptr != NULL; ptr++) {
+            free((*ptr)->server);
+            free(*ptr);
         }
         free(config->servers);
     }
     if (config->siteFs != NULL) {
-        size_t idx = 0;
-        for (idx = 0; idx < config->siteFsCount; idx++) {
-            free(config->siteFs[idx]);
+        char **ptr = NULL;
+        for (ptr = config->siteFs; *ptr != NULL; ptr++) {
+            free(*ptr);
         }
         free(config->siteFs);
     }
@@ -128,7 +133,8 @@ void free_UdiRootConfig(UdiRootConfig *config) {
 }
 
 void fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
-    size_t idx = 0;
+    ImageGwServer **sPtr = NULL;
+    char **fsPtr = NULL;
 
     if (config == NULL || fp == NULL) return;
 
@@ -147,8 +153,10 @@ void fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->imageBasePath != NULL ? config->imageBasePath : ""));
     fprintf(fp, "udiRootPath = %s\n", 
         (config->udiRootPath != NULL ? config->udiRootPath : ""));
-    fprintf(fp, "udiRootSiteInclude = %s\n", 
-        (config->udiRootSiteInclude != NULL ? config->udiRootSiteInclude : ""));
+    fprintf(fp, "sitePreMountHook = %s\n",
+        (config->sitePreMountHook != NULL ? config->sitePreMountHook : ""));
+    fprintf(fp, "sitePostMountHook = %s\n",
+        (config->sitePostMountHook != NULL ? config->sitePostMountHook : ""));
     fprintf(fp, "sshPath = %s\n", 
         (config->sshPath != NULL ? config->sshPath : ""));
     fprintf(fp, "etcPath = %s\n", 
@@ -159,35 +167,19 @@ void fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->kmodPath != NULL ? config->kmodPath : ""));
     fprintf(fp, "kmodCacheFile = %s\n", 
         (config->kmodCacheFile != NULL ? config->kmodCacheFile : ""));
-    fprintf(fp, "Image Gateway Servers = %lu servers\n",  config->serversCount);
-    for (idx = 0; idx < config->serversCount; idx++) {
-        fprintf(fp, "    %s:%d\n", config->servers[idx]->server,
-            config->servers[idx]->port);
+    fprintf(fp, "Image Gateway Servers = %lu servers\n",  (config->svrPtr - config->servers));
+    for (sPtr = config->servers; *sPtr != NULL; sPtr++) {
+        fprintf(fp, "    %s:%d\n", (*sPtr)->server, (*sPtr)->port);
     }
-    fprintf(fp, "Site FS Bind-mounts = %lu fs\n", config->siteFsCount);
-    for (idx = 0; idx < config->siteFsCount; idx++) {
-        fprintf(fp, "    %s\n", config->siteFs[idx]);
+    fprintf(fp, "Site FS Bind-mounts = %lu fs\n", (config->siteFsPtr - config->siteFs));
+    for (fsPtr = config->siteFs; *fsPtr != NULL; fsPtr++) {
+        fprintf(fp, "    %s\n", *fsPtr);
     }
     fprintf(fp, "***** END UdiRootConfig *****\n");
 }
 
 int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
     return 0;
-}
-
-static char *_trim(char *str) {
-    char *ptr = str;
-    ssize_t len = 0;
-    if (str == NULL) return NULL;
-    for ( ; isspace(*ptr) && *ptr != 0; ptr++) {
-        // that's it
-    }
-    if (*ptr == 0) return ptr;
-    len = strlen(ptr) - 1;
-    for ( ; isspace(*(ptr + len)) && len > 0; len--) {
-        *(ptr + len) = 0;
-    }
-    return ptr;
 }
 
 static int _assign(char *key, char *value, void *t_config) {
@@ -204,9 +196,12 @@ static int _assign(char *key, char *value, void *t_config) {
     } else if (strcmp(key, "udiRootPath") == 0) {
         config->udiRootPath = strdup(value);
         if (config->udiRootPath == NULL) return 1;
-    } else if (strcmp(key, "udiRootSiteInclude") == 0) {
-        config->udiRootSiteInclude = strdup(value);
-        if (config->udiRootSiteInclude == NULL) return 1;
+    } else if (strcmp(key, "sitePreMountHook") == 0) {
+        config->sitePreMountHook = strdup(value);
+        if (config->sitePreMountHook == NULL) return 1;
+    } else if (strcmp(key, "sitePostMountHook") == 0) {
+        config->sitePostMountHook = strdup(value);
+        if (config->sitePostMountHook == NULL) return 1;
     } else if (strcmp(key, "sshPath") == 0) {
         config->sshPath = strdup(value);
         if (config->sshPath == NULL) return 1;
@@ -235,11 +230,20 @@ static int _assign(char *key, char *value, void *t_config) {
         char *search = value;
         char *ptr = NULL;
         while ((ptr = strtok(search, " ")) != NULL) {
+            size_t cnt = config->siteFsPtr - config->siteFs;
             search = NULL;
-            config->siteFs = (char **) realloc(config->siteFs, sizeof(char*) * (config->siteFsCount+1));
-            if (config->siteFs == NULL) return 1;
-            config->siteFs[config->siteFsCount] = strdup(ptr);
-            config->siteFsCount++;
+            if (config->siteFs == NULL || (cnt + 2) >= config->siteFs_capacity) {
+                char **tmp = NULL;
+                tmp = realloc(config->siteFs, sizeof(char*) * (config->siteFs_capacity + SITEFS_ALLOC_BLOCK));
+                if (tmp == NULL) return 1;
+
+                config->siteFs_capacity += SITEFS_ALLOC_BLOCK;
+                config->siteFs = tmp;
+                config->siteFsPtr = tmp + cnt;
+            }
+            *(config->siteFsPtr) = strdup(ptr);
+            config->siteFsPtr += 1;
+            *(config->siteFsPtr) = NULL;
         }
     } else if (strcmp(key, "imageGateway") == 0) {
         char *search = value;
@@ -247,6 +251,7 @@ static int _assign(char *key, char *value, void *t_config) {
         while ((ptr = strtok(search, " ")) != NULL) {
             char *dPtr = NULL;
             ImageGwServer *newServer = (ImageGwServer*) malloc(sizeof(ImageGwServer));
+            size_t cnt = 0;
             if (newServer == NULL) return 1;
             dPtr = strchr(ptr, ':');
             if (dPtr == NULL) {
@@ -258,10 +263,19 @@ static int _assign(char *key, char *value, void *t_config) {
             newServer->server = strdup(ptr);
 
             search = NULL;
-            config->servers = (ImageGwServer **) realloc(config->servers, sizeof(ImageGwServer*) * (config->serversCount+1));
-            if (config->servers == NULL) return 1;
-            config->servers[config->serversCount] = newServer;
-            config->serversCount++;
+
+            cnt = config->svrPtr - config->servers;
+            if (config->servers == NULL || (cnt + 2) > config->servers_capacity) {
+                ImageGwServer **tmp = NULL;
+                tmp = realloc(config->servers, sizeof(ImageGwServer*) * (config->servers_capacity + SERVER_ALLOC_BLOCK));
+                if (tmp == NULL) return 1;
+                config->servers = tmp;
+                config->svrPtr = tmp + cnt;
+                config->servers_capacity += SERVER_ALLOC_BLOCK;
+            }
+            *(config->svrPtr) = newServer;
+            config->svrPtr += 1;
+            *(config->svrPtr) = NULL;
         }
     } else if (strcmp(key, "batchType") == 0) {
         config->batchType = strdup(value);
@@ -283,7 +297,7 @@ static int _validateConfigFile() {
     struct stat st;
     memset(&st, 0, sizeof(struct stat));
 
-    if (stat(UDIROOT_CONFIG, &st) != 0) {
+    if (stat(CONFIG_FILE, &st) != 0) {
         return 1;
     }
 #ifndef NO_ROOT_OWN_CHECK
