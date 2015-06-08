@@ -1,5 +1,7 @@
 preSiteFsBindMount() {
     mkdir -p global
+    mkdir -p var/spool
+    mkdir -p var/opt/cray/alps
 }
 
 postSiteFsBindMount() {
