@@ -99,8 +99,8 @@ void free_UdiRootConfig(UdiRootConfig *config) {
     if (config->sitePostMountHook != NULL) {
         free(config->sitePostMountHook);
     }
-    if (config->sshPath != NULL) {
-        free(config->sshPath);
+    if (config->optUdiImage != NULL) {
+        free(config->optUdiImage);
     }
     if (config->etcPath != NULL) {
         free(config->etcPath);
@@ -157,8 +157,8 @@ void fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->sitePreMountHook != NULL ? config->sitePreMountHook : ""));
     fprintf(fp, "sitePostMountHook = %s\n",
         (config->sitePostMountHook != NULL ? config->sitePostMountHook : ""));
-    fprintf(fp, "sshPath = %s\n", 
-        (config->sshPath != NULL ? config->sshPath : ""));
+    fprintf(fp, "optUdiImage = %s\n", 
+        (config->optUdiImage != NULL ? config->optUdiImage : ""));
     fprintf(fp, "etcPath = %s\n", 
         (config->etcPath != NULL ? config->etcPath : ""));
     fprintf(fp, "kmodBasePath = %s\n", 
@@ -202,9 +202,9 @@ static int _assign(char *key, char *value, void *t_config) {
     } else if (strcmp(key, "sitePostMountHook") == 0) {
         config->sitePostMountHook = strdup(value);
         if (config->sitePostMountHook == NULL) return 1;
-    } else if (strcmp(key, "sshPath") == 0) {
-        config->sshPath = strdup(value);
-        if (config->sshPath == NULL) return 1;
+    } else if (strcmp(key, "optUdiImage") == 0) {
+        config->optUdiImage = strdup(value);
+        if (config->optUdiImage == NULL) return 1;
     } else if (strcmp(key, "etcPath") == 0) {
         config->etcPath = strdup(value);
         if (config->etcPath == NULL) return 1;

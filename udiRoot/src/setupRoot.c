@@ -682,6 +682,16 @@ _parseMounts_errClean:
     return NULL;
 }
 
-static int _sortFsForward(const void *, const void *) {
+static int _sortFsForward(const void *ta, const void *tb) {
+    const char *a = ta;
+    const char *b = tb;
+
+    return strcmp(a, b);
 }
-static int _sortFsReverse(const void *, const void *);
+
+static int _sortFsReverse(const void *ta, const void *tb) {
+    const char *a = ta;
+    const char *b = tb;
+
+    return -1 * strcmp(a, b);
+}

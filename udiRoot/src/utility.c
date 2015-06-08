@@ -77,7 +77,7 @@ int shifter_parseConfig(char *filename, char delim, void *obj, int (*assign_fp)(
             *ptr++ = 0;
             key = shifter_trim(strdup(linePtr));
             if (key == NULL) {
-                return 1;
+                goto _parseConfig_errCleanup;
             }
             tValue = shifter_trim(ptr);
         } else {
@@ -117,7 +117,21 @@ int shifter_parseConfig(char *filename, char delim, void *obj, int (*assign_fp)(
             valueLen = 0;
         }
     }
+    if (linePtr != NULL) {
+        free(linePtr);
+    }
     return 0;
+_parseConfig_errCleanup:
+    if (linePtr != NULL) {
+        free(linePtr);
+    }
+    if (value != NULL) {
+        free(value);
+    }
+    if (key != NULL) {
+        free(value);
+    }
+    return 1;
 }
 
 
