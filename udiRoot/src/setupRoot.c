@@ -56,6 +56,7 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <limits.h>
+#include <dirent.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -82,10 +83,13 @@ typedef struct _SetupRootConfig {
 static void _usage(int exitStatus);
 static int _forkAndExec(char **args);
 static int _bindMount(const char **mountCache, const char *from, const char *to, unsigned long flags);
+static int _sortFsForward(const void *, const void *);
+static int _sortFsReverse(const void *, const void *);
 int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config);
 void free_SetupRootConfig(SetupRootConfig *config);
 void fprint_SetupRootConfig(FILE *, SetupRootConfig *config);
 int getImage(ImageData *, SetupRootConfig *, UdiRootConfig *);
+char **parseMounts(size_t *n_mounts);
 
 static char *_filterString(char *);
 
@@ -280,23 +284,41 @@ int getImage(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiCo
 int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) {
 
     // construct path to "live" copy of the image.
-    char setupPath[PATH_MAX];
+    char udiRoot[PATH_MAX];
+    char mntBuffer[PATH_MAX];
+    char srcBuffer[PATH_MAX];
     char **volPtr = NULL;
-    snprintf(setupPath, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
-    setupPath[PATH_MAX-1] = 0;
-    if (chdir(setupPath) != 0) {
-        fprintf(stderr, "FAILED to chdir to %s. Exiting.\n", setupPath);
+    char **mountCache = NULL;
+    char **mntPtr = NULL;
+    int ret = 0;
+    size_t mountCache_cnt = 0;
+    struct stat statData;
+
+    snprintf(udiRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    udiRoot[PATH_MAX-1] = 0;
+    if (chdir(udiRoot) != 0) {
+        fprintf(stderr, "FAILED to chdir to %s. Exiting.\n", udiRoot);
         return 1;
     }
+
+    // get list of current mounts for this namespace
+    mountCache = parseMounts(&mountCache_cnt);
+    if (mountCache == NULL) {
+        fprintf(stderr, "FAILED to get list of current mount points\n");
+        return 1;
+    }
+    qsort(mountCache, mountCache_cnt, sizeof(char*), _sortFsForward);
 
     // create all the directories needed for initial setup
 #define _MKDIR(dir, perm) if (mkdir(dir, perm) != 0) { \
     fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", dir); \
-    return 1; \
+    ret = 1; \
+    goto _prepSiteMod_unclean; \
 }
-#define _BINDMOUNT(mountCache, from, to, flags) if (_bindMount(mountCache, from, to, flags) != 0) { \
+#define _BINDMOUNT(mountCache, from, to, ro) if (_bindMount(mountCache, from, to, ro) != 0) { \
     fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from, to); \
-    return 1; \
+    ret = 1; \
+    goto _prepSiteMod_unclean; \
 }
 
     _MKDIR("etc", 0755);
@@ -321,18 +343,20 @@ int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) 
         int ret = _forkAndExec(args);
         if (ret != 0) {
             fprintf(stderr, "Site premount hook failed. Exiting.\n");
-            return 1;
+            ret = 1;
+            goto _prepSiteMod_unclean;
         }
     }
 
-    // do mount activities
-    volPtr = udiConfig->volumes;
+    // do site-defined mount activities
+    for (volPtr = udiConfig->volumes; *volPtr != NULL; volPtr++) {
+        char to_buffer[PATH_MAX];
+        snprintf(to_buffer, PATH_MAX, "%s/%s", udiRoot, *volPtr);
+        to_buffer[PATH_MAX-1] = 0;
+        _MKDIR(to_buffer, 0755);
+        _BINDMOUNT(mountCache, *volPtr, to_buffer, 0);
+    }
 
-    
-
-    
-    
-    
     // run site-defined post-mount procedure
     if (strlen(udiConfig->sitePostMountHook) > 0) {
         char *args[3] = {
@@ -341,11 +365,119 @@ int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) 
         int ret = _forkAndExec(args);
         if (ret != 0) {
             fprintf(stderr, "Site premount hook failed. Exiting.\n");
-            return 1;
+            ret = 1;
+            goto _prepSiteMod_unclean;
         }
     }
 
+    // setup site needs for /etc
+    snprintf(mntBuffer, PATH_MAX, "%s/etc/local", udiRoot);
+    mntBuffer[PATH_MAX-1] = 0;
+    _BINDMOUNT(mountCache, "/etc", mntBuffer, 0);
+    // --> loop over everything in site etc-files and copy into image etc
+    snprintf(srcBuffer, PATH_MAX, "%s/%s", udiConfig->nodeContextPrefix, udiConfig->etcDir);
+    srcBuffer[PATH_MAX-1] = 0;
+    memset(&statData, 0, sizeof(struct stat));
+    if (stat(srcBuffer, &statData) == 0) {
+        DIR *etcDir = opendir(srcBuffer);
+        struct dirent *entry = NULL;
+        while ((entry = readdir(etcDir)) != NULL) {
+            char *filename = _filterString(entry->d_name);
+            if (filename == NULL) {
+                fprintf(stderr, "FAILED to allocate filename string.\n");
+                goto _prepSiteMod_unclean;
+            }
+            snprintf(srcBuffer, PATH_MAX, "%s/%s/%s", udiConfig->nodeContextPrefix, udiConfig->etcDir, filename);
+            srcBuffer[PATH_MAX-1] = 0;
+            snprintf(mntBuffer, PATH_MAX, "%s/etc/%s", udiRoot, filename);
+            mntBuffer[PATH_MAX-1] = 0;
+            free(filename);
+
+            if (lstat(srcBuffer, &statData) != 0) {
+                fprintf(stderr, "Coudldn't fine source file, check if there are illegal characters: %s\n", srcBuffer);
+                goto _prepSiteMod_unclean;
+            }
+
+            if (lstat(mntBuffer, &statData) == 0) {
+                fprintf(stderr, "Couldn't copy %s because file already exists.\n", mntBuffer);
+                goto _prepSiteMod_unclean;
+            } else {
+                char *args[5] = { "cp", "-p", srcBuffer, mntBuffer, NULL };
+                if (_forkAndExec(args) != 0) {
+                    fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
+                    goto _prepSiteMod_unclean;
+                }
+            }
+        }
+        closedir(etcDir);
+    } else {
+        fprintf(stderr, "Couldn't stat udiRoot etc dir: %s\n", srcBuffer);
+        ret = 1;
+        goto _prepSiteMod_unclean;
+    }
+
+    // setup built-in sshd
+
+    // setup hostlist for current allocation
+
+    //***** setup linux needs ******//
+    // mount /proc
+    snprintf(mntBuffer, PATH_MAX, "%s/proc", udiRoot);
+    mntBuffer[PATH_MAX-1] = 0;
+    if (mount(NULL, mntBuffer, "proc", MS_REC|MS_NOSUID|MS_NOEXEC|MS_NODEV, NULL) != 0) {
+        fprintf(stderr, "FAILED to mount /proc\n");
+        ret = 1;
+        goto _prepSiteMod_unclean;
+    }
+
+    // mount /sys
+    snprintf(mntBuffer, PATH_MAX, "%s/sys", udiRoot);
+    mntBuffer[PATH_MAX-1] = 0;
+    _BINDMOUNT(mountCache, "/sys", mntBuffer, 0);
+
+    // mount /dev
+    snprintf(mntBuffer, PATH_MAX, "%s/dev", udiRoot);
+    mntBuffer[PATH_MAX-1] = 0;
+    _BINDMOUNT(mountCache, "/dev", mntBuffer, 0);
+
+    // mount any mount points under /dev
+    for (mntPtr = mountCache; *mntPtr != NULL; mntPtr++) {
+        if (strncmp(*mntPtr, "/dev/", 4) == 0) {
+            snprintf(mntBuffer, PATH_MAX, "%s/%s", udiRoot, *mntPtr);
+            mntBuffer[PATH_MAX-1] = 0;
+            _BINDMOUNT(mountCache, *mntPtr, mntBuffer, 0);
+        }
+    }
+
+#undef _MKDIR
+#undef _BINDMOUNT
+
     return 0;
+_prepSiteMod_unclean:
+    if (mountCache != NULL) {
+        char **ptr = NULL;
+        for (ptr = mountCache; *ptr != NULL; ptr++) {
+            free(*ptr);
+        }
+        free(mountCache);
+        mountCache = NULL;
+    }
+    mountCache = parseMounts(&mountCache_cnt);
+    if (mountCache != NULL) {
+        size_t udiRoot_len = strlen(udiRoot);
+        char **ptr = NULL;
+
+        qsort(mountCache, mountCache_cnt, sizeof(char*), _sortFsReverse);
+        for (ptr = mountCache; *ptr != NULL; ptr++) {
+            if (strncmp(*ptr, udiRoot, udiRoot_len) == 0) {
+                umount(*ptr);
+            }
+            free(*ptr);
+        }
+        free(mountCache);
+        mountCache = NULL;
+    }
+    return 1;
 }
 
 int mountImageVFS(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiConfig) {
@@ -482,3 +614,74 @@ static char *_filterString(char *input) {
     *wptr = 0;
     return ret;
 }
+
+char **parseMounts(size_t *n_mounts) {
+    pid_t pid = getpid();
+    char fname_buffer[PATH_MAX];
+    FILE *fp = NULL;
+    char *lineBuffer = NULL;
+    size_t lineBuffer_size = 0;
+    ssize_t nRead = 0;
+
+    char **ret = NULL;
+    char **ret_ptr = NULL;
+    size_t ret_capacity = 0;
+
+    snprintf(fname_buffer, PATH_MAX, "/proc/%d/mounts", pid);
+    fp = fopen(fname_buffer, "r");
+    if (fp == NULL) {
+        fprintf(stderr, "FAILED to open %s\n", fname_buffer);
+        *n_mounts = 0;
+        return NULL;
+    }
+    while (!feof(fp) && !ferror(fp)) {
+        char *search = NULL;
+        char *ptr = NULL;
+        nRead = getline(&lineBuffer, &lineBuffer_size, fp);
+        if (nRead == 0 || feof(fp) || ferror(fp)) {
+            break;
+        }
+        /* want second space-seperated column */
+        ptr = strtok(lineBuffer, " ");
+        ptr = strtok(NULL, " ");
+
+        if (ptr != NULL) {
+            size_t curr_count = ret_ptr - ret;
+            if (ret == NULL || (curr_count + 2) >= ret_capacity) {
+                char **tRet = realloc(ret, (ret_capacity + MOUNT_ALLOC_BLOCK) * sizeof(char*));
+                if (tRet == NULL) {
+                    fprintf(stderr, "FAILED to allocate enough memory for mounts listing\n");
+                    goto _parseMounts_errClean;
+                }
+                ret = tRet;
+                ret_capacity += MOUNT_ALLOC_BLOCK;
+                ret_ptr = tRet + curr_count;
+            }
+            *ret_ptr = strdup(ptr);
+            ret_ptr++;
+            *ret_ptr = NULL;
+        }
+    }
+    fclose(fp);
+    if (lineBuffer != NULL) {
+        free(lineBuffer);
+    }
+    *n_mounts = ret_ptr - ret;
+    return ret;
+_parseMounts_errClean:
+    if (lineBuffer != NULL) {
+        free(lineBuffer);
+    }
+    if (ret != NULL) {
+        for (ret_ptr = ret; *ret_ptr; ret_ptr++) {
+            free(*ret_ptr);
+        }
+        free(ret);
+    }
+    *n_mounts = 0;
+    return NULL;
+}
+
+static int _sortFsForward(const void *, const void *) {
+}
+static int _sortFsReverse(const void *, const void *);
