@@ -100,6 +100,8 @@ int getImage(ImageData *, SetupRootConfig *, UdiRootConfig *);
 int setupUserMounts(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiConfig);
 int userMountFilter(char *udiRoot, char *filtered_from, char *filtered_to, char *flags);
 int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig);
+int mountImageVFS(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiConfig);
+int mountImageLoop(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiConfig);
 char **parseMounts(size_t *n_mounts);
 
 static char *_filterString(char *);
@@ -134,7 +136,19 @@ int main(int argc, char **argv) {
         fprintf(stderr, "FAILED to get image %s of type %s\n", config.imageIdentifier, config.imageType);
         exit(1);
     }
-    fprint_ImageData(stdout, &image);
+    if (config.verbose) {
+        fprint_ImageData(stdout, &image);
+    }
+    if (image.useLoopMount) {
+        if (mountImageLoop(&image, &config, &udiConfig) != 0) {
+            fprintf(stderr, "FAILED to mount image on loop device.\n");
+            exit(1);
+        }
+    }
+    if (mountImageVFS(&image, &config, &udiConfig) != 0) {
+        fprintf(stderr, "FAILED to mount image into UDI\n");
+        exit(1);
+    }
     return 0;
 }
 
@@ -660,7 +674,7 @@ int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) 
         fclose(fp);
     }
 
-    //***** setup linux needs ******//
+    /***** setup linux needs ******/
     // mount /proc
     snprintf(mntBuffer, PATH_MAX, "%s/proc", udiRoot);
     mntBuffer[PATH_MAX-1] = 0;
@@ -736,6 +750,11 @@ int mountImageVFS(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *
     }
 
 #undef _MKDIR
+#define BIND_IMAGE_INTO_UDI(subtree, img, config, udiConfig, copyFlag) \
+    if (bindImageIntoUDI(subtree, img, config, udiConfig, copyFlag) != 0) { \
+        fprintf(stderr, "FAILED To setup \"%s\" in %s\n", subtree, udiRoot); \
+        goto _mountImgVfs_unclean; \
+    }
 
     // mount a new rootfs to work in
     if (mount(NULL, udiRoot, "rootfs", MS_NOSUID|MS_NODEV, NULL) != 0) {
@@ -750,26 +769,14 @@ int mountImageVFS(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *
     }
 
     // copy/bind mount pieces into prepared site
-    if (bindImageIntoUDI("/", imageData, config, udiConfig, 0) != 0) {
-        fprintf(stderr, "FAILED to setup \"/\" in %s\n", udiRoot);
-        goto _mountImgVfs_unclean;
-    }
-    if (bindImageIntoUDI("/var", imageData, config, udiConfig, 0) != 0) {
-        fprintf(stderr, "FAILED to setup \"/var\" in %s\n", udiRoot);
-        goto _mountImgVfs_unclean;
-    }
-    if (bindImageIntoUDI("/opt", imageData, config, udiConfig, 0) != 0) {
-        fprintf(stderr, "FAILED to setup \"/opt\" in %s\n", udiRoot);
-        goto _mountImgVfs_unclean;
-    }
+    BIND_IMAGE_INTO_UDI("/", imageData, config, udiConfig, 0);
+    BIND_IMAGE_INTO_UDI("/var", imageData, config, udiConfig, 0);
+    BIND_IMAGE_INTO_UDI("/opt", imageData, config, udiConfig, 0);
 
     // setup sshd configuration
 
     // copy image /etc into place
-    if (bindImageIntoUDI("/etc", imageData, config, udiConfig, 1) != 0) {
-        fprintf(stderr, "FAILED to setup \"/etc\" in %s\n", udiRoot);
-        goto _mountImgVfs_unclean;
-    }
+    BIND_IMAGE_INTO_UDI("/etc", imageData, config, udiConfig, 1);
 
     // perform user-requested bind mounts
     if (setupUserMounts(imageData, config, udiConfig) != 0) {
@@ -797,8 +804,8 @@ int mountImageLoop(ImageData *imageData, SetupRootConfig *config, UdiRootConfig 
     fprintf(stderr, "FAILED to load %s kernel module.\n", name); \
     goto _mntImgLoop_unclean; \
 }
-#define LOOPMOUNT(from, to, type, flags) if (mount(from, to, type, flags, NULL) != 0) { \
-    fprintf(stderr, "FAILED to mount image %s (%ts) on %s\n", from, type, to); \
+#define LOOPMOUNT(from, to, imgtype, flags) if (mount(from, to, imgtype, flags, NULL) != 0) { \
+    fprintf(stderr, "FAILED to mount image %s (%s) on %s\n", from, imgtype, to); \
     goto _mntImgLoop_unclean; \
 }
 
@@ -807,17 +814,17 @@ int mountImageLoop(ImageData *imageData, SetupRootConfig *config, UdiRootConfig 
     snprintf(imagePath, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, imageData->filename);
     imagePath[PATH_MAX-1] = 0;
 
-    _LOADKMOD("loop", "drivers/block/loop.ko");
+    LOADKMOD("loop", "drivers/block/loop.ko");
     if (imageData->format == FORMAT_EXT4) {
         LOADKMOD("mbcache", "fs/mbcache.ko");
         LOADKMOD("jbd2", "fs/jbd2/jbd2.ko");
         LOADKMOD("ext4", "fs/ext4/ext4.ko");
         LOOPMOUNT(imagePath, loopMount, "ext4", MS_NOSUID|MS_NODEV|MS_RDONLY);
     } else if (imageData->format == FORMAT_SQUASHFS) {
-        _LOADKMOD("squashfs", "fs/squashfs/squashfs.ko");
+        LOADKMOD("squashfs", "fs/squashfs/squashfs.ko");
         LOOPMOUNT(imagePath, loopMount, "squashfs", MS_NOSUID|MS_NODEV|MS_RDONLY);
     } else if (imageData->format == FORMAT_CRAMFS) {
-        _LOADKMOD("cramfs", "fs/cramfs/cramfs.ko");
+        LOADKMOD("cramfs", "fs/cramfs/cramfs.ko");
         LOOPMOUNT(imagePath, loopMount, "cramfs", MS_NOSUID|MS_NODEV|MS_RDONLY);
     } else {
         fprintf(stderr, "ERROR: unknown image format.\n");
@@ -1196,6 +1203,7 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
     size_t lineSize = 0;
     ssize_t nread = 0;
     struct stat statData;
+    int loaded = 0;
 
     if (name == NULL || strlen(name) == 0 || path == NULL || strlen(path) == 0 || udiConfig == NULL) {
         return 1;
@@ -1233,12 +1241,12 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
     if (stat(kmodPath, &statData) == 0) {
         char *insmodArgs[] = {"insmod", kmodPath, NULL};
         if (_forkAndExec(insmodArgs) != 0) {
-            fprintf("FAILED to load kernel module %s (%s)\n", name, kmodPath);
+            fprintf(stderr, "FAILED to load kernel module %s (%s)\n", name, kmodPath);
             goto _loadKrnlMod_unclean;
         }
     } else {
-        fprintf("FAILED to find kernel modules %s (%s)\n", name, kmodPath);
-        goto _loadKrnelMod_unclean;
+        fprintf(stderr, "FAILED to find kernel modules %s (%s)\n", name, kmodPath);
+        goto _loadKrnlMod_unclean;
     }
     return 0;
 _loadKrnlMod_unclean:
@@ -1246,5 +1254,4 @@ _loadKrnlMod_unclean:
         free(lineBuffer);
     }
     return 1;
-}
 }
