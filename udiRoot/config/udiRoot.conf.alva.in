@@ -1,13 +1,14 @@
+nodeContextPrefix=
 udiMount=/var/udiMount
 loopMount=/var/loopUdiMount
 imagePath=/scratch1/scratchdirs/craydock/docker
 udiRootPath=@@@PREFIX@@@
 sitePreMountHook=@@@CONFIG_DIR@@@/premount.sh
 sitePostMountHook=@@@CONFIG_DIR@@@/postmount.sh
-siteFs=scratch1 \
-       global/u1 global/u2 global/syscom global/common \
-       global/scratch2 var/opt/cray/alps/spool \
-       var/spool/slurmd
+siteFs=/scratch1 \
+       /global/u1 /global/u2 /global/syscom /global/common \
+       /global/scratch2 /var/opt/cray/alps/spool \
+       /var/spool/slurmd
 sshPath=@@@PREFIX@@@/sshd
 etcPath=@@@PREFIX@@@/etc_files
 kmodBasePath=@@@PREFIX@@@/kmod
