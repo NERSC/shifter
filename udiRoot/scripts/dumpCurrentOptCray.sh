@@ -44,8 +44,9 @@ cluster=$( cat /etc/clustername )
 origdir=$( pwd )
 tarball="optcray_${cluster}_${datestr}.tar"
 cd $workspace
+echo $workspace
 
-exceptions="papi lgdb fftw netcdf-hdf5parallel netcdf hdf5-parallel lustre-cray_ari_s nvidia hdf5 parallel-netcdf stat perftools cce diag petsc libsci trilinos tpsl"
+exceptions="papi lgdb fftw netcdf-hdf5parallel netcdf hdf5-parallel lustre-cray_ari_s nvidia hdf5 parallel-netcdf stat perftools cce diag petsc libsci trilinos tpsl xc-sysroot"
 
 for dir in /opt/cray/*; do
     echo $dir
@@ -73,6 +74,8 @@ for dir in /opt/cray/*; do
         ln -s "$lastComp" default
     fi
 done
+cd "$workspace"
+find "$workspace" -name \*.a -exec rm {} \;
 cd "$origdir"
 tar -cf "$tarball" -C "$workspace"  opt
 chmod -R u+w "$workspace"
