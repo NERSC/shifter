@@ -98,7 +98,8 @@ void free_SetupRootConfig(SetupRootConfig *config);
 void fprint_SetupRootConfig(FILE *, SetupRootConfig *config);
 int getImage(ImageData *, SetupRootConfig *, UdiRootConfig *);
 int setupUserMounts(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiConfig);
-int userMountFilter(char *udiRoot, char **mountCache, char *filtered_from, char *filtered_to, char *flags);
+int userMountFilter(char *udiRoot, char *filtered_from, char *filtered_to, char *flags);
+int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig);
 char **parseMounts(size_t *n_mounts);
 
 static char *_filterString(char *);
@@ -387,7 +388,7 @@ int bindImageIntoUDI(
         }
 
         // if target is a symlink, copy it
-        if (statData.st_mode & S_IFLNK) {
+        if (S_ISLNK(statData.st_mode)) {
             char *args[5] = { "cp", "-P", srcBuffer, mntBuffer, NULL };
             if (_forkAndExec(args) != 0) {
                 fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
@@ -396,7 +397,7 @@ int bindImageIntoUDI(
             free(itemname);
             continue;
         }
-        if (statData.st_mode & S_IFREG) {
+        if (S_ISREG(statData.st_mode)) {
             if (statData.st_size < FILE_SIZE_LIMIT) {
                 char *args[5] = { "cp", "-p", srcBuffer, mntBuffer, NULL };
                 if (_forkAndExec(args) != 0) {
@@ -409,7 +410,7 @@ int bindImageIntoUDI(
             free(itemname);
             continue;
         }
-        if (statData.st_mode & S_IFDIR) {
+        if (S_ISDIR(statData.st_mode)) {
             if (copyFlag == 0) {
                 _BINDMOUNT(mountCache, srcBuffer, mntBuffer, 0);
             } else {
@@ -737,7 +738,7 @@ int mountImageVFS(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *
 #undef _MKDIR
 
     // mount a new rootfs to work in
-    if (mount(NULL, udiRoot, "rootfs", MS_NOSUID|MS_NOEXEC|MS_NODEV, NULL) != 0) {
+    if (mount(NULL, udiRoot, "rootfs", MS_NOSUID|MS_NODEV, NULL) != 0) {
         fprintf(stderr, "FAILED to mount rootfs on %s\n", udiRoot);
         goto _mountImgVfs_unclean;
     }
@@ -784,7 +785,49 @@ _mountImgVfs_unclean:
 }
 
 int mountImageLoop(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiConfig) {
+    char loopMount[PATH_MAX];
+    char imagePath[PATH_MAX];
+    if (imageData == NULL || config == NULL || udiConfig == NULL) {
+        return 1;
+    }
+    if (imageData->useLoopMount == 0) {
+        return 0;
+    }
+#define LOADKMOD(name, path) if (loadKernelModule(name, path, udiConfig) != 0) { \
+    fprintf(stderr, "FAILED to load %s kernel module.\n", name); \
+    goto _mntImgLoop_unclean; \
+}
+#define LOOPMOUNT(from, to, type, flags) if (mount(from, to, type, flags, NULL) != 0) { \
+    fprintf(stderr, "FAILED to mount image %s (%ts) on %s\n", from, type, to); \
+    goto _mntImgLoop_unclean; \
+}
+
+    snprintf(loopMount, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->loopMountPoint);
+    loopMount[PATH_MAX-1] = 0;
+    snprintf(imagePath, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, imageData->filename);
+    imagePath[PATH_MAX-1] = 0;
+
+    _LOADKMOD("loop", "drivers/block/loop.ko");
+    if (imageData->format == FORMAT_EXT4) {
+        LOADKMOD("mbcache", "fs/mbcache.ko");
+        LOADKMOD("jbd2", "fs/jbd2/jbd2.ko");
+        LOADKMOD("ext4", "fs/ext4/ext4.ko");
+        LOOPMOUNT(imagePath, loopMount, "ext4", MS_NOSUID|MS_NODEV|MS_RDONLY);
+    } else if (imageData->format == FORMAT_SQUASHFS) {
+        _LOADKMOD("squashfs", "fs/squashfs/squashfs.ko");
+        LOOPMOUNT(imagePath, loopMount, "squashfs", MS_NOSUID|MS_NODEV|MS_RDONLY);
+    } else if (imageData->format == FORMAT_CRAMFS) {
+        _LOADKMOD("cramfs", "fs/cramfs/cramfs.ko");
+        LOOPMOUNT(imagePath, loopMount, "cramfs", MS_NOSUID|MS_NODEV|MS_RDONLY);
+    } else {
+        fprintf(stderr, "ERROR: unknown image format.\n");
+        goto _mntImgLoop_unclean;
+    }
+
+#undef _LOADKMOD
     return 0;
+_mntImgLoop_unclean:
+    return 1;
 } 
 
 int setupUserMounts(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiConfig) {
@@ -848,7 +891,7 @@ int setupUserMounts(ImageData *imageData, SetupRootConfig *config, UdiRootConfig
             fprintf(stderr, "FAILED to location is not directory: %s\n", to_buffer);
             goto _setupUserMounts_unclean;
         }
-        if (userMountFilter(udiRoot, mountCache, filtered_from, filtered_to, *flags) != 0) {
+        if (userMountFilter(udiRoot, filtered_from, filtered_to, *flags) != 0) {
             fprintf(stderr, "FAILED illegal user-requested mount: %s\n", filtered_to);
             goto _setupUserMounts_unclean;
         }
@@ -1094,7 +1137,7 @@ static int _sortFsReverse(const void *ta, const void *tb) {
     return -1 * strcmp(a, b);
 }
 
-int userMountFilter(char *udiRoot, char **mountCache, char *filtered_from, char *filtered_to, char *flags) {
+int userMountFilter(char *udiRoot, char *filtered_from, char *filtered_to, char *flags) {
     const char *disallowedPaths[] = {"/etc", "/opt", "/opt/udiImage", "/var", NULL};
     const char **strPtr = NULL;
     char mntBuffer[PATH_MAX];
@@ -1102,7 +1145,7 @@ int userMountFilter(char *udiRoot, char **mountCache, char *filtered_from, char 
     char *to_real = NULL;
     char *req_real = NULL;
 
-    if (mountCache == NULL || filtered_from == NULL || filtered_to == NULL) {
+    if (filtered_from == NULL || filtered_to == NULL) {
         return 1;
     }
     if (flags != NULL) {
@@ -1112,27 +1155,96 @@ int userMountFilter(char *udiRoot, char **mountCache, char *filtered_from, char 
     }
     req_real = realpath(filtered_to, NULL);
     if (req_real == NULL) {
-        // error
+        fprintf(stderr, "ERROR: unable to determine real path for %s\n", filtered_to);
         goto _userMntFilter_unclean;
     }
     for (strPtr = disallowedPaths; *strPtr; strPtr++) {
+        int len = 0;
         snprintf(mntBuffer, PATH_MAX, "%s%s", udiRoot, *strPtr);
         to_real = realpath(mntBuffer, NULL);
         if (to_real == NULL) {
-            //error
+            fprintf(stderr, "ERROR: unable to determine real path for %s\n", mntBuffer);
             goto _userMntFilter_unclean;
         }
-        if (strcmp(to_real, req_real) == 0) {
-            // error
+        len = strlen(to_real);
+        if (strncmp(to_real, req_real, len) == 0) {
+            fprintf(stderr, "ERROR: user requested mount matches illegal pattern: %s matches %s\n", req_real, to_real);
             goto _userMntFilter_unclean;
         }
+        free(to_real);
+        to_real = NULL;
     }
-    for (strPtr = mountCache; 
+    if (req_real != NULL) {
+        free(req_real);
+    }
 
     return 0;
 _userMntFilter_unclean:
     if (to_real != NULL) {
         free(to_real);
     }
+    if (req_real != NULL) {
+        free(req_real);
+    }
     return 1;
+}
+
+int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig) {
+    char kmodPath[PATH_MAX];
+    FILE *fp = NULL;
+    char *lineBuffer = NULL;
+    size_t lineSize = 0;
+    ssize_t nread = 0;
+    struct stat statData;
+
+    if (name == NULL || strlen(name) == 0 || path == NULL || strlen(path) == 0 || udiConfig == NULL) {
+        return 1;
+    }
+
+    fp = fopen("/proc/modules", "r");
+    if (fp == NULL) {
+        return 1;
+    }
+    while (!feof(fp) && !ferror(fp)) {
+        char *ptr = NULL;
+        nread = getline(&lineBuffer, &lineSize, fp);
+        if (nread == 0 || feof(fp) || ferror(fp)) {
+            break;
+        }
+        ptr = strtok(lineBuffer, " ");
+        if (strcmp(name, ptr) == 0) {
+            loaded = 1;
+            break;
+        }
+    }
+    fclose(fp);
+    if (lineBuffer != NULL) {
+        free(lineBuffer);
+        lineBuffer = NULL;
+    }
+
+    if (loaded) {
+        return 0;
+    }
+
+    snprintf(kmodPath, PATH_MAX, "%s%s/%s", udiConfig->nodeContextPrefix, udiConfig->kmodPath, path);
+    kmodPath[PATH_MAX-1] = 0;
+
+    if (stat(kmodPath, &statData) == 0) {
+        char *insmodArgs[] = {"insmod", kmodPath, NULL};
+        if (_forkAndExec(insmodArgs) != 0) {
+            fprintf("FAILED to load kernel module %s (%s)\n", name, kmodPath);
+            goto _loadKrnlMod_unclean;
+        }
+    } else {
+        fprintf("FAILED to find kernel modules %s (%s)\n", name, kmodPath);
+        goto _loadKrnelMod_unclean;
+    }
+    return 0;
+_loadKrnlMod_unclean:
+    if (lineBuffer != NULL) {
+        free(lineBuffer);
+    }
+    return 1;
+}
 }
