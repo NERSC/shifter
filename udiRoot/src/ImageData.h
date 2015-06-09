@@ -52,17 +52,17 @@ typedef enum _ImageFormat {
 } ImageFormat;
 
 typedef struct _ImageData {
-    ImageFormat format;     //!< image format 
-    char *filename;         //!< path to image
-    char **env;             //!< array of environment variables
-    char *entryPoint;       //!< default command used
-    char **volume;          //!< array of volume mounts
-    int useLoopMount;       //!< flag if image requires loop mount
+    ImageFormat format;     /*!< image format  */
+    char *filename;         /*!< path to image */
+    char **env;             /*!< array of environment variables */
+    char *entryPoint;       /*!< default command used */
+    char **volume;          /*!< array of volume mounts */
+    int useLoopMount;       /*!< flag if image requires loop mount */
 
-    size_t env_capacity;    //!< Current # of allocated char* in env
-    size_t volume_capacity; //!< Current # of allocated char* in volumes
-    char **envPtr;          //!< Temporary write pointer for env
-    char **volPtr;          //!< Temporary write pointer for volumes
+    size_t env_capacity;    /*!< Current # of allocated char* in env */
+    size_t volume_capacity; /*!< Current # of allocated char* in volumes */
+    char **envPtr;          /*!< Temporary write pointer for env */
+    char **volPtr;          /*!< Temporary write pointer for volumes */
 } ImageData;
 
 int parse_ImageData(char *identifier, UdiRootConfig *, ImageData *);

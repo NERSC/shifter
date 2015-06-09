@@ -299,7 +299,7 @@ int getImage(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiCo
     return ret;
 }
 
-//! Bind subtree of static image into UDI rootfs
+/*! Bind subtree of static image into UDI rootfs */
 /*!
   Bind mount directories and large files (copy symlinks and small files) from
   image VFS location to prepared UDI VFS location.  This functionality performs
@@ -354,7 +354,7 @@ int bindImageIntoUDI(
     }
     qsort(mountCache, n_mountCache, sizeof(char*), _sortFsForward);
 
-    // calculate important base paths
+    /* calculate important base paths */
     snprintf(udiRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
     udiRoot[PATH_MAX-1] = 0;
 
@@ -366,7 +366,7 @@ int bindImageIntoUDI(
         imgRoot[PATH_MAX-1] = 0;
     }
 
-    // start traversing through image subtree
+    /* start traversing through image subtree */
     snprintf(srcBuffer, PATH_MAX, "%s/%s", imgRoot, relpath);
     srcBuffer[PATH_MAX-1] = 0;
     subtree = opendir(srcBuffer);
@@ -385,25 +385,25 @@ int bindImageIntoUDI(
             continue;
         }
 
-        // check to see if UDI version already exists
+        /* check to see if UDI version already exists */
         snprintf(mntBuffer, PATH_MAX, "%s/%s/%s", udiRoot, relpath, itemname);
         mntBuffer[PATH_MAX-1] = 0;
         if (lstat(mntBuffer, &statData) == 0) {
-            // exists in UDI, skip
+            /* exists in UDI, skip */
             free(itemname);
             continue;
         }
 
-        // after filtering, lstat path to get details
+        /* after filtering, lstat path to get details */
         snprintf(srcBuffer, PATH_MAX, "%s/%s/%s", imgRoot, relpath, itemname);
         srcBuffer[PATH_MAX-1] = 0;
         if (lstat(srcBuffer, &statData) != 0) {
-            // path didn't exist, skip
+            /* path didn't exist, skip */
             free(itemname);
             continue;
         }
 
-        // if target is a symlink, copy it
+        /* if target is a symlink, copy it */
         if (S_ISLNK(statData.st_mode)) {
             char *args[5] = { "cp", "-P", srcBuffer, mntBuffer, NULL };
             if (_forkAndExec(args) != 0) {
@@ -439,7 +439,7 @@ int bindImageIntoUDI(
             free(itemname);
             continue;
         }
-        // no other types are supported
+        /* no other types are supported */
         free(itemname);
     }
     closedir(subtree);
@@ -473,7 +473,7 @@ _bindImgUDI_unclean:
     return 1;
 }
 
-//! Setup all required files/paths for site mods to the image
+/*! Setup all required files/paths for site mods to the image */
 /*!
   Setup all required files/paths for site mods to the image.  This should be
   called before performing any bindmounts or other discovery of the user image.
@@ -488,7 +488,7 @@ _bindImgUDI_unclean:
 */
 int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) {
 
-    // construct path to "live" copy of the image.
+    /* construct path to "live" copy of the image. */
     char udiRoot[PATH_MAX];
     char mntBuffer[PATH_MAX];
     char srcBuffer[PATH_MAX];
@@ -506,7 +506,7 @@ int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) 
         return 1;
     }
 
-    // get list of current mounts for this namespace
+    /* get list of current mounts for this namespace */
     mountCache = parseMounts(&mountCache_cnt);
     if (mountCache == NULL) {
         fprintf(stderr, "FAILED to get list of current mount points\n");
@@ -514,7 +514,7 @@ int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) 
     }
     qsort(mountCache, mountCache_cnt, sizeof(char*), _sortFsForward);
 
-    // create all the directories needed for initial setup
+    /* create all the directories needed for initial setup */
 #define _MKDIR(dir, perm) if (mkdir(dir, perm) != 0) { \
     fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", dir); \
     ret = 1; \
@@ -540,7 +540,7 @@ int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) 
     _MKDIR("dev", 0755);
     _MKDIR("tmp", 0777);
 
-    // run site-defined pre-mount procedure
+    /* run site-defined pre-mount procedure */
     if (strlen(udiConfig->sitePreMountHook) > 0) {
         char *args[3] = {
             "/bin/sh", udiConfig->sitePreMountHook, NULL
@@ -553,7 +553,7 @@ int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) 
         }
     }
 
-    // do site-defined mount activities
+    /* do site-defined mount activities */
     for (volPtr = udiConfig->siteFs; *volPtr != NULL; volPtr++) {
         char to_buffer[PATH_MAX];
         snprintf(to_buffer, PATH_MAX, "%s/%s", udiRoot, *volPtr);
@@ -562,7 +562,7 @@ int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) 
         _BINDMOUNT(mountCache, *volPtr, to_buffer, 0);
     }
 
-    // run site-defined post-mount procedure
+    /* run site-defined post-mount procedure */
     if (strlen(udiConfig->sitePostMountHook) > 0) {
         char *args[3] = {
             "/bin/sh", udiConfig->sitePostMountHook, NULL
@@ -575,11 +575,11 @@ int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) 
         }
     }
 
-    // setup site needs for /etc
+    /* setup site needs for /etc */
     snprintf(mntBuffer, PATH_MAX, "%s/etc/local", udiRoot);
     mntBuffer[PATH_MAX-1] = 0;
     _BINDMOUNT(mountCache, "/etc", mntBuffer, 0);
-    // --> loop over everything in site etc-files and copy into image etc
+    /* --> loop over everything in site etc-files and copy into image etc */
     snprintf(srcBuffer, PATH_MAX, "%s/%s", udiConfig->nodeContextPrefix, udiConfig->etcPath);
     srcBuffer[PATH_MAX-1] = 0;
     memset(&statData, 0, sizeof(struct stat));
@@ -621,7 +621,7 @@ int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) 
         goto _prepSiteMod_unclean;
     }
 
-    // recursively copy /opt/udiImage (to allow modifications)
+    /* recursively copy /opt/udiImage (to allow modifications) */
     if (udiConfig->optUdiImage != NULL) {
         snprintf(srcBuffer, PATH_MAX, "%s/%s", udiConfig->nodeContextPrefix, udiConfig->optUdiImage);
         srcBuffer[PATH_MAX-1] = 0;
@@ -644,8 +644,8 @@ int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) 
         }
     }
 
-    // setup hostlist for current allocation
-    // format of minNodeSpec is "host1/16 host2/16" for 16 copies each of host1 and host2
+    /* setup hostlist for current allocation 
+       format of minNodeSpec is "host1/16 host2/16" for 16 copies each of host1 and host2 */
     if (config->minNodeSpec) {
         char *minNode = strdup(config->minNodeSpec);
         char *search = minNode;
@@ -677,26 +677,26 @@ int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) 
     }
 
     /***** setup linux needs ******/
-    // mount /proc
+    /* mount /proc */
     snprintf(mntBuffer, PATH_MAX, "%s/proc", udiRoot);
     mntBuffer[PATH_MAX-1] = 0;
-    if (mount(NULL, mntBuffer, "proc", MS_REC|MS_NOSUID|MS_NOEXEC|MS_NODEV, NULL) != 0) {
+    if (mount(NULL, mntBuffer, "proc", MS_NOSUID|MS_NOEXEC|MS_NODEV, NULL) != 0) {
         fprintf(stderr, "FAILED to mount /proc\n");
         ret = 1;
         goto _prepSiteMod_unclean;
     }
 
-    // mount /sys
+    /* mount /sys */
     snprintf(mntBuffer, PATH_MAX, "%s/sys", udiRoot);
     mntBuffer[PATH_MAX-1] = 0;
     _BINDMOUNT(mountCache, "/sys", mntBuffer, 0);
 
-    // mount /dev
+    /* mount /dev */
     snprintf(mntBuffer, PATH_MAX, "%s/dev", udiRoot);
     mntBuffer[PATH_MAX-1] = 0;
     _BINDMOUNT(mountCache, "/dev", mntBuffer, 0);
 
-    // mount any mount points under /dev
+    /* mount any mount points under /dev */
     for (mntPtr = mountCache; *mntPtr != NULL; mntPtr++) {
         if (strncmp(*mntPtr, "/dev/", 4) == 0) {
             snprintf(mntBuffer, PATH_MAX, "%s/%s", udiRoot, *mntPtr);
@@ -758,29 +758,29 @@ int mountImageVFS(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *
         goto _mountImgVfs_unclean; \
     }
 
-    // mount a new rootfs to work in
+    /* mount a new rootfs to work in */
     if (mount(NULL, udiRoot, "rootfs", MS_NOSUID|MS_NODEV, NULL) != 0) {
         fprintf(stderr, "FAILED to mount rootfs on %s\n", udiRoot);
         goto _mountImgVfs_unclean;
     }
 
-    // get our needs injected first
+    /* get our needs injected first */
     if (prepareSiteModifications(config, udiConfig) != 0) {
         fprintf(stderr, "FAILED to properly setup site modifications\n");
         goto _mountImgVfs_unclean;
     }
 
-    // copy/bind mount pieces into prepared site
+    /* copy/bind mount pieces into prepared site */
     BIND_IMAGE_INTO_UDI("/", imageData, config, udiConfig, 0);
     BIND_IMAGE_INTO_UDI("/var", imageData, config, udiConfig, 0);
     BIND_IMAGE_INTO_UDI("/opt", imageData, config, udiConfig, 0);
 
-    // setup sshd configuration
+    /* setup sshd configuration */
 
-    // copy image /etc into place
+    /* copy image /etc into place */
     BIND_IMAGE_INTO_UDI("/etc", imageData, config, udiConfig, 1);
 
-    // perform user-requested bind mounts
+    /* perform user-requested bind mounts */
     if (setupUserMounts(imageData, config, udiConfig) != 0) {
         fprintf(stderr, "FAILED to setup user-requested mounts.\n");
         goto _mountImgVfs_unclean;
@@ -789,7 +789,7 @@ int mountImageVFS(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *
     return 0;
 
 _mountImgVfs_unclean:
-    // do needed unmounts
+    /* do needed unmounts */
     return 1;
 }
 
@@ -949,7 +949,7 @@ static int _forkAndExec(char **args) {
         return 1;
     }
     if (pid > 0) {
-        // this is the parent
+        /* this is the parent */
         int status = 0;
         do {
             pid_t ret = waitpid(pid, &status, 0);
@@ -965,7 +965,7 @@ static int _forkAndExec(char **args) {
         }
         return status;
     }
-    // this is the child
+    /* this is the child */
     execv(args[0], args);
     fprintf(stderr, "FAILED to execv! Exiting.\n");
     exit(1);
@@ -989,8 +989,8 @@ static int _bindMount(char **mountCache, const char *from, const char *to, int r
         return 1;
     }
 
-    // not interesting in mounting over existing mounts, prevents
-    // things from getting into a weird state later.
+    /* not interesting in mounting over existing mounts, prevents 
+       things from getting into a weird state later. */
     if (mountCache != NULL) {
         for (ptr = mountCache; *ptr; ptr++) {
             if (strcmp(*ptr, to_real) == 0) {
@@ -1001,24 +1001,24 @@ static int _bindMount(char **mountCache, const char *from, const char *to, int r
         }
     }
 
-    // perform the initial bind-mount
+    /* perform the initial bind-mount */
     ret = mount(from, to, "bind", MS_BIND, NULL);
     if (ret != 0) {
         goto _bindMount_unclean;
     }
 
-    // if the source is exactly /dev or starts with /dev/ then
-    // ALLOW device entires, otherwise remount with noDev
+    /* if the source is exactly /dev or starts with /dev/ then 
+       ALLOW device entires, otherwise remount with noDev */
     if (strcmp(from, "/dev") != 0 && strncmp(from, "/dev/", 5) != 0) {
         remountFlags |= MS_NODEV;
     }
 
-    // if readonly is requested, then do it
+    /* if readonly is requested, then do it */
     if (ro) {
         remountFlags |= MS_RDONLY;
     }
 
-    // remount the bind-mount to get the needed mount flags
+    /* remount the bind-mount to get the needed mount flags */
     ret = mount(from, to, "bind", remountFlags, NULL);
     if (ret != 0) {
         goto _bindMount_unclean;

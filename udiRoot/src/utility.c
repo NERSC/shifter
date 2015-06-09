@@ -70,7 +70,7 @@ int shifter_parseConfig(char *filename, char delim, void *obj, int (*assign_fp)(
         nRead = getline(&linePtr, &lineSize, fp);
         if (nRead <= 0) break;
 
-        // get key/value pair
+        /* get key/value pair */
         if (!multiline) {
             ptr = strchr(linePtr, delim);
             if (ptr == NULL) continue;
@@ -85,14 +85,14 @@ int shifter_parseConfig(char *filename, char delim, void *obj, int (*assign_fp)(
             multiline = 0;
         }
 
-        // check to see if value extends over multiple lines
+        /* check to see if value extends over multiple lines */
         if (tValue[strlen(tValue) - 1] == '\\') {
             multiline = 1;
             tValue[strlen(tValue) - 1] = 0;
             tValue = shifter_trim(tValue);
         }
 
-        // merge value and tValue
+        /* merge value and tValue */
         tValueLen = strlen(tValue);
         value = (char *) realloc(value, sizeof(char)*(valueLen + tValueLen + 2));
         ptr = value + valueLen;
@@ -101,7 +101,7 @@ int shifter_parseConfig(char *filename, char delim, void *obj, int (*assign_fp)(
         strncat(value, tValue, valueLen + tValueLen + 2);
         valueLen += tValueLen + 1;
 
-        // if value is complete, assign
+        /* if value is complete, assign */
         if (multiline == 0) {
             ptr = shifter_trim(value);
 
@@ -140,7 +140,7 @@ char *shifter_trim(char *str) {
     ssize_t len = 0;
     if (str == NULL) return NULL;
     for ( ; isspace(*ptr) && *ptr != 0; ptr++) {
-        // that's it
+        /* that's it */
     }
     if (*ptr == 0) return ptr;
     len = strlen(ptr) - 1;
