@@ -85,7 +85,7 @@ typedef struct _UdiRootConfig {
     size_t servers_capacity;
 } UdiRootConfig;
 
-int parse_UdiRootConfig(UdiRootConfig *, int validateFlags);
+int parse_UdiRootConfig(const char *, UdiRootConfig *, int validateFlags);
 void free_UdiRootConfig(UdiRootConfig *);
 void fprint_UdiRootConfig(FILE *, UdiRootConfig *);
 int validate_UdiRootConfig(UdiRootConfig *, int validateFlags);

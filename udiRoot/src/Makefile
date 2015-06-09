@@ -12,6 +12,7 @@ include ../config.mk
 CFLAGS=-O2 -W -Wall -Wundef -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -ansi
 LDFLAGS=
 SED_MODIFY=sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g' |\
+           sed 's|@@@CONFIG_DIR@@@|$(CONFIG_DIR)|g' |\
            sed 's|@@@INCLUDE_FILE@@@|$(INCLUDE_FILE)|g' |\
            sed 's|@@@PREFIX@@@|$(PREFIX)|g' |\
            sed  -e '/@@@INCLUDE shifterLibFancyShell.sh@@@/{r shifterLibFancyShell.sh' -e 'd}' |\
@@ -32,12 +33,14 @@ shiftsh: shiftsh.in
 	cat $< | $(SED_MODIFY) > $@
 shiftrun: shiftrun.in
 	cat $< | $(SED_MODIFY) > $@
+config.h: config.h.in
+	cat $< | $(SED_MODIFY) > $@
 
 udiRootEnter: udiRootEnter.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" $< -o $@
 distributeKeys: distributeKeys.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) $< -o $@
-setupRoot: setupRoot.c UdiRootConfig.c utility.c ImageData.c
+setupRoot: setupRoot.c UdiRootConfig.c utility.c ImageData.c config.h
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) -DNO_ROOT_OWN_CHECK $^ -o $@
 
 
@@ -55,5 +58,5 @@ install: all
 	$(INSTALL) --owner=root --group=root --mode=555  shiftrun $(DESTDIR)/bin/shiftrun
 	$(INSTALL) --owner=root --group=root docker $(DESTDIR)/bin/docker
 
-clean: setupRoot setupRoot.sh unsetupRoot.sh getDockerImage.pl udiRootEnter shiftsh shiftrun
+clean: setupRoot setupRoot.sh unsetupRoot.sh getDockerImage.pl udiRootEnter shiftsh shiftrun config.h
 	for file in $^; do if [[ -e "$$file" ]]; then rm "$$file"; fi; done

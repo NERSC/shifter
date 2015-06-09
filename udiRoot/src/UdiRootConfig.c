@@ -56,15 +56,15 @@
 #define SERVER_ALLOC_BLOCK 3
 
 static int _assign(char *key, char *value, void *tUdiRootConfig);
-static int _validateConfigFile(void);
+static int _validateConfigFile(const char *);
 
-int parse_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
+int parse_UdiRootConfig(const char *configFile, UdiRootConfig *config, int validateFlags) {
 
-    if (_validateConfigFile() != 0) {
+    if (_validateConfigFile(configFile) != 0) {
         return UDIROOT_VAL_CFGFILE;
     }
 
-    if (shifter_parseConfig(CONFIG_FILE, '=', config, _assign) != 0) {
+    if (shifter_parseConfig(configFile, '=', config, _assign) != 0) {
         return UDIROOT_VAL_PARSE;
     }
 
@@ -293,11 +293,11 @@ static int _assign(char *key, char *value, void *t_config) {
     return 0; 
 }
 
-static int _validateConfigFile(void) {
+static int _validateConfigFile(const char *configFile) {
     struct stat st;
     memset(&st, 0, sizeof(struct stat));
 
-    if (stat(CONFIG_FILE, &st) != 0) {
+    if (stat(configFile, &st) != 0) {
         return 1;
     }
 #ifndef NO_ROOT_OWN_CHECK

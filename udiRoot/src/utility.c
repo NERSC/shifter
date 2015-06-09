@@ -48,7 +48,7 @@
 #include "utility.h"
 
 
-int shifter_parseConfig(char *filename, char delim, void *obj, int (*assign_fp)(char *, char *, void *)) {
+int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assign_fp)(char *, char *, void *)) {
     FILE *fp = NULL;
     char *linePtr = NULL;
     char *ptr = NULL;

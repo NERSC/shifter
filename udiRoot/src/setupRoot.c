@@ -66,6 +66,8 @@
 #include "ImageData.h"
 #include "UdiRootConfig.h"
 
+#include "config.h"
+
 #define VOLUME_ALLOC_BLOCK 10
 #define MOUNT_ALLOC_BLOCK 24
 #define FILE_SIZE_LIMIT 5242880
@@ -125,7 +127,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "FAILED to parse command line arguments. Exiting.\n");
         _usage(1);
     }
-    if (parse_UdiRootConfig(&udiConfig, 0) != 0) {
+    if (parse_UdiRootConfig(UDIROOT_CONFIG_FILE, &udiConfig, 0) != 0) {
         fprintf(stderr, "FAILED to parse udiRoot configuration. Exiting.\n");
         exit(1);
     }
@@ -141,6 +143,7 @@ int main(int argc, char **argv) {
     if (config.verbose) {
         fprint_ImageData(stdout, &image);
     }
+    /*
     if (image.useLoopMount) {
         if (mountImageLoop(&image, &config, &udiConfig) != 0) {
             fprintf(stderr, "FAILED to mount image on loop device.\n");
@@ -151,6 +154,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "FAILED to mount image into UDI\n");
         exit(1);
     }
+    */
     return 0;
 }
 
