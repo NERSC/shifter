@@ -15,6 +15,8 @@
 #include <slurm/spank.h>
 #include <slurm/slurm.h> // for job prolog where job data structure is loaded
 
+#include "UdiRootConfig.h"
+
 SPANK_PLUGIN(shifter, 1)
 
 #ifndef IS_NATIVE_SLURM
@@ -26,9 +28,10 @@ SPANK_PLUGIN(shifter, 1)
 static char image[IMAGE_MAXLEN] = "";
 static char image_type[IMAGE_MAXLEN] = "";
 static char imagevolume[IMAGEVOLUME_MAXLEN] = "";
-static char udiRoot_prefix[1024] = "";
-static char chroot_path[1024] = "";
+static char udiRoot_prefix[PATH_MAX] = "";
+static char chroot_path[PATH_MAX] = "";
 static int nativeSlurm = IS_NATIVE_SLURM;
+static UdiRootConfig *udiConfig = NULL;
 
 static int _opt_image(int val, const char *optarg, int remote);
 static int _opt_imagevolume(int val, const char *optarg, int remote);
@@ -142,76 +145,16 @@ int generateSshKey() {
     return 0;
 }
 
-int read_config_item(const char *filename, const char *item, char *buffer, size_t buflen) {
-    char cmdBuffer[1024];
-    ssize_t nread;
-    size_t linePtrSize;
-    char *linePtr = NULL;
-    char *ptr = NULL;
-    FILE *fp = NULL;
-    int rc = 0;
-
-    if (filename == NULL || strlen(filename) == 0) {
-        return 1;
-    }
-    if (item == NULL || strlen(item) == 0) {
-        return 1;
-    }
-
-    snprintf(cmdBuffer, 1024, "/bin/sh -c 'source %s; echo $%s'", filename, item);
-    fp = popen(cmdBuffer, "r");
-    while ((nread = getline(&linePtr, &linePtrSize, fp)) > 0) {
-        linePtr[nread] = 0;
-        ptr = trim(linePtr);
-        snprintf(buffer, buflen, "%s", ptr);
-    }
-    if (linePtr != NULL) {
-        free(linePtr);
-        linePtr = NULL;
-        linePtrSize = 0;
-    }
-    if ((rc = pclose(fp)) != 0) {
-        slurm_error("Failed to read configuration file: %d", rc);
-        return 1;
-    }
-    return strlen(buffer);;
-}
-
-
-
 int read_config(const char *filename) {
-    struct stat st_data;
 
-    chroot_path[0] = 0;
-    udiRoot_prefix[0] = 0;
+    config = malloc(sizeof(UdiRootConfig));
+    memset(config, 0, sizeof(UdiRootConfig));
 
-    memset(&st_data, 0, sizeof(struct stat));
-    if (stat(filename, &st_data) != 0) {
-        perror("Failed to stat config file: ");
+    if (parse_UdiRootConfig(filename, &config, 0) != 0) {
+        fprintf(stderr, "FAILED to read udiRoot configuration file!\n");
         return 1;
     }
-    if (st_data.st_uid != 0 || st_data.st_gid != 0 || (st_data.st_mode & S_IWOTH)) {
-        fprintf(stderr, "Configuration file not owned by root, or is writable by others.\n");
-        return 1;
-    }
-    if (read_config_item(filename, "udiMount", chroot_path, 1024) <= 0) {
-        fprintf(stderr, "udiMount path invalid (len=0)\n");
-        return 1;
-    }
-    if (read_config_item(filename, "udiRootPath", udiRoot_prefix, 1024) <= 0) {
-        fprintf(stderr, "udiRootPath invalid (len=0)\n");
-        return 1;
-    } else {
-        memset(&st_data, 0, sizeof(struct stat));
-        if (stat(udiRoot_prefix, &st_data) != 0) {
-            perror("Could not stat udiRoot prefix");
-            return 1;
-        }
-        if (st_data.st_uid != 0 || st_data.st_gid != 0 || (st_data.st_mode & S_IWOTH)) {
-            fprintf(stderr, "udiRoot installation not owned by root, or is globally writable.\n");
-            return 1;
-        }
-    }
+
     return 0;
 }
 
@@ -293,7 +236,7 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
         slurm_debug("shifter_config not set, cannot use shifter");
         return rc;
     }
-    if (read_config(config_file) != 0) {
+    if (read_config(config_file, context) != 0) {
         slurm_error("Failed to parse shifter config. Cannot use shifter.");
         return rc;
     }
@@ -301,7 +244,6 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
     image[0] = 0;
     imagevolume[0] = 0;
 
-    context = spank_context();
     //if (context == S_CTX_ALLOCATOR || context == S_CTX_LOCAL) {
         for (i = 0; spank_option_array[i].name != NULL; ++i) {
             j = spank_option_register(sp, &spank_option_array[i]);
@@ -312,6 +254,14 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
         }
     //}
     return rc;
+}
+
+int slurm_spank_exit(spank_t sp, int argc, char **argv) {
+    if (config != NULL) {
+        free_UdiRootConfig(config);
+        config = NULL;
+    }
+    return ESPANK_SUCCESS;
 }
 
 int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {

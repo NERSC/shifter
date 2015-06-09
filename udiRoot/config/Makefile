@@ -9,24 +9,25 @@
 include ../config.mk
 -include ../config.inc
 
+all: udiRoot.conf premount.sh postmount.sh
+
 udiRoot.conf: udiRoot.conf.$(SYSTEM).in
-	cat $< | sed 's|@@@SYSTEM@@@|$(SYSTEM)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' | sed 's|@@@INCLUDE_FILE@@@|$(INCLUDE_FILE)|g' > $@
+	cat $< | sed 's|@@@SYSTEM@@@|$(SYSTEM)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' | sed 's|@@@INCLUDE_FILE@@@|$(INCLUDE_FILE)|g' | sed 's|@@@CONFIG_DIR@@@|$(CONFIG_DIR)|g' > $@
 
-udiRoot.include: udiRoot.include.$(SYSTEM).in
-	cat $< | sed 's|@@@SYSTEM@@@|$(SYSTEM)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' | sed 's|@@@INCLUDE_FILE@@@|$(INCLUDE_FILE)|g' > $@
+premount.sh: premount.sh.$(SYSTEM).in
+	cat $< | sed 's|@@@SYSTEM@@@|$(SYSTEM)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' | sed 's|@@@INCLUDE_FILE@@@|$(INCLUDE_FILE)|g' | sed 's|@@@CONFIG_DIR@@@|$(CONFIG_DIR)|g' > $@
 
-fsMap.conf: fsMap.conf.$(SYSTEM).in
-	cat $< | sed 's|@@@SYSTEM@@@|$(SYSTEM)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' | sed 's|@@@INCLUDE_FILE@@@|$(INCLUDE_FILE)|g' > $@
+postmount.sh: postmount.sh.$(SYSTEM).in
+	cat $< | sed 's|@@@SYSTEM@@@|$(SYSTEM)|g' | sed 's|@@@PREFIX@@@|$(PREFIX)|g' | sed 's|@@@INCLUDE_FILE@@@|$(INCLUDE_FILE)|g' | sed 's|@@@CONFIG_DIR@@@|$(CONFIG_DIR)|g' > $@
 
-all: udiRoot.conf udiRoot.include fsMap.conf
 
 install: all
 	mkdir -p $(DESTDIR)/etc
-	$(INSTALL) --owner=root --group=root --mode=444  udiRoot.conf $(DESTDIR)/etc/udiRoot.conf
-	$(INSTALL) --owner=root --group=root --mode=400  udiRoot.include $(DESTDIR)/etc/udiRoot.include; \
-	$(INSTALL) --owner=root --group=root --mode=400  fsMap.conf $(DESTDIR)/fsMap.conf; \
+	$(INSTALL) --owner=root --group=root --mode=444  udiRoot.conf $(CONFIG_DIR)/udiRoot.conf
+	$(INSTALL) --owner=root --group=root --mode=400  premount.sh $(CONFIG_DIR)/premount.sh; \
+	$(INSTALL) --owner=root --group=root --mode=400  postmount.sh $(CONFIG_DIR)/postmount.sh; \
 
 clean:
 	if [ -a udiRoot.conf ]; then $(RM) udiRoot.conf; fi
-	if [ -a udiRoot.include ]; then $(RM) udiRoot.include; fi
-	if [ -a fsMap.conf ]; then $(RM) fsMap.conf; fi
+	if [ -a premount.sh ]; then $(RM) premount.sh; fi
+	if [ -a postmount.sh ]; then $(RM) postmount.sh; fi
