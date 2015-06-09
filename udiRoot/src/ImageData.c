@@ -56,7 +56,7 @@
 
 static int _assign(char *key, char *value, void *t_imageData);
 
-int parse_ImageData(char *type, char *identifier, UdiRootConfig *config, ImageData *image) {
+int parse_ImageData(char *identifier, UdiRootConfig *config, ImageData *image) {
     char *fname = NULL;
     size_t fname_len = 0;
     const char *extension = NULL;
@@ -178,8 +178,8 @@ static int _assign(char *key, char *value, void *t_image) {
         }
     } else if (strcmp(key, "ENV") == 0) {
         char **tmp = NULL;
-        if (image->env == NULL || image->envPtr - image->env >= image->env_capacity) {
-            size_t cnt = image->envPtr - image->env;
+        size_t cnt = image->envPtr - image->env;
+        if (image->env == NULL || cnt >= image->env_capacity) {
             tmp = realloc(image->env, sizeof(char*) * (image->env_capacity + ENV_ALLOC_SIZE));
             if (tmp == NULL) {
                 return 1;
@@ -199,8 +199,8 @@ static int _assign(char *key, char *value, void *t_image) {
         }
     } else if (strcmp(key, "VOLUME") == 0) {
         char **tmp = NULL;
-        if (image->volume == NULL || image->volPtr - image->volume >= image->volume_capacity) {
-            size_t cnt = image->volPtr - image->volume;
+        size_t cnt = image->volPtr - image->volume;
+        if (image->volume == NULL || cnt >= image->volume_capacity) {
             tmp = realloc(image->volume, sizeof(char*) * (image->volume_capacity + VOL_ALLOC_SIZE));
             if (tmp == NULL) {
                 return 1;

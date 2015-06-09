@@ -65,7 +65,7 @@ typedef struct _ImageData {
     char **volPtr;          //!< Temporary write pointer for volumes
 } ImageData;
 
-int parse_ImageData(char *type, char *identifier, UdiRootConfig *, ImageData *);
+int parse_ImageData(char *identifier, UdiRootConfig *, ImageData *);
 void free_ImageData(ImageData *);
 void fprint_ImageData(FILE *, ImageData *);
 

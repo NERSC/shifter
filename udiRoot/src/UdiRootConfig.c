@@ -56,7 +56,7 @@
 #define SERVER_ALLOC_BLOCK 3
 
 static int _assign(char *key, char *value, void *tUdiRootConfig);
-static int _validateConfigFile();
+static int _validateConfigFile(void);
 
 int parse_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
 
@@ -293,7 +293,7 @@ static int _assign(char *key, char *value, void *t_config) {
     return 0; 
 }
 
-static int _validateConfigFile() {
+static int _validateConfigFile(void) {
     struct stat st;
     memset(&st, 0, sizeof(struct stat));
 

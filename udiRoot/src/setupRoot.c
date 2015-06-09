@@ -102,6 +102,8 @@ int userMountFilter(char *udiRoot, char *filtered_from, char *filtered_to, char 
 int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig);
 int mountImageVFS(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiConfig);
 int mountImageLoop(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiConfig);
+int bindImageIntoUDI(const char *relpath, ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiConfig, int copyFlag);
+int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig);
 char **parseMounts(size_t *n_mounts);
 
 static char *_filterString(char *);
@@ -293,7 +295,7 @@ void fprint_SetupRootConfig(FILE *fp, SetupRootConfig *config) {
 }
 
 int getImage(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiConfig) {
-    int ret = parse_ImageData(config->imageType, config->imageIdentifier, udiConfig, imageData);
+    int ret = parse_ImageData(config->imageIdentifier, udiConfig, imageData);
     return ret;
 }
 
@@ -1042,7 +1044,7 @@ _bindMount_unclean:
 }
 
 static char *_filterString(char *input) {
-    size_t len = 0;
+    ssize_t len = 0;
     char *ret = NULL;
     char *rptr = NULL;
     char *wptr = NULL;

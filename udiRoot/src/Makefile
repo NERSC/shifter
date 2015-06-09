@@ -9,7 +9,8 @@ include ../config.mk
 -include ../config.inc
 
 ## configuration
-CFLAGS=-O2 -Wall
+CFLAGS=-O2 -W -Wall -Wundef -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -pedantic
+OTHER=-ansi -pedantic -Wundef -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations
 LDFLAGS=
 SED_MODIFY=sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g' |\
            sed 's|@@@INCLUDE_FILE@@@|$(INCLUDE_FILE)|g' |\
