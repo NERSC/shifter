@@ -143,7 +143,6 @@ int main(int argc, char **argv) {
     if (config.verbose) {
         fprint_ImageData(stdout, &image);
     }
-    /*
     if (image.useLoopMount) {
         if (mountImageLoop(&image, &config, &udiConfig) != 0) {
             fprintf(stderr, "FAILED to mount image on loop device.\n");
@@ -154,7 +153,6 @@ int main(int argc, char **argv) {
         fprintf(stderr, "FAILED to mount image into UDI\n");
         exit(1);
     }
-    */
     return 0;
 }
 
@@ -379,6 +377,9 @@ int bindImageIntoUDI(
         goto _bindImgUDI_unclean;
     }
     while ((dirEntry = readdir(subtree)) != NULL) {
+        if (strcmp(dirEntry->d_name, ".") == 0 || strcmp(dirEntry->d_name, "..") == 0) {
+            continue;
+        }
         itemname = _filterString(dirEntry->d_name);
         if (itemname == NULL) {
             fprintf(stderr, "FAILED to correctly filter entry: %s\n", dirEntry->d_name);
@@ -533,7 +534,6 @@ int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) 
     _MKDIR("etc", 0755);
     _MKDIR("etc/local", 0755);
     _MKDIR("etc/udiImage", 0755);
-    _MKDIR("etc", 0755);
     _MKDIR("opt", 0755);
     _MKDIR("opt/udiImage", 0755);
     _MKDIR("var", 0755);
@@ -591,7 +591,11 @@ int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) 
         DIR *etcDir = opendir(srcBuffer);
         struct dirent *entry = NULL;
         while ((entry = readdir(etcDir)) != NULL) {
-            char *filename = _filterString(entry->d_name);
+            char *filename = NULL;
+            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+                continue;
+            }
+            filename = _filterString(entry->d_name);
             if (filename == NULL) {
                 fprintf(stderr, "FAILED to allocate filename string.\n");
                 goto _prepSiteMod_unclean;
@@ -603,7 +607,7 @@ int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) 
             free(filename);
 
             if (lstat(srcBuffer, &statData) != 0) {
-                fprintf(stderr, "Coudldn't fine source file, check if there are illegal characters: %s\n", srcBuffer);
+                fprintf(stderr, "Couldn't find source file, check if there are illegal characters: %s\n", srcBuffer);
                 goto _prepSiteMod_unclean;
             }
 
@@ -773,6 +777,7 @@ int mountImageVFS(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *
         fprintf(stderr, "FAILED to properly setup site modifications\n");
         goto _mountImgVfs_unclean;
     }
+return 0;
 
     /* copy/bind mount pieces into prepared site */
     BIND_IMAGE_INTO_UDI("/", imageData, config, udiConfig, 0);
@@ -800,21 +805,35 @@ _mountImgVfs_unclean:
 int mountImageLoop(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiConfig) {
     char loopMount[PATH_MAX];
     char imagePath[PATH_MAX];
+    struct stat statData;
     if (imageData == NULL || config == NULL || udiConfig == NULL) {
         return 1;
     }
     if (imageData->useLoopMount == 0) {
         return 0;
     }
+    if (udiConfig->loopMountPoint == NULL || strlen(udiConfig->loopMountPoint) == 0) {
+        return 1;
+    }
+#define MKDIR(dir, perm) if (mkdir(dir, perm) != 0) { \
+    fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", dir); \
+    goto _mntImgLoop_unclean; \
+}
 #define LOADKMOD(name, path) if (loadKernelModule(name, path, udiConfig) != 0) { \
     fprintf(stderr, "FAILED to load %s kernel module.\n", name); \
     goto _mntImgLoop_unclean; \
 }
-#define LOOPMOUNT(from, to, imgtype, flags) if (mount(from, to, imgtype, flags, NULL) != 0) { \
-    fprintf(stderr, "FAILED to mount image %s (%s) on %s\n", from, imgtype, to); \
-    goto _mntImgLoop_unclean; \
+#define LOOPMOUNT(from, to, imgtype, flags) { \
+    char *args[] = {"mount", "-o", "loop,ro,nosuid,nodev", from, to, NULL}; \
+    if (_forkAndExec(args) != 0) { \
+        fprintf(stderr, "FAILED to mount image %s (%s) on %s\n", from, imgtype, to); \
+        goto _mntImgLoop_unclean; \
+    } \
 }
 
+    if (stat(udiConfig->loopMountPoint, &statData) != 0) {
+        MKDIR(udiConfig->loopMountPoint, 0755);
+    }
     snprintf(loopMount, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->loopMountPoint);
     loopMount[PATH_MAX-1] = 0;
     snprintf(imagePath, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, imageData->filename);
@@ -837,7 +856,9 @@ int mountImageLoop(ImageData *imageData, SetupRootConfig *config, UdiRootConfig 
         goto _mntImgLoop_unclean;
     }
 
-#undef _LOADKMOD
+#undef LOADKMOD
+#undef MKDIR
+#undef LOOPMOUNT
     return 0;
 _mntImgLoop_unclean:
     return 1;
@@ -970,8 +991,8 @@ static int _forkAndExec(char **args) {
         return status;
     }
     /* this is the child */
-    execv(args[0], args);
-    fprintf(stderr, "FAILED to execv! Exiting.\n");
+    execvp(args[0], args);
+    fprintf(stderr, "FAILED to execvp! Exiting.\n");
     exit(1);
     return 1;
 }
