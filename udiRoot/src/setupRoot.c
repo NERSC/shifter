@@ -66,6 +66,10 @@
 #include "ImageData.h"
 #include "UdiRootConfig.h"
 
+#define VOLUME_ALLOC_BLOCK 10
+#define MOUNT_ALLOC_BLOCK 24
+#define FILE_SIZE_LIMIT 5242880
+
 typedef struct _SetupRootConfig {
     char *sshPubKey;
     char *user;
@@ -76,19 +80,25 @@ typedef struct _SetupRootConfig {
     char **volumeMapFrom;
     char **volumeMapTo;
     char **volumeMapFlags;
-    size_t volumeMapCount;
+
+    size_t volumeMap_capacity;
+    char **volumeMapFrom_ptr;
+    char **volumeMapTo_ptr;
+    char **volumeMapFlags_ptr;
     int verbose;
 } SetupRootConfig;
 
 static void _usage(int exitStatus);
 static int _forkAndExec(char **args);
-static int _bindMount(const char **mountCache, const char *from, const char *to, unsigned long flags);
+static int _bindMount(char **mountCache, const char *from, const char *to, int ro);
 static int _sortFsForward(const void *, const void *);
 static int _sortFsReverse(const void *, const void *);
 int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config);
 void free_SetupRootConfig(SetupRootConfig *config);
 void fprint_SetupRootConfig(FILE *, SetupRootConfig *config);
 int getImage(ImageData *, SetupRootConfig *, UdiRootConfig *);
+int setupUserMounts(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiConfig);
+int userMountFilter(char *udiRoot, char **mountCache, char *filtered_from, char *filtered_to, char *flags);
 char **parseMounts(size_t *n_mounts);
 
 static char *_filterString(char *);
@@ -143,29 +153,37 @@ int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
                     char *from  = strtok(optarg, ":");
                     char *to    = strtok(NULL,   ":");
                     char *flags = strtok(NULL,   ":");
+                    size_t cnt = config->volumeMapFrom_ptr - config->volumeMapFrom;
 
                     if (from == NULL || to == NULL) {
                         fprintf(stderr, "ERROR: invalid format for volume map!");
                         _usage(1);
                     }
 
-                    config->volumeMapFrom = (char **) realloc(
-                        config->volumeMapFrom,
-                        sizeof(char*) * (config->volumeMapCount + 1)
-                    );
-                    config->volumeMapTo = (char **) realloc(
-                        config->volumeMapTo,
-                        sizeof(char*) * (config->volumeMapCount + 1)
-                    );
-                    config->volumeMapFlags = (char **) realloc(
-                        config->volumeMapFlags,
-                        sizeof(char*) * (config->volumeMapCount + 1)
-                    );
-
-                    config->volumeMapFrom[config->volumeMapCount] = strdup(from);
-                    config->volumeMapTo[config->volumeMapCount] = strdup(to);
-                    config->volumeMapFlags[config->volumeMapCount] = (flags != NULL ? strdup(flags) : NULL);
-                    config->volumeMapCount++;
+                    if (config->volumeMapFrom == NULL || (cnt + 2) >= config->volumeMap_capacity) {
+                        char **fromPtr = realloc(config->volumeMapFrom, config->volumeMap_capacity + VOLUME_ALLOC_BLOCK);
+                        char **toPtr = realloc(config->volumeMapTo, config->volumeMap_capacity + VOLUME_ALLOC_BLOCK);
+                        char **flagsPtr = realloc(config->volumeMapFlags, config->volumeMap_capacity + VOLUME_ALLOC_BLOCK);
+                        if (fromPtr == NULL || toPtr == NULL || flagsPtr == NULL) {
+                            fprintf(stderr, "ERROR: unable to allocate memory for volume map!\n");
+                            _usage(1);
+                        }
+                        config->volumeMapFrom = fromPtr;
+                        config->volumeMapTo = toPtr;
+                        config->volumeMapFlags = flagsPtr;
+                        config->volumeMapFrom_ptr = fromPtr + cnt;
+                        config->volumeMapTo_ptr = toPtr + cnt;
+                        config->volumeMapFlags_ptr = flagsPtr + cnt;
+                    }
+                    *(config->volumeMapFrom_ptr) = strdup(from);
+                    *(config->volumeMapTo_ptr) = strdup(to);
+                    *(config->volumeMapFlags_ptr) = (flags ? strdup(flags) : NULL);
+                    config->volumeMapFrom_ptr++;
+                    config->volumeMapTo_ptr++;
+                    config->volumeMapFlags_ptr++;
+                    *(config->volumeMapFrom_ptr) = NULL;
+                    *(config->volumeMapTo_ptr) = NULL;
+                    *(config->volumeMapFlags_ptr) = NULL;
                 }
 
                 break;
@@ -201,7 +219,7 @@ int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
 }
 
 void free_SetupRootConfig(SetupRootConfig *config) {
-    size_t idx = 0;
+    char **volPtr = NULL;
     if (config->sshPubKey != NULL) {
         free(config->sshPubKey);
     }
@@ -217,16 +235,14 @@ void free_SetupRootConfig(SetupRootConfig *config) {
     if (config->minNodeSpec != NULL) {
         free(config->minNodeSpec);
     }
-    for (idx = 0; idx < config->volumeMapCount; idx++) {
-        if (config->volumeMapFrom && config->volumeMapFrom[idx]) {
-            free(config->volumeMapFrom[idx]);
-        }
-        if (config->volumeMapTo && config->volumeMapTo[idx]) {
-            free(config->volumeMapTo[idx]);
-        }
-        if (config->volumeMapFlags && config->volumeMapFlags[idx]) {
-            free(config->volumeMapFlags[idx]);
-        }
+    for (volPtr = config->volumeMapFrom; volPtr && *volPtr; volPtr++) {
+        free(*volPtr);
+    }
+    for (volPtr = config->volumeMapTo; volPtr && *volPtr; volPtr++) {
+        free(*volPtr);
+    }
+    for (volPtr = config->volumeMapFlags; volPtr && *volPtr; volPtr++) {
+        free(*volPtr);
     }
     if (config->volumeMapFrom) {
         free(config->volumeMapFrom);
@@ -249,15 +265,13 @@ void fprint_SetupRootConfig(FILE *fp, SetupRootConfig *config) {
     fprintf(fp, "user: %s\n", (config->user ? config->user : ""));
     fprintf(fp, "uid: %d\n", config->uid);
     fprintf(fp, "minNodeSpec: %s\n", (config->minNodeSpec ? config->minNodeSpec : ""));
-    fprintf(fp, "volumeMap: %lu maps\n", config->volumeMapCount);
-    if (config->volumeMapCount > 0) {
-        size_t idx = 0;
-        for (idx = 0; idx < config->volumeMapCount; idx++) {
-            fprintf(fp, "    FROM: %s, TO: %s, FLAGS: %s\n",
-                (config->volumeMapFrom && config->volumeMapFrom[idx] ? config->volumeMapFrom[idx] : "Unknown"),
-                (config->volumeMapTo && config->volumeMapTo[idx] ? config->volumeMapTo[idx] : "Unknown"),
-                (config->volumeMapFlags && config->volumeMapFlags[idx] ? config->volumeMapFlags[idx] : "NONE")
-            );
+    fprintf(fp, "volumeMap: %lu maps\n", (config->volumeMapFrom_ptr - config->volumeMapFrom));
+    if (config->volumeMapFrom) {
+        char **from = config->volumeMapFrom;
+        char **to = config->volumeMapTo;
+        char **flags = config->volumeMapFlags;
+        for (; *from && *to; from++, to++, flags++) {
+            fprintf(fp, "    FROM: %s, TO: %s, FLAGS: %s\n", *from, *to, (*flags ? *flags : "NONE"));
         }
     }
     fprintf(fp, "***** END SetupRootConfig *****\n");
@@ -266,6 +280,180 @@ void fprint_SetupRootConfig(FILE *fp, SetupRootConfig *config) {
 int getImage(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiConfig) {
     int ret = parse_ImageData(config->imageType, config->imageIdentifier, udiConfig, imageData);
     return ret;
+}
+
+//! Bind subtree of static image into UDI rootfs
+/*!
+  Bind mount directories and large files (copy symlinks and small files) from
+  image VFS location to prepared UDI VFS location.  This functionality performs
+  same basic need as overlayfs for systems not supporting overlayfs.
+
+  \param relpath The subtree to examine
+  \param imageData Metadata about image
+  \param config configuration for this invocation of setupRoot
+  \param udiConfig global configuration for udiRoot
+  \param copyFlag if zero, use bind mounts; if one recursively copy
+ */
+int bindImageIntoUDI(
+        const char *relpath,
+        ImageData *imageData,
+        SetupRootConfig *config,
+        UdiRootConfig *udiConfig,
+        int copyFlag
+) {
+    char udiRoot[PATH_MAX];
+    char imgRoot[PATH_MAX];
+    char mntBuffer[PATH_MAX];
+    char srcBuffer[PATH_MAX];
+    DIR *subtree = NULL;
+    struct dirent *dirEntry = NULL;
+    struct stat statData;
+    char *itemname = NULL;
+
+    char **mountCache = NULL;
+    size_t n_mountCache = 0;
+
+    if (relpath == NULL || strlen(relpath) == 0 || imageData == NULL ||
+            config == NULL || udiConfig == NULL)
+    {
+        return 1;
+    }
+
+#define _MKDIR(dir, perm) if (mkdir(dir, perm) != 0) { \
+    fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", dir); \
+    goto _bindImgUDI_unclean; \
+}
+#define _BINDMOUNT(mountCache, from, to, ro) if (_bindMount(mountCache, from, to, ro) != 0) { \
+    fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from, to); \
+    goto _bindImgUDI_unclean; \
+}
+
+    memset(&statData, 0, sizeof(struct stat));
+
+    mountCache = parseMounts(&n_mountCache);
+    if (mountCache == NULL) {
+        fprintf(stderr, "FAILED to read existing mounts.\n");
+        return 1;
+    }
+    qsort(mountCache, n_mountCache, sizeof(char*), _sortFsForward);
+
+    // calculate important base paths
+    snprintf(udiRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    udiRoot[PATH_MAX-1] = 0;
+
+    if (imageData->useLoopMount) {
+        snprintf(imgRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->loopMountPoint);
+        imgRoot[PATH_MAX-1] = 0;
+    } else {
+        snprintf(imgRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, imageData->filename);
+        imgRoot[PATH_MAX-1] = 0;
+    }
+
+    // start traversing through image subtree
+    snprintf(srcBuffer, PATH_MAX, "%s/%s", imgRoot, relpath);
+    srcBuffer[PATH_MAX-1] = 0;
+    subtree = opendir(srcBuffer);
+    if (subtree == NULL) {
+        fprintf(stderr, "FAILED to opendir %s\n", srcBuffer);
+        goto _bindImgUDI_unclean;
+    }
+    while ((dirEntry = readdir(subtree)) != NULL) {
+        itemname = _filterString(dirEntry->d_name);
+        if (itemname == NULL) {
+            fprintf(stderr, "FAILED to correctly filter entry: %s\n", dirEntry->d_name);
+            goto _bindImgUDI_unclean;
+        }
+        if (strlen(itemname) == 0) {
+            free(itemname);
+            continue;
+        }
+
+        // check to see if UDI version already exists
+        snprintf(mntBuffer, PATH_MAX, "%s/%s/%s", udiRoot, relpath, itemname);
+        mntBuffer[PATH_MAX-1] = 0;
+        if (lstat(mntBuffer, &statData) == 0) {
+            // exists in UDI, skip
+            free(itemname);
+            continue;
+        }
+
+        // after filtering, lstat path to get details
+        snprintf(srcBuffer, PATH_MAX, "%s/%s/%s", imgRoot, relpath, itemname);
+        srcBuffer[PATH_MAX-1] = 0;
+        if (lstat(srcBuffer, &statData) != 0) {
+            // path didn't exist, skip
+            free(itemname);
+            continue;
+        }
+
+        // if target is a symlink, copy it
+        if (statData.st_mode & S_IFLNK) {
+            char *args[5] = { "cp", "-P", srcBuffer, mntBuffer, NULL };
+            if (_forkAndExec(args) != 0) {
+                fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
+                goto _bindImgUDI_unclean;
+            }
+            free(itemname);
+            continue;
+        }
+        if (statData.st_mode & S_IFREG) {
+            if (statData.st_size < FILE_SIZE_LIMIT) {
+                char *args[5] = { "cp", "-p", srcBuffer, mntBuffer, NULL };
+                if (_forkAndExec(args) != 0) {
+                    fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
+                    goto _bindImgUDI_unclean;
+                }
+            } else if (copyFlag == 0) {
+                _BINDMOUNT(mountCache, srcBuffer, mntBuffer, 0);
+            }
+            free(itemname);
+            continue;
+        }
+        if (statData.st_mode & S_IFDIR) {
+            if (copyFlag == 0) {
+                _BINDMOUNT(mountCache, srcBuffer, mntBuffer, 0);
+            } else {
+                char *args[5] = { "cp", "-rp", srcBuffer, mntBuffer, NULL };
+                if (_forkAndExec(args) != 0) {
+                    fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
+                    goto _bindImgUDI_unclean;
+                }
+            }
+            free(itemname);
+            continue;
+        }
+        // no other types are supported
+        free(itemname);
+    }
+    closedir(subtree);
+
+#undef _MKDIR
+#undef _BINDMOUNT
+
+    if (mountCache != NULL) {
+        char **ptr = mountCache;
+        for (ptr = mountCache; *ptr != NULL; ptr++) {
+            free(*ptr);
+        }
+        free(mountCache);
+        mountCache = NULL;
+    }
+    return 0;
+
+_bindImgUDI_unclean:
+    if (mountCache != NULL) {
+        char **ptr = mountCache;
+        for (ptr = mountCache; *ptr != NULL; ptr++) {
+            free(*ptr);
+        }
+        free(mountCache);
+        mountCache = NULL;
+    }
+    if (itemname != NULL) {
+        free(itemname);
+        itemname = NULL;
+    }
+    return 1;
 }
 
 //! Setup all required files/paths for site mods to the image
@@ -349,7 +537,7 @@ int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) 
     }
 
     // do site-defined mount activities
-    for (volPtr = udiConfig->volumes; *volPtr != NULL; volPtr++) {
+    for (volPtr = udiConfig->siteFs; *volPtr != NULL; volPtr++) {
         char to_buffer[PATH_MAX];
         snprintf(to_buffer, PATH_MAX, "%s/%s", udiRoot, *volPtr);
         to_buffer[PATH_MAX-1] = 0;
@@ -375,7 +563,7 @@ int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) 
     mntBuffer[PATH_MAX-1] = 0;
     _BINDMOUNT(mountCache, "/etc", mntBuffer, 0);
     // --> loop over everything in site etc-files and copy into image etc
-    snprintf(srcBuffer, PATH_MAX, "%s/%s", udiConfig->nodeContextPrefix, udiConfig->etcDir);
+    snprintf(srcBuffer, PATH_MAX, "%s/%s", udiConfig->nodeContextPrefix, udiConfig->etcPath);
     srcBuffer[PATH_MAX-1] = 0;
     memset(&statData, 0, sizeof(struct stat));
     if (stat(srcBuffer, &statData) == 0) {
@@ -387,7 +575,7 @@ int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) 
                 fprintf(stderr, "FAILED to allocate filename string.\n");
                 goto _prepSiteMod_unclean;
             }
-            snprintf(srcBuffer, PATH_MAX, "%s/%s/%s", udiConfig->nodeContextPrefix, udiConfig->etcDir, filename);
+            snprintf(srcBuffer, PATH_MAX, "%s/%s/%s", udiConfig->nodeContextPrefix, udiConfig->etcPath, filename);
             srcBuffer[PATH_MAX-1] = 0;
             snprintf(mntBuffer, PATH_MAX, "%s/etc/%s", udiRoot, filename);
             mntBuffer[PATH_MAX-1] = 0;
@@ -416,9 +604,60 @@ int prepareSiteModifications(SetupRootConfig *config, UdiRootConfig *udiConfig) 
         goto _prepSiteMod_unclean;
     }
 
-    // setup built-in sshd
+    // recursively copy /opt/udiImage (to allow modifications)
+    if (udiConfig->optUdiImage != NULL) {
+        snprintf(srcBuffer, PATH_MAX, "%s/%s", udiConfig->nodeContextPrefix, udiConfig->optUdiImage);
+        srcBuffer[PATH_MAX-1] = 0;
+        if (stat(srcBuffer, &statData) != 0) {
+            fprintf(stderr, "FAILED to stat udiImage source directory: %s\n", srcBuffer);
+            goto _prepSiteMod_unclean;
+        }
+        snprintf(mntBuffer, PATH_MAX, "%s/opt/udiImage", udiRoot);
+        mntBuffer[PATH_MAX-1] = 0;
+
+        if (stat(mntBuffer, &statData) != 0) {
+            fprintf(stderr, "FAILED to stat udiImage target directory: %s\n", mntBuffer);
+            goto _prepSiteMod_unclean;
+        } else {
+            char *args[5] = {"cp", "-rp", srcBuffer, mntBuffer, NULL };
+            if (_forkAndExec(args) != 0) {
+                fprintf(stderr, "FAILED to copy %s to %s.\n", srcBuffer, mntBuffer);
+                goto _prepSiteMod_unclean;
+            }
+        }
+    }
 
     // setup hostlist for current allocation
+    // format of minNodeSpec is "host1/16 host2/16" for 16 copies each of host1 and host2
+    if (config->minNodeSpec) {
+        char *minNode = strdup(config->minNodeSpec);
+        char *search = minNode;
+        char *token = NULL;
+        FILE *fp = NULL;
+        snprintf(mntBuffer, PATH_MAX, "%s/var/hostsfile", udiRoot);
+        mntBuffer[PATH_MAX-1] = 0;
+        fp = fopen(mntBuffer, "w");
+        if (fp == NULL) {
+            fprintf(stderr, "FAILED to open hostsfile for writing: %s\n", mntBuffer);
+            goto _prepSiteMod_unclean;
+        }
+        while ((token = strtok(search, "/ ")) != NULL) {
+            char *hostname = token;
+            int count = 0;
+            int i = 0;
+            search = NULL;
+            token = strtok(NULL, "/ ");
+            if (token == NULL || ((count = atoi(token)) == 0)) {
+                fprintf(stderr, "FAILED to parse minNodeSpec: %s\n", config->minNodeSpec);
+                goto _prepSiteMod_unclean;
+            }
+
+            for (i = 0; i < count; i++) {
+                fprintf(fp, "%s\n", hostname);
+            }
+        }
+        fclose(fp);
+    }
 
     //***** setup linux needs ******//
     // mount /proc
@@ -481,12 +720,173 @@ _prepSiteMod_unclean:
 }
 
 int mountImageVFS(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiConfig) {
+    struct stat statData;
+    char udiRoot[PATH_MAX];
+
+#define _MKDIR(dir, perm) if (mkdir(dir, perm) != 0) { \
+    fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", dir); \
+    goto _mountImgVfs_unclean; \
+}
+
+    snprintf(udiRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+
+    if (stat(udiRoot, &statData) != 0) {
+        _MKDIR(udiRoot, 0755);
+    }
+
+#undef _MKDIR
+
+    // mount a new rootfs to work in
+    if (mount(NULL, udiRoot, "rootfs", MS_NOSUID|MS_NOEXEC|MS_NODEV, NULL) != 0) {
+        fprintf(stderr, "FAILED to mount rootfs on %s\n", udiRoot);
+        goto _mountImgVfs_unclean;
+    }
+
+    // get our needs injected first
+    if (prepareSiteModifications(config, udiConfig) != 0) {
+        fprintf(stderr, "FAILED to properly setup site modifications\n");
+        goto _mountImgVfs_unclean;
+    }
+
+    // copy/bind mount pieces into prepared site
+    if (bindImageIntoUDI("/", imageData, config, udiConfig, 0) != 0) {
+        fprintf(stderr, "FAILED to setup \"/\" in %s\n", udiRoot);
+        goto _mountImgVfs_unclean;
+    }
+    if (bindImageIntoUDI("/var", imageData, config, udiConfig, 0) != 0) {
+        fprintf(stderr, "FAILED to setup \"/var\" in %s\n", udiRoot);
+        goto _mountImgVfs_unclean;
+    }
+    if (bindImageIntoUDI("/opt", imageData, config, udiConfig, 0) != 0) {
+        fprintf(stderr, "FAILED to setup \"/opt\" in %s\n", udiRoot);
+        goto _mountImgVfs_unclean;
+    }
+
+    // setup sshd configuration
+
+    // copy image /etc into place
+    if (bindImageIntoUDI("/etc", imageData, config, udiConfig, 1) != 0) {
+        fprintf(stderr, "FAILED to setup \"/etc\" in %s\n", udiRoot);
+        goto _mountImgVfs_unclean;
+    }
+
+    // perform user-requested bind mounts
+    if (setupUserMounts(imageData, config, udiConfig) != 0) {
+        fprintf(stderr, "FAILED to setup user-requested mounts.\n");
+        goto _mountImgVfs_unclean;
+    }
+
     return 0;
+
+_mountImgVfs_unclean:
+    // do needed unmounts
+    return 1;
 }
 
 int mountImageLoop(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiConfig) {
     return 0;
 } 
+
+int setupUserMounts(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiConfig) {
+    char **from = NULL;
+    char **to = NULL;
+    char **flags = NULL;
+    char *filtered_from = NULL;
+    char *filtered_to = NULL;
+    char from_buffer[PATH_MAX];
+    char to_buffer[PATH_MAX];
+    char udiRoot[PATH_MAX];
+    struct stat statData;
+    char **mountCache = NULL;
+    size_t n_mountCache = 0;
+    int ro = 0;
+
+    if (imageData == NULL || config == NULL || udiConfig == NULL) {
+        return 1;
+    }
+    if (config->volumeMapFrom == NULL) {
+        return 0;
+    }
+
+#define _BINDMOUNT(mountCache, from, to, ro) if (_bindMount(mountCache, from, to, ro) != 0) { \
+    fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from, to); \
+    goto _setupUserMounts_unclean; \
+}
+
+    mountCache = parseMounts(&n_mountCache);
+    if (mountCache == NULL) {
+        return 1;
+    }
+
+    snprintf(udiRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    udiRoot[PATH_MAX-1] = 0;
+
+    from = config->volumeMapFrom;
+    to = config->volumeMapTo;
+    flags = config->volumeMapFlags;
+    for (; *from && *to; from++, to++, flags++) {
+        filtered_from = _filterString(*from);
+        filtered_to =   _filterString(*to);
+        snprintf(from_buffer, PATH_MAX, "%s/%s", udiConfig->nodeContextPrefix, filtered_from);
+        from_buffer[PATH_MAX-1] = 0;
+        snprintf(to_buffer, PATH_MAX, "%s/%s", udiRoot, filtered_to);
+        to_buffer[PATH_MAX-1] = 0;
+
+        if (stat(from_buffer, &statData) != 0) {
+            fprintf(stderr, "FAILED to find user volume from: %s\n", from_buffer);
+            goto _setupUserMounts_unclean;
+        }
+        if (!S_ISDIR(statData.st_mode)) {
+            fprintf(stderr, "FAILED from location is not directory: %s\n", from_buffer);
+            goto _setupUserMounts_unclean;
+        }
+        if (stat(to_buffer, &statData) != 0) {
+            fprintf(stderr, "FAILED to find user volume to: %s\n", to_buffer);
+            goto _setupUserMounts_unclean;
+        }
+        if (!S_ISDIR(statData.st_mode)) {
+            fprintf(stderr, "FAILED to location is not directory: %s\n", to_buffer);
+            goto _setupUserMounts_unclean;
+        }
+        if (userMountFilter(udiRoot, mountCache, filtered_from, filtered_to, *flags) != 0) {
+            fprintf(stderr, "FAILED illegal user-requested mount: %s\n", filtered_to);
+            goto _setupUserMounts_unclean;
+        }
+        ro = 0;
+        if (flags && strcmp(*flags, "ro") == 0) {
+            ro = 1;
+        }
+        _BINDMOUNT(mountCache, filtered_from, filtered_to, ro);
+    }
+
+#undef _BINDMOUNT
+    if (mountCache != NULL) {
+        char **ptr = mountCache;
+        for (ptr = mountCache; *ptr != NULL; ptr++) {
+            free(*ptr);
+        }
+        free(mountCache);
+        mountCache = NULL;
+    }
+    return 0;
+
+_setupUserMounts_unclean:
+    if (filtered_from != NULL) {
+        free(filtered_from);
+    }
+    if (filtered_to != NULL) {
+        free(filtered_to);
+    }
+    if (mountCache != NULL) {
+        char **ptr = mountCache;
+        for (ptr = mountCache; *ptr != NULL; ptr++) {
+            free(*ptr);
+        }
+        free(mountCache);
+        mountCache = NULL;
+    }
+    return 1;
+}
 
 static int _forkAndExec(char **args) {
     pid_t pid = 0;
@@ -520,10 +920,9 @@ static int _forkAndExec(char **args) {
     return 1;
 }
 
-static int _bindMount(const char **mountCache, const char *from, const char *to, int ro) {
+static int _bindMount(char **mountCache, const char *from, const char *to, int ro) {
     int ret = 0;
-    int err = 0;
-    const char **ptr = mountCache;
+    char **ptr = mountCache;
     char *to_real = NULL;
     unsigned long remountFlags = MS_REMOUNT|MS_BIND|MS_NOSUID;
 
@@ -635,7 +1034,6 @@ char **parseMounts(size_t *n_mounts) {
         return NULL;
     }
     while (!feof(fp) && !ferror(fp)) {
-        char *search = NULL;
         char *ptr = NULL;
         nRead = getline(&lineBuffer, &lineBuffer_size, fp);
         if (nRead == 0 || feof(fp) || ferror(fp)) {
@@ -694,4 +1092,47 @@ static int _sortFsReverse(const void *ta, const void *tb) {
     const char *b = tb;
 
     return -1 * strcmp(a, b);
+}
+
+int userMountFilter(char *udiRoot, char **mountCache, char *filtered_from, char *filtered_to, char *flags) {
+    const char *disallowedPaths[] = {"/etc", "/opt", "/opt/udiImage", "/var", NULL};
+    const char **strPtr = NULL;
+    char mntBuffer[PATH_MAX];
+
+    char *to_real = NULL;
+    char *req_real = NULL;
+
+    if (mountCache == NULL || filtered_from == NULL || filtered_to == NULL) {
+        return 1;
+    }
+    if (flags != NULL) {
+        if (strcmp(flags, "ro") != 0) {
+            return 1;
+        }
+    }
+    req_real = realpath(filtered_to, NULL);
+    if (req_real == NULL) {
+        // error
+        goto _userMntFilter_unclean;
+    }
+    for (strPtr = disallowedPaths; *strPtr; strPtr++) {
+        snprintf(mntBuffer, PATH_MAX, "%s%s", udiRoot, *strPtr);
+        to_real = realpath(mntBuffer, NULL);
+        if (to_real == NULL) {
+            //error
+            goto _userMntFilter_unclean;
+        }
+        if (strcmp(to_real, req_real) == 0) {
+            // error
+            goto _userMntFilter_unclean;
+        }
+    }
+    for (strPtr = mountCache; 
+
+    return 0;
+_userMntFilter_unclean:
+    if (to_real != NULL) {
+        free(to_real);
+    }
+    return 1;
 }

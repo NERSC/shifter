@@ -71,7 +71,7 @@ typedef struct _UdiRootConfig {
     char *udiRootPath;
     char *sitePreMountHook;
     char *sitePostMountHook;
-    char *sshPath;
+    char *optUdiImage;
     char *etcPath;
     char *kmodBasePath;
     char *kmodPath;
