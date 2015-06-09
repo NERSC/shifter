@@ -145,12 +145,12 @@ int generateSshKey() {
     return 0;
 }
 
-int read_config(const char *filename) {
+int read_config(const char *filename, spank_context_t context) {
 
-    config = malloc(sizeof(UdiRootConfig));
-    memset(config, 0, sizeof(UdiRootConfig));
+    udiConfig = malloc(sizeof(UdiRootConfig));
+    memset(udiConfig, 0, sizeof(UdiRootConfig));
 
-    if (parse_UdiRootConfig(filename, &config, 0) != 0) {
+    if (parse_UdiRootConfig(filename, udiConfig, 0) != 0) {
         fprintf(stderr, "FAILED to read udiRoot configuration file!\n");
         return 1;
     }
@@ -257,9 +257,9 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
 }
 
 int slurm_spank_exit(spank_t sp, int argc, char **argv) {
-    if (config != NULL) {
-        free_UdiRootConfig(config);
-        config = NULL;
+    if (udiConfig != NULL) {
+        free_UdiRootConfig(udiConfig);
+        udiConfig = NULL;
     }
     return ESPANK_SUCCESS;
 }
@@ -331,6 +331,8 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     char *nodelist = NULL;
     size_t tasksPerNode = 0;
 
+    spank_context_t context = spank_context();
+
     for (idx = 0; idx < argc; ++idx) {
         if (strncmp("shifter_config=", argv[idx], 15) == 0) {
             snprintf(config_file, 1024, "%s", (argv[idx] + 15));
@@ -342,7 +344,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         slurm_debug("shifter_config not set, cannot use shifter");
         return rc;
     }
-    if (read_config(config_file) != 0) {
+    if (read_config(config_file, context) != 0) {
         slurm_error("Failed to parse shifter config. Cannot use shifter.");
         return rc;
     }
@@ -505,6 +507,8 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     char job_str[128];
     char user_str[128];
     char group_str[128];
+    spank_context_t context = spank_context();
+
     for (idx = 0; idx < argc; ++idx) {
         if (strncmp("shifter_config=", argv[idx], 15) == 0) {
             snprintf(config_file, 1024, "%s", (argv[idx] + 15));
@@ -516,7 +520,7 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
         slurm_debug("shifter_config not set, cannot use shifter");
         return rc;
     }
-    if (read_config(config_file) != 0) {
+    if (read_config(config_file, context) != 0) {
         slurm_error("Failed to parse shifter config. Cannot use shifter.");
         return rc;
     }

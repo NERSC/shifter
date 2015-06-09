@@ -315,7 +315,7 @@ int main(int argc, char **argv) {
             args[2] = opts.udiRoot_value;
             args[3] = NULL;
             execv(args[0], args);
-            exit(1); //should never get here
+            exit(1); /*should never get here */
         } else if (child < 0) {
             fprintf(stderr, "Failed to call setupRoot.sh\n");
             exit(1);

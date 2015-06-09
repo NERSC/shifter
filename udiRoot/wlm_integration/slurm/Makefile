@@ -9,7 +9,7 @@ include ../../config.mk
 -include ../../config.inc
 
 ## configuration
-CFLAGS=-O2 -Wall -I$(SLURM_ROOT)/include
+CFLAGS=-O2 -Wall -I$(SLURM_ROOT)/include -I../../src
 LDFLAGS=
 
 all: shifter.so
