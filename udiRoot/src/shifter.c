@@ -53,11 +53,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <limits.h>
+#include <ctype.h>
+#include <pwd.h>
+#include <grp.h>
+#include <getopt.h>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-#include <ctype.h>
-#include <grp.h>
 
 #include "UdiRootConfig.h"
 #include "shifter_core.h"
@@ -77,6 +80,7 @@ struct options {
     char **volumeMapFrom;
     char **volumeMapTo;
     char **volumeMapFlags;
+    int verbose;
 
     /* state variables only used at parse time */
     size_t volumeMap_capacity;
@@ -87,6 +91,7 @@ struct options {
 
 static void _usage(int);
 static void _version(void);
+static char *_filterString(char *input);
 char **copyenv(void);
 int parse_options(int argc, char **argv, struct options *opts);
 int fprint_options(FILE *, struct options *);
@@ -116,19 +121,19 @@ int main(int argc, char **argv) {
     /* destroy this environment */
     clearenv();
 
-    if (parse_UdiRootConfig(CONFIG_FILE) != 0) {
+    if (parse_UdiRootConfig(CONFIG_FILE, &udiConfig, 0) != 0) {
         fprintf(stderr, "FAILED to parse udiRoot configuration.\n");
         exit(1);
     }
 
     /* parse config file and command line options */
-    if (parse_config(argc, argv, &opts) != 0) {
+    if (parse_options(argc, argv, &opts) != 0) {
         fprintf(stderr, "FAILED to parse command line arguments.\n");
         exit(1);
     }
 
     snprintf(udiRoot, PATH_MAX, "%s%s", udiConfig.nodeContextPrefix, udiConfig.udiMountPoint);
-    udiRoot[PATH_MAX-1];
+    udiRoot[PATH_MAX-1] = 0;
 
 
     /* figure out who we are and who we want to be */
@@ -176,7 +181,7 @@ int main(int argc, char **argv) {
     snprintf(exec, PATH_MAX, "%s%s/sbin/setupRoot", udiConfig.nodeContextPrefix, udiConfig.udiMountPoint);
     exec[PATH_MAX-1] = 0;
     {
-        char *args[] = {exec, config.imageType, config.imageIdentifier, NULL};
+        char *args[] = {exec, opts.imageType, opts.imageIdentifier, NULL};
         if (forkAndExecv(args) != 0) {
             fprintf(stderr, "FAILED to run setupRoot!\n");
             exit(1);
@@ -223,23 +228,17 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    arg = opts.args;
-    while (*arg != NULL) {
-        printf("arg: %s\n", *arg);
-        arg++;
-    }
     execve(opts.args[0], opts.args, environ_copy);
     return 0;
 }
 
-int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
+int parse_options(int argc, char **argv, struct options *config) {
     int opt = 0;
     static struct option long_options[] = {
         {"help", 0, 0, 'h'},
         {"volume", 1, 0, 'V'},
         {"verbose", 0, 0, 'v'},
         {"user", 0, 0, 0},
-        {"group", 0, 0, 0},
         {0, 0, 0, 0}
     };
 
@@ -254,14 +253,25 @@ int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
             case 0:
                 {
                     if (strcmp(long_options[longopt_index].name, "user") == 0) {
+                        struct passwd *pwd = NULL;
                         if (optarg == NULL) {
                             fprintf(stderr, "Must specify user with --user flag.\n");
                             _usage(1);
                         }
-                    } else if (strcmp(long_options[longopt_index].name, "group") == 0) {
-                        if (optarg == NULL) {
-                            fprintf(stderr, "Must specify group with --group flag.\n");
-                            _usage(1);
+                        pwd = getpwnam(optarg);
+                        if (pwd != NULL) {
+                            config->tgtUid = pwd->pw_uid;
+                            config->tgtGid = pwd->pw_gid;
+                        } else {
+                            uid_t uid = atoi(optarg);
+                            if (uid != 0) {
+                                pwd = getpwuid(uid);
+                                config->tgtUid = pwd->pw_uid;
+                                config->tgtGid = pwd->pw_gid;
+                            } else {
+                                fprintf(stderr, "Cannot run as root.\n");
+                                _usage(1);
+                            }
                         }
                     }
                 }
@@ -315,16 +325,40 @@ int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
     }
 
     int remaining = argc - optind;
-    if (remaining != 2) {
-        fprintf(stderr, "Must specify image type and image identifier\n");
+    if (remaining < 2) {
+        fprintf(stderr, "Must specify image descriptor followed by command and arguments.\n");
         _usage(1);
     }
-    config->imageType = _filterString(argv[optind++]);
-    config->imageIdentifier = _filterString(argv[optind++]);
+    {
+        char **argsPtr = NULL;
+        size_t argsSize = NULL;
+
+        char *ptr = strchr(argv[optind], ':');
+        if (ptr == NULL) {
+            fprintf(stderr, "Incorrect format for image identifier\n");
+            _usage(1);
+        }
+        *ptr++ = 0;
+        config->imageType = _filterString(argv[optind]);
+        config->imageIdentifier = _filterString(ptr);
+        optind++;
+
+        argsSize = (sizeof(char*) * ((argc - optind) + 1));
+        config->args = malloc(argsSize);
+        memset(config->args, 0, argsSize);
+        argsPtr = config->args;
+        for ( ; optind < argc ; optind++) {
+            *argsPtr = strdup(argv[optind]);
+            argsPtr++;
+        }
+        *argsPtr = NULL;
+    }
+
     return 0;
 }
 
 static void _usage(int status) {
+    exit(status);
 }
 
 static void _version(void) {
@@ -348,4 +382,27 @@ char **copyenv(void) {
     }
     *wptr = NULL;
     return outenv;
+}
+
+static char *_filterString(char *input) {
+    ssize_t len = 0;
+    char *ret = NULL;
+    char *rptr = NULL;
+    char *wptr = NULL;
+    if (input == NULL) return NULL;
+
+    len = strlen(input) + 1;
+    ret = (char *) malloc(sizeof(char) * len);
+    if (ret == NULL) return NULL;
+
+    rptr = input;
+    wptr = ret;
+    while (wptr - ret < len && *rptr != 0) {
+        if (isalnum(*rptr) || *rptr == '_' || *rptr == ':' || *rptr == '.' || *rptr == '+' || *rptr == '-') {
+            *wptr++ = *rptr;
+        }
+        rptr++;
+    }
+    *wptr = 0;
+    return ret;
 }

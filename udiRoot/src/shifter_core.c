@@ -777,37 +777,6 @@ int forkAndExecv(char **args) {
     exit(1);
     return 1;
 }
-int forkAndExecvp(char **args) {
-    pid_t pid = 0;
-
-    pid = fork();
-    if (pid < 0) {
-        fprintf(stderr, "FAILED to fork! Exiting.\n");
-        return 1;
-    }
-    if (pid > 0) {
-        /* this is the parent */
-        int status = 0;
-        do {
-            pid_t ret = waitpid(pid, &status, 0);
-            if (ret != pid) {
-                fprintf(stderr, "This might be impossible: forked by couldn't wait, FAIL!\n");
-                return 1;
-            }
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-        if (WIFEXITED(status)) {
-            status = WEXITSTATUS(status);
-        } else {
-            status = 1;
-        }
-        return status;
-    }
-    /* this is the child */
-    execvp(args[0], args);
-    fprintf(stderr, "FAILED to execvp! Exiting.\n");
-    exit(1);
-    return 1;
-}
 
 static int _bindMount(char **mountCache, const char *from, const char *to, int ro) {
     int ret = 0;
