@@ -21,12 +21,8 @@ define CLEANFILES
     for file in $(1); do echo $$file; done
 endef
 
-all: udiRootEnter setupRoot unsetupRoot setupRoot.sh unsetupRoot.sh shiftsh shiftrun getDockerImage.pl
+all: udiRootEnter setupRoot unsetupRoot shifter shiftsh shiftrun getDockerImage.pl
 
-setupRoot.sh: setupRoot.sh.in
-	cat $< | $(SED_MODIFY) > $@
-unsetupRoot.sh: unsetupRoot.sh.in
-	cat $< | $(SED_MODIFY) > $@
 getDockerImage.pl: getDockerImage.pl.in
 	cat $< | $(SED_MODIFY) > $@
 shiftsh: shiftsh.in
@@ -36,13 +32,11 @@ shiftrun: shiftrun.in
 config.h: config.h.in
 	cat $< | $(SED_MODIFY) > $@
 
-udiRootEnter: udiRootEnter.c
-	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" $< -o $@
-distributeKeys: distributeKeys.c
-	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) $< -o $@
 setupRoot: setupRoot.c UdiRootConfig.c utility.c ImageData.c config.h shifter_core.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) -DNO_ROOT_OWN_CHECK $^ -o $@
 unsetupRoot: unsetupRoot.c UdiRootConfig.c utility.c config.h shifter_core.c
+	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) -DNO_ROOT_OWN_CHECK $^ -o $@
+shifter: shifter.c UdiRootConfig.c utility.c config.h shifter_core.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) -DNO_ROOT_OWN_CHECK $^ -o $@
 
 
@@ -51,14 +45,13 @@ install: all
 	mkdir -m 755 -p $(DESTDIR)/sbin
 	mkdir -m 755 -p $(DESTDIR)/bin
 	ln -s getDockerImage.pl docker
-	$(INSTALL) --owner=root --group=root --mode=555  setupRoot.sh $(DESTDIR)/sbin/setupRoot.sh
 	$(INSTALL) --owner=root --group=root --mode=555  setupRoot $(DESTDIR)/sbin/setupRoot
-	$(INSTALL) --owner=root --group=root --mode=555  unsetupRoot.sh $(DESTDIR)/sbin/unsetupRoot.sh
+	$(INSTALL) --owner=root --group=root --mode=555  unsetupRoot $(DESTDIR)/sbin/unsetupRoot
+	$(INSTALL) --owner=root --group=root --mode=4555  shifter $(DESTDIR)/bin/shifter
 	$(INSTALL) --owner=root --group=root --mode=555  getDockerImage.pl $(DESTDIR)/bin/getDockerImage.pl
-	$(INSTALL) --owner=root --group=root --mode=4555  udiRootEnter $(DESTDIR)/sbin/udiRootEnter
 	$(INSTALL) --owner=root --group=root --mode=555  shiftsh $(DESTDIR)/bin/shiftsh
 	$(INSTALL) --owner=root --group=root --mode=555  shiftrun $(DESTDIR)/bin/shiftrun
 	$(INSTALL) --owner=root --group=root docker $(DESTDIR)/bin/docker
 
-clean: setupRoot unsetupRoot setupRoot.sh unsetupRoot.sh getDockerImage.pl udiRootEnter shiftsh shiftrun config.h
+clean: setupRoot unsetupRoot shifter setupRoot.sh unsetupRoot.sh getDockerImage.pl shiftsh shiftrun config.h
 	for file in $^; do if [[ -e "$$file" ]]; then rm "$$file"; fi; done
