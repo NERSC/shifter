@@ -176,9 +176,13 @@ int main(int argc, char **argv) {
         perror("Failed to unshare the filesystem namespace.");
         exit(1);
     }
+    if (setresuid(0, 0, 0) != 0) {
+        fprintf(stderr, "Failed to setuid to %d\n", 0);
+        exit(1);
+    }
 
     /* TODO: run setupRoot here */
-    snprintf(exec, PATH_MAX, "%s%s/sbin/setupRoot", udiConfig.nodeContextPrefix, udiConfig.udiMountPoint);
+    snprintf(exec, PATH_MAX, "%s%s/sbin/setupRoot", udiConfig.nodeContextPrefix, udiConfig.udiRootPath);
     exec[PATH_MAX-1] = 0;
     {
         char *args[] = {exec, opts.imageType, opts.imageIdentifier, NULL};
@@ -238,7 +242,7 @@ int parse_options(int argc, char **argv, struct options *config) {
         {"help", 0, 0, 'h'},
         {"volume", 1, 0, 'V'},
         {"verbose", 0, 0, 'v'},
-        {"user", 0, 0, 0},
+        {"user", 1, 0, 0},
         {0, 0, 0, 0}
     };
 

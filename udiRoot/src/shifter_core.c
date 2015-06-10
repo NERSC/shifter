@@ -475,6 +475,11 @@ int prepareSiteModifications(const char *minNodeSpec, UdiRootConfig *udiConfig) 
     mntBuffer[PATH_MAX-1] = 0;
     _BINDMOUNT(mountCache, "/dev", mntBuffer, 0);
 
+    /* mount /tmp */
+    snprintf(mntBuffer, PATH_MAX, "%s/tmp", udiRoot);
+    mntBuffer[PATH_MAX-1] = 0;
+    _BINDMOUNT(mountCache, "/tmp", mntBuffer, 0);
+
     /* mount any mount points under /dev */
     for (mntPtr = mountCache; *mntPtr != NULL; mntPtr++) {
         if (strncmp(*mntPtr, "/dev/", 4) == 0) {
@@ -524,8 +529,9 @@ int mountImageVFS(ImageData *imageData, const char *minNodeSpec, UdiRootConfig *
     }
 
     /* mount a new rootfs to work in */
-    if (mount(NULL, udiRoot, "rootfs", MS_NOSUID|MS_NODEV, NULL) != 0) {
+    if (mount(NULL, udiRoot, "tmpfs", MS_NOSUID|MS_NODEV, NULL) != 0) {
         fprintf(stderr, "FAILED to mount rootfs on %s\n", udiRoot);
+        perror("   --- REASON: ");
         goto _mountImgVfs_unclean;
     }
 
@@ -589,7 +595,10 @@ int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig) {
     snprintf(imagePath, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, imageData->filename);
     imagePath[PATH_MAX-1] = 0;
 
-    LOADKMOD("loop", "drivers/block/loop.ko");
+
+    if (stat("/dev/loop0", &statData) != 0) {
+        LOADKMOD("loop", "drivers/block/loop.ko");
+    }
     if (imageData->format == FORMAT_EXT4) {
         LOADKMOD("mbcache", "fs/mbcache.ko");
         LOADKMOD("jbd2", "fs/jbd2/jbd2.ko");
