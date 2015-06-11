@@ -14,15 +14,21 @@ KVER := $(shell uname -r | sed 's|\(.*\)-cray_.*|\1|g' )
 CFLAGS=-O2 -Wall
 LDFLAGS=
 
-all: modules.tar
+all: modules_c.tar modules_s.tar
 
-modules.tar:
-	./build_kernel_modules.sh $(CRAY_NETTYPE) $(CRAY_NODETYPE)
+modules_c.tar:
+	./build_kernel_modules.sh $(CRAY_NETTYPE) c
+	mv modules.tar modules_c.tar
+modules_s.tar:
+	./build_kernel_modules.sh $(CRAY_NETTYPE) s
+	mv modules.tar modules_s.tar
 
 install: all
 	mkdir -p $(DESTDIR)/kmod/$(KVER)-cray_$(CRAY_NETTYPE)_$(CRAY_NODETYPE)
-	tar xvf modules.tar -C $(DESTDIR)/kmod/$(KVER)-cray_$(CRAY_NETTYPE)_$(CRAY_NODETYPE)
+	tar xvf modules_c.tar -C $(DESTDIR)/kmod/$(KVER)-cray_$(CRAY_NETTYPE)_c
+	tar xvf modules_s.tar -C $(DESTDIR)/kmod/$(KVER)-cray_$(CRAY_NETTYPE)_s
 	chmod -R a+rX $(DESTDIR)/kmod
 
 clean:
-	if [ -a modules.tar ]; then $(RM) modules.tar; fi
+	if [ -a modules_c.tar ]; then $(RM) modules_c.tar; fi
+	if [ -a modules_s.tar ]; then $(RM) modules_s.tar; fi
