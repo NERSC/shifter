@@ -53,5 +53,5 @@ install: all
 	$(INSTALL) --owner=root --group=root --mode=555  shiftrun $(DESTDIR)/bin/shiftrun
 	$(INSTALL) --owner=root --group=root docker $(DESTDIR)/bin/docker
 
-clean: setupRoot unsetupRoot shifter setupRoot.sh unsetupRoot.sh getDockerImage.pl shiftsh shiftrun config.h
+clean: setupRoot unsetupRoot shifter getDockerImage.pl shiftsh shiftrun config.h
 	for file in $^; do if [[ -e "$$file" ]]; then rm "$$file"; fi; done
