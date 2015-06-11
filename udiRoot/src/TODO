@@ -1,0 +1,14 @@
+Douglas Jacobsen
+2015/06/11
+
+* Need to finish adding config validation support to ensure setupRoot isn't
+  getting tricked into handing out privilege (i.e. check for safe file
+  ownership, write perms etc). Would be nice to have a better way.
+
+* Add sshd configuration to shifter_core/prepareSiteModifications()
+
+* Rely on recent versions of mount understanding autoclear functionality for
+  loop device management.  OK in CLE 5.2, may need to add more explicit loop
+  device management for other systems.
+
+* Add unittest
