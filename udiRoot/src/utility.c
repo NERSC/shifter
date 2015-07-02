@@ -57,6 +57,7 @@ int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assig
     int multiline = 0;
 
     char *key = NULL;
+    char *key_alloc = NULL;
     char *value = NULL;
     char *tValue = NULL;
     size_t valueLen = 0;
@@ -75,7 +76,8 @@ int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assig
             ptr = strchr(linePtr, delim);
             if (ptr == NULL) continue;
             *ptr++ = 0;
-            key = shifter_trim(strdup(linePtr));
+            key_alloc = strdup(linePtr);
+            key = shifter_trim(key_alloc);
             if (key == NULL) {
                 goto _parseConfig_errCleanup;
             }
@@ -109,10 +111,11 @@ int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assig
             if (value != NULL) {
                 free(value);
             }
-            if (key != NULL) {
-                free(key);
+            if (key_alloc != NULL) {
+                free(key_alloc);
             }
             key = NULL;
+            key_alloc = NULL;
             value = NULL;
             valueLen = 0;
         }
@@ -128,8 +131,8 @@ _parseConfig_errCleanup:
     if (value != NULL) {
         free(value);
     }
-    if (key != NULL) {
-        free(value);
+    if (key_alloc != NULL) {
+        free(key_alloc);
     }
     return 1;
 }

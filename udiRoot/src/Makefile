@@ -21,7 +21,7 @@ define CLEANFILES
     for file in $(1); do echo $$file; done
 endef
 
-all: udiRootEnter setupRoot unsetupRoot shifter shiftsh shiftrun getDockerImage.pl
+all: setupRoot unsetupRoot shifter shiftsh shiftrun getDockerImage.pl
 
 getDockerImage.pl: getDockerImage.pl.in
 	cat $< | $(SED_MODIFY) > $@
