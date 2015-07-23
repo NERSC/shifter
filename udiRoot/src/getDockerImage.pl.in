@@ -45,11 +45,57 @@ use POSIX qw(strftime);
 
 use strict;
 use warnings;
+my %config;
+
+sub parseUdiRootConfig {
+    my $config_file = shift;
+    if ( ! -e $config_file ) {
+        return 1;
+    }
+    open(my $fd, "<", $config_file) or die("Failed to open $config_file");
+
+    my $multiline = 0;
+    my $key = undef;
+    my $value = "";
+    while (<$fd>) {
+        my $line = $_;
+        my $tvalue = undef;
+        $line =~ s/\s+$//g;
+        $line =~ s/^\s+//g;
+
+        if ($multiline == 0) {
+            ($key,$tvalue) = split(/=/, $line, 2);
+            $key =~ s/\s+$//g;
+            $tvalue =~ s/^\s+//g;
+        } else {
+            $tvalue = $line;
+            $multiline = 0;
+        }
+        if ($tvalue =~ /\\$/) {
+            chop($tvalue);
+            $multiline = 1;
+        }
+        $tvalue =~ s/\s+$//g;
+        $value .= " " . $tvalue;
+        if ($multiline == 0) {
+            $value =~ s/^\s+//g;
+            my @values = split(/ /, $value);
+            $config{$key} = \@values;
+            $value = "";
+        }
+    }
+    return 0;
+}
 
 my $config_file = "@@@CONFIG_FILE@@@";
-my $dockergw_host = `. $config_file; echo \$dockergw_host`;
-my $dockergw_port = `. $config_file; echo \$dockergw_port`;
-my $batchType = `. $config_file; echo \$batchType`;
+parseUdiRootConfig($config_file);
+
+my $imagegw_host = undef;
+my $imagegw_port = undef;
+if (grep(/imageGateway/, keys(%config))) {
+    ($imagegw_host, $imagegw_port) = split(/:/, $config{"imageGateway"}->[0], 2);
+}
+my $batchType = $config{"batchType"};
 
 my $ret = 0;
 
@@ -126,10 +172,11 @@ if (!defined($system)) {
 }
 
 my $socket = new IO::Socket::INET (
-    PeerHost => $dockergw_host,
-    PeerPort => $dockergw_port,
+    PeerHost => $imagegw_host,
+    PeerPort => $imagegw_port,
     Proto => 'tcp',
-) or die("Failed to connect to dockergw");
+) or die("Failed to connect to imagegw");
+print "about to send\"$image $system$extra\"\n";
 $socket->send("$image $system$extra\n");
 my @imageEnv;
 my $entryPoint = undef;
@@ -141,6 +188,7 @@ my $displayedPull = 0;
 my @images;
 while (<$socket>) {
     my $data = $_;
+    print $data;
     $data =~ s/^s\+//g;
     $data =~ s/\s+$//g;
     if ($data =~ /^ID:\s+(\S+)$/) {
