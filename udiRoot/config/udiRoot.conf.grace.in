@@ -1,19 +1,18 @@
-if [[ -z "$context" ]]; then
-    context=""
-fi
+nodeContextPrefix=
 udiMount=/var/udiMount
 loopMount=/var/loopUdiMount
-chosPath=/scratch/chos
-dockerPath=/scratch/scratchdirs/craydock/docker
-udiRootPath="$context/@@@PREFIX@@@"
-udiRootIncludeFile="$context/@@@INCLUDE_FILE@@@"
-mapPath=$udiRootPath/fsMap.conf
-sshPath=$udiRootPath/sshd
-etcDir=$udiRootPath/etc_files
-kmodDir=$udiRootPath/kmod/$( uname -r )
-kmodCache=/tmp/udiRootLoadedModules.txt
-siteFs="scratch global/u1 global/u2 global/project global/syscom global/common global/scratch2 var/opt/cray/alps/spool"
-dockergw_host=128.55.50.83
-dockergw_port=7777
+imagePath=/scratch/scratchdirs/craydock/docker
+udiRootPath=@@@PREFIX@@@
+sitePreMountHook=@@@CONFIG_DIR@@@/premount.sh
+sitePostMountHook=@@@CONFIG_DIR@@@/postmount.sh
+siteFs=/scratch \
+       /global/u1 /global/u2 /global/syscom /global/common \
+       /global/scratch2 /global/project /global/projectb \
+       /global/dna /var/opt/cray/alps/spool
+optUdiImage=@@@PREFIX@@@/sshd
+etcPath=@@@PREFIX@@@/etc_files
+kmodBasePath=@@@PREFIX@@@/kmod
+kmodCacheFile=/tmp/udiRootLoadedModules.txt
 batchType=torque
 system=@@@SYSTEM@@@
+imageGateway=128.55.50.83:7777
