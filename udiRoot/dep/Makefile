@@ -13,15 +13,15 @@ include ../config.mk
 CFLAGS=-O2 -Wall
 LDFLAGS=
 
-all: udiRoot_sshd.tar
+all: udiRoot_dep.tar
 
-udiRoot_sshd.tar:
+udiRoot_dep.tar:
 	./build.sh
 
 install: all
-	mkdir -p $(DESTDIR)/sshd
-	tar xf udiRoot_sshd.tar -C $(DESTDIR)/sshd --strip-components=2
-	chmod -R u+rX,go-rwx $(DESTDIR)/sshd
+	mkdir -p $(DESTDIR)/deps
+	tar xf udiRoot_dep.tar -C $(DESTDIR)/deps --strip-components=2
+	chmod -R u+rX,go-rwx $(DESTDIR)/deps
 
 clean:
-	if [ -a udiRoot_sshd.tar ]; then $(RM) udiRoot_sshd.tar; fi
+	if [ -a udiRoot_dep.tar ]; then $(RM) udiRoot_dep.tar; fi
