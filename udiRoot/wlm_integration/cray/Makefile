@@ -12,7 +12,13 @@ SED_UPDATE=sed 's|@@@SYSTEM@@@|$(SYSTEM)|g' |\
            sed 's|@@@PREFIX@@@|$(PREFIX)|g' |\
            sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g'
 
-all: udiRoot-epilogue udiRoot-prologue udiRoot-nhc-plugin
+
+ALL=udiRoot-nhc-plugin
+ifneq ($(IS_NATIVE_SLURM),1)
+    ALL += udiRoot-epilogue udiRoot-prologue
+endif
+
+all: $(ALL)
 
 udiRoot-epilogue: udiRoot-epilogue.in
 	cat $< | $(SED_UPDATE) > $@
@@ -26,9 +32,11 @@ udiRoot-nhc-plugin:udiRoot-nhc-plugin.in
 
 install: all
 	mkdir -p $(DESTDIR)/libexec
-	$(INSTALL) --owner=root --group=root --mode=555  udiRoot-prologue $(DESTDIR)/libexec/udiRoot-prologue
-	$(INSTALL) --owner=root --group=root --mode=555  udiRoot-epilogue $(DESTDIR)/libexec/udiRoot-epilogue
 	$(INSTALL) --owner=root --group=root --mode=555  udiRoot-nhc-plugin $(DESTDIR)/libexec/udiRoot-nhc-plugin
+	ifneq ($(IS_NATIVE_SLURM),1)
+		$(INSTALL) --owner=root --group=root --mode=555  udiRoot-prologue $(DESTDIR)/libexec/udiRoot-prologue
+		$(INSTALL) --owner=root --group=root --mode=555  udiRoot-epilogue $(DESTDIR)/libexec/udiRoot-epilogue
+	endif
 
 clean:
 	if [ -a udiRoot-prologue ]; then $(RM) udiRoot-prologue; fi
