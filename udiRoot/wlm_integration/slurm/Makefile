@@ -12,7 +12,22 @@ include ../../config.mk
 CFLAGS=-O2 -Wall -I$(SLURM_ROOT)/include -I../../src
 LDFLAGS=
 
-all: shifter.so
+ALL=shifter.so
+ifeq ($(IS_NATIVE_SLURM),1)
+    ALL += udiRoot-epilogue udiRoot-prologue
+endif
+
+all: $(ALL)
+
+SED_UPDATE=sed 's|@@@SYSTEM@@@|$(SYSTEM)|g' |\
+           sed 's|@@@PREFIX@@@|$(PREFIX)|g' |\
+           sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g'
+
+udiRoot-epilogue: udiRoot-epilogue.in
+	cat $< | $(SED_UPDATE) > $@
+
+udiRoot-prologue: udiRoot-prologue.in
+	cat $< | $(SED_UPDATE) > $@
 
 shifter.so: spank_shifter.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" \
@@ -22,6 +37,10 @@ shifter.so: spank_shifter.c
 install: all
 	mkdir -m 755 -p $(DESTDIR)/shared/slurm
 	$(INSTALL) --owner=root --group=root --mode=555  shifter.so $(DESTDIR)/shared/slurm/shifter.so
+	ifeq ($(IS_NATIVE_SLURM),1)
+		$(INSTALL) --owner=root --group=root --mode=555 udiRoot-epilogue $(DESTDIR)/libexec/udiRoot-epilogue
+		$(INSTALL) --owner=root --group=root --mode=555 udiRoot-prologue $(DESTDIR)/libexec/udiRoot-prologue
+	endif
 
 clean: shifter.so
 	for file in $^; do if [[ -e "$$file" ]]; then rm "$$file"; fi; done
