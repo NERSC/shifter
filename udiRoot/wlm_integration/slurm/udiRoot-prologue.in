@@ -1,0 +1,172 @@
+#!/bin/bash
+## Shifter, Copyright (c) 2015, The Regents of the University of California,
+## through Lawrence Berkeley National Laboratory (subject to receipt of any
+## required approvals from the U.S. Dept. of Energy).  All rights reserved.
+##
+## Redistribution and use in source and binary forms, with or without
+## modification, are permitted provided that the following conditions are met:
+##  1. Redistributions of source code must retain the above copyright notice,
+##     this list of conditions and the following disclaimer.
+##  2. Redistributions in binary form must reproduce the above copyright notice,
+##     this list of conditions and the following disclaimer in the documentation
+##     and/or other materials provided with the distribution.
+##  3. Neither the name of the University of California, Lawrence Berkeley
+##     National Laboratory, U.S. Dept. of Energy nor the names of its
+##     contributors may be used to endorse or promote products derived from this
+##     software without specific prior written permission.
+##
+## THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+## AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+## IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+## ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+## LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+## CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+## SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+## INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+## CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+## ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+## POSSIBILITY OF SUCH DAMAGE.
+##
+## You are under no obligation whatsoever to provide any bug fixes, patches, or
+## upgrades to the features, functionality or performance of the source code
+## ("Enhancements") to anyone; however, if you choose to make your Enhancements
+## available either publicly, or directly to Lawrence Berkeley National
+## Laboratory, without imposing a separate written license agreement for such
+## Enhancements, then you hereby grant the following license: a  non-exclusive,
+## royalty-free perpetual license to install, use, modify, prepare derivative
+## works, incorporate into other computer software, distribute, and sublicense
+## such enhancements or derivative works thereof, in binary and source code
+## form.
+
+jobIdRaw="$1"
+jobId=""
+user="$2"
+userUid=""
+udiRootType="$3"
+udiRootValue="$4"
+shift 4
+
+nodeContext="/dsl"
+
+volumes=""
+image=""
+nodelist=""
+tasksPerNode=""
+while getopts ":v:m:n:N:" opt; do
+    case "${opt}" in
+        v)
+            volumes="${volumes}|${OPTARG}"
+            ;;
+        m)
+            mode="${OPTARG}"
+            if [[ -n "$mode" && "$mode" == "local" ]]; then
+                nodeContext="";
+            fi
+            ;;
+        n)
+            nodelist="${OPTARG}"
+            ;;
+        N)
+            tasksPerNode="${OPTARG}"
+            ;;
+        \?)
+            echo "Invalid option: -${OPTARG}" >&2
+            exit 1
+            ;;
+        :)
+            echo "Option -${OPTARG} requires an argument" >&2
+            exit 1
+            ;;
+    esac
+done
+if [[ -n "${volumes}" ]]; then
+    volumes="${volumes:1}" ## remove leading |
+fi
+context="$nodeContext"
+export context
+
+if [[ -z "$context" ]]; then
+    export NOCONTEXT="true"
+fi
+
+udiRootSetupPath=@@@PREFIX@@@
+exit_code=0
+
+die() {
+    local msg
+    msg="$1"
+    echo "$msg" 1>&2
+    exit 1
+}
+
+[[ -n "$jobIdRaw" ]] || die "Job ID is undefined"
+[[ -n "$user" ]]  || die "user is undefined"
+[[ -n "$udiRootType" ]] || die "udi image type is undefined"
+[[ -n "$udiRootValue" ]] || die "udi image value is undefined"
+
+jobId=$( echo "$jobIdRaw" | awk -F. '{print $1}' )
+userUid=$( id -u "$user" )
+
+[[ -n "$jobId" ]] || die "Job ID is undefined"
+[[ -n "$userUid" ]] || die "user Uid is unknown"
+
+jobEnv=()
+entrypoint=""
+if [[ "$udiRootType" = "DOCKER" ]]; then
+    data=$($udiRootSetupPath/bin/getDockerImage.pl -quiet lookup "$udiRootValue")
+    ret=$?
+    IFS=$'\n'
+    for item in $data; do
+        unset IFS
+        if [[ "$item" == "ENV:"* ]]; then
+            envItem=$(echo "$item" | cut -c 5-)
+            jobEnv+=($envItem)
+        elif [[ "$item" == "ENTRY:"* ]]; then
+            entrypoint=$(echo "$item" | cut -c 7-)
+        else
+            image=$item
+        fi
+    done
+    ret=$?
+    if [[ -z "$image" || $ret -ne 0 ]]; then
+        echo "Failed to get udi image: $UDI_ROOT_VALUE"
+        exit 1
+    else
+        udiRootValue=$image
+    fi
+fi
+
+datadir="/var/run/udiRoot_jobs/$user/$jobId"
+mkdir -p "$datadir"
+chmod a+x /var/run/udiRoot_jobs
+chmod a+x "/var/run/udiRoot_jobs/$user"
+chmod a+x "/var/run/udiRoot_jobs/$user/$jobId"
+
+oldUmask=$(umask)
+umask 022
+
+sshPubKey=$( su -c "cat ~/.udiRoot/id_rsa.key.pub" "$user" ) 
+envFile="$datadir/env";
+for envItem in "${jobEnv[@]}"; do
+    echo "$envItem" >> "$envFile"
+done
+if [[ -n "$entrypoint" ]]; then
+    echo "$entrypoint" > "$datadir/entrypoint"
+fi
+
+
+## minimize nodelist for putting hostsfile on the compute node
+[[ -n "$tasksPerNode" ]] || tasksPerNode=1
+minNodes=$( /opt/slurm/default/bin/scontrol show hostnames "$nodelist" | awk -v taskCount="$tasksPerNode" '{ print $1 "/" taskCount }' | xargs )
+
+cmdStr="${nodeContext}/${udiRootSetupPath}/sbin/setupRoot \"$udiRootType\" \"$udiRootValue\" -s \"$sshPubKey\" -u \"$user\" -U \"$userUid\" -N \"$minNodes\""
+IFS="|"
+for volume in ${volumes}; do
+    unset IFS
+    cmdStr="$cmdStr -v \"$volume\""
+done
+
+ok=0
+/bin/sh -c "$cmdStr"
+[[ $? -eq 0 ]] && ok=1
+exit $ok
