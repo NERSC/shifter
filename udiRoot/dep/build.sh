@@ -124,7 +124,7 @@ Host *
 EOF
 
 cd "${PREFIX}"
-tar cf "${origdir}/udiRoot_sshd.tar" .
+tar cf "${origdir}/udiRoot_dep.tar" .
 cd "${origdir}"
 rm -r "${PREFIX}"
 rm -r "${SPRT_PREFIX}"

@@ -24,7 +24,8 @@ modules_s.tar:
 	mv modules.tar modules_s.tar
 
 install: all
-	mkdir -p $(DESTDIR)/kmod/$(KVER)-cray_$(CRAY_NETTYPE)_$(CRAY_NODETYPE)
+	mkdir -p $(DESTDIR)/kmod/$(KVER)-cray_$(CRAY_NETTYPE)_c
+	mkdir -p $(DESTDIR)/kmod/$(KVER)-cray_$(CRAY_NETTYPE)_s
 	tar xvf modules_c.tar -C $(DESTDIR)/kmod/$(KVER)-cray_$(CRAY_NETTYPE)_c
 	tar xvf modules_s.tar -C $(DESTDIR)/kmod/$(KVER)-cray_$(CRAY_NETTYPE)_s
 	chmod -R a+rX $(DESTDIR)/kmod

@@ -23,9 +23,9 @@ postmount.sh: postmount.sh.$(SYSTEM).in
 
 install: all
 	mkdir -p $(DESTDIR)/etc
-	$(INSTALL) --owner=root --group=root --mode=444  udiRoot.conf $(CONFIG_DIR)/udiRoot.conf
-	$(INSTALL) --owner=root --group=root --mode=400  premount.sh $(CONFIG_DIR)/premount.sh; \
-	$(INSTALL) --owner=root --group=root --mode=400  postmount.sh $(CONFIG_DIR)/postmount.sh; \
+	$(INSTALL) --owner=root --group=root --mode=444  udiRoot.conf $(CONFIGINST_DIR)/udiRoot.conf
+	$(INSTALL) --owner=root --group=root --mode=400  premount.sh $(CONFIGINST_DIR)/premount.sh; \
+	$(INSTALL) --owner=root --group=root --mode=400  postmount.sh $(CONFIGINST_DIR)/postmount.sh; \
 
 clean:
 	if [ -a udiRoot.conf ]; then $(RM) udiRoot.conf; fi

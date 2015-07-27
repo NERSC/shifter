@@ -1,6 +1,7 @@
 PREFIX=/opt/nersc/udiRoot/tag
 DESTDIR=$(PREFIX)
 CONFIG_DIR=$(PREFIX)/etc
+CONFIGINST_DIR=$(DESTDIR)/etc
 CONFIG_FILE=$(CONFIG_DIR)/udiRoot.conf
 INCLUDE_FILE=$(CONFIG_DIR)/udiRoot.include
 CRAY_NETTYPE=ari

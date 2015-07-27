@@ -33,10 +33,8 @@ udiRoot-nhc-plugin:udiRoot-nhc-plugin.in
 install: all
 	mkdir -p $(DESTDIR)/libexec
 	$(INSTALL) --owner=root --group=root --mode=555  udiRoot-nhc-plugin $(DESTDIR)/libexec/udiRoot-nhc-plugin
-	ifneq ($(IS_NATIVE_SLURM),1)
-		$(INSTALL) --owner=root --group=root --mode=555  udiRoot-prologue $(DESTDIR)/libexec/udiRoot-prologue
-		$(INSTALL) --owner=root --group=root --mode=555  udiRoot-epilogue $(DESTDIR)/libexec/udiRoot-epilogue
-	endif
+	if [ -a udiRoot-prologue ]; then $(INSTALL) --owner=root --group=root --mode=555  udiRoot-prologue $(DESTDIR)/libexec/udiRoot-prologue; fi
+	if [ -a udiRoot-epilogue ]; then $(INSTALL) --owner=root --group=root --mode=555  udiRoot-epilogue $(DESTDIR)/libexec/udiRoot-epilogue; fi
 
 clean:
 	if [ -a udiRoot-prologue ]; then $(RM) udiRoot-prologue; fi

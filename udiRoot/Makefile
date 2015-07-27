@@ -1,10 +1,11 @@
-DIRS := config src kmod dep
+DIRS := config src dep
 
 include config.mk
 -include config.inc
 
 ifeq ($(CRAY_SUPPORT),1)
     DIRS += wlm_integration/cray
+    DIRS += kmod
 endif
 ifeq ($(WLM_INT),torque)
     DIRS += wlm_integration/torque
