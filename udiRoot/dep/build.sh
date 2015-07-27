@@ -60,9 +60,8 @@ cd util-linux
 CC="${SPRT_PREFIX}/bin/musl-gcc" ./configure "--prefix=${INST_PREFIX}" --enable-static --disable-shared
 CC="${SPRT_PREFIX}/bin/musl-gcc" make mount
 CC="${SPRT_PREFIX}/bin/musl-gcc" make losetup
-mkdir -p "${PREFIX}/usr/libexec"
-cp -p mount "${PREFIX}/usr/libexec"
-cp -p losetup "${PREFIX}/usr/libexec"
+cp -p mount "${origdir}/mount"
+cp -p losetup "${origdir}/losetup"
 
 cd "${builddir}"
 mkdir -p libressl

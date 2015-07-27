@@ -561,6 +561,7 @@ _mountImgVfs_unclean:
 int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig) {
     char loopMount[PATH_MAX];
     char imagePath[PATH_MAX];
+    char mountExec[PATH_MAX];
     struct stat statData;
     if (imageData == NULL || udiConfig == NULL) {
         return 1;
@@ -579,8 +580,8 @@ int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig) {
     fprintf(stderr, "FAILED to load %s kernel module.\n", name); \
     goto _mntImgLoop_unclean; \
 }
-#define LOOPMOUNT(from, to, imgtype, flags) { \
-    char *args[] = {"mount", "-o", "loop,autoclear,ro,nosuid,nodev", from, to, NULL}; \
+#define LOOPMOUNT(mountExec, from, to, imgtype) { \
+    char *args[] = {mountExec, "-o", "loop,autoclear,ro,nosuid,nodev", from, to, NULL}; \
     if (forkAndExecvp(args) != 0) { \
         fprintf(stderr, "FAILED to mount image %s (%s) on %s\n", from, imgtype, to); \
         goto _mntImgLoop_unclean; \
@@ -594,7 +595,15 @@ int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig) {
     loopMount[PATH_MAX-1] = 0;
     snprintf(imagePath, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, imageData->filename);
     imagePath[PATH_MAX-1] = 0;
+    snprintf(mountExec, PATH_MAX, "%s/sbin/mount", udiConfig->udiRootPath);
 
+    if (stat(mountExec, &statData) != 0) {
+        fprintf(stderr, "udiRoot mount executable missing: %s\n", mountExec);
+        goto _mntImgLoop_unclean;
+    } else if (statData.st_uid != 0 || statData.st_mode & S_IWGRP || statData.st_mode & S_IWOTH || !(statData.st_mode & S_IXUSR)) {
+        fprintf(stderr, "udiRoot mount has incorrect ownership or permissions: %s\n", mountExec);
+        goto _mntImgLoop_unclean;
+    }
 
     if (stat("/dev/loop0", &statData) != 0) {
         LOADKMOD("loop", "drivers/block/loop.ko");
@@ -603,13 +612,13 @@ int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig) {
         LOADKMOD("mbcache", "fs/mbcache.ko");
         LOADKMOD("jbd2", "fs/jbd2/jbd2.ko");
         LOADKMOD("ext4", "fs/ext4/ext4.ko");
-        LOOPMOUNT(imagePath, loopMount, "ext4", MS_NOSUID|MS_NODEV|MS_RDONLY);
+        LOOPMOUNT(mountExec, imagePath, loopMount, "ext4");
     } else if (imageData->format == FORMAT_SQUASHFS) {
         LOADKMOD("squashfs", "fs/squashfs/squashfs.ko");
-        LOOPMOUNT(imagePath, loopMount, "squashfs", MS_NOSUID|MS_NODEV|MS_RDONLY);
+        LOOPMOUNT(mountExec, imagePath, loopMount, "squashfs");
     } else if (imageData->format == FORMAT_CRAMFS) {
         LOADKMOD("cramfs", "fs/cramfs/cramfs.ko");
-        LOOPMOUNT(imagePath, loopMount, "cramfs", MS_NOSUID|MS_NODEV|MS_RDONLY);
+        LOOPMOUNT(mountExec,imagePath, loopMount, "cramfs");
     } else {
         fprintf(stderr, "ERROR: unknown image format.\n");
         goto _mntImgLoop_unclean;

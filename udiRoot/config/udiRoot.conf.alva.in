@@ -10,7 +10,7 @@ siteFs=/scratch1 \
        /global/scratch2 /global/project /global/projectb \
        /global/dna /var/opt/cray/alps/spool \
        /var/spool/slurmd
-optUdiImage=@@@PREFIX@@@/sshd
+optUdiImage=@@@PREFIX@@@/deps
 etcPath=@@@PREFIX@@@/etc_files
 kmodBasePath=@@@PREFIX@@@/kmod
 kmodCacheFile=/tmp/udiRootLoadedModules.txt
