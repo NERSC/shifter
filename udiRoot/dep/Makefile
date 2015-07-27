@@ -25,3 +25,4 @@ install: all
 
 clean:
 	if [ -a udiRoot_dep.tar ]; then $(RM) udiRoot_dep.tar; fi
+	if [ -d build ]; then $(RM) -r build; fi
