@@ -300,13 +300,13 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     }
     
     spank_setenv(sp, "CRAY_ROOTFS", "UDI", 1);
-    spank_setenv(sp, "SLURM_PROTEUS_IMAGE", image, 1);
-    spank_setenv(sp, "SLURM_PROTEUS_IMAGETYPE", image_type, 1);
-    spank_job_control_setenv(sp, "SLURM_PROTEUS_IMAGE", image, 1);
-    spank_job_control_setenv(sp, "SLURM_PROTEUS_IMAGETYPE", image_type, 1);
+    spank_setenv(sp, "SLURM_SHIFTER_IMAGE", image, 1);
+    spank_setenv(sp, "SLURM_SHIFTER_IMAGETYPE", image_type, 1);
+    spank_job_control_setenv(sp, "SLURM_SHIFTER_IMAGE", image, 1);
+    spank_job_control_setenv(sp, "SLURM_SHIFTER_IMAGETYPE", image_type, 1);
     
     if (imagevolume != NULL) {
-         spank_setenv(sp, "SLURM_PROTEUS_VOLUME", imagevolume, 1);
+         spank_setenv(sp, "SLURM_SHIFTER_VOLUME", imagevolume, 1);
     }
     return rc;
 }
@@ -447,7 +447,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         size_t idx2 = 0;
         clearenv();
         snprintf(buffer, PATH_MAX, "%s/libexec/udiRoot-prologue", udiRoot_prefix);
-        memset(args, 0, sizeof(char*) * (6 + n_volArgs*2 + 3));
+        memset(args, 0, sizeof(char*) * (6 + n_volArgs*2 + 6));
         args[idx++] = buffer;
         args[idx++] = job_str;
         args[idx++] = user_str;
