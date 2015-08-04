@@ -176,7 +176,6 @@ my $socket = new IO::Socket::INET (
     PeerPort => $imagegw_port,
     Proto => 'tcp',
 ) or die("Failed to connect to imagegw");
-print "about to send\"$image $system$extra\"\n";
 $socket->send("$image $system$extra\n");
 my @imageEnv;
 my $entryPoint = undef;
@@ -188,7 +187,6 @@ my $displayedPull = 0;
 my @images;
 while (<$socket>) {
     my $data = $_;
-    print $data;
     $data =~ s/^s\+//g;
     $data =~ s/\s+$//g;
     if ($data =~ /^ID:\s+(\S+)$/) {
