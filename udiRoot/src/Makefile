@@ -25,6 +25,8 @@ all: setupRoot unsetupRoot shifter shiftsh shiftrun getDockerImage.pl shifterShi
 
 getDockerImage.pl: getDockerImage.pl.in
 	cat $< | $(SED_MODIFY) > $@
+docker: getDockerImage.pl
+	ln -s getDockerImage.pl docker
 shiftsh: shiftsh.in
 	cat $< | $(SED_MODIFY) > $@
 shiftrun: shiftrun.in
@@ -44,7 +46,6 @@ shifterShim: shifterShim.c
 install: all
 	mkdir -m 755 -p $(DESTDIR)/sbin
 	mkdir -m 755 -p $(DESTDIR)/bin
-	ln -s getDockerImage.pl docker
 	$(INSTALL) --owner=root --group=root --mode=555  setupRoot $(DESTDIR)/sbin/setupRoot
 	$(INSTALL) --owner=root --group=root --mode=555  unsetupRoot $(DESTDIR)/sbin/unsetupRoot
 	$(INSTALL) --owner=root --group=root --mode=4555  shifter $(DESTDIR)/bin/shifter
