@@ -202,12 +202,16 @@ int lookup_image(UdiRootConfig *config, int verbose, const char *mode, char **im
     char *ptr = NULL;
     char *linePtr = NULL;
     size_t linePtrSize = 0;
+    //verbose = 0;
     /* perform image lookup */
     snprintf(buffer, 4096, "%s%s/bin/getDockerImage.pl %s%s %s", config->nodeContextPrefix, config->udiRootPath, (verbose == 0 ? "-quiet " : ""), mode, image);
+    printf("LOOKUP COMMAND: %s\n", buffer);
     fp = popen(buffer, "r");
     while ((nread = getline(&linePtr, &linePtrSize, fp)) > 0) {
         linePtr[nread] = 0;
+        printf("RAW OUTPUT: %s\n", linePtr);
         ptr = trim(linePtr);
+        printf("TRIMMED OUTPUT: %s\n", linePtr);
         if (verbose) {
             printf("%s\n", linePtr);
             int val = sscanf(linePtr, "Retrieved docker image %1024s resolving to ID %1024s", buff1, buff2);
@@ -229,9 +233,11 @@ int lookup_image(UdiRootConfig *config, int verbose, const char *mode, char **im
                 ptr = trim(ptr);
             } else {
                 /* this is the image id */
-                ptr = trim(ptr);
-                *image_id = (char *) realloc(*image_id, sizeof(char) * (strlen(ptr) + 1));
-                snprintf(*image_id, strlen(ptr), "%s", ptr);
+                size_t nbytes = 0;
+                *image_id = (char *) realloc(*image_id, sizeof(char) * (strlen(ptr) + 2));
+                nbytes = snprintf(*image_id, strlen(ptr) + 1, "%s", ptr);
+                *image_id[nbytes] = 0;
+                printf("FOUND IMAGE: %s, %s\n", ptr, *image_id);
             }
         }
 
@@ -296,7 +302,7 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     
     if (strncmp(image_type, "docker", IMAGE_MAXLEN) == 0) {
         char *image_id = NULL;
-        lookup_image(udiConfig, verbose_lookup, "pull", &image_id);
+        lookup_image(udiConfig, verbose_lookup, "lookup", &image_id);
         if (image_id == NULL) {
             slurm_error("Failed to lookup image.  Aborting.");
             exit(-1);
@@ -314,13 +320,13 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     }
     
     spank_setenv(sp, "CRAY_ROOTFS", "UDI", 1);
-    spank_setenv(sp, "SLURM_SHIFTER_IMAGE", image, 1);
-    spank_setenv(sp, "SLURM_SHIFTER_IMAGETYPE", image_type, 1);
-    spank_job_control_setenv(sp, "SLURM_SHIFTER_IMAGE", image, 1);
-    spank_job_control_setenv(sp, "SLURM_SHIFTER_IMAGETYPE", image_type, 1);
+    spank_setenv(sp, "SHIFTER_IMAGE", image, 1);
+    spank_setenv(sp, "SHIFTER_IMAGETYPE", image_type, 1);
+    spank_job_control_setenv(sp, "SHIFTER_IMAGE", image, 1);
+    spank_job_control_setenv(sp, "SHIFTER_IMAGETYPE", image_type, 1);
     
     if (imagevolume != NULL) {
-         spank_setenv(sp, "SLURM_SHIFTER_VOLUME", imagevolume, 1);
+         spank_setenv(sp, "SHIFTER_VOLUME", imagevolume, 1);
     }
     return rc;
 }
@@ -426,16 +432,12 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     char *sshPubKey = NULL;
     size_t tasksPerNode = 0;
     UdiRootConfig *udiConfig = NULL;
+    pid_t pid = 0;
 
 #define PROLOG_ERROR(message, errCode) \
     slurm_error(message); \
     rc = errCode; \
     goto _prolog_exit_unclean;
-
-    udiConfig = read_config(argc, argv);
-    if (udiConfig == NULL) {
-        PROLOG_ERROR("Failed to read/parse shifter configuration.\n", rc);
-    }
 
     for (i = 0; spank_option_array[i].name != NULL; ++i) {
         char *optarg = NULL;
@@ -445,22 +447,56 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         }
         (spank_option_array[i].cb)(spank_option_array[i].val, optarg, 1);
     }
+
+    /* if processing the user-specified options indicates no image, dump out */
     if (strlen(image) == 0 || strlen(image_type) == 0) {
         return rc;
+    }
+
+    slurm_error("DMJ: FOUND IMAGE ARGS, starting shifter prolog");
+
+    ptr = getenv("SHIFTER_IMAGETYPE");
+    if (ptr != NULL) {
+        snprintf(image_type, IMAGE_MAXLEN, "%s", ptr);
+    }
+
+    ptr = getenv("SHIFTER_IMAGE");
+    if (ptr != NULL) {
+        slurm_error("DMJ: got SHIFTER_IMAGE: %s\n", ptr);
+        snprintf(image, IMAGE_MAXLEN, "%s", ptr);
+    }
+
+    ptr = getenv("SHIFTER_VOLUME");
+    if (ptr != NULL) {
+        snprintf(imagevolume, IMAGEVOLUME_MAXLEN, "%s", ptr);
+    }
+
+    slurm_error("DMJ: SHIFTER, about to read configation");
+    /* parse udi configuration */
+    udiConfig = read_config(argc, argv);
+    if (udiConfig == NULL) {
+        PROLOG_ERROR("Failed to read/parse shifter configuration.\n", rc);
     }
 
     for (ptr = image_type; ptr - image_type < strlen(image_type); ptr++) {
         *ptr = toupper(*ptr);
     }
 
+    slurm_error("DMJ: SHIFTER, about to read job data");
     rc = read_data_from_job(sp, &job, &nodelist, &tasksPerNode);
     if (rc != ESPANK_SUCCESS) {
         PROLOG_ERROR("FAILED to get job information.", ESPANK_ERROR);
     }
 
+    slurm_error("DMJ: SHIFTER, about to read ssh pub key");
     /* try to recover ssh public key */
     sshPubKey = getenv("SHIFTER_SSH_PUBKEY");
-    if (sshPubKey != NULL) sshPubKey = strdup(sshPubKey);
+    if (sshPubKey != NULL) {
+        char *ptr = strdup(sshPubKey);
+        sshPubKey = trim(ptr);
+        sshPubKey = strdup(sshPubKey);
+        free(ptr);
+    }
 
     uid_str = getenv("SLURM_JOB_UID");
     if (uid_str != NULL) {
@@ -520,7 +556,9 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     }
     snprintf(setupRootPath, PATH_MAX, "%s%s/sbin/setupRoot", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
     setupRootArgs = malloc(sizeof(char*) * n_setupRootArgs);
+    idx = 0;
     setupRootArgs[idx++] = strdup(setupRootPath);
+    /*
     if (uid != 0) {
         snprintf(buffer, 1024, "%u", uid);
         setupRootArgs[idx++] = strdup("-u");
@@ -538,18 +576,36 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         setupRootArgs[idx++] = strdup("-N");
         setupRootArgs[idx++] = strdup(nodelist);
     }
+    */
     setupRootArgs[idx++] = strdup(image_type);
     setupRootArgs[idx++] = strdup(image);
     setupRootArgs[idx++] = NULL;
 
+    for (i = 0; i < idx && setupRootArgs[i] != NULL; i++) {
+        slurm_error("setupRoot arg %d: %s", i, setupRootArgs[i]);
+    }
+
     /* return success because we don't want bad input to mark node in
        error state -- would be nice to do something to inform the job
        of this issue */
-    if (forkAndExecv(setupRootArgs) != 0) {
-        PROLOG_ERROR("FAILED to run setupRoot", ESPANK_SUCCESS);
+    pid = fork();
+    if (pid < 0) {
+        PROLOG_ERROR("FAILED to fork setupRoot", ESPANK_ERROR);
+    } else if (pid > 0) {
+        /* this is the parent */
+        int status = 0;
+        slurm_error("waiting on child\n");
+        waitpid(pid, &status, 0);
+        if (WIFEXITED(status)) {
+             status = WEXITSTATUS(status);
+        } else {
+             status = 1;
+        }
+        if (status != 0) PROLOG_ERROR("FAILED to run setupRoot", ESPANK_ERROR);
+    } else {
+        execv(setupRootArgs[0], setupRootArgs);
     }
     
-    return rc;
 _prolog_exit_unclean:
     if (udiConfig != NULL) free_UdiRootConfig(udiConfig);
     if (setupRootArgs != NULL) {
@@ -576,6 +632,7 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     char path[PATH_MAX];
     char *epilogueArgs[2];
     int i, j;
+    pid_t pid = 0;
 
 #define EPILOG_ERROR(message, errCode) \
     slurm_error(message); \
@@ -583,11 +640,6 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     goto _epilog_exit_unclean;
 
     context = spank_context();
-    udiConfig = read_config(argc, argv);
-    if (udiConfig == NULL) {
-        EPILOG_ERROR("Failed to read/parse shifter configuration.\n", rc);
-    }
-
     for (i = 0; spank_option_array[i].name != NULL; ++i) {
         char *optarg = NULL;
         j = spank_option_getopt(sp, &spank_option_array[i], &optarg);
@@ -600,11 +652,36 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
         return rc;
     }
 
-    snprintf(path, PATH_MAX, "%s%s/libexec/unsetupRoot", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
+    udiConfig = read_config(argc, argv);
+    if (udiConfig == NULL) {
+        EPILOG_ERROR("Failed to read/parse shifter configuration.\n", rc);
+    }
+
+
+    snprintf(path, PATH_MAX, "%s%s/sbin/unsetupRoot", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
     epilogueArgs[0] = path;
     epilogueArgs[1] = NULL;
-    if (forkAndExecv(epilogueArgs) != 0) {
-        EPILOG_ERROR("FAILED to run unsetupRoot.\n", rc);
+    pid = fork();
+    if (pid < 0) {
+        EPILOG_ERROR("FAILED to fork unsetupRoot", ESPANK_ERROR);
+    } else if (pid > 0) {
+        /* this is the parent */
+        int status = 0;
+        slurm_error("waiting on child\n");
+        do {
+            pid_t ret = waitpid(pid, &status, 0);
+            if (ret != pid) {
+                slurm_error("This might be impossible: forked by couldn't wait, FAIL!\n");
+            }
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+        if (WIFEXITED(status)) {
+             status = WEXITSTATUS(status);
+        } else {
+             status = 1;
+        }
+        if (status != 0) EPILOG_ERROR("FAILED to run unsetupRoot", ESPANK_ERROR);
+    } else {
+        execv(epilogueArgs[0], epilogueArgs);
     }
     
 _epilog_exit_unclean:
@@ -637,8 +714,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
         char newcwd[PATH_MAX];
         struct stat st_data;
         if (getcwd(currcwd, PATH_MAX) == NULL) {
-            slurm_error("FAILED to determine working directory");
-            return ESPANK_ERROR;
+            TASKINITPRIV_ERROR("FAILED to determine working directory", ESPANK_ERROR);
         }
 
         // check to see if newcwd exists, if not, just chdir to the new chroot base
@@ -647,13 +723,13 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
             snprintf(newcwd, PATH_MAX, "%s", udiConfig->udiMountPoint);
         }
         if (chdir(newcwd) != 0) {
-            slurm_error("FAILED to change directory to %s", newcwd);
-            return ESPANK_ERROR;
+            char error[PATH_MAX];
+            snprintf(error, PATH_MAX, "FAILED to change directory to %s", newcwd);
+            TASKINITPRIV_ERROR(error, ESPANK_ERROR);
         }
 
         if (chroot(udiConfig->udiMountPoint) != 0) {
-            slurm_error("FAILED to chroot to designated image");
-            return ESPANK_ERROR;
+            TASKINITPRIV_ERROR("FAILED to chroot to designated image", ESPANK_ERROR);
         }
     }
 _taskInitPriv_exit_unclean:

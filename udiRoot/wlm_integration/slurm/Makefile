@@ -29,10 +29,10 @@ udiRoot-epilogue: udiRoot-epilogue.in
 udiRoot-prologue: udiRoot-prologue.in
 	cat $< | $(SED_UPDATE) > $@
 
-shifter.so: spank_shifter.c
+shifter.so: spank_shifter.c ../../src/UdiRootConfig.c ../../src/utility.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" \
         -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" \
-        -DIS_NATIVE_SLURM=$(IS_NATIVE_SLURM) -shared -fPIC $(LDFLAGS) $< -o $@
+        -DIS_NATIVE_SLURM=$(IS_NATIVE_SLURM) -shared -fPIC $(LDFLAGS) $^ -o $@
 	
 install: all
 	mkdir -m 755 -p $(DESTDIR)/shared/slurm
