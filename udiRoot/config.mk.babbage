@@ -1,0 +1,18 @@
+PREFIX=/usr/syscom/nsg/opt/udiRoot/tag
+DESTDIR=$(PREFIX)
+CONFIG_DIR=$(PREFIX)/etc
+CONFIGINST_DIR=$(DESTDIR)/etc
+CONFIG_FILE=$(CONFIG_DIR)/udiRoot.conf
+INCLUDE_FILE=$(CONFIG_DIR)/udiRoot.include
+SYSTEM=babbage
+VERSION=0.5
+WLM_INT=slurm
+KEYLEN=512
+CRAY_SUPPORT=0
+SLURM_ROOT=/usr/syscom/nsg/opt/slurm/default
+IS_NATIVE_SLURM=1
+
+CC      = /usr/bin/gcc
+RM      = /bin/rm
+CMP     = /usr/bin/cmp
+INSTALL = /usr/bin/install

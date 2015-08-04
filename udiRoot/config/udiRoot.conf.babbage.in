@@ -1,0 +1,16 @@
+nodeContextPrefix=
+udiMount=/var/udiMount
+loopMount=/var/loopUdiMount
+imagePath=/usr/syscom/shifter
+udiRootPath=@@@PREFIX@@@
+sitePreMountHook=@@@CONFIG_DIR@@@/premount.sh
+sitePostMountHook=@@@CONFIG_DIR@@@/postmount.sh
+siteFs=/chos/global/u1 /chos/global/u2 /chos/global/babbage \
+       /chos/global/common /chos/global/scratch2 /chos/global/project \
+       /chos/global/projectb /chos/global/dna 
+optUdiImage=@@@PREFIX@@@/deps
+etcPath=@@@PREFIX@@@/etc_files
+kmodBasePath=@@@PREFIX@@@/kmod
+kmodCacheFile=/tmp/udiRootLoadedModules.txt
+batchType=slurm
+system=@@@SYSTEM@@@

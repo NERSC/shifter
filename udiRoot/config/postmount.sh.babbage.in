@@ -1,0 +1,7 @@
+#!/bin/sh
+
+my_cwd=$( pwd )
+ln -s chos/global global
+cd global
+ln -s u1 homes
+cd "$my_cwd"
