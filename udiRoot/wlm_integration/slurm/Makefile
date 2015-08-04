@@ -10,7 +10,7 @@ include ../../config.mk
 
 ## configuration
 CFLAGS=-O2 -Wall -I$(SLURM_ROOT)/include -I../../src
-LDFLAGS=
+LDFLAGS=-L$(SLURM_ROOT)/lib -lslurm -Wl,-rpath=$(SLURM_ROOT)/lib
 
 ALL=shifter.so
 ifeq ($(IS_NATIVE_SLURM),1)
@@ -32,7 +32,7 @@ udiRoot-prologue: udiRoot-prologue.in
 shifter.so: spank_shifter.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" \
         -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" \
-        -DIS_NATIVE_SLURM=$(IS_NATIVE_SLURM) -shared -fPIC $< -o $@
+        -DIS_NATIVE_SLURM=$(IS_NATIVE_SLURM) -shared -fPIC $(LDFLAGS) $< -o $@
 	
 install: all
 	mkdir -m 755 -p $(DESTDIR)/shared/slurm
