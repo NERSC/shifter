@@ -8,7 +8,22 @@ context=/dsl
 CONFIG_FILE="$context/@@@CONFIG_FILE@@@"
 readonly CONFIG_FILE
 
-. $CONFIG_FILE
+## parse config file
+while read line; do
+    if [[ "$line" == "*=" ]]; then continue; fi
+    IFS="="
+    set - $line
+    key=$1
+    value=$2
+    if [[ -z $2 ]]; then
+        continue;
+    fi
+    unset IFS
+    expr="export $key=\"$value\""
+    eval $expr
+    IFS="="
+done < "$CONFIG_FILE"
+unset IFS
 
 foundVFSMounts=1
 (cat /proc/mounts | awk '{print $2}' | egrep "^$udiMount" > /dev/null 2>&1) || foundVFSMounts=0
@@ -16,22 +31,22 @@ foundVFSMounts=1
 foundLoopMount=1
 (cat /proc/mounts | awk '{print $2}' | egrep "^$loopMount" > /dev/null 2>&1) || foundLoopMount=0
 
-kmodCacheExists=1
-[[ -e "$kmodCache" ]] || kmodCacheExists=0
+#kmodCacheExists=1
+#[[ -e "$kmodCache" ]] || kmodCacheExists=0
+#
+#possibleKernelModules="loop mbcache jbd2 ext4 cramfs squashfs"
+#foundModules=""
+#for mod in $possibleKernelModules; do
+#    foundModule=1
+#    (/sbin/lsmod | egrep "^$mod\s+" > /dev/null 2>&1) || foundModule=0
+#    if [[ $foundModule -eq 1 ]]; then
+#        foundModules="$foundModules,$mod"
+#    fi
+#done
 
-possibleKernelModules="loop mbcache jbd2 ext4 cramfs squashfs"
-foundModules=""
-for mod in $possibleKernelModules; do
-    foundModule=1
-    (/sbin/lsmod | egrep "^$mod\s+" > /dev/null 2>&1) || foundModule=0
-    if [[ $foundModule -eq 1 ]]; then
-        foundModules="$foundModules,$mod"
-    fi
-done
-
-if [[ -n "$foundModules" ]]; then
-    foundModules="${foundModules:1}"
-fi
+#if [[ -n "$foundModules" ]]; then
+#    foundModules="${foundModules:1}"
+#fi
 
 errMessage=""
 if [[ $foundVFSMounts -eq 1 ]]; then
@@ -43,9 +58,9 @@ fi
 if [[ $kmodCacheExists -eq 1 ]]; then
     errMessage="$errMessage,temporary loaded kernel module cache file exists ($kmodCache)"
 fi
-if [[ -n "$foundModules" ]]; then
-    errMessage="$errMessage,temporary loaded modules still loaded: $foundModules"
-fi
+#if [[ -n "$foundModules" ]]; then
+#    errMessage="$errMessage,temporary loaded modules still loaded: $foundModules"
+#fi
 
 if [[ -n "$errMessage" ]]; then
     errMessage="${errMessage:1}"
