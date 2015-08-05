@@ -402,7 +402,7 @@ int prepareSiteModifications(const char *minNodeSpec, UdiRootConfig *udiConfig) 
 
     /* recursively copy /opt/udiImage (to allow modifications) */
     if (udiConfig->optUdiImage != NULL) {
-        snprintf(srcBuffer, PATH_MAX, "%s/%s", udiConfig->nodeContextPrefix, udiConfig->optUdiImage);
+        snprintf(srcBuffer, PATH_MAX, "%s/%s/*", udiConfig->nodeContextPrefix, udiConfig->optUdiImage);
         srcBuffer[PATH_MAX-1] = 0;
         if (stat(srcBuffer, &statData) != 0) {
             fprintf(stderr, "FAILED to stat udiImage source directory: %s\n", srcBuffer);
@@ -416,8 +416,13 @@ int prepareSiteModifications(const char *minNodeSpec, UdiRootConfig *udiConfig) 
             goto _prepSiteMod_unclean;
         } else {
             char *args[5] = {"cp", "-rp", srcBuffer, mntBuffer, NULL };
+            char *chmodArgs[5] = {"chmod", "-R", "a+rX", mntBuffer, NULL};
             if (forkAndExecvp(args) != 0) {
                 fprintf(stderr, "FAILED to copy %s to %s.\n", srcBuffer, mntBuffer);
+                goto _prepSiteMod_unclean;
+            }
+            if (forkAndExecvp(chmodArgs) != ) {
+                fprintf(stderr, "FAILED to fix permissions on %s.\n", mntBuffer);
                 goto _prepSiteMod_unclean;
             }
         }
@@ -529,7 +534,7 @@ int mountImageVFS(ImageData *imageData, const char *minNodeSpec, UdiRootConfig *
     }
 
     /* mount a new rootfs to work in */
-    if (mount(NULL, udiRoot, "tmpfs", MS_NOSUID|MS_NODEV, NULL) != 0) {
+    if (mount(NULL, udiRoot, "rootfs", MS_NOSUID|MS_NODEV, NULL) != 0) {
         fprintf(stderr, "FAILED to mount rootfs on %s\n", udiRoot);
         perror("   --- REASON: ");
         goto _mountImgVfs_unclean;
@@ -551,6 +556,7 @@ int mountImageVFS(ImageData *imageData, const char *minNodeSpec, UdiRootConfig *
     /* copy image /etc into place */
     BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
 
+#undef BIND_IMAGE_INTO_UDI
     return 0;
 
 _mountImgVfs_unclean:
