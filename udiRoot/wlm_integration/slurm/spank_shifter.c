@@ -30,6 +30,7 @@ static char image[IMAGE_MAXLEN] = "";
 static char image_type[IMAGE_MAXLEN] = "";
 static char imagevolume[IMAGEVOLUME_MAXLEN] = "";
 static int nativeSlurm = IS_NATIVE_SLURM;
+static int serialMode = 0;
 
 static int _opt_image(int val, const char *optarg, int remote);
 static int _opt_imagevolume(int val, const char *optarg, int remote);
@@ -209,9 +210,7 @@ int lookup_image(UdiRootConfig *config, int verbose, const char *mode, char **im
     fp = popen(buffer, "r");
     while ((nread = getline(&linePtr, &linePtrSize, fp)) > 0) {
         linePtr[nread] = 0;
-        printf("RAW OUTPUT: %s\n", linePtr);
         ptr = trim(linePtr);
-        printf("TRIMMED OUTPUT: %s\n", linePtr);
         if (verbose) {
             printf("%s\n", linePtr);
             int val = sscanf(linePtr, "Retrieved docker image %1024s resolving to ID %1024s", buff1, buff2);
@@ -237,7 +236,6 @@ int lookup_image(UdiRootConfig *config, int verbose, const char *mode, char **im
                 *image_id = (char *) realloc(*image_id, sizeof(char) * (strlen(ptr) + 2));
                 nbytes = snprintf(*image_id, strlen(ptr) + 1, "%s", ptr);
                 *image_id[nbytes] = 0;
-                printf("FOUND IMAGE: %s, %s\n", ptr, *image_id);
             }
         }
 
@@ -592,7 +590,6 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     if (pid < 0) {
         PROLOG_ERROR("FAILED to fork setupRoot", ESPANK_ERROR);
     } else if (pid > 0) {
-        /* this is the parent */
         int status = 0;
         slurm_error("waiting on child\n");
         waitpid(pid, &status, 0);
@@ -665,7 +662,6 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     if (pid < 0) {
         EPILOG_ERROR("FAILED to fork unsetupRoot", ESPANK_ERROR);
     } else if (pid > 0) {
-        /* this is the parent */
         int status = 0;
         slurm_error("waiting on child\n");
         do {
