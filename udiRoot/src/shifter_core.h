@@ -73,6 +73,7 @@ int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig);
 int destructUDI(UdiRootConfig *udiConfig);
 int bindImageIntoUDI(const char *relpath, ImageData *imageData, UdiRootConfig *udiConfig, int copyFlag);
 int prepareSiteModifications(const char *minNodeSpec, UdiRootConfig *udiConfig);
+int setupImageSsh(ImageData *imageData, char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udiConfig);
 int forkAndExecvp(char **args);
 int forkAndExecv(char **argvs);
 char **parseMounts(size_t *n_mounts);

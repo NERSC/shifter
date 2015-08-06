@@ -421,7 +421,7 @@ int prepareSiteModifications(const char *minNodeSpec, UdiRootConfig *udiConfig) 
                 fprintf(stderr, "FAILED to copy %s to %s.\n", srcBuffer, mntBuffer);
                 goto _prepSiteMod_unclean;
             }
-            if (forkAndExecvp(chmodArgs) != ) {
+            if (forkAndExecvp(chmodArgs) != 0) {
                 fprintf(stderr, "FAILED to fix permissions on %s.\n", mntBuffer);
                 goto _prepSiteMod_unclean;
             }
@@ -735,6 +735,173 @@ _setupUserMounts_unclean:
         }
         free(mountCache);
         mountCache = NULL;
+    }
+    return 1;
+}
+
+int setupImageSsh(ImageData *imageData, char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udiConfig) {
+    struct stat statData;
+    char udiImage[PATH_MAX];
+    char sshdConfigPath[PATH_MAX];
+    char sshdConfigPathNew[PATH_MAX];
+    char *keyType[3] = {"rsa","ed25519", NULL}; /* skipping dsa and ecdsa since there is suspicion of trouble */
+    char **keyPtr = NULL;
+    char *lineBuf = NULL;
+    size_t lineBuf_size = 0;
+
+    FILE *inputFile = NULL;
+    FILE *outputFile = NULL;
+
+    size_t mountCache_cnt = 0;
+    char **mountCache = parseMounts(&mountCache_cnt);
+
+#define _BINDMOUNT(mountCache, from, to, ro) if (_bindMount(mountCache, from, to, ro) != 0) { \
+    fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from, to); \
+    goto _setupImageSsh_unclean; \
+}
+
+    if (mountCache == NULL) {
+        fprintf(stderr, "FAILED to parse existing mounts\n");
+        goto _setupImageSsh_unclean;
+    }
+
+    snprintf(udiImage, PATH_MAX, "%s%s/opt/udiImage", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    udiImage[PATH_MAX-1] = 0;
+    if (stat(udiImage, &statData) != 0) {
+        fprintf(stderr, "FAILED to find udiImage path, cannot setup sshd\n");
+        goto _setupImageSsh_unclean;
+    }
+    if (chdir(udiImage) != 0) {
+        fprintf(stderr, "FAILED to chdir to %s\n", udiImage);
+        goto _setupImageSsh_unclean;
+    }
+
+    /* generate ssh host keys */
+    for (keyPtr = keyType; *keyPtr != NULL; keyPtr++) {
+        char keygenExec[PATH_MAX];
+        char keyFileName[PATH_MAX];
+        char *args[8];
+
+        snprintf(keygenExec, PATH_MAX, "%s/bin/ssh-keygen", udiImage);
+        keygenExec[PATH_MAX-1] = 0;
+        snprintf(keyFileName, PATH_MAX, "%s/etc/ssh_host_%s_key", udiImage, *keyPtr);
+        args[0] = keygenExec;
+        args[1] = "-t";
+        args[2] = *keyPtr;
+        args[3] = "-f";
+        args[4] = keyFileName;
+        args[5] = "-N";
+        args[6] = "";
+        args[7] = NULL;
+        if (forkAndExecv(args) != 0) {
+            fprintf(stderr, "Failed to generate key of type %s\n", *keyPtr);
+            goto _setupImageSsh_unclean;
+        }
+    }
+
+    /* rewrite sshd_config */
+    snprintf(sshdConfigPath, PATH_MAX, "%s/etc/sshd_config", udiImage);
+    sshdConfigPath[PATH_MAX - 1] = 0;
+    snprintf(sshdConfigPathNew, PATH_MAX, "%s/etc/sshd_config.new", udiImage);
+    sshdConfigPathNew[PATH_MAX - 1] = 0;
+
+    inputFile = fopen(sshdConfigPath, "r");
+    outputFile = fopen(sshdConfigPathNew, "w");
+
+    if (inputFile == NULL || outputFile == NULL) {
+        fprintf(stderr, "Could not open sshd_config for reading or writing\n");
+        goto _setupImageSsh_unclean;
+    }
+
+    while (!feof(inputFile) && !ferror(inputFile)) {
+        size_t nbytes = getline(&lineBuf, &lineBuf_size, inputFile);
+        if (nbytes == 0) break;
+        if (strcmp(lineBuf, "AllowUsers ToBeReplaced") == 0) {
+            fprintf(outputFile, "AllowUsers %s\n", username);
+        } else {
+            fprintf(outputFile, "%s\n", lineBuf);
+        }
+    }
+    fclose(inputFile);
+    fclose(outputFile);
+    inputFile = NULL;
+    outputFile = NULL;
+    if (lineBuf != NULL) {
+        free(lineBuf);
+        lineBuf = NULL;
+    }
+    if (stat(sshdConfigPathNew, &statData) != 0) {
+        fprintf(stderr, "FAILED to find new sshd_config file, cannot setup sshd\n");
+        goto _setupImageSsh_unclean;
+    } else {
+        char *moveCmd[4] = { "mv", sshdConfigPathNew, sshdConfigPath, NULL };
+        if (forkAndExecvp(moveCmd) != 0) {
+            fprintf(stderr, "FAILED to replace sshd_config with configured version.\n");
+            goto _setupImageSsh_unclean;
+        }
+    }
+    chown(sshdConfigPath, 0, 0);
+    chmod(sshdConfigPath, S_IRUSR);
+
+    if (sshPubKey != NULL && strlen(sshPubKey) > 0) {
+        char buffer[PATH_MAX];
+        snprintf(buffer, PATH_MAX, "%s/etc/user_auth_keys", udiImage);
+        buffer[PATH_MAX - 1] = 0;
+        outputFile = fopen(buffer, "w");
+        if (outputFile == NULL) {
+            fprintf(stderr, "FAILED to open user_auth_keys for writing\n");
+            goto _setupImageSsh_unclean;
+        }
+        fprintf(outputFile, "%s\n", sshPubKey);
+        fclose(outputFile);
+        outputFile = NULL;
+        chown(buffer, uid, 0);
+        chmod(buffer, S_IRUSR); /* user read only */
+
+    }
+
+    {
+        char from[PATH_MAX];
+        char to[PATH_MAX];
+
+        snprintf(from, PATH_MAX, "%s/bin/ssh", udiImage);
+        snprintf(to, PATH_MAX, "%s%s/usr/bin/ssh", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+        from[PATH_MAX-1] = 0;
+        to[PATH_MAX-1] = 0;
+        if (stat(to, &statData) == 0) {
+            _BINDMOUNT(mountCache, from, to, 1);
+        }
+        snprintf(from, PATH_MAX, "%s/bin/ssh", udiImage);
+        snprintf(to, PATH_MAX, "%s%s/bin/ssh", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+        from[PATH_MAX - 1] = 0;
+        to[PATH_MAX - 1] = 0;
+        if (stat(to, &statData) == 0) {
+            _BINDMOUNT(mountCache, from, to, 1);
+        }
+        snprintf(from, PATH_MAX, "%s/etc/ssh_config", udiImage);
+        snprintf(to, PATH_MAX, "%s%s/etc/ssh/ssh_config", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+        if (stat(to, &statData) == 0) {
+            char *args[5] = {"cp", "-p", from, to, NULL};
+            if (forkAndExecvp(args) != 0) {
+                fprintf(stderr, "FAILED to copy ssh_config to %s\n", to);
+                goto _setupImageSsh_unclean;
+            }
+        }
+    }
+#undef _BINDMOUNT
+    return 0;
+_setupImageSsh_unclean:
+    if (inputFile != NULL) {
+        fclose(inputFile);
+        inputFile = NULL;
+    }
+    if (outputFile != NULL) {
+        fclose(outputFile);
+        outputFile = NULL;
+    }
+    if (lineBuf != NULL) {
+        free(lineBuf);
+        lineBuf = NULL;
     }
     return 1;
 }
