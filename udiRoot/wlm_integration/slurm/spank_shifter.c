@@ -556,20 +556,20 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     setupRootArgs = malloc(sizeof(char*) * n_setupRootArgs);
     idx = 0;
     setupRootArgs[idx++] = strdup(setupRootPath);
-    /*
     if (uid != 0) {
         snprintf(buffer, 1024, "%u", uid);
-        setupRootArgs[idx++] = strdup("-u");
+        setupRootArgs[idx++] = strdup("-U");
         setupRootArgs[idx++] = strdup(buffer);
     }
     if (username != NULL) {
-        setupRootArgs[idx++] = strdup("-U");
+        setupRootArgs[idx++] = strdup("-u");
         setupRootArgs[idx++] = strdup(username);
     }
     if (sshPubKey != NULL) {
         setupRootArgs[idx++] = strdup("-s");
         setupRootArgs[idx++] = strdup(sshPubKey);
     }
+    /*
     if (nodelist != NULL) {
         setupRootArgs[idx++] = strdup("-N");
         setupRootArgs[idx++] = strdup(nodelist);

@@ -63,6 +63,10 @@
 #include "UdiRootConfig.h"
 #include "shifter_core.h"
 
+#ifndef ROOTFS_TYPE
+#define ROOTFS_TYPE "tmpfs"
+#endif
+
 
 static int _bindMount(char **mountCache, const char *from, const char *to, int ro);
 static int _sortFsForward(const void *, const void *);
@@ -402,13 +406,13 @@ int prepareSiteModifications(const char *minNodeSpec, UdiRootConfig *udiConfig) 
 
     /* recursively copy /opt/udiImage (to allow modifications) */
     if (udiConfig->optUdiImage != NULL) {
-        snprintf(srcBuffer, PATH_MAX, "%s/%s/*", udiConfig->nodeContextPrefix, udiConfig->optUdiImage);
+        snprintf(srcBuffer, PATH_MAX, "%s/%s/", udiConfig->nodeContextPrefix, udiConfig->optUdiImage);
         srcBuffer[PATH_MAX-1] = 0;
         if (stat(srcBuffer, &statData) != 0) {
             fprintf(stderr, "FAILED to stat udiImage source directory: %s\n", srcBuffer);
             goto _prepSiteMod_unclean;
         }
-        snprintf(mntBuffer, PATH_MAX, "%s/opt/udiImage", udiRoot);
+        snprintf(mntBuffer, PATH_MAX, "%s/opt", udiRoot);
         mntBuffer[PATH_MAX-1] = 0;
 
         if (stat(mntBuffer, &statData) != 0) {
@@ -534,7 +538,7 @@ int mountImageVFS(ImageData *imageData, const char *minNodeSpec, UdiRootConfig *
     }
 
     /* mount a new rootfs to work in */
-    if (mount(NULL, udiRoot, "rootfs", MS_NOSUID|MS_NODEV, NULL) != 0) {
+    if (mount(NULL, udiRoot, ROOTFS_TYPE, MS_NOSUID|MS_NODEV, NULL) != 0) {
         fprintf(stderr, "FAILED to mount rootfs on %s\n", udiRoot);
         perror("   --- REASON: ");
         goto _mountImgVfs_unclean;
@@ -744,7 +748,7 @@ int setupImageSsh(ImageData *imageData, char *sshPubKey, char *username, uid_t u
     char udiImage[PATH_MAX];
     char sshdConfigPath[PATH_MAX];
     char sshdConfigPathNew[PATH_MAX];
-    char *keyType[3] = {"rsa","ed25519", NULL}; /* skipping dsa and ecdsa since there is suspicion of trouble */
+    char *keyType[5] = {"dsa", "ecdsa", "rsa","ed25519", NULL};
     char **keyPtr = NULL;
     char *lineBuf = NULL;
     size_t lineBuf_size = 0;
@@ -815,11 +819,13 @@ int setupImageSsh(ImageData *imageData, char *sshPubKey, char *username, uid_t u
 
     while (!feof(inputFile) && !ferror(inputFile)) {
         size_t nbytes = getline(&lineBuf, &lineBuf_size, inputFile);
+        char *ptr = NULL;
         if (nbytes == 0) break;
-        if (strcmp(lineBuf, "AllowUsers ToBeReplaced") == 0) {
+        ptr = shifter_trim(lineBuf);
+        if (strcmp(ptr, "AllowUsers ToBeReplaced") == 0) {
             fprintf(outputFile, "AllowUsers %s\n", username);
         } else {
-            fprintf(outputFile, "%s\n", lineBuf);
+            fprintf(outputFile, "%s\n", ptr);
         }
     }
     fclose(inputFile);
@@ -886,6 +892,12 @@ int setupImageSsh(ImageData *imageData, char *sshPubKey, char *username, uid_t u
                 fprintf(stderr, "FAILED to copy ssh_config to %s\n", to);
                 goto _setupImageSsh_unclean;
             }
+        }
+
+        snprintf(to, PATH_MAX, "%s%s/var/empty", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+        if (mkdir(to, 0700) != 0) {
+            fprintf(stderr, "FAILED to create /var/empty\n");
+            goto _setupImageSsh_unclean;
         }
     }
 #undef _BINDMOUNT
