@@ -140,6 +140,15 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
+    if (config.sshPubKey != NULL && strlen(config.sshPubKey) > 0
+            && config.user != NULL && strlen(config.user) > 0
+            && config.uid != 0) {
+        if (setupImageSsh(&image, config.sshPubKey, config.user, config.uid, &udiConfig) != 0) {
+            fprintf(stderr, "FAILED to setup ssh configuration\n");
+            exit(1);
+        }
+    }
+
     if (setupUserMounts(&image, config.volumeMapFrom, config.volumeMapTo, config.volumeMapFlags, &udiConfig) != 0) {
         fprintf(stderr, "FAILED to setup user-requested mounts.\n");
         exit(1);
