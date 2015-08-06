@@ -906,6 +906,56 @@ _setupImageSsh_unclean:
     return 1;
 }
 
+/**
+  * startSshd
+  * chroots into image and runs the secured sshd
+  */
+int startSshd(UdiRootConfig *udiConfig) {
+    char udiRootPath[PATH_MAX];
+    pid_t pid = 0;
+
+    snprintf(udiRootPath, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    udiRootPath[PATH_MAX - 1] = 0;
+
+    if (chdir(udiRootPath) != 0) {
+        fprintf(stderr, "FAILED to chdir to %s while attempted to start sshd\n", udiRootPath);
+        goto _startSshd_unclean;
+    }
+
+    pid = fork();
+    if (pid < 0) {
+        fprintf(stderr, "FAILED to fork while attempting to start sshd\n");
+        goto _startSshd_unclean;
+    }
+    if (pid == 0) {
+        char *args[2] = {"/opt/udiImage/sbin/sshd", NULL};
+        if (chroot(udiRootPath) != 0) {
+            fprintf(stderr, "FAILED to chroot to %s while attempting to start sshd\n", udiRootPath);
+            goto _startSshd_unclean;
+        }
+        execv(args[0], args);
+        exit(1);
+    } else {
+        int status = 0;
+        do {
+            pid_t ret = waitpid(pid, &status, 0);
+            if (ret != pid) {
+                fprintf(stderr, "waited for wrong pid: %d != %d\n", pid, ret);
+                goto _startSshd_unclean;
+            }
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+        if (WIFEXITED(status)) {
+            status = WEXITSTATUS(status);
+        } else {
+            status = 1;
+        }
+        return status;
+    }
+    return 0;
+_startSshd_unclean:
+    return 1;
+}
+
 int forkAndExecvp(char **args) {
     pid_t pid = 0;
 
