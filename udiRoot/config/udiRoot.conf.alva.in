@@ -10,9 +10,10 @@ siteFs=/scratch1 \
        /global/scratch2 /global/project /global/projectb \
        /global/dna /var/opt/cray/alps/spool \
        /var/spool/slurmd
-optUdiImage=@@@PREFIX@@@/deps
+optUdiImage=@@@PREFIX@@@/deps/udiImage
 etcPath=@@@PREFIX@@@/etc_files
 kmodBasePath=@@@PREFIX@@@/kmod
 kmodCacheFile=/tmp/udiRootLoadedModules.txt
 batchType=slurm
+imageGateway=128.55.50.83:7777
 system=@@@SYSTEM@@@

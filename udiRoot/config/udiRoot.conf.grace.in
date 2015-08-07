@@ -9,10 +9,10 @@ siteFs=/scratch \
        /global/u1 /global/u2 /global/syscom /global/common \
        /global/scratch2 /global/project /global/projectb \
        /global/dna /var/opt/cray/alps/spool
-optUdiImage=@@@PREFIX@@@/sshd
+optUdiImage=@@@PREFIX@@@/deps/udiImage
 etcPath=@@@PREFIX@@@/etc_files
 kmodBasePath=@@@PREFIX@@@/kmod
 kmodCacheFile=/tmp/udiRootLoadedModules.txt
 batchType=torque
-system=@@@SYSTEM@@@
 imageGateway=128.55.50.83:7777
+system=@@@SYSTEM@@@

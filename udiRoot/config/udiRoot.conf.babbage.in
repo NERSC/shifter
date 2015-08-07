@@ -8,7 +8,7 @@ sitePostMountHook=@@@CONFIG_DIR@@@/postmount.sh
 siteFs=/chos/global/u1 /chos/global/u2 /chos/global/babbage \
        /chos/global/common /chos/global/scratch2 /chos/global/project \
        /chos/global/projectb /chos/global/dna /chos/cgroup /var/spool/slurm
-optUdiImage=@@@PREFIX@@@/deps
+optUdiImage=@@@PREFIX@@@/deps/udiImage
 etcPath=@@@PREFIX@@@/etc_files
 kmodBasePath=@@@PREFIX@@@/kmod
 kmodCacheFile=/tmp/udiRootLoadedModules.txt
