@@ -135,12 +135,11 @@ int main(int argc, char **argv) {
             exit(1);
         }
     }
-    if (mountImageVFS(&image, config.minNodeSpec, &udiConfig) != 0) {
+    if (mountImageVFS(&image, config.user, config.minNodeSpec, &udiConfig) != 0) {
         fprintf(stderr, "FAILED to mount image into UDI\n");
         exit(1);
     }
 
-    printf("sshPubKey: %s, user: %s, uid: %lu\n", config.sshPubKey != NULL ? config.sshPubKey : "(none)", config.user != NULL ? config.user : "(none)", config.uid);
     if (config.sshPubKey != NULL && strlen(config.sshPubKey) > 0
             && config.user != NULL && strlen(config.user) > 0
             && config.uid != 0) {

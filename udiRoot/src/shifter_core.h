@@ -62,18 +62,22 @@
 #include "ImageData.h"
 #include "UdiRootConfig.h"
 
+#define INVALID_USER UINT_MAX
+#define INVALID_GROUP UINT_MAX
 #define FILE_SIZE_LIMIT 5242880
 #define MOUNT_ALLOC_BLOCK 24
 
 int setupUserMounts(ImageData *imageData, char **volumeFrom, char **volumeTo, char **volumeFlags, UdiRootConfig *udiConfig);
 int userMountFilter(char *udiRoot, char *filtered_from, char *filtered_to, char *flags);
 int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig);
-int mountImageVFS(ImageData *imageData, const char *minNodeSpec, UdiRootConfig *udiConfig);
+int mountImageVFS(ImageData *imageData, const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig);
 int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig);
 int destructUDI(UdiRootConfig *udiConfig);
 int bindImageIntoUDI(const char *relpath, ImageData *imageData, UdiRootConfig *udiConfig, int copyFlag);
-int prepareSiteModifications(const char *minNodeSpec, UdiRootConfig *udiConfig);
+int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig);
 int setupImageSsh(ImageData *imageData, char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udiConfig);
+int startSshd(UdiRootConfig *udiConfig);
+int filterEtcGroup(const char *dest, const char *from, const char *username);
 int forkAndExecvp(char **args);
 int forkAndExecv(char **argvs);
 char **parseMounts(size_t *n_mounts);
