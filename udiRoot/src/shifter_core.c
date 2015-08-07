@@ -62,15 +62,18 @@
 #include "ImageData.h"
 #include "UdiRootConfig.h"
 #include "shifter_core.h"
+#include "utility.h"
 
 #ifndef ROOTFS_TYPE
 #define ROOTFS_TYPE "tmpfs"
 #endif
 
 
+
 static int _bindMount(char **mountCache, const char *from, const char *to, int ro);
 static int _sortFsForward(const void *, const void *);
 static int _sortFsReverse(const void *, const void *);
+static int _copyFile(const char *source, const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode);
 static char *_filterString(char *);
 
 /*! Bind subtree of static image into UDI rootfs */
@@ -253,6 +256,93 @@ _bindImgUDI_unclean:
     return 1;
 }
 
+/*! Copy a file or link as correctly as possible */
+/*!
+ * Copy file (or symlink) from source to dest.
+ * \param source Filename to copy, must be an existing regular file or an
+ *             existing symlink
+ * \param dest Destination of copy, must be an existing directory name or a
+ *             non-existing filename
+ * \param keepLink If set to 1 copy symlink, if set to 0 copy file dereferenced
+ *             value of symlink
+ * \param owner uid to set dest, INVALID_USER uses source ownership
+ * \param group gid to set dest, INVALID_GROUP uses source group ownership
+ * \param mode octal mode of file, 0 keeps source permissions
+ *
+ * In all cases stick/setuid bits will be removed.
+ */
+int _copyFile(const char *source, const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode) {
+    struct stat destStat;
+    struct stat sourceStat;
+    char *cmdArgs[5] = { NULL, NULL, NULL, NULL, NULL };
+    char **ptr = NULL;
+    size_t cmdArgs_idx = 0;
+    int isLink = 0;
+    mode_t tgtMode = mode;
+
+    if (dest == NULL || source == NULL || strlen(dest) == 0 || strlen(source) == 0) {
+        fprintf(stderr, "Invalid arguments for _copyFile\n");
+        goto _copyFile_unclean;
+    }
+    if (stat(dest, &destStat) == 0) {
+        /* check if dest is a directory */
+        if (!S_ISDIR(destStat.st_mode)) {
+            fprintf(stderr, "Destination path %s exists and is not a directory. Will not copy\n", dest);
+            goto _copyFile_unclean;
+        }
+    }
+    if (stat(source, &sourceStat) != 0) {
+        fprintf(stderr, "Source file %s does not exist. Cannot copy\n", source);
+        goto _copyFile_unclean;
+    } else {
+        if (S_ISLNK(sourceStat.st_mode)) {
+            isLink = 1;
+        } else if (S_ISDIR(sourceStat.st_mode)) {
+            fprintf(stderr, "Source path %s is a directory. Will not copy\n", source);
+            goto _copyFile_unclean;
+        }
+    }
+
+    cmdArgs[cmdArgs_idx++] = strdup("cp");
+    if (isLink == 1 && keepLink == 1) {
+        cmdArgs[cmdArgs_idx++] = strdup("-P");
+    }
+    cmdArgs[cmdArgs_idx++] = strdup(source);
+    cmdArgs[cmdArgs_idx++] = strdup(dest);
+    cmdArgs[cmdArgs_idx++] = NULL;
+
+    if (forkAndExecvp(cmdArgs) != 0) {
+        fprintf(stderr, "Failed to copy %s to %s\n", source, dest);
+        goto _copyFile_unclean;
+    }
+
+    if (owner == INVALID_USER) owner = sourceStat.st_uid;
+    if (group == INVALID_GROUP) group = sourceStat.st_gid;
+    if (chown(dest, owner, group) != 0) {
+        fprintf(stderr, "Failed to set ownership to %d:%d on %s\n", owner, group, dest);
+        goto _copyFile_unclean;
+    }
+
+    if (mode == 0) tgtMode = sourceStat.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO);
+    tgtMode &= ~(S_ISUID | S_ISGID | S_ISVTX);
+    if (chmod(dest, tgtMode) != 0) {
+        fprintf(stderr, "Failed to set permissions on %s to %o\n", dest, tgtMode);
+        goto _copyFile_unclean;
+    }
+
+    for (ptr = cmdArgs; *ptr != NULL; ptr++) {
+        free(*ptr);
+        *ptr = NULL;
+    }
+    return 0;
+_copyFile_unclean:
+    for (ptr = cmdArgs; *ptr != NULL; ptr++) {
+        free(*ptr);
+        *ptr = NULL;
+    }
+    return 1;
+}
+
 /*! Setup all required files/paths for site mods to the image */
 /*!
   Setup all required files/paths for site mods to the image.  This should be
@@ -262,11 +352,12 @@ _bindImgUDI_unclean:
 
   The site-configured bind-mounts will also be performed here.
 
+  \param username username for group-file filtering
   \param minNodeSpec nodelist specification
   \param udiConfig global configuration for udiRoot
   \return 0 for succss, 1 otherwise
 */
-int prepareSiteModifications(const char *minNodeSpec, UdiRootConfig *udiConfig) {
+int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig) {
 
     /* construct path to "live" copy of the image. */
     char udiRoot[PATH_MAX];
@@ -275,9 +366,17 @@ int prepareSiteModifications(const char *minNodeSpec, UdiRootConfig *udiConfig) 
     char **volPtr = NULL;
     char **mountCache = NULL;
     char **mntPtr = NULL;
+    char **fnamePtr = NULL;
     int ret = 0;
     size_t mountCache_cnt = 0;
     struct stat statData;
+
+    char *mandatorySiteEtcFiles[4] = {
+        "passwd", "group", "nsswitch.conf", NULL
+    };
+    char *copyLocalEtcFiles[3] = {
+        "hosts", "resolv.conf", NULL
+    };
 
     snprintf(udiRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
     udiRoot[PATH_MAX-1] = 0;
@@ -358,6 +457,32 @@ int prepareSiteModifications(const char *minNodeSpec, UdiRootConfig *udiConfig) 
     snprintf(mntBuffer, PATH_MAX, "%s/etc/local", udiRoot);
     mntBuffer[PATH_MAX-1] = 0;
     _BINDMOUNT(mountCache, "/etc", mntBuffer, 0);
+
+    /* copy needed local files */
+    for (fnamePtr = copyLocalEtcFiles; *fnamePtr != NULL; fnamePtr++) {
+        char source[PATH_MAX];
+        char dest[PATH_MAX];
+        snprintf(source, PATH_MAX, "%s/etc/local/%s", udiRoot, *fnamePtr);
+        snprintf(dest, PATH_MAX, "%s/etc/%s", udiRoot, *fnamePtr);
+        source[PATH_MAX - 1] = 0;
+        dest[PATH_MAX - 1] = 0;
+        if (_copyFile(source, dest, 1, 0, 0, 0644) != 0) {
+            fprintf(stderr, "Failed to copy %s to %s\n", source, dest);
+            goto _prepSiteMod_unclean;
+        }
+    }
+
+
+    /* validate that the mandatorySiteEtcFiles do not exist yet */
+    for (fnamePtr = mandatorySiteEtcFiles; *fnamePtr != NULL; fnamePtr++) {
+        char path[PATH_MAX];
+        snprintf(path, PATH_MAX, "%s/%s", udiRoot, *fnamePtr);
+        if (stat(path, &statData) == 0) {
+            fprintf(stderr, "%s already exists! ALERT!\n", path);
+            goto _prepSiteMod_unclean;
+        }
+    }
+
     /* --> loop over everything in site etc-files and copy into image etc */
     snprintf(srcBuffer, PATH_MAX, "%s/%s", udiConfig->nodeContextPrefix, udiConfig->etcPath);
     srcBuffer[PATH_MAX-1] = 0;
@@ -402,6 +527,48 @@ int prepareSiteModifications(const char *minNodeSpec, UdiRootConfig *udiConfig) 
         fprintf(stderr, "Couldn't stat udiRoot etc dir: %s\n", srcBuffer);
         ret = 1;
         goto _prepSiteMod_unclean;
+    }
+
+    /* validate that the mandatorySiteEtcFiles now exist */
+    for (fnamePtr = mandatorySiteEtcFiles; *fnamePtr != NULL; fnamePtr++) {
+        char path[PATH_MAX];
+        snprintf(path, PATH_MAX, "%s/%s", udiRoot, *fnamePtr);
+        if (stat(path, &statData) != 0) {
+            fprintf(stderr, "%s does not exist! ALERT!\n", path);
+            goto _prepSiteMod_unclean;
+        }
+        if (chown(path, 0, 0) != 0) {
+            fprintf(stderr, "failed to chown %s to userid 0\n", path);
+            goto _prepSiteMod_unclean;
+        }
+        if (chmod(path, 0644) != 0) {
+            fprintf(stderr, "failed to chmod %s to 0644\n", path);
+            goto _prepSiteMod_unclean;
+        }
+    }
+
+    /* filter the group file */
+    {
+        char *mvArgs[5];
+        char fromGroupFile[PATH_MAX];
+        char toGroupFile[PATH_MAX];
+        snprintf(fromGroupFile, PATH_MAX, "%s/etc/group", udiRoot);
+        snprintf(toGroupFile, PATH_MAX, "%s/etc/group.orig", udiRoot);
+        fromGroupFile[PATH_MAX - 1] = 0;
+        toGroupFile[PATH_MAX - 1] = 0;
+        mvArgs[0] = "mv";
+        mvArgs[1] = fromGroupFile;
+        mvArgs[2] = toGroupFile;
+        mvArgs[3] = NULL;
+        if (forkAndExecvp(mvArgs) != 0) {
+            fprintf(stderr, "Failed to rename %s to %s\n", fromGroupFile, toGroupFile);
+            goto _prepSiteMod_unclean;
+        }
+
+        if (filterEtcGroup(fromGroupFile, toGroupFile, username) != 0) {
+            fprintf(stderr, "Failed to filter group file %s\n", fromGroupFile);
+            goto _prepSiteMod_unclean;
+        }
     }
 
     /* recursively copy /opt/udiImage (to allow modifications) */
@@ -515,7 +682,7 @@ _prepSiteMod_unclean:
     return 1;
 }
 
-int mountImageVFS(ImageData *imageData, const char *minNodeSpec, UdiRootConfig *udiConfig) {
+int mountImageVFS(ImageData *imageData, const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig) {
     struct stat statData;
     char udiRoot[PATH_MAX];
 
@@ -543,9 +710,13 @@ int mountImageVFS(ImageData *imageData, const char *minNodeSpec, UdiRootConfig *
         perror("   --- REASON: ");
         goto _mountImgVfs_unclean;
     }
+    if (chmod(udiRoot, 0755) != 0) {
+        fprintf(stderr, "FAILED to chmod \"%s\" to 0755.\n", udiRoot);
+        goto _mountImgVfs_unclean;
+    }
 
     /* get our needs injected first */
-    if (prepareSiteModifications(minNodeSpec, udiConfig) != 0) {
+    if (prepareSiteModifications(username, minNodeSpec, udiConfig) != 0) {
         fprintf(stderr, "FAILED to properly setup site modifications\n");
         goto _mountImgVfs_unclean;
     }
@@ -1313,6 +1484,107 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
 _loadKrnlMod_unclean:
     if (lineBuffer != NULL) {
         free(lineBuffer);
+    }
+    return 1;
+}
+
+/** filterEtcGroup
+ *  many implementations of initgroups() do not deal with huge /etc/group 
+ *  files due to a variety of limitations (like per-line limits).  this 
+ *  function reads a given etcgroup file and filters the content to only
+ *  include the specified user
+ *
+ *  Parameters:
+ *  group_dest_fname - filename of filtered group file
+ *  group_source_fname - filename of to-be-filtered group file
+ *  username - user to identify
+ */
+int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname, const char *username) {
+    FILE *input = NULL;
+    FILE *output = NULL;
+    char *linePtr = NULL;
+    size_t linePtr_size = 0;
+    char *group_name = NULL;
+
+    if (group_dest_fname == NULL || strlen(group_dest_fname) == 0
+            || group_source_fname == NULL || strlen(group_source_fname) == 0
+            || username == NULL || strlen(username) == 0) {
+        fprintf(stderr, "Invalid arguments, cannot filter group file.\n");
+        goto _filterEtcGroup_unclean;
+    }
+
+    input = fopen(group_source_fname, "r");
+    output = fopen(group_dest_fname, "w");
+
+    if (input == NULL || output == NULL) {
+        fprintf(stderr, "Failed to open files, cannot filter group file.\n");
+        goto _filterEtcGroup_unclean;
+    }
+
+    while (!feof(input) && !ferror(input)) {
+        size_t nread = getline(&linePtr, &linePtr_size, input);
+        char *ptr = NULL;
+
+        char *token = NULL;
+        gid_t gid = 0;
+        size_t counter = 0;
+        int foundUsername = 0;
+        if (nread == 0) break;
+        ptr = shifter_trim(linePtr);
+        for (token = strtok(ptr, ":,");
+             token != NULL;
+             token = strtok(NULL, ":,")) {
+
+            switch (counter) {
+                case 0: group_name = strdup(token);
+                        if (strcmp(group_name, username) == 0) {
+                            foundUsername = 1;
+                        }
+                        break;
+                case 1: break;
+                case 2: gid = strtoul(token, NULL, 10);
+                        break;
+                default: if (strcmp(username, token) == 0) {
+                            foundUsername = 1;
+                        }
+                        break;
+            }
+            counter++;
+            if (foundUsername) break;
+        }
+        if (group_name != NULL && foundUsername == 1) {
+            fprintf(output, "%s:x:%d:%s\n", group_name, gid, username);
+        }
+        if (group_name != NULL) {
+            free(group_name);
+            group_name = NULL;
+        }
+    }
+    fclose(input);
+    fclose(output);
+    input = NULL;
+    output = NULL;
+
+    if (linePtr != NULL) {
+        free(linePtr);
+    }
+    return 0;
+_filterEtcGroup_unclean:
+    if (input != NULL) {
+        fclose(input);
+        input = NULL;
+    }
+    if (output != NULL) {
+        fclose(output);
+        output = NULL;
+    }
+    if (linePtr != NULL) {
+        free(linePtr);
+        linePtr = NULL;
+    }
+    if (group_name != NULL) {
+        free(group_name);
+        group_name = NULL;
     }
     return 1;
 }
