@@ -335,7 +335,7 @@ int parse_options(int argc, char **argv, struct options *config) {
     }
     {
         char **argsPtr = NULL;
-        size_t argsSize = NULL;
+        size_t argsSize = 0;
 
         char *ptr = strchr(argv[optind], ':');
         if (ptr == NULL) {
