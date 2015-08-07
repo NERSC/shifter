@@ -476,7 +476,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     /* validate that the mandatorySiteEtcFiles do not exist yet */
     for (fnamePtr = mandatorySiteEtcFiles; *fnamePtr != NULL; fnamePtr++) {
         char path[PATH_MAX];
-        snprintf(path, PATH_MAX, "%s/%s", udiRoot, *fnamePtr);
+        snprintf(path, PATH_MAX, "%s/etc/%s", udiRoot, *fnamePtr);
         if (stat(path, &statData) == 0) {
             fprintf(stderr, "%s already exists! ALERT!\n", path);
             goto _prepSiteMod_unclean;
@@ -532,7 +532,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     /* validate that the mandatorySiteEtcFiles now exist */
     for (fnamePtr = mandatorySiteEtcFiles; *fnamePtr != NULL; fnamePtr++) {
         char path[PATH_MAX];
-        snprintf(path, PATH_MAX, "%s/%s", udiRoot, *fnamePtr);
+        snprintf(path, PATH_MAX, "%s/etc/%s", udiRoot, *fnamePtr);
         if (stat(path, &statData) != 0) {
             fprintf(stderr, "%s does not exist! ALERT!\n", path);
             goto _prepSiteMod_unclean;
@@ -1550,7 +1550,7 @@ int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname,
                         break;
             }
             counter++;
-            if (foundUsername) break;
+            if (foundUsername && gid != 0) break;
         }
         if (group_name != NULL && foundUsername == 1) {
             fprintf(output, "%s:x:%d:%s\n", group_name, gid, username);

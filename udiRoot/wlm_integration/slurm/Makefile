@@ -35,8 +35,9 @@ shifter.so: spank_shifter.c ../../src/UdiRootConfig.c ../../src/utility.c
         -DIS_NATIVE_SLURM=$(IS_NATIVE_SLURM) -shared -fPIC $(LDFLAGS) $^ -o $@
 	
 install: all
-	mkdir -m 755 -p $(DESTDIR)/shared/slurm
-	$(INSTALL) --owner=root --group=root --mode=555  shifter.so $(DESTDIR)/shared/slurm/shifter.so
+	mkdir -m 755 -p $(DESTDIR)/share/slurm
+	mkdir -m 755 -p $(DESTDIR)/libexec
+	$(INSTALL) --owner=root --group=root --mode=555  shifter.so $(DESTDIR)/share/slurm/shifter.so
 	if [ -a udiRoot-epilogue ]; then $(INSTALL) --owner=root --group=root --mode=555 udiRoot-epilogue $(DESTDIR)/libexec/udiRoot-epilogue; fi
 	if [ -a udiRoot-prologue ]; then $(INSTALL) --owner=root --group=root --mode=555 udiRoot-prologue $(DESTDIR)/libexec/udiRoot-prologue; fi
 
