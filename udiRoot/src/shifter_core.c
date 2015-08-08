@@ -53,11 +53,13 @@
 #include <ctype.h>
 #include <limits.h>
 #include <dirent.h>
+#include <signal.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/mount.h>
+#include <sys/types.h>
 
 #include "ImageData.h"
 #include "UdiRootConfig.h"
@@ -1589,35 +1591,85 @@ _filterEtcGroup_unclean:
     return 1;
 }
 
+int killSshd() {
+    FILE *psOutput = popen("ps -eo pid,command", "r");
+    char *linePtr = NULL;
+    size_t linePtr_size = 0;
+    if (psOutput == NULL) {
+        fprintf(stderr, "FAILED to run ps to find sshd\n");
+        goto _killSshd_unclean;
+    }
+    while (!feof(psOutput) && !ferror(psOutput)) {
+        size_t nRead = getline(&linePtr, &linePtr_size, psOutput);
+        char *ptr = NULL;
+        char *command = NULL;
+        if (nRead == 0) break;
+        ptr = shifter_trim(linePtr);
+        command = strchr(ptr, ' ');
+        if (command != NULL) {
+            *command++ = 0;
+            if (strcmp(command, "/opt/udiImage/sbin/sshd") == 0) {
+                pid_t pid = strtoul(ptr, NULL, 10);
+                if (pid != 0) kill(pid, SIGTERM);
+            }
+        }
+    }
+    pclose(psOutput);
+    psOutput = NULL;
+    if (linePtr != NULL) {
+        free(linePtr);
+        linePtr = NULL;
+    }
+    return 0;
+_killSshd_unclean:
+    if (psOutput != NULL) {
+        pclose(psOutput);
+        psOutput = NULL;
+    }
+    if (linePtr != NULL) {
+        free(linePtr);
+        linePtr = NULL;
+    }
+    return 1;
+}
+
 int destructUDI(UdiRootConfig *udiConfig) {
     char udiRoot[PATH_MAX];
     char loopMount[PATH_MAX];
     size_t mountCache_cnt = 0;
     char **mountCache = parseMounts(&mountCache_cnt);
+    size_t idx = 0;
     snprintf(udiRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
     udiRoot[PATH_MAX-1] = 0;
     snprintf(loopMount, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->loopMountPoint);
     loopMount[PATH_MAX-1] = 0;
-    if (mountCache != NULL) {
-        size_t udiRoot_len = strlen(udiRoot);
-        size_t loopMount_len = strlen(loopMount);
-        char **ptr = NULL;
+    for (idx = 0; idx < 10; idx++) {
+        killSshd();
+        if (mountCache != NULL && *mountCache != NULL) {
+            size_t udiRoot_len = strlen(udiRoot);
+            size_t loopMount_len = strlen(loopMount);
+            char **ptr = NULL;
 
-        qsort(mountCache, mountCache_cnt, sizeof(char*), _sortFsReverse);
-        for (ptr = mountCache; *ptr != NULL; ptr++) {
-            if (strncmp(*ptr, udiRoot, udiRoot_len) == 0) {
-                char *args[] = {"umount", *ptr, NULL};
-                int ret = forkAndExecvp(args);
-                printf("%d umounted: %s\n", ret, *ptr);
-            } else if (strncmp(*ptr, loopMount, loopMount_len) == 0) {
-                char *args[] = {"umount", *ptr, NULL};
-                int ret = forkAndExecvp(args);
-                printf("%d loop umounted: %s\n", ret, *ptr);
+            if (idx > 0) usleep(300);
+
+            qsort(mountCache, mountCache_cnt, sizeof(char*), _sortFsReverse);
+            for (ptr = mountCache; *ptr != NULL; ptr++) {
+                if (strncmp(*ptr, udiRoot, udiRoot_len) == 0) {
+                    char *args[] = {"umount", *ptr, NULL};
+                    int ret = forkAndExecvp(args);
+                    printf("%d umounted: %s\n", ret, *ptr);
+                } else if (strncmp(*ptr, loopMount, loopMount_len) == 0) {
+                    char *args[] = {"umount", *ptr, NULL};
+                    int ret = forkAndExecvp(args);
+                    printf("%d loop umounted: %s\n", ret, *ptr);
+                }
+                free(*ptr);
             }
-            free(*ptr);
+            free(mountCache);
+            mountCache = NULL;
+        } else {
+            break;
         }
-        free(mountCache);
-        mountCache = NULL;
     }
     return 0;
 }
