@@ -23,9 +23,11 @@ recurse:
 	for dir in $(DIRS); do (cd $$dir; make all || exit 1) || exit 1; done
 all: config.inc recurse
 
-test:
+test: cpputest
 	for dir in $(DIRS); do (cd $$dir; make test || exit 1) || exit 1; done
 
+cpputest:
+	./cpputest.sh
 install:
 	mkdir -m 755 -p $(DESTDIR)
 	mkdir -m 755 -p $(DESTDIR)/sbin
