@@ -45,7 +45,9 @@
  * form.
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <unistd.h>
 #include <sched.h>
 
@@ -71,9 +73,16 @@ extern char **environ;
 
 #define VOLUME_ALLOC_BLOCK 10
 
+#ifndef VERSION
+#define VERSION "0Test0"
+#endif
+
+
 struct options {
+    char *request;
     char *imageType;
     char *imageIdentifier;
+    char *rawVolumes;
     uid_t tgtUid;
     gid_t tgtGid;
     char **args;
@@ -81,6 +90,7 @@ struct options {
     char **volumeMapTo;
     char **volumeMapFlags;
     int verbose;
+    int useEntryPoint;
 
     /* state variables only used at parse time */
     size_t volumeMap_capacity;
@@ -89,14 +99,19 @@ struct options {
     char **volumeMapFlags_ptr;
 };
 
+
 static void _usage(int);
 static void _version(void);
-static char *_filterString(char *input);
+static char *_filterString(const char *input);
 char **copyenv(void);
 int parse_options(int argc, char **argv, struct options *opts);
+int parse_environment(struct options *opts);
 int fprint_options(FILE *, struct options *);
 void free_options(struct options *);
+int appendVolumeMap(struct options *config, char *volumeDesc);
+void local_putenv(char ***environ, const char *newVar);
 
+#ifndef _TESTHARNESS
 int main(int argc, char **argv) {
 
     /* save a copy of the environment for the exec */
@@ -118,6 +133,11 @@ int main(int argc, char **argv) {
     memset(&udiConfig, 0, sizeof(UdiRootConfig));
     memset(&imageData, 0, sizeof(ImageData));
 
+    if (parse_environment(&opts) != 0) {
+        fprintf(stderr, "FAILED to parse environment\n");
+        exit(1);
+    }
+
     /* destroy this environment */
     clearenv();
 
@@ -132,9 +152,23 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
+    /* discover information about this image */
+    if (parse_ImageData(opts.imageIdentifier, &udiConfig, &imageData) != 0) {
+        fprintf(stderr, "FAILED to find requested image.\n");
+        exit(1);
+    }
+
+    /* check if entrypoint is defined and desired */
+    if (opts.useEntryPoint == 1) {
+        if (imageData.entryPoint != NULL) {
+            opts.args[0] = strdup(imageData.entryPoint);
+        } else {
+            fprintf(stderr, "Image does not have a defined entrypoint.\n");
+        }
+    }
+
     snprintf(udiRoot, PATH_MAX, "%s%s", udiConfig.nodeContextPrefix, udiConfig.udiMountPoint);
     udiRoot[PATH_MAX-1] = 0;
-
 
     /* figure out who we are and who we want to be */
     uid = getuid();
@@ -181,7 +215,7 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    /* TODO: run setupRoot here */
+    /* run setupRoot here */
     snprintf(exec, PATH_MAX, "%s%s/sbin/setupRoot", udiConfig.nodeContextPrefix, udiConfig.udiRootPath);
     exec[PATH_MAX-1] = 0;
     {
@@ -232,8 +266,60 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
+    /* source the environment variables from the image */
+    char **envPtr = NULL;
+    for (envPtr = imageData.env; *envPtr != NULL; envPtr++) {
+        local_putenv(&environ_copy, *envPtr);
+    }
+
     execve(opts.args[0], opts.args, environ_copy);
     return 0;
+}
+#endif
+
+/* local_putenv
+ * Provides similar functionality to linux putenv, but on a targetted
+ * environment.  Expects all strings to be in "var=value" format.
+ * Expects environment to be unsorted (linear search). The environ
+ * may be reallocated by this code if it needs to add to the environment.
+ * newVar will not be changed.
+ *
+ * environ: pointer to pointer to NULL-terminated array of points to key/value
+ *          strings
+ * newVar: key/value string to replace, add to environment
+ */
+void local_putenv(char ***environ, const char *newVar) {
+    const char *ptr = NULL;
+    size_t envSize = 0;
+    int nameSize = 0;
+    char **envPtr = NULL;
+
+    if (environ == NULL || newVar == NULL || *environ == NULL) return;
+    ptr = strchr(newVar, '=');
+    if (ptr == NULL) {
+        fprintf(stderr, "WARNING: cannot parse container environment variable: %s\n", newVar);
+        return;
+    }
+    nameSize = ptr - newVar;
+
+    for (envPtr = *environ; *envPtr != NULL; envPtr++) {
+        if (strncmp(*envPtr, newVar, nameSize) == 0) {
+            free(*envPtr);
+            *envPtr = strdup(newVar);
+            return;
+        }
+        envSize++;
+    }
+
+    /* did not find newVar in the environment, need to add it */
+    char **tmp = (char **) realloc(*environ, sizeof(char *) * (envSize + 2));
+    if (tmp == NULL) {
+        fprintf(stderr, "WARNING: failed to add %*s to the environment, out of memory.\n", nameSize, newVar);
+        return;
+    }
+    *environ = tmp;
+    (*environ)[envSize++] = strdup(newVar);
+    (*environ)[envSize++] = NULL;
 }
 
 int parse_options(int argc, char **argv, struct options *config) {
@@ -243,14 +329,17 @@ int parse_options(int argc, char **argv, struct options *config) {
         {"volume", 1, 0, 'V'},
         {"verbose", 0, 0, 'v'},
         {"user", 1, 0, 0},
+        {"image", 1, 0, 'i'},
+        {"entry", 0, 0, 'e'},
         {0, 0, 0, 0}
     };
+    char *ptr = NULL;
 
 
     optind = 1;
     for ( ; ; ) {
         int longopt_index = 0;
-        opt = getopt_long(argc, argv, "hvV:", long_options, &longopt_index);
+        opt = getopt_long(argc, argv, "hvV:i:e", long_options, &longopt_index);
         if (opt == -1) break;
 
         switch (opt) {
@@ -282,42 +371,41 @@ int parse_options(int argc, char **argv, struct options *config) {
                 break;
             case 'v': config->verbose = 1; break;
             case 'V':
-                {
-                    char *from  = strtok(optarg, ":");
-                    char *to    = strtok(NULL,   ":");
-                    char *flags = strtok(NULL,   ":");
-                    size_t cnt = config->volumeMapFrom_ptr - config->volumeMapFrom;
-
-                    if (from == NULL || to == NULL) {
-                        fprintf(stderr, "ERROR: invalid format for volume map!");
-                        _usage(1);
+                if (optarg == NULL) break;
+                char *tokloc;
+                for (ptr = strtok_r(optarg, ",", &tokloc); ptr != NULL; ptr = strtok_r(NULL, ",", &tokloc)) {
+                    size_t raw_capacity = 0;
+                    size_t new_capacity = strlen(ptr);
+                    char *orig = strdup(ptr);
+                    if (config->rawVolumes != NULL) {
+                        raw_capacity = strlen(config->rawVolumes);
                     }
-
-                    if (config->volumeMapFrom == NULL || (cnt + 2) >= config->volumeMap_capacity) {
-                        char **fromPtr = realloc(config->volumeMapFrom, config->volumeMap_capacity + VOLUME_ALLOC_BLOCK);
-                        char **toPtr = realloc(config->volumeMapTo, config->volumeMap_capacity + VOLUME_ALLOC_BLOCK);
-                        char **flagsPtr = realloc(config->volumeMapFlags, config->volumeMap_capacity + VOLUME_ALLOC_BLOCK);
-                        if (fromPtr == NULL || toPtr == NULL || flagsPtr == NULL) {
-                            fprintf(stderr, "ERROR: unable to allocate memory for volume map!\n");
-                            _usage(1);
+                    if (appendVolumeMap(config, ptr) == 0) {
+                        char *ptr = NULL;
+                        config->rawVolumes = (char *) realloc(config->rawVolumes, sizeof(char) * (raw_capacity + new_capacity + 2));
+                        if (config->rawVolumes == NULL) {
+                            fprintf(stderr, "FAILED to allocate memory, aborting.");
+                            abort();
                         }
-                        config->volumeMapFrom = fromPtr;
-                        config->volumeMapTo = toPtr;
-                        config->volumeMapFlags = flagsPtr;
-                        config->volumeMapFrom_ptr = fromPtr + cnt;
-                        config->volumeMapTo_ptr = toPtr + cnt;
-                        config->volumeMapFlags_ptr = flagsPtr + cnt;
+                        ptr = config->rawVolumes + raw_capacity;
+                        snprintf(ptr, new_capacity + 2, "%s,", orig);
                     }
-                    *(config->volumeMapFrom_ptr) = strdup(from);
-                    *(config->volumeMapTo_ptr) = strdup(to);
-                    *(config->volumeMapFlags_ptr) = (flags ? strdup(flags) : NULL);
-                    config->volumeMapFrom_ptr++;
-                    config->volumeMapTo_ptr++;
-                    config->volumeMapFlags_ptr++;
-                    *(config->volumeMapFrom_ptr) = NULL;
-                    *(config->volumeMapTo_ptr) = NULL;
-                    *(config->volumeMapFlags_ptr) = NULL;
+                    free(orig);
                 }
+                break;
+            case 'i':
+                ptr = strchr(optarg, ':');
+                if (ptr == NULL) {
+                    fprintf(stderr, "Incorrect format for image identifier:  need \"image_type:image_id\"\n");
+                    _usage(1);
+                    break;
+                }
+                *ptr = 0;
+                config->imageType = _filterString(optarg);
+                config->imageIdentifier = _filterString(ptr);
+                break;
+            case 'e':
+                config->useEntryPoint = 1;
                 break;
             case '?':
                 fprintf(stderr, "Missing an argument!\n");
@@ -328,36 +416,102 @@ int parse_options(int argc, char **argv, struct options *config) {
         }
     }
 
-    int remaining = argc - optind;
-    if (remaining < 2) {
-        fprintf(stderr, "Must specify image descriptor followed by command and arguments.\n");
-        _usage(1);
-    }
-    {
-        char **argsPtr = NULL;
-        size_t argsSize = 0;
-
-        char *ptr = strchr(argv[optind], ':');
-        if (ptr == NULL) {
-            fprintf(stderr, "Incorrect format for image identifier\n");
-            _usage(1);
+    if (config->rawVolumes != NULL) {
+        /* remove trailing comma */
+        size_t len = strlen(config->rawVolumes);
+        if (config->rawVolumes[len - 1] == ',') {
+            config->rawVolumes[len - 1] = 0;
         }
-        *ptr++ = 0;
-        config->imageType = _filterString(argv[optind]);
-        config->imageIdentifier = _filterString(ptr);
-        optind++;
+    }
 
-        argsSize = (sizeof(char*) * ((argc - optind) + 1));
-        config->args = malloc(argsSize);
-        memset(config->args, 0, argsSize);
+    int remaining = argc - optind;
+    if (config->useEntryPoint == 1) {
+        char **argsPtr = NULL;
+        config->args = (char **) malloc(sizeof(char *) * (remaining + 2));
         argsPtr = config->args;
-        for ( ; optind < argc ; optind++) {
-            *argsPtr = strdup(argv[optind]);
-            argsPtr++;
+        *argsPtr++ = NULL; /* leave space for entry point */
+        for ( ; optind < argc; optind++) {
+            *argsPtr++ = strdup(argv[optind]);
         }
         *argsPtr = NULL;
+    } else if (remaining > 0) {
+        /* interpret all remaining arguments as the intended command */
+        char **argsPtr = NULL;
+        config->args = (char **) malloc(sizeof(char *) * (remaining + 1));
+        for (argsPtr = config->args; optind < argc; optind++) {
+            *argsPtr++ = strdup(argv[optind]);
+        }
+        *argsPtr = NULL;
+    } else if (getenv("SHELL") != NULL) {
+        /* use the current shell */
+        config->args = (char **) malloc(sizeof(char *) * 2);
+        config->args[0] = strdup(getenv("SHELL"));
+        config->args[1] = NULL;
+    } else {
+        /* use /bin/sh */
+        config->args = (char **) malloc(sizeof(char*) * 2);
+        config->args[0] = strdup("/bin/sh");
+        config->args[1] = NULL;
     }
 
+    return 0;
+}
+
+int parse_environment(struct options *opts) {
+    char *envPtr = NULL;
+
+    if ((envPtr = getenv("SHIFTER_IMAGETYPE")) != NULL) {
+        opts->imageType = strdup(envPtr);
+    }
+    if ((envPtr = getenv("SHIFTER_IMAGE")) != NULL) {
+        opts->imageIdentifier = strdup(envPtr);
+    }
+    if ((envPtr = getenv("SHIFTER")) != NULL) {
+        opts->request = strdup(envPtr);
+    }
+    if ((envPtr = getenv("SHIFTER_VOLUME")) != NULL) {
+        opts->rawVolumes = strdup(envPtr);
+    }
+
+    return 0;
+}
+
+int appendVolumeMap(struct options *config, char *volumeDesc) {
+    char *tokloc = NULL;
+    char *from  = strtok_r(volumeDesc, ":", &tokloc);
+    char *to    = strtok_r(NULL,   ":", &tokloc);
+    char *flags = strtok_r(NULL,   ":", &tokloc);
+    size_t cnt = config->volumeMapFrom_ptr - config->volumeMapFrom;
+
+    if (from == NULL || to == NULL) {
+        fprintf(stderr, "ERROR: invalid format for volume map!");
+        _usage(1);
+    }
+
+    if (config->volumeMapFrom == NULL || (cnt + 2) >= config->volumeMap_capacity) {
+        char **fromPtr = (char **) realloc(config->volumeMapFrom, config->volumeMap_capacity + VOLUME_ALLOC_BLOCK);
+        char **toPtr = (char **) realloc(config->volumeMapTo, config->volumeMap_capacity + VOLUME_ALLOC_BLOCK);
+        char **flagsPtr = (char **) realloc(config->volumeMapFlags, config->volumeMap_capacity + VOLUME_ALLOC_BLOCK);
+        if (fromPtr == NULL || toPtr == NULL || flagsPtr == NULL) {
+            fprintf(stderr, "ERROR: unable to allocate memory for volume map!\n");
+            _usage(1);
+        }
+        config->volumeMapFrom = fromPtr;
+        config->volumeMapTo = toPtr;
+        config->volumeMapFlags = flagsPtr;
+        config->volumeMapFrom_ptr = fromPtr + cnt;
+        config->volumeMapTo_ptr = toPtr + cnt;
+        config->volumeMapFlags_ptr = flagsPtr + cnt;
+    }
+    *(config->volumeMapFrom_ptr) = strdup(from);
+    *(config->volumeMapTo_ptr) = strdup(to);
+    *(config->volumeMapFlags_ptr) = (flags ? strdup(flags) : NULL);
+    config->volumeMapFrom_ptr++;
+    config->volumeMapTo_ptr++;
+    config->volumeMapFlags_ptr++;
+    *(config->volumeMapFrom_ptr) = NULL;
+    *(config->volumeMapTo_ptr) = NULL;
+    *(config->volumeMapFlags_ptr) = NULL;
     return 0;
 }
 
@@ -388,10 +542,10 @@ char **copyenv(void) {
     return outenv;
 }
 
-static char *_filterString(char *input) {
+static char *_filterString(const char *input) {
     ssize_t len = 0;
     char *ret = NULL;
-    char *rptr = NULL;
+    const char *rptr = NULL;
     char *wptr = NULL;
     if (input == NULL) return NULL;
 
@@ -410,3 +564,28 @@ static char *_filterString(char *input) {
     *wptr = 0;
     return ret;
 }
+
+#ifdef _TESTHARNESS
+#include <CppUTest/CommandLineTestRunner.h>
+
+TEST_GROUP(ShifterTestGroup) {
+};
+
+TEST(ShifterTestGroup, FilterString_basic) {
+    CHECK(_filterString(NULL) == NULL);
+    char *output = _filterString("echo test; rm -rf thing1");
+    CHECK(strcmp(output, "echotestrm-rfthing1") == 0);
+    free(output);
+    output = _filterString("V4l1d-str1ng.input");
+    CHECK(strcmp(output, "V4l1d-str1ng.input") == 0);
+    free(output);
+    output = _filterString("");
+    CHECK(output != NULL);
+    CHECK(strlen(output) == 0);
+    free(output);
+}
+
+int main(int argc, char **argv) {
+    return CommandLineTestRunner::RunAllTests(argc, argv);
+}
+#endif
