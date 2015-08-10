@@ -103,7 +103,7 @@ struct options {
 static void _usage(int);
 static void _version(void);
 static char *_filterString(const char *input);
-char **copyenv(void);
+char **local_copyenv(void);
 int parse_options(int argc, char **argv, struct options *opts);
 int parse_environment(struct options *opts);
 int fprint_options(FILE *, struct options *);
@@ -115,7 +115,7 @@ int local_putenv(char ***environ, const char *newVar);
 int main(int argc, char **argv) {
 
     /* save a copy of the environment for the exec */
-    char **environ_copy = copyenv();
+    char **environ_copy = local_copyenv();
 
     /* declare needed variables */
     char wd[PATH_MAX];
@@ -524,7 +524,7 @@ static void _version(void) {
     printf("interactive shifter version %s\n", VERSION);
 }
 
-char **copyenv(void) {
+char **local_copyenv(void) {
     char **outenv = NULL;
     char **ptr = NULL;
     char **wptr = NULL;
@@ -536,8 +536,10 @@ char **copyenv(void) {
     for (ptr = environ; *ptr != NULL; ++ptr) {
     }
     outenv = (char **) malloc(sizeof(char*) * ((ptr - environ) + 1));
-    for (ptr = environ, wptr = outenv; *ptr != NULL; ++ptr, ++wptr) {
-        *wptr = strdup(*ptr);
+    ptr = environ;
+    wptr = outenv;
+    for ( ; *ptr != NULL; ptr++) {
+        *wptr++ = strdup(*ptr);
     }
     *wptr = NULL;
     return outenv;
@@ -587,8 +589,9 @@ TEST(ShifterTestGroup, FilterString_basic) {
 }
 
 TEST(ShifterTestGroup, CopyEnv_basic) {
+    MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();
     setenv("TESTENV0", "gfedcba", 1);
-    char **origEnv = copyenv();
+    char **origEnv = local_copyenv();
     CHECK(origEnv != NULL);
     clearenv();
     setenv("TESTENV1", "abcdefg", 1);
@@ -602,12 +605,13 @@ TEST(ShifterTestGroup, CopyEnv_basic) {
     free(origEnv);
     CHECK(getenv("TESTENV0") != NULL);
     CHECK(strcmp(getenv("TESTENV0"), "gfedcba") == 0);
+    MemoryLeakWarningPlugin::turnOnNewDeleteOverloads();
 }
 
 TEST(ShifterTestGroup, LocalPutEnv_basic) {
     setenv("TESTENV0", "qwerty123", 1);
     unsetenv("TESTENV2");
-    char **altEnv = copyenv();
+    char **altEnv = local_copyenv();
     CHECK(altEnv != NULL);
     char *testenv0Ptr = NULL;
     char *testenv2Ptr = NULL;

@@ -135,6 +135,9 @@ int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assig
         linePtr = NULL;
     }
 _parseConfig_errCleanup:
+    if (fp != NULL) {
+        fclose(fp);
+    }
     if (linePtr != NULL) {
         free(linePtr);
     }

@@ -1,0 +1,17 @@
+{
+   ShifterCopyEnvTESTwithExplicitLeak
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:malloc
+   fun:strdup
+   fun:_Z13local_copyenvv
+   fun:_ZN40TEST_ShifterTestGroup_CopyEnv_basic_Test8testBodyEv
+   fun:PlatformSpecificSetJmp
+   fun:_ZN5Utest3runEv
+   fun:_ZN10UtestShell26runOneTestInCurrentProcessEP10TestPluginR10TestResult
+   fun:PlatformSpecificSetJmp
+   fun:_ZN10UtestShell10runOneTestEP10TestPluginR10TestResult
+   fun:_ZN12TestRegistry11runAllTestsER10TestResult
+   fun:_ZN21CommandLineTestRunner11runAllTestsEv
+   fun:_ZN21CommandLineTestRunner15runAllTestsMainEv
+}
