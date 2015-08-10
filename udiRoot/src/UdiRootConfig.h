@@ -41,7 +41,9 @@
 #ifndef __UDIROOTCONFIG_INCLUDE
 #define __UDIROOTCONFIG_INCLUDE
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -86,8 +88,8 @@ typedef struct _UdiRootConfig {
 } UdiRootConfig;
 
 int parse_UdiRootConfig(const char *, UdiRootConfig *, int validateFlags);
-void free_UdiRootConfig(UdiRootConfig *);
-void fprint_UdiRootConfig(FILE *, UdiRootConfig *);
+void free_UdiRootConfig(UdiRootConfig *, int freeStruct);
+size_t fprint_UdiRootConfig(FILE *, UdiRootConfig *);
 int validate_UdiRootConfig(UdiRootConfig *, int validateFlags);
 
 #endif

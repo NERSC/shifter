@@ -38,7 +38,9 @@
 ## form.
 */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -71,7 +73,7 @@ int parse_UdiRootConfig(const char *configFile, UdiRootConfig *config, int valid
     return validate_UdiRootConfig(config, validateFlags);
 }
 
-void free_UdiRootConfig(UdiRootConfig *config) {
+void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
     if (config->nodeContextPrefix != NULL) {
         free(config->nodeContextPrefix);
     }
@@ -129,53 +131,57 @@ void free_UdiRootConfig(UdiRootConfig *config) {
         }
         free(config->siteFs);
     }
-    free(config);
+    if (freeStruct) {
+        free(config);
+    }
 }
 
-void fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
+size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
     ImageGwServer **sPtr = NULL;
     char **fsPtr = NULL;
+    size_t written = 0;
 
-    if (config == NULL || fp == NULL) return;
+    if (config == NULL || fp == NULL) return 0;
 
-    fprintf(fp, "***** UdiRootConfig *****\n");
-    fprintf(fp, "nodeContextPrefix = %s\n", 
+    written += fprintf(fp, "***** UdiRootConfig *****\n");
+    written += fprintf(fp, "nodeContextPrefix = %s\n", 
         (config->nodeContextPrefix != NULL ? config->nodeContextPrefix : ""));
-    fprintf(fp, "udiMountPoint = %s\n", 
+    written += fprintf(fp, "udiMountPoint = %s\n", 
         (config->udiMountPoint != NULL ? config->udiMountPoint : ""));
-    fprintf(fp, "loopMountPoint = %s\n", 
+    written += fprintf(fp, "loopMountPoint = %s\n", 
         (config->loopMountPoint != NULL ? config->loopMountPoint : ""));
-    fprintf(fp, "batchType = %s\n", 
+    written += fprintf(fp, "batchType = %s\n", 
         (config->batchType != NULL ? config->batchType : ""));
-    fprintf(fp, "system = %s\n", 
+    written += fprintf(fp, "system = %s\n", 
         (config->system != NULL ? config->system : ""));
-    fprintf(fp, "imageBasePath = %s\n", 
+    written += fprintf(fp, "imageBasePath = %s\n", 
         (config->imageBasePath != NULL ? config->imageBasePath : ""));
-    fprintf(fp, "udiRootPath = %s\n", 
+    written += fprintf(fp, "udiRootPath = %s\n", 
         (config->udiRootPath != NULL ? config->udiRootPath : ""));
-    fprintf(fp, "sitePreMountHook = %s\n",
+    written += fprintf(fp, "sitePreMountHook = %s\n",
         (config->sitePreMountHook != NULL ? config->sitePreMountHook : ""));
-    fprintf(fp, "sitePostMountHook = %s\n",
+    written += fprintf(fp, "sitePostMountHook = %s\n",
         (config->sitePostMountHook != NULL ? config->sitePostMountHook : ""));
-    fprintf(fp, "optUdiImage = %s\n", 
+    written += fprintf(fp, "optUdiImage = %s\n", 
         (config->optUdiImage != NULL ? config->optUdiImage : ""));
-    fprintf(fp, "etcPath = %s\n", 
+    written += fprintf(fp, "etcPath = %s\n", 
         (config->etcPath != NULL ? config->etcPath : ""));
-    fprintf(fp, "kmodBasePath = %s\n", 
+    written += fprintf(fp, "kmodBasePath = %s\n", 
         (config->kmodBasePath != NULL ? config->kmodBasePath : ""));
-    fprintf(fp, "kmodPath = %s\n", 
+    written += fprintf(fp, "kmodPath = %s\n", 
         (config->kmodPath != NULL ? config->kmodPath : ""));
-    fprintf(fp, "kmodCacheFile = %s\n", 
+    written += fprintf(fp, "kmodCacheFile = %s\n", 
         (config->kmodCacheFile != NULL ? config->kmodCacheFile : ""));
-    fprintf(fp, "Image Gateway Servers = %lu servers\n",  (config->svrPtr - config->servers));
+    written += fprintf(fp, "Image Gateway Servers = %lu servers\n",  (config->svrPtr - config->servers));
     for (sPtr = config->servers; *sPtr != NULL; sPtr++) {
-        fprintf(fp, "    %s:%d\n", (*sPtr)->server, (*sPtr)->port);
+        written += fprintf(fp, "    %s:%d\n", (*sPtr)->server, (*sPtr)->port);
     }
-    fprintf(fp, "Site FS Bind-mounts = %lu fs\n", (config->siteFsPtr - config->siteFs));
+    written += fprintf(fp, "Site FS Bind-mounts = %lu fs\n", (config->siteFsPtr - config->siteFs));
     for (fsPtr = config->siteFs; *fsPtr != NULL; fsPtr++) {
-        fprintf(fp, "    %s\n", *fsPtr);
+        written += fprintf(fp, "    %s\n", *fsPtr);
     }
-    fprintf(fp, "***** END UdiRootConfig *****\n");
+    written += fprintf(fp, "***** END UdiRootConfig *****\n");
+    return written;
 }
 
 int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
@@ -234,7 +240,7 @@ static int _assign(char *key, char *value, void *t_config) {
             search = NULL;
             if (config->siteFs == NULL || (cnt + 2) >= config->siteFs_capacity) {
                 char **tmp = NULL;
-                tmp = realloc(config->siteFs, sizeof(char*) * (config->siteFs_capacity + SITEFS_ALLOC_BLOCK));
+                tmp = (char **) realloc(config->siteFs, sizeof(char*) * (config->siteFs_capacity + SITEFS_ALLOC_BLOCK));
                 if (tmp == NULL) return 1;
 
                 config->siteFs_capacity += SITEFS_ALLOC_BLOCK;
@@ -267,7 +273,7 @@ static int _assign(char *key, char *value, void *t_config) {
             cnt = config->svrPtr - config->servers;
             if (config->servers == NULL || (cnt + 2) > config->servers_capacity) {
                 ImageGwServer **tmp = NULL;
-                tmp = realloc(config->servers, sizeof(ImageGwServer*) * (config->servers_capacity + SERVER_ALLOC_BLOCK));
+                tmp = (ImageGwServer**) realloc(config->servers, sizeof(ImageGwServer*) * (config->servers_capacity + SERVER_ALLOC_BLOCK));
                 if (tmp == NULL) return 1;
                 config->servers = tmp;
                 config->svrPtr = tmp + cnt;
