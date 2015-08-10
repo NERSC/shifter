@@ -56,7 +56,7 @@
 
 static void _usage(int);
 
-int main(int argc, char **argv) {
+int main(void) {
     UdiRootConfig udiConfig;
 
     memset(&udiConfig, 0, sizeof(UdiRootConfig));
