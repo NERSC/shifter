@@ -41,7 +41,10 @@
 #ifndef __SHFTR_UTIL_INCLUDE
 #define __SHFTR_UTIL_INCLUDE
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
+
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>

@@ -38,7 +38,10 @@
 ## form.
 */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -62,6 +65,11 @@ int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assig
     char *tValue = NULL;
     size_t valueLen = 0;
     size_t tValueLen = 0;
+    int ret = 0;
+
+    if (filename == NULL || obj == NULL || assign_fp == NULL) {
+        return 1;
+    }
 
     fp = fopen(filename, "r");
     if (fp == NULL) {
@@ -107,7 +115,9 @@ int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assig
         if (multiline == 0) {
             ptr = shifter_trim(value);
 
-            assign_fp(key, ptr, obj);
+            ret = assign_fp(key, ptr, obj);
+            if (ret != 0) goto _parseConfig_errCleanup;
+
             if (value != NULL) {
                 free(value);
             }
@@ -122,8 +132,8 @@ int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assig
     }
     if (linePtr != NULL) {
         free(linePtr);
+        linePtr = NULL;
     }
-    return 0;
 _parseConfig_errCleanup:
     if (linePtr != NULL) {
         free(linePtr);
@@ -134,7 +144,7 @@ _parseConfig_errCleanup:
     if (key_alloc != NULL) {
         free(key_alloc);
     }
-    return 1;
+    return ret;
 }
 
 

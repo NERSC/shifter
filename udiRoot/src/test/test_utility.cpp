@@ -60,6 +60,125 @@ TEST(UtilityTestGroup, ShifterTrim_Early) {
     char *earlyTrim = strdup(" \t   12345 Early, no whitespace end");
     char *trimmed = shifter_trim(earlyTrim);
     CHECK(strcmp(trimmed, "12345 Early, no whitespace end") == 0);
+    free(earlyTrim);
+}
+
+TEST(UtilityTestGroup, ShifterTrim_Late) {
+    char *lateTrim = strdup("NothingEarly, something late\n");
+    char *trimmed = shifter_trim(lateTrim);
+    CHECK(strcmp(trimmed, "NothingEarly, something late") == 0);
+    free(lateTrim);
+}
+
+TEST(UtilityTestGroup, ShifterTrim_Both) {
+    char *bothTrim = strdup(" 1 Early, 1 Late\n");
+    char *trimmed = shifter_trim(bothTrim);
+    CHECK(strcmp(trimmed, "1 Early, 1 Late") == 0);
+    free(bothTrim);
+}
+
+TEST(UtilityTestGroup, ShifterTrim_BothSeveral) {
+    char *bothTrim = strdup("\n\n\nabcdef    fedcba\t\t \n   ");
+    char *trimmed = shifter_trim(bothTrim);
+    CHECK(strcmp(trimmed, "abcdef    fedcba") == 0);
+    free(bothTrim);
+}
+
+struct testConfig {
+    char *first;
+    int second;
+    double third;
+};
+
+static int _assignTestConfig(char *key, char *value, void *_testConfig) {
+    struct testConfig *config = (struct testConfig *) _testConfig;
+    if (strcmp(key, "first") == 0) {
+        config->first = strdup(value);
+        return 0;
+    }
+    if (strcmp(key, "second") == 0) {
+        config->second = atoi(value);
+        return 0;
+    }
+    if (strcmp(key, "third") == 0) {
+        config->third = atof(value);
+        return 0;
+    }
+    return 1;
+}
+
+TEST(UtilityTestGroup, ShifterParseConfig_Basic) {
+    const char *filename = "data_config1.conf";
+    struct testConfig config;
+    int ret = 0;
+    memset(&config, 0, sizeof(struct testConfig));
+   
+    ret = shifter_parseConfig(filename, ':', &config, _assignTestConfig);
+    CHECK(ret == 0);
+    CHECK(config.second == 10);
+    CHECK(config.third == 3.14159);
+    CHECK(strcmp(config.first, "abcdefg") == 0);
+    free(config.first);
+}
+
+TEST(UtilityTestGroup, ShifterParseConfig_InvalidKey) {
+    const char *filename = "data_config2.conf";
+    struct testConfig config;
+    int ret = 0;
+    memset(&config, 0, sizeof(struct testConfig));
+   
+    ret = shifter_parseConfig(filename, ':', &config, _assignTestConfig);
+    CHECK(ret == 1);
+    free(config.first);
+}
+
+TEST(UtilityTestGroup, ShifterParseConfig_MultiLine) {
+    const char *filename = "data_config3.conf";
+    struct testConfig config;
+    int ret = 0;
+    memset(&config, 0, sizeof(struct testConfig));
+   
+    ret = shifter_parseConfig(filename, ':', &config, _assignTestConfig);
+    CHECK(ret == 0);
+    CHECK(strcmp(config.first, "abcdefg qed feg") == 0);
+    CHECK(config.second == 10);
+    CHECK(config.third == 3.14159);
+    free(config.first);
+}
+
+TEST(UtilityTestGroup, ShifterParseConfig_InvalidFilename) {
+    const char *filename = "fake.conf";
+    struct testConfig config;
+    memset(&config, 0, sizeof(struct testConfig));
+    int ret = 0;
+
+    ret = shifter_parseConfig(filename, ':', &config, _assignTestConfig);
+    CHECK(ret == 1);
+    CHECK(config.first == NULL);
+    CHECK(config.second == 0);
+    CHECK(config.third == 0.0);
+}
+
+TEST(UtilityTestGroup, ShifterParseConfig_NullKey) {
+    const char *filename = "data_config4.conf";
+    struct testConfig config;
+    memset(&config, 0, sizeof(struct testConfig));
+    int ret = 0;
+
+    ret = shifter_parseConfig(filename, ':', &config, _assignTestConfig);
+    CHECK(ret == 1);
+    CHECK(config.second == 10);
+    CHECK(config.third == 3.14159);
+    CHECK(strcmp(config.first, "abcdefg qed feg") == 0);
+    free(config.first);
+}
+
+TEST(UtilityTestGroup, ShifterParseConfig_NullConfig) {
+    const char *filename = "data_config4.conf";
+    int ret = 0;
+
+    ret = shifter_parseConfig(filename, ':', NULL, _assignTestConfig);
+    CHECK(ret == 1);
 }
 
 int main(int argc, char** argv) {
