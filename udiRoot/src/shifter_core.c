@@ -916,7 +916,7 @@ _setupUserMounts_unclean:
     return 1;
 }
 
-int setupImageSsh(ImageData *imageData, char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udiConfig) {
+int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udiConfig) {
     struct stat statData;
     char udiImage[PATH_MAX];
     char sshdConfigPath[PATH_MAX];
@@ -1591,7 +1591,7 @@ _filterEtcGroup_unclean:
     return 1;
 }
 
-int killSshd() {
+int killSshd(void) {
     FILE *psOutput = popen("ps -eo pid,command", "r");
     char *linePtr = NULL;
     size_t linePtr_size = 0;
