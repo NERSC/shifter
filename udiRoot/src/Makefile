@@ -28,10 +28,13 @@ endef
 
 all: setupRoot unsetupRoot shifter shiftsh shiftrun getDockerImage.pl shifterShim
 
+test:
+	cd test; make test || exit 1
+
 getDockerImage.pl: getDockerImage.pl.in
 	cat $< | $(SED_MODIFY) > $@
 docker: getDockerImage.pl
-	ln -s getDockerImage.pl docker
+	cp getDockerImage.pl docker
 shiftsh: shiftsh.in
 	cat $< | $(SED_MODIFY) > $@
 shiftrun: shiftrun.in
@@ -43,7 +46,7 @@ setupRoot: setupRoot.c UdiRootConfig.c utility.c ImageData.c config.h shifter_co
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) -DROOTFS_TYPE=$(ROOTFS_TYPE) -DNO_ROOT_OWN_CHECK $^ -o $@
 unsetupRoot: unsetupRoot.c UdiRootConfig.c utility.c config.h shifter_core.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) -DROOTFS_TYPE=$(ROOTFS_TYPE) -DNO_ROOT_OWN_CHECK $^ -o $@
-shifter: shifter.c UdiRootConfig.c utility.c config.h shifter_core.c
+shifter: shifter.c UdiRootConfig.c utility.c config.h shifter_core.c ImageData.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) -DROOTFS_TYPE=$(ROOTFS_TYPE) -DNO_ROOT_OWN_CHECK $^ -o $@
 shifterShim: shifterShim.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) -DROOTFS_TYPE=$(ROOTFS_TYPE) -DNO_ROOT_OWN_CHECK $^ -o $@
@@ -60,5 +63,5 @@ install: all
 	$(INSTALL) --owner=root --group=root --mode=555  shifterShim $(DESTDIR)/bin/shifterShim
 	$(INSTALL) --owner=root --group=root docker $(DESTDIR)/bin/docker
 
-clean: setupRoot unsetupRoot shifter getDockerImage.pl shiftsh shiftrun config.h shifterShim docker
-	for file in $^; do if [[ -e "$$file" ]]; then rm "$$file"; fi; done
+clean: setupRoot unsetupRoot shifter docker getDockerImage.pl shiftsh shiftrun config.h shifterShim
+	set -x; for file in $^; do if [[ -e "$$file" ]]; then rm "$$file"; fi; done
