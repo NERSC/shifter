@@ -342,6 +342,7 @@ TEST(UdiRootConfigTestGroup, ParseUdiRootConfig_display) {
     CHECK(output != NULL);
     size_t nwrite = fprint_UdiRootConfig(output, &config);
     fclose(output);
+    free_UdiRootConfig(&config, 0);
 }
 
 
