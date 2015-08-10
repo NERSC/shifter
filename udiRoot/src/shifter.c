@@ -109,9 +109,9 @@ int parse_environment(struct options *opts);
 int fprint_options(FILE *, struct options *);
 void free_options(struct options *);
 int appendVolumeMap(struct options *config, char *volumeDesc);
-void local_putenv(char ***environ, const char *newVar);
+int local_putenv(char ***environ, const char *newVar);
 
-#ifndef _TESTHARNESS
+#ifndef _TESTHARNESS_SHIFTER
 int main(int argc, char **argv) {
 
     /* save a copy of the environment for the exec */
@@ -288,17 +288,17 @@ int main(int argc, char **argv) {
  *          strings
  * newVar: key/value string to replace, add to environment
  */
-void local_putenv(char ***environ, const char *newVar) {
+int local_putenv(char ***environ, const char *newVar) {
     const char *ptr = NULL;
     size_t envSize = 0;
     int nameSize = 0;
     char **envPtr = NULL;
 
-    if (environ == NULL || newVar == NULL || *environ == NULL) return;
+    if (environ == NULL || newVar == NULL || *environ == NULL) return 1;
     ptr = strchr(newVar, '=');
     if (ptr == NULL) {
         fprintf(stderr, "WARNING: cannot parse container environment variable: %s\n", newVar);
-        return;
+        return 1;
     }
     nameSize = ptr - newVar;
 
@@ -306,7 +306,7 @@ void local_putenv(char ***environ, const char *newVar) {
         if (strncmp(*envPtr, newVar, nameSize) == 0) {
             free(*envPtr);
             *envPtr = strdup(newVar);
-            return;
+            return 0;
         }
         envSize++;
     }
@@ -315,11 +315,12 @@ void local_putenv(char ***environ, const char *newVar) {
     char **tmp = (char **) realloc(*environ, sizeof(char *) * (envSize + 2));
     if (tmp == NULL) {
         fprintf(stderr, "WARNING: failed to add %*s to the environment, out of memory.\n", nameSize, newVar);
-        return;
+        return 1;
     }
     *environ = tmp;
     (*environ)[envSize++] = strdup(newVar);
     (*environ)[envSize++] = NULL;
+    return 0;
 }
 
 int parse_options(int argc, char **argv, struct options *config) {
@@ -565,7 +566,7 @@ static char *_filterString(const char *input) {
     return ret;
 }
 
-#ifdef _TESTHARNESS
+#ifdef _TESTHARNESS_SHIFTER
 #include <CppUTest/CommandLineTestRunner.h>
 
 TEST_GROUP(ShifterTestGroup) {
@@ -583,6 +584,73 @@ TEST(ShifterTestGroup, FilterString_basic) {
     CHECK(output != NULL);
     CHECK(strlen(output) == 0);
     free(output);
+}
+
+TEST(ShifterTestGroup, CopyEnv_basic) {
+    setenv("TESTENV0", "gfedcba", 1);
+    char **origEnv = copyenv();
+    CHECK(origEnv != NULL);
+    clearenv();
+    setenv("TESTENV1", "abcdefg", 1);
+    CHECK(getenv("TESTENV0") == NULL);
+    CHECK(getenv("TESTENV1") != NULL);
+    for (char **ptr = origEnv; *ptr != NULL; ptr++) {
+        putenv(*ptr);
+        // not free'ing *ptr, since *ptr is becoming part of the environment
+        // it is owned by environ now
+    }
+    free(origEnv);
+    CHECK(getenv("TESTENV0") != NULL);
+    CHECK(strcmp(getenv("TESTENV0"), "gfedcba") == 0);
+}
+
+TEST(ShifterTestGroup, LocalPutEnv_basic) {
+    setenv("TESTENV0", "qwerty123", 1);
+    unsetenv("TESTENV2");
+    char **altEnv = copyenv();
+    CHECK(altEnv != NULL);
+    char *testenv0Ptr = NULL;
+    char *testenv2Ptr = NULL;
+    char **ptr = NULL;
+    int nEnvVar = 0;
+    int nEnvVar2 = 0;
+    for (ptr = altEnv; *ptr != NULL; ptr++) {
+        if (strncmp(*ptr, "TESTENV0", 8) == 0) {
+            testenv0Ptr = *ptr;
+        }
+        nEnvVar++;
+    }
+    CHECK(testenv0Ptr != NULL);
+    CHECK(strcmp(testenv0Ptr, "TESTENV0=qwerty123") == 0);
+
+    int ret = local_putenv(&altEnv, "TESTENV0=abcdefg321");
+    CHECK(ret == 0);
+    ret = local_putenv(&altEnv, "TESTENV2=asdfghjkl;");
+    CHECK(ret == 0);
+    ret = local_putenv(&altEnv, NULL);
+    CHECK(ret != 0);
+    ret = local_putenv(NULL, "TESTENV2=qwerty123");
+    CHECK(ret != 0);
+
+    for (ptr = altEnv; *ptr != NULL; ptr++) {
+        if (strncmp(*ptr, "TESTENV0", 8) == 0) {
+            testenv0Ptr = *ptr;
+        } else if (strncmp(*ptr, "TESTENV2", 8) == 0) {
+            testenv2Ptr = *ptr;
+        } else {
+            free(*ptr);
+        }
+        nEnvVar2++;
+    }
+    free(altEnv);
+    CHECK(testenv0Ptr != NULL);
+    CHECK(testenv2Ptr != NULL);
+    CHECK(nEnvVar2 - nEnvVar == 1);
+    CHECK(strcmp(testenv0Ptr, "TESTENV0=abcdefg321") == 0);
+    CHECK(strcmp(testenv2Ptr, "TESTENV2=asdfghjkl;") == 0);
+
+    free(testenv0Ptr);
+    free(testenv2Ptr);
 }
 
 int main(int argc, char **argv) {

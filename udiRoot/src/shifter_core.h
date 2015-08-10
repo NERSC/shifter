@@ -80,7 +80,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
 int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udiConfig);
 int startSshd(UdiRootConfig *udiConfig);
 int filterEtcGroup(const char *dest, const char *from, const char *username);
-int forkAndExecvp(char **args);
-int forkAndExecv(char **argvs);
+int forkAndExecvp(char *const *args);
+int forkAndExecv(char *const *argvs);
 int killSshd(void);
 char **parseMounts(size_t *n_mounts);

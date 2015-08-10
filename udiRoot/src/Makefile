@@ -26,7 +26,7 @@ define CLEANFILES
     for file in $(1); do echo $$file; done
 endef
 
-all: setupRoot unsetupRoot shifter shiftsh shiftrun getDockerImage.pl shifterShim
+all: setupRoot unsetupRoot shifter shiftsh shiftrun getDockerImage.pl
 
 test:
 	cd test; make test || exit 1
@@ -48,8 +48,6 @@ unsetupRoot: unsetupRoot.c UdiRootConfig.c utility.c config.h shifter_core.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) -DROOTFS_TYPE=$(ROOTFS_TYPE) -DNO_ROOT_OWN_CHECK $^ -o $@
 shifter: shifter.c UdiRootConfig.c utility.c config.h shifter_core.c ImageData.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) -DROOTFS_TYPE=$(ROOTFS_TYPE) -DNO_ROOT_OWN_CHECK $^ -o $@
-shifterShim: shifterShim.c
-	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) -DROOTFS_TYPE=$(ROOTFS_TYPE) -DNO_ROOT_OWN_CHECK $^ -o $@
 
 install: all
 	mkdir -m 755 -p $(DESTDIR)/sbin
@@ -60,8 +58,7 @@ install: all
 	$(INSTALL) --owner=root --group=root --mode=555  getDockerImage.pl $(DESTDIR)/bin/getDockerImage.pl
 	$(INSTALL) --owner=root --group=root --mode=555  shiftsh $(DESTDIR)/bin/shiftsh
 	$(INSTALL) --owner=root --group=root --mode=555  shiftrun $(DESTDIR)/bin/shiftrun
-	$(INSTALL) --owner=root --group=root --mode=555  shifterShim $(DESTDIR)/bin/shifterShim
 	$(INSTALL) --owner=root --group=root docker $(DESTDIR)/bin/docker
 
-clean: setupRoot unsetupRoot shifter docker getDockerImage.pl shiftsh shiftrun config.h shifterShim
+clean: setupRoot unsetupRoot shifter docker getDockerImage.pl shiftsh shiftrun config.h
 	set -x; for file in $^; do if [[ -e "$$file" ]]; then rm "$$file"; fi; done

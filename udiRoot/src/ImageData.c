@@ -38,7 +38,9 @@
 ## form.
 */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -180,7 +182,7 @@ static int _assign(char *key, char *value, void *t_image) {
         char **tmp = NULL;
         size_t cnt = image->envPtr - image->env;
         if (image->env == NULL || cnt >= image->env_capacity) {
-            tmp = realloc(image->env, sizeof(char*) * (image->env_capacity + ENV_ALLOC_SIZE));
+            tmp = (char **) realloc(image->env, sizeof(char*) * (image->env_capacity + ENV_ALLOC_SIZE));
             if (tmp == NULL) {
                 return 1;
             }
@@ -201,7 +203,7 @@ static int _assign(char *key, char *value, void *t_image) {
         char **tmp = NULL;
         size_t cnt = image->volPtr - image->volume;
         if (image->volume == NULL || cnt >= image->volume_capacity) {
-            tmp = realloc(image->volume, sizeof(char*) * (image->volume_capacity + VOL_ALLOC_SIZE));
+            tmp = (char **) realloc(image->volume, sizeof(char*) * (image->volume_capacity + VOL_ALLOC_SIZE));
             if (tmp == NULL) {
                 return 1;
             }

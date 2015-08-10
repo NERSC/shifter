@@ -316,3 +316,36 @@ static int _validateConfigFile(const char *configFile) {
     }
     return 0;
 }
+
+#ifdef _TESTHARNESS_UDIROOTCONFIG
+#include <CppUTest/CommandLineTestRunner.h>
+
+TEST_GROUP(UdiRootConfigTestGroup) {
+};
+
+TEST(UdiRootConfigTestGroup, ParseUdiRootConfig_basic) {
+    UdiRootConfig config;
+
+    memset(&config, 0, sizeof(UdiRootConfig));
+    int ret = parse_UdiRootConfig("test_udiRoot.conf", &config, 0);
+    CHECK(ret == 0);
+    CHECK(strcmp(config.system, "testSystem") == 0);
+    free_UdiRootConfig(&config, 0);
+}
+
+TEST(UdiRootConfigTestGroup, ParseUdiRootConfig_display) {
+    UdiRootConfig config;
+    memset(&config, 0, sizeof(UdiRootConfig));
+    int ret = parse_UdiRootConfig("test_udiRoot.conf", &config, 0);
+    CHECK(ret == 0);
+    FILE *output = fopen("ParseUdiRootConfig_display.out", "w");
+    CHECK(output != NULL);
+    size_t nwrite = fprint_UdiRootConfig(output, &config);
+    fclose(output);
+}
+
+
+int main(int argc, char** argv) {
+    return CommandLineTestRunner::RunAllTests(argc, argv);
+}
+#endif

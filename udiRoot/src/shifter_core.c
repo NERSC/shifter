@@ -45,7 +45,10 @@
  */
 
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -186,7 +189,7 @@ int bindImageIntoUDI(
 
         /* if target is a symlink, copy it */
         if (S_ISLNK(statData.st_mode)) {
-            char *args[5] = { "cp", "-P", srcBuffer, mntBuffer, NULL };
+            char *const args[] = { "cp", "-P", srcBuffer, mntBuffer, NULL };
             if (forkAndExecvp(args) != 0) {
                 fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
                 goto _bindImgUDI_unclean;
@@ -196,7 +199,7 @@ int bindImageIntoUDI(
         }
         if (S_ISREG(statData.st_mode)) {
             if (statData.st_size < FILE_SIZE_LIMIT) {
-                char *args[5] = { "cp", "-p", srcBuffer, mntBuffer, NULL };
+                char *const args[] = { "cp", "-p", srcBuffer, mntBuffer, NULL };
                 if (forkAndExecvp(args) != 0) {
                     fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
                     goto _bindImgUDI_unclean;
@@ -215,7 +218,7 @@ int bindImageIntoUDI(
                 MKDIR(mntBuffer, 0755);
                 BINDMOUNT(mountCache, srcBuffer, mntBuffer, 0);
             } else {
-                char *args[5] = { "cp", "-rp", srcBuffer, mntBuffer, NULL };
+                char * const args[] = { "cp", "-rp", srcBuffer, mntBuffer, NULL };
                 if (forkAndExecvp(args) != 0) {
                     fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
                     goto _bindImgUDI_unclean;
@@ -368,15 +371,15 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     char **volPtr = NULL;
     char **mountCache = NULL;
     char **mntPtr = NULL;
-    char **fnamePtr = NULL;
+    char *const *fnamePtr = NULL;
     int ret = 0;
     size_t mountCache_cnt = 0;
     struct stat statData;
 
-    char *mandatorySiteEtcFiles[4] = {
+    char *const mandatorySiteEtcFiles[4] = {
         "passwd", "group", "nsswitch.conf", NULL
     };
-    char *copyLocalEtcFiles[3] = {
+    char *const copyLocalEtcFiles[3] = {
         "hosts", "resolv.conf", NULL
     };
 
@@ -422,7 +425,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
 
     /* run site-defined pre-mount procedure */
     if (strlen(udiConfig->sitePreMountHook) > 0) {
-        char *args[3] = {
+        char *args[] = {
             "/bin/sh", udiConfig->sitePreMountHook, NULL
         };
         int ret = forkAndExecvp(args);
@@ -444,7 +447,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
 
     /* run site-defined post-mount procedure */
     if (strlen(udiConfig->sitePostMountHook) > 0) {
-        char *args[3] = {
+        char *args[] = {
             "/bin/sh", udiConfig->sitePostMountHook, NULL
         };
         int ret = forkAndExecvp(args);
@@ -517,7 +520,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
                 fprintf(stderr, "Couldn't copy %s because file already exists.\n", mntBuffer);
                 goto _prepSiteMod_unclean;
             } else {
-                char *args[5] = { "cp", "-p", srcBuffer, mntBuffer, NULL };
+                char *args[] = { "cp", "-p", srcBuffer, mntBuffer, NULL };
                 if (forkAndExecvp(args) != 0) {
                     fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
                     goto _prepSiteMod_unclean;
@@ -588,7 +591,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
             fprintf(stderr, "FAILED to stat udiImage target directory: %s\n", mntBuffer);
             goto _prepSiteMod_unclean;
         } else {
-            char *args[5] = {"cp", "-rp", srcBuffer, mntBuffer, NULL };
+            char *args[] = {"cp", "-rp", srcBuffer, mntBuffer, NULL };
             char *chmodArgs[5] = {"chmod", "-R", "a+rX", mntBuffer, NULL};
             if (forkAndExecvp(args) != 0) {
                 fprintf(stderr, "FAILED to copy %s to %s.\n", srcBuffer, mntBuffer);
@@ -1141,7 +1144,7 @@ _startSshd_unclean:
     return 1;
 }
 
-int forkAndExecvp(char **args) {
+int forkAndExecvp(char *const *args) {
     pid_t pid = 0;
 
     pid = fork();
@@ -1172,7 +1175,8 @@ int forkAndExecvp(char **args) {
     exit(1);
     return 1;
 }
-int forkAndExecv(char **args) {
+
+int forkAndExecv(char *const *args) {
     pid_t pid = 0;
 
     pid = fork();
@@ -1330,7 +1334,7 @@ char **parseMounts(size_t *n_mounts) {
         if (ptr != NULL) {
             size_t curr_count = ret_ptr - ret;
             if (ret == NULL || (curr_count + 2) >= ret_capacity) {
-                char **tRet = realloc(ret, (ret_capacity + MOUNT_ALLOC_BLOCK) * sizeof(char*));
+                char **tRet = (char **) realloc(ret, (ret_capacity + MOUNT_ALLOC_BLOCK) * sizeof(char*));
                 if (tRet == NULL) {
                     fprintf(stderr, "FAILED to allocate enough memory for mounts listing\n");
                     goto _parseMounts_errClean;
