@@ -38,8 +38,8 @@
 ## form.
 */
 
-#ifndef __SHFTR_UTIL_INCLUDE
-#define __SHFTR_UTIL_INCLUDE
+#ifndef __SHFTR_VOLMAP_INCLUDE
+#define __SHFTR_VOLMAP_INCLUDE
 
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
@@ -49,9 +49,23 @@
 #include <string.h>
 #include <unistd.h>
 
+#define VOLUME_ALLOC_BLOCK 10
 
-char *shifter_trim(char *);
-int shifter_parseConfig(const char *fname, char delim, void *obj, int (*assign_fp)(char *, char *, void *));
-int strncpy_StringArray(const char *str, size_t n, char ***wptr, char ***array, size_t *capacity, size_t allocBlock);
+struct VolumeMap {
+    char **raw;
+    char **to;
+    char **from;
+    char **flags;
+    size_t n;
+
+    size_t rawCapacity;
+    size_t toCapacity;
+    size_t fromCapacity;
+    size_t flagsCapacity;
+};
+
+int parseVolumeMap(const char *input, struct VolumeMap *volMap);
+char *getVolMapSignature(struct VolumeMap *volMap);
+void free_VolumeMap(struct VolumeMap *volMap, int freeStruct);
 
 #endif

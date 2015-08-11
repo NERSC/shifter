@@ -166,6 +166,65 @@ char *shifter_trim(char *str) {
     return ptr;
 }
 
+/**
+ * strncpy_StringArray
+ * Append a string to the specified string array.  Assumes a relatively small
+ * number of items.  Uses a block allocation scheem to expand array.  String
+ * is destructively appended at the wptr position.  Pointers are naivly
+ * verified to at least make sense.
+ *
+ * Affect: Space is allocated in array if necessary; then n bytes of string
+ * str are appended to end of array.  A NULL terminator is appended to the
+ * end of array.  wptr is left pointing to the NULL terminator for the next
+ * append.
+ *
+ * Parameters:
+ * str:  input string
+ * n  :  bytes to copy
+ * wptr: pointer to write position; value may be changed upon array
+ *       reallocation, or successful append.  Left pointing to NULL terminator.
+ * array: pointer to base of String Array. value may be updated upon
+ *       reallocation
+ * capacity: pointer to array capacity; updated upon reallocation
+ * allocationBlock: number of elements to add per reallocation event, must be
+ *       greater than 0.
+ *
+ * Returns: 0 upon success, 1 upon failure
+ */
+int strncpy_StringArray(const char *str, size_t n, char ***wptr,
+        char ***array, size_t *capacity, size_t allocationBlock) {
+
+    size_t count = 0;
+    if (str == NULL || wptr == NULL || array == NULL
+            || capacity == NULL || allocationBlock == 0 ||
+            *wptr < *array || *wptr - *capacity > *array) {
+        fprintf(stderr, "ERROR: invalid input to strncpy_StringArray\n");
+        return 1;
+    }
+
+    /* allocate more space at a time */
+    count = *wptr - *array;
+    if (*capacity - count < 2) {
+        size_t new_capacity = *capacity + allocationBlock;
+        char **tmp = (char **) realloc(*array, sizeof(char *) * new_capacity);
+        if (tmp == NULL) {
+            fprintf(stderr, "ERROR: failed to allocate memory, append failed\n");
+            return 1;
+        }
+        *array = tmp;
+        *wptr = *array + count;
+        *capacity += allocationBlock;
+    }
+
+    /* append string to array, add ternminated NULL */
+    **wptr = (char *) malloc(sizeof(char) * (n + 1));
+    memcpy(**wptr, str, n);
+    (**wptr)[n] = 0;
+    (*wptr)++;
+    **wptr = NULL;
+    return 0;
+}
+
 #ifdef _TESTHARNESS_UTILITY
 #include <CppUTest/CommandLineTestRunner.h>
 
@@ -305,6 +364,56 @@ TEST(UtilityTestGroup, ShifterParseConfig_NullConfig) {
 
     ret = shifter_parseConfig(filename, ':', NULL, _assignTestConfig);
     CHECK(ret == 1);
+}
+
+TEST(UtilityTestGroup, strncpyStringArray_basic) {
+    char **array = NULL;
+    char **wptr = NULL;
+    size_t capacity = 0;
+    int ret = 0;
+
+    ret = strncpy_StringArray("abcdefg", 4, &wptr, &array, &capacity, 10);
+    CHECK(ret == 0);
+    CHECK(*wptr == NULL);
+    CHECK(capacity == 10);
+
+    const char *triples = "abc;def;ghi;jkl;mno;pqr;stu;vxy;z01";
+    const char *ptr = triples;
+    const char *eptr = NULL;
+    while (ptr < triples + strlen(triples)) {
+        eptr = strchr(ptr, ';');
+        if (eptr == NULL) eptr = triples + strlen(triples);
+        ret = strncpy_StringArray(ptr, eptr - ptr, &wptr, &array, &capacity, 10);
+        CHECK(ret == 0);
+        CHECK(*wptr == NULL);
+        ptr = eptr + 1;
+    }
+    CHECK(wptr - array == 10);
+
+    /* check myriad error handling */
+    ret = strncpy_StringArray(NULL, 20, &wptr, &array, &capacity, 10);
+    CHECK(ret == 1);
+
+    ret = strncpy_StringArray(*array, 0, &wptr, &array, &capacity, 10);
+    CHECK(ret == 0);
+    CHECK(strlen((*(wptr - 1))) == 0);
+
+    ret = strncpy_StringArray("test", 4, NULL, &array, &capacity, 10);
+    CHECK(ret == 1);
+
+    ret = strncpy_StringArray("test", 4, &wptr, NULL, &capacity, 10);
+    CHECK(ret == 1);
+
+    ret = strncpy_StringArray("test", 4, &wptr, &array, NULL, 10);
+    CHECK(ret == 1);
+
+    ret = strncpy_StringArray("test", 4, &wptr, &array, &capacity, 0);
+    CHECK(ret == 1);
+
+    for (wptr = array; *wptr != NULL; wptr++) {
+        free(*wptr);
+    }
+    free(array);
 }
 
 int main(int argc, char** argv) {

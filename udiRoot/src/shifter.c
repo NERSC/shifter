@@ -104,6 +104,8 @@ struct options {
 static void _usage(int);
 static void _version(void);
 static char *_filterString(const char *input);
+static int _appendStringArray(const char *target, size_t nChars, char ***wptr,
+        char ***array, size_t *capacity, size_t allocationBlock);
 char **copyenv(void);
 int parse_options(int argc, char **argv, struct options *opts);
 int parse_environment(struct options *opts);
@@ -478,6 +480,11 @@ int parse_volume_mounts(struct options *config) {
     int n_bindMounts = 0;
     size_t rawVolumesLen = 0;
     char *ptr = NULL;
+    char *eptr = NULL;
+    char **bindMountStrings = NULL;
+    char **bindMountPtr = NULL;
+    size_t bindMountStrings_capacity = 0;
+    int ret = 0;
 
     if (config == NULL) return -1;
     if (config->rawVolumes == NULL) return 0; /* no error if none */
@@ -487,28 +494,48 @@ int parse_volume_mounts(struct options *config) {
 
     /* count how many mounts we see */
     n_bindMounts = 0;
-    for (ptr = config->rawVolumes;
-            ptr != NULL && (ptr - config->rawVolumes <= rawVolumesLen);
-            ptr = strchr(ptr, ',')
-        ) {
+    ptr = config->rawVolumes;
+    while (ptr < config->rawVolumes + rawVolumesLen) {
 
-        ptr++;
+        /* find end of current substring */
+        eptr = strchr(ptr, ',');
+        if (eptr == NULL) {
+            eptr = config->rawVolumes + rawVolumesLen;
+        }
+
+        /* copy substring into array */
+        ret = _appendStringArray(
+                ptr, eptr - ptr, &bindMountPtr, &bindMountStrings,
+                &bindMountStrings_capacity, VOLUME_ALLOC_BLOCK
+        );
+        if (ret != 0) {
+            ret *= -1;
+            goto _parseVolumeMounts_end;
+        }
+
+        /* increment to next substring */
+        ptr = eptr + 1;
         n_bindMounts++;
     }
 
-    char **volMounts = (char **) malloc(sizeof(char *) * (n_bindMounts + 1));
-    char **volMountPtr = volMounts;
-    char *begin 
-    for (ptr = config->rawVolumes;
-            ptr != NULL && (ptr - config->rawVolunes <= rawVolumesLen);
-            ptr = strchr(ptr, ',')
-        ) {
+    /* sort array - important for comparing mounts */
+    qsort(bindMountStrings, bindMountPtr - bindMountStrings, sizeof(char *), strcmp);
 
-            *volMountPtr = (char *) malloc
+    for (bindMountPtr = bindMountStrings; *bindMountPtr != NULL; bindMountPtr++) {
+
+    }
 
 
-
-    return n_bindMounts;
+    ret = n_bindMounts;
+_parseVolumeMounts_end:
+    if (bindMountStrings != NULL) {
+        for (bindMountPtr = bindMountStrings; *bindMountPtr != NULL; bindMountPtr++) {
+            free(*bindMountPtr);
+        }
+        free(bindMountStrings);
+        bindMountStrings = NULL;
+    }
+    return ret;
 }
 
 int appendVolumeMap(struct options *config, char *volumeDesc) {
