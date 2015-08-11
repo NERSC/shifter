@@ -4,7 +4,7 @@
    match-leak-kinds: definite
    fun:malloc
    fun:strdup
-   fun:_Z13local_copyenvv
+   fun:_Z7copyenvv
    fun:_ZN40TEST_ShifterTestGroup_CopyEnv_basic_Test8testBodyEv
    fun:PlatformSpecificSetJmp
    fun:_ZN5Utest3runEv

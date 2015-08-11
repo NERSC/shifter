@@ -86,6 +86,7 @@ struct options {
     uid_t tgtUid;
     gid_t tgtGid;
     char **args;
+    char **volumeStrings;
     char **volumeMapFrom;
     char **volumeMapTo;
     char **volumeMapFlags;
@@ -103,9 +104,10 @@ struct options {
 static void _usage(int);
 static void _version(void);
 static char *_filterString(const char *input);
-char **local_copyenv(void);
+char **copyenv(void);
 int parse_options(int argc, char **argv, struct options *opts);
 int parse_environment(struct options *opts);
+int parse_volume_mounts(struct options *opts);
 int fprint_options(FILE *, struct options *);
 void free_options(struct options *);
 int appendVolumeMap(struct options *config, char *volumeDesc);
@@ -115,7 +117,7 @@ int local_putenv(char ***environ, const char *newVar);
 int main(int argc, char **argv) {
 
     /* save a copy of the environment for the exec */
-    char **environ_copy = local_copyenv();
+    char **environ_copy = copyenv();
 
     /* declare needed variables */
     char wd[PATH_MAX];
@@ -372,28 +374,18 @@ int parse_options(int argc, char **argv, struct options *config) {
                 break;
             case 'v': config->verbose = 1; break;
             case 'V':
-                if (optarg == NULL) break;
-                char *tokloc;
-                for (ptr = strtok_r(optarg, ",", &tokloc); ptr != NULL; ptr = strtok_r(NULL, ",", &tokloc)) {
+                {
+                    if (optarg == NULL) break;
                     size_t raw_capacity = 0;
-                    size_t new_capacity = strlen(ptr);
-                    char *orig = strdup(ptr);
+                    size_t new_capacity = strlen(optarg);
                     if (config->rawVolumes != NULL) {
                         raw_capacity = strlen(config->rawVolumes);
                     }
-                    if (appendVolumeMap(config, ptr) == 0) {
-                        char *ptr = NULL;
-                        config->rawVolumes = (char *) realloc(config->rawVolumes, sizeof(char) * (raw_capacity + new_capacity + 2));
-                        if (config->rawVolumes == NULL) {
-                            fprintf(stderr, "FAILED to allocate memory, aborting.");
-                            abort();
-                        }
-                        ptr = config->rawVolumes + raw_capacity;
-                        snprintf(ptr, new_capacity + 2, "%s,", orig);
-                    }
-                    free(orig);
+                    config->rawVolumes = (char *) realloc(config->rawVolumes, sizeof(char) * (raw_capacity + new_capacity + 2));
+                    char *ptr = config->rawVolumes + raw_capacity;
+                    snprintf(ptr, new_capacity + 2, "%s,", optarg);
+                    break;
                 }
-                break;
             case 'i':
                 ptr = strchr(optarg, ':');
                 if (ptr == NULL) {
@@ -430,7 +422,7 @@ int parse_options(int argc, char **argv, struct options *config) {
         char **argsPtr = NULL;
         config->args = (char **) malloc(sizeof(char *) * (remaining + 2));
         argsPtr = config->args;
-        *argsPtr++ = NULL; /* leave space for entry point */
+        *argsPtr++ = (char *) 0x1; /* leave space for entry point */
         for ( ; optind < argc; optind++) {
             *argsPtr++ = strdup(argv[optind]);
         }
@@ -455,6 +447,11 @@ int parse_options(int argc, char **argv, struct options *config) {
         config->args[1] = NULL;
     }
 
+    /* validate and organize any user-requested bind-mounts */
+    if (parse_volume_mounts(config) != 0) {
+        _usage(1);
+    }
+
     return 0;
 }
 
@@ -475,6 +472,43 @@ int parse_environment(struct options *opts) {
     }
 
     return 0;
+}
+
+int parse_volume_mounts(struct options *config) {
+    int n_bindMounts = 0;
+    size_t rawVolumesLen = 0;
+    char *ptr = NULL;
+
+    if (config == NULL) return -1;
+    if (config->rawVolumes == NULL) return 0; /* no error if none */
+
+    rawVolumesLen = strlen(config->rawVolumes);
+    if (rawVolumesLen == 0) return 0; /* no error if none */
+
+    /* count how many mounts we see */
+    n_bindMounts = 0;
+    for (ptr = config->rawVolumes;
+            ptr != NULL && (ptr - config->rawVolumes <= rawVolumesLen);
+            ptr = strchr(ptr, ',')
+        ) {
+
+        ptr++;
+        n_bindMounts++;
+    }
+
+    char **volMounts = (char **) malloc(sizeof(char *) * (n_bindMounts + 1));
+    char **volMountPtr = volMounts;
+    char *begin 
+    for (ptr = config->rawVolumes;
+            ptr != NULL && (ptr - config->rawVolunes <= rawVolumesLen);
+            ptr = strchr(ptr, ',')
+        ) {
+
+            *volMountPtr = (char *) malloc
+
+
+
+    return n_bindMounts;
 }
 
 int appendVolumeMap(struct options *config, char *volumeDesc) {
@@ -524,7 +558,7 @@ static void _version(void) {
     printf("interactive shifter version %s\n", VERSION);
 }
 
-char **local_copyenv(void) {
+char **copyenv(void) {
     char **outenv = NULL;
     char **ptr = NULL;
     char **wptr = NULL;
@@ -568,6 +602,65 @@ static char *_filterString(const char *input) {
     return ret;
 }
 
+void free_options(struct options *opts, int freeStruct) {
+    char **ptr = NULL;
+    if (opts == NULL) return;
+    if (opts->request != NULL) {
+        free(opts->request);
+        opts->request = NULL;
+    }
+    if (opts->imageType != NULL) {
+        free(opts->imageType);
+        opts->imageType = NULL;
+    }
+    if (opts->imageIdentifier != NULL) {
+        free(opts->imageIdentifier);
+        opts->imageIdentifier = NULL;
+    }
+    if (opts->rawVolumes) {
+        free(opts->rawVolumes);
+        opts->rawVolumes = NULL;
+    }
+    if (opts->args != NULL) {
+        for (ptr = opts->args; *ptr != NULL; ptr++) {
+            if (*ptr != (char *) 0x1) free(*ptr);
+        }
+        free(opts->args);
+        opts->args = NULL;
+    }
+    if (opts->volumeStrings != NULL) {
+        for (ptr = opts->volumeStrings; *ptr != NULL; ptr++) {
+            free(*ptr);
+        }
+        free(opts->volumeStrings);
+        opts->volumeStrings = NULL;
+    }
+    if (opts->volumeMapFrom != NULL) {
+        for (ptr = opts->volumeMapFrom; *ptr != NULL; ptr++) {
+            free(*ptr);
+        }
+        free(opts->volumeMapFrom);
+        opts->volumeMapFrom = NULL;
+    }
+    if (opts->volumeMapTo != NULL) {
+        for (ptr = opts->volumeMapTo; *ptr != NULL; ptr++) {
+            free(*ptr);
+        }
+        free(opts->volumeMapTo);
+        opts->volumeMapTo = NULL;
+    }
+    if (opts->volumeMapFlags != NULL) {
+        for (ptr = opts->volumeMapFlags; *ptr != NULL; ptr++) {
+            free(*ptr);
+        }
+        free(opts->volumeMapFlags);
+        opts->volumeMapFlags = NULL;
+    }
+    if (freeStruct != 0) {
+        free(opts);
+    }
+}
+
 #ifdef _TESTHARNESS_SHIFTER
 #include <CppUTest/CommandLineTestRunner.h>
 
@@ -591,7 +684,7 @@ TEST(ShifterTestGroup, FilterString_basic) {
 TEST(ShifterTestGroup, CopyEnv_basic) {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();
     setenv("TESTENV0", "gfedcba", 1);
-    char **origEnv = local_copyenv();
+    char **origEnv = copyenv();
     CHECK(origEnv != NULL);
     clearenv();
     setenv("TESTENV1", "abcdefg", 1);
@@ -611,7 +704,7 @@ TEST(ShifterTestGroup, CopyEnv_basic) {
 TEST(ShifterTestGroup, LocalPutEnv_basic) {
     setenv("TESTENV0", "qwerty123", 1);
     unsetenv("TESTENV2");
-    char **altEnv = local_copyenv();
+    char **altEnv = copyenv();
     CHECK(altEnv != NULL);
     char *testenv0Ptr = NULL;
     char *testenv2Ptr = NULL;
@@ -655,6 +748,24 @@ TEST(ShifterTestGroup, LocalPutEnv_basic) {
 
     free(testenv0Ptr);
     free(testenv2Ptr);
+}
+
+TEST(ShifterTestGroup, TestVolumeParse) {
+    struct options opts;
+    memset(&opts, 0, sizeof(struct options));
+    int ret = parse_volume_mounts(&opts);
+    CHECK(ret == 0);
+
+    opts.rawVolumes = strdup("/test/path/1:/mnt/tp1");
+    ret = parse_volume_mounts(&opts);
+    CHECK(ret == 1);
+    free_options(&opts, 0);
+
+    opts.rawVolumes = strdup("/test/path/1:/mnt/tp1,/test/path/2:/mnt/tp2");
+    ret = parse_volume_mounts(&opts);
+    CHECK(ret == 2);
+    free_options(&opts, 0);
+
 }
 
 int main(int argc, char **argv) {
