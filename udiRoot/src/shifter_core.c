@@ -189,8 +189,15 @@ int bindImageIntoUDI(
 
         /* if target is a symlink, copy it */
         if (S_ISLNK(statData.st_mode)) {
-            char *const args[] = { "cp", "-P", srcBuffer, mntBuffer, NULL };
-            if (forkAndExecvp(args) != 0) {
+            char *args[] = { strdup("cp"), strdup("-P"), 
+                strdup(srcBuffer), strdup(mntBuffer), NULL
+            };
+            char **argsPtr = NULL;
+            int ret = forkAndExecvp(args);
+            for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
+                free(*argsPtr);
+            }
+            if (ret != 0) {
                 fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
                 goto _bindImgUDI_unclean;
             }
@@ -199,8 +206,15 @@ int bindImageIntoUDI(
         }
         if (S_ISREG(statData.st_mode)) {
             if (statData.st_size < FILE_SIZE_LIMIT) {
-                char *const args[] = { "cp", "-p", srcBuffer, mntBuffer, NULL };
-                if (forkAndExecvp(args) != 0) {
+                char *args[] = { strdup("cp"), strdup("-p"),
+                    strdup(srcBuffer), strdup(mntBuffer), NULL
+                };
+                char **argsPtr = NULL;
+                int ret = forkAndExecvp(args);
+                for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
+                    free(*argsPtr);
+                }
+                if (ret != 0) {
                     fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
                     goto _bindImgUDI_unclean;
                 }
@@ -218,8 +232,15 @@ int bindImageIntoUDI(
                 MKDIR(mntBuffer, 0755);
                 BINDMOUNT(mountCache, srcBuffer, mntBuffer, 0);
             } else {
-                char * const args[] = { "cp", "-rp", srcBuffer, mntBuffer, NULL };
-                if (forkAndExecvp(args) != 0) {
+                char *args[] = { strdup("cp"), strdup("-rp"),
+                    strdup(srcBuffer), strdup(mntBuffer), NULL
+                };
+                char **argsPtr = NULL;
+                int ret = forkAndExecvp(args);
+                for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
+                    free(*argsPtr);
+                }
+                if (ret != 0) {
                     fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
                     goto _bindImgUDI_unclean;
                 }
@@ -371,15 +392,15 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     char **volPtr = NULL;
     char **mountCache = NULL;
     char **mntPtr = NULL;
-    char *const *fnamePtr = NULL;
+    const char **fnamePtr = NULL;
     size_t mountCache_cnt = 0;
     int ret = 0;
     struct stat statData;
 
-    char *const mandatorySiteEtcFiles[4] = {
+    const char *mandatorySiteEtcFiles[4] = {
         "passwd", "group", "nsswitch.conf", NULL
     };
-    char *const copyLocalEtcFiles[3] = {
+    const char *copyLocalEtcFiles[3] = {
         "hosts", "resolv.conf", NULL
     };
 
@@ -426,9 +447,13 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     /* run site-defined pre-mount procedure */
     if (strlen(udiConfig->sitePreMountHook) > 0) {
         char *args[] = {
-            "/bin/sh", udiConfig->sitePreMountHook, NULL
+            strdup("/bin/sh"), strdup(udiConfig->sitePreMountHook), NULL
         };
+        char **argsPtr = NULL;
         int ret = forkAndExecvp(args);
+        for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
+            free(*argsPtr);
+        }
         if (ret != 0) {
             fprintf(stderr, "Site premount hook failed. Exiting.\n");
             ret = 1;
@@ -448,9 +473,13 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     /* run site-defined post-mount procedure */
     if (strlen(udiConfig->sitePostMountHook) > 0) {
         char *args[] = {
-            "/bin/sh", udiConfig->sitePostMountHook, NULL
+            strdup("/bin/sh"), strdup(udiConfig->sitePostMountHook), NULL
         };
+        char **argsPtr = NULL;
         int ret = forkAndExecvp(args);
+        for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
+            free(*argsPtr);
+        }
         if (ret != 0) {
             fprintf(stderr, "Site premount hook failed. Exiting.\n");
             ret = 1;
@@ -520,8 +549,13 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
                 fprintf(stderr, "Couldn't copy %s because file already exists.\n", mntBuffer);
                 goto _prepSiteMod_unclean;
             } else {
-                char *args[] = { "cp", "-p", srcBuffer, mntBuffer, NULL };
-                if (forkAndExecvp(args) != 0) {
+                char *args[] = { strdup("cp"), strdup("-p"), strdup(srcBuffer), strdup(mntBuffer), NULL };
+                char **argsPtr = NULL;
+                int ret = forkAndExecvp(args);
+                for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
+                    free(*argsPtr);
+                }
+                if (ret != 0) {
                     fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
                     goto _prepSiteMod_unclean;
                 }
@@ -555,17 +589,22 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     /* filter the group file */
     {
         char *mvArgs[5];
+        char **argsPtr = NULL;
         char fromGroupFile[PATH_MAX];
         char toGroupFile[PATH_MAX];
         snprintf(fromGroupFile, PATH_MAX, "%s/etc/group", udiRoot);
         snprintf(toGroupFile, PATH_MAX, "%s/etc/group.orig", udiRoot);
         fromGroupFile[PATH_MAX - 1] = 0;
         toGroupFile[PATH_MAX - 1] = 0;
-        mvArgs[0] = "mv";
-        mvArgs[1] = fromGroupFile;
-        mvArgs[2] = toGroupFile;
+        mvArgs[0] = strdup("mv");
+        mvArgs[1] = strdup(fromGroupFile);
+        mvArgs[2] = strdup(toGroupFile);
         mvArgs[3] = NULL;
-        if (forkAndExecvp(mvArgs) != 0) {
+        ret = forkAndExecvp(mvArgs);
+        for (argsPtr = mvArgs; *argsPtr != NULL; argsPtr++) {
+            free(*argsPtr);
+        }
+        if (ret != 0) {
             fprintf(stderr, "Failed to rename %s to %s\n", fromGroupFile, toGroupFile);
             goto _prepSiteMod_unclean;
         }
@@ -591,14 +630,25 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
             fprintf(stderr, "FAILED to stat udiImage target directory: %s\n", mntBuffer);
             goto _prepSiteMod_unclean;
         } else {
-            char *args[] = {"cp", "-rp", srcBuffer, mntBuffer, NULL };
-            char *chmodArgs[5] = {"chmod", "-R", "a+rX", mntBuffer, NULL};
-            if (forkAndExecvp(args) != 0) {
+            char *args[] = {strdup("cp"), strdup("-rp"),
+                strdup(srcBuffer), strdup(mntBuffer), NULL
+            };
+            char *chmodArgs[] = {strdup("chmod"), strdup("-R"),
+                strdup("a+rX"), strdup(mntBuffer), NULL
+            };
+            char **argsPtr = NULL;
+            int ret = forkAndExecvp(args);
+            if (ret == 0) {
+                ret = forkAndExecvp(chmodArgs);
+                if (ret != 0) {
+                    fprintf(stderr, "FAILED to fix permissions on %s.\n", mntBuffer);
+                }
+            } else {
                 fprintf(stderr, "FAILED to copy %s to %s.\n", srcBuffer, mntBuffer);
-                goto _prepSiteMod_unclean;
             }
-            if (forkAndExecvp(chmodArgs) != 0) {
-                fprintf(stderr, "FAILED to fix permissions on %s.\n", mntBuffer);
+            for (argsPtr = args; *argsPtr != NULL; argsPtr++) free(*argsPtr);
+            for (argsPtr = chmodArgs; *argsPtr != NULL; argsPtr++) free(*argsPtr);
+            if (ret != 0) {
                 goto _prepSiteMod_unclean;
             }
         }
@@ -767,8 +817,16 @@ int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig) {
     goto _mntImgLoop_unclean; \
 }
 #define LOOPMOUNT(mountExec, from, to, imgtype) { \
-    char *args[] = {mountExec, "-o", "loop,autoclear,ro,nosuid,nodev", from, to, NULL}; \
-    if (forkAndExecvp(args) != 0) { \
+    char *args[] = {strdup(mountExec), \
+        strdup("-o"), strdup("loop,autoclear,ro,nosuid,nodev"), \
+        strdup(from), strdup(to), \
+        NULL}; \
+    char **argsPtr = NULL; \
+    int ret = forkAndExecvp(args); \
+    for (argsPtr = args; *argsPtr != NULL; argsPtr++) { \
+        free(*argsPtr); \
+    } \
+    if (ret != 0) { \
         fprintf(stderr, "FAILED to mount image %s (%s) on %s\n", from, imgtype, to); \
         goto _mntImgLoop_unclean; \
     } \
@@ -929,8 +987,8 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
     char udiImage[PATH_MAX];
     char sshdConfigPath[PATH_MAX];
     char sshdConfigPathNew[PATH_MAX];
-    char *keyType[5] = {"dsa", "ecdsa", "rsa","ed25519", NULL};
-    char **keyPtr = NULL;
+    const char *keyType[5] = {"dsa", "ecdsa", "rsa","ed25519", NULL};
+    const char **keyPtr = NULL;
     char *lineBuf = NULL;
     size_t lineBuf_size = 0;
 
@@ -966,19 +1024,27 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
         char keygenExec[PATH_MAX];
         char keyFileName[PATH_MAX];
         char *args[8];
+        char **argPtr = NULL;
+        int ret = 0;
 
         snprintf(keygenExec, PATH_MAX, "%s/bin/ssh-keygen", udiImage);
         keygenExec[PATH_MAX-1] = 0;
         snprintf(keyFileName, PATH_MAX, "%s/etc/ssh_host_%s_key", udiImage, *keyPtr);
-        args[0] = keygenExec;
-        args[1] = "-t";
-        args[2] = *keyPtr;
-        args[3] = "-f";
-        args[4] = keyFileName;
-        args[5] = "-N";
-        args[6] = "";
+        args[0] = strdup(keygenExec);
+        args[1] = strdup("-t");
+        args[2] = strdup(*keyPtr);
+        args[3] = strdup("-f");
+        args[4] = strdup(keyFileName);
+        args[5] = strdup("-N");
+        args[6] = strdup("");
         args[7] = NULL;
-        if (forkAndExecv(args) != 0) {
+
+        ret = forkAndExecv(args);
+        for (argPtr = args; *argPtr != NULL; argPtr++) {
+            free(*argPtr);
+        }
+
+        if (ret != 0) {
             fprintf(stderr, "Failed to generate key of type %s\n", *keyPtr);
             goto _setupImageSsh_unclean;
         }
@@ -1021,8 +1087,17 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
         fprintf(stderr, "FAILED to find new sshd_config file, cannot setup sshd\n");
         goto _setupImageSsh_unclean;
     } else {
-        char *moveCmd[4] = { "mv", sshdConfigPathNew, sshdConfigPath, NULL };
-        if (forkAndExecvp(moveCmd) != 0) {
+        char *moveCmd[] = { strdup("mv"),
+            strdup(sshdConfigPathNew),
+            strdup(sshdConfigPath),
+            NULL
+        };
+        char **argsPtr = NULL;
+        int ret = forkAndExecvp(moveCmd);
+        for (argsPtr = moveCmd; *argsPtr != NULL; argsPtr++) {
+            free(*argsPtr);
+        }
+        if (ret != 0) {
             fprintf(stderr, "FAILED to replace sshd_config with configured version.\n");
             goto _setupImageSsh_unclean;
         }
@@ -1068,8 +1143,18 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
         snprintf(from, PATH_MAX, "%s/etc/ssh_config", udiImage);
         snprintf(to, PATH_MAX, "%s%s/etc/ssh/ssh_config", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
         if (stat(to, &statData) == 0) {
-            char *args[5] = {"cp", "-p", from, to, NULL};
-            if (forkAndExecvp(args) != 0) {
+            char *args[] = {strdup("cp"),
+                strdup("-p"),
+                strdup(from),
+                strdup(to),
+                NULL
+            };
+            char **argsPtr = NULL;
+            int ret = forkAndExecvp(args);
+            for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
+                free(*argsPtr);
+            }
+            if (ret == 0) {
                 fprintf(stderr, "FAILED to copy ssh_config to %s\n", to);
                 goto _setupImageSsh_unclean;
             }
@@ -1121,12 +1206,19 @@ int startSshd(UdiRootConfig *udiConfig) {
         goto _startSshd_unclean;
     }
     if (pid == 0) {
-        char *args[2] = {"/opt/udiImage/sbin/sshd", NULL};
         if (chroot(udiRootPath) != 0) {
             fprintf(stderr, "FAILED to chroot to %s while attempting to start sshd\n", udiRootPath);
-            goto _startSshd_unclean;
+            /* no goto, this is the child, we want it to end if this failed */
+        } else  {
+            char *sshdArgs[2] = {
+                strdup("/opt/udiImage/sbin/sshd"),
+                NULL
+            };
+            execv(sshdArgs[0], sshdArgs);
+            fprintf(stderr, "FAILED to exec sshd!\n");
+
         }
-        execv(args[0], args);
+        /* if we fell through to here, there is a problem */
         exit(1);
     } else {
         int status = 0;
