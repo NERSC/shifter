@@ -80,7 +80,6 @@ static int _bindMount(char **mountCache, const char *from, const char *to, int r
 static int _sortFsForward(const void *, const void *);
 static int _sortFsReverse(const void *, const void *);
 static int _copyFile(const char *source, const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode);
-static char *_filterString(char *);
 
 /*! Bind subtree of static image into UDI rootfs */
 /*!
@@ -160,7 +159,7 @@ int bindImageIntoUDI(
         if (strcmp(dirEntry->d_name, ".") == 0 || strcmp(dirEntry->d_name, "..") == 0) {
             continue;
         }
-        itemname = _filterString(dirEntry->d_name);
+        itemname = userInputPathFilter(dirEntry->d_name);
         if (itemname == NULL) {
             fprintf(stderr, "FAILED to correctly filter entry: %s\n", dirEntry->d_name);
             goto _bindImgUDI_unclean;
@@ -501,7 +500,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
             if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
                 continue;
             }
-            filename = _filterString(entry->d_name);
+            filename = userInputPathFilter(entry->d_name);
             if (filename == NULL) {
                 fprintf(stderr, "FAILED to allocate filename string.\n");
                 goto _prepSiteMod_unclean;
@@ -825,6 +824,7 @@ int setupUserMounts(ImageData *imageData, struct VolumeMap *map, UdiRootConfig *
     char **flags = NULL;
     char *filtered_from = NULL;
     char *filtered_to = NULL;
+    char *filtered_flags = NULL;
     char from_buffer[PATH_MAX];
     char to_buffer[PATH_MAX];
     char udiRoot[PATH_MAX];
@@ -857,8 +857,9 @@ int setupUserMounts(ImageData *imageData, struct VolumeMap *map, UdiRootConfig *
     to = map->to;
     flags = map->flags;
     for (; *from && *to; from++, to++, flags++) {
-        filtered_from = _filterString(*from);
-        filtered_to =   _filterString(*to);
+        filtered_from = userInputPathFilter(*from);
+        filtered_to =   userInputPathFilter(*to);
+        filtered_flags = userInputPathFilter(*flags);
         snprintf(from_buffer, PATH_MAX, "%s/%s", udiConfig->nodeContextPrefix, filtered_from);
         from_buffer[PATH_MAX-1] = 0;
         snprintf(to_buffer, PATH_MAX, "%s/%s", udiRoot, filtered_to);
@@ -880,12 +881,12 @@ int setupUserMounts(ImageData *imageData, struct VolumeMap *map, UdiRootConfig *
             fprintf(stderr, "FAILED to location is not directory: %s\n", to_buffer);
             goto _setupUserMounts_unclean;
         }
-        if (userMountFilter(udiRoot, filtered_from, filtered_to, *flags) != 0) {
+        if (validateVolumeMap(filtered_from, filtered_to, filtered_flags) != 0) {
             fprintf(stderr, "FAILED illegal user-requested mount: %s\n", filtered_to);
             goto _setupUserMounts_unclean;
         }
         ro = 0;
-        if (flags && strcmp(*flags, "ro") == 0) {
+        if (strcmp(filtered_flags, "ro") == 0) {
             ro = 1;
         }
         _BINDMOUNT(mountCache, filtered_from, filtered_to, ro);
@@ -908,6 +909,9 @@ _setupUserMounts_unclean:
     }
     if (filtered_to != NULL) {
         free(filtered_to);
+    }
+    if (filtered_flags != NULL) {
+        free(filtered_flags);
     }
     if (mountCache != NULL) {
         char **ptr = mountCache;
@@ -1280,7 +1284,7 @@ _bindMount_unclean:
     return 1;
 }
 
-static char *_filterString(char *input) {
+char *userInputPathFilter(const char *input) {
     ssize_t len = 0;
     char *ret = NULL;
     char *rptr = NULL;

@@ -44,8 +44,7 @@
 #include <unistd.h>
 #include "VolumeMap.h"
 #include "utility.h"
-
-static int _validateVolumeMap(const char *to, const char *from, const char *flags);
+#include "shifter_core.h"
 
 int parseVolumeMap(const char *input, struct VolumeMap *volMap) {
     if (input == NULL || volMap == NULL) return 1;
@@ -59,9 +58,13 @@ int parseVolumeMap(const char *input, struct VolumeMap *volMap) {
     char *tmp = NULL;
     size_t len = strlen(input);
     int ret = 0;
+    char *to = NULL;
+    char *from = NULL;
+    char *flags = NULL;
+    char *raw = NULL;
+    size_t rawLen = 0;
 
     while (ptr < input + len) {
-        char *to, *from, *flags;
         const char *cflags;
         eptr = strchr(ptr, ',');
         if (eptr == NULL) eptr = input + len;
@@ -71,11 +74,13 @@ int parseVolumeMap(const char *input, struct VolumeMap *volMap) {
         strncpy(tmp, ptr, eptr - ptr);
         tmp[eptr - ptr] = 0;
 
-        from = strtok(tmp, ":");
-        to = strtok(NULL, ":");
-        flags = strtok(NULL, ":");
+        /* tokenize and filter the input string */
+        from = userInputPathFilter(strtok(tmp, ":"));
+        to = userInputPathFilter(strtok(NULL, ":"));
+        flags = userInputPathFilter(strtok(NULL, ":"));
 
-        if (_validateVolumeMap(from, to, flags) != 0) {
+        /* ensure the user is asking for a legal mapping */
+        if (validateVolumeMap(from, to, flags) != 0) {
             fprintf(stderr, "Invalid Volume Map: %*s, aborting!\n", (eptr - ptr), ptr);
             goto _parseVolumeMap_unclean;
         }
@@ -87,8 +92,20 @@ int parseVolumeMap(const char *input, struct VolumeMap *volMap) {
         if (flags == NULL) cflags = "";
         else cflags = flags;
 
+        /* generate a new "raw" string from the filtered values */
+        rawLen = 2 + strlen(from) + strlen(to);
+        if (flags != NULL) {
+            rawLen += 1 + strlen(flags);
+        }
+        raw = (char *) malloc(sizeof(char) * rawLen);
+        snprintf(raw, rawLen, "%s:%s%c%s", from, to,
+                (flags && strlen(flags) > 0 ? ':' : '\0'),
+                (flags && strlen(flags) > 0 ? flags : "")
+        );
+
+
         /* append to raw array */
-        ret = strncpy_StringArray(ptr, eptr - ptr, &rawPtr, &(volMap->raw),
+        ret = strncpy_StringArray(raw, rawLen, &rawPtr, &(volMap->raw),
                 &(volMap->rawCapacity), VOLUME_ALLOC_BLOCK);
         if (ret != 0) goto _parseVolumeMap_unclean;
 
@@ -104,6 +121,15 @@ int parseVolumeMap(const char *input, struct VolumeMap *volMap) {
                 &(volMap->flagsCapacity), VOLUME_ALLOC_BLOCK);
         if (ret != 0) goto _parseVolumeMap_unclean;
 
+        free(from);
+        free(to);
+        free(flags);
+        free(raw);
+        from = NULL;
+        to = NULL;
+        flags = NULL;
+        raw = NULL;
+
         ptr = eptr + 1;
         volMap->n += 1;
         free(tmp);
@@ -111,19 +137,25 @@ int parseVolumeMap(const char *input, struct VolumeMap *volMap) {
     }
     return 0;
 _parseVolumeMap_unclean:
-    if (tmp != NULL) {
-        free(tmp);
-        tmp = NULL;
+    {
+        char *freeArray[] = {tmp, from, to, flags, raw, NULL};
+        char **freePtr = NULL;
+        for (freePtr = freeArray; *freePtr != NULL; freePtr++) {
+            if (*freePtr != NULL) {
+                free(*freePtr);
+            }
+        }
     }
     return 1;
 }
 
-static int _validateVolumeMap(const char *from, const char *to, const char *flags) {
+int validateVolumeMap(const char *from, const char *to, const char *flags) {
     const char *toStartsWithDisallowed[] = {"/etc", "/var", "etc", "var", "/opt/udiImage", "opt/udiImage", NULL};
     const char *toExactDisallowed[] = {"/opt", "opt", NULL};
     const char *fromStartsWithDisallowed[] = { NULL };
     const char *fromExactDisallowed[] = { NULL };
     const char **ptr = NULL;
+    int ret = 0;
 
     if (from == NULL || to == NULL) return 1;
 
@@ -272,25 +304,25 @@ TEST(VolumeMapTestGroup, VolumeMapParse_basic) {
 TEST(VolumeMapTestGroup, ValidateVolumeMap_basic) {
     int ret = 0;
 
-    ret = _validateVolumeMap("/test1Loc", "/etc/passwd", NULL);
+    ret = validateVolumeMap("/test1Loc", "/etc/passwd", NULL);
     CHECK(ret != 0);
 
-    ret = _validateVolumeMap("/test1Loc", "/var/log", NULL);
+    ret = validateVolumeMap("/test1Loc", "/var/log", NULL);
     CHECK(ret != 0);
 
-    ret = _validateVolumeMap("/test1Loc", "/opt", NULL);
+    ret = validateVolumeMap("/test1Loc", "/opt", NULL);
     CHECK(ret != 0);
 
-    ret = _validateVolumeMap("/test1Loc", "opt", NULL);
+    ret = validateVolumeMap("/test1Loc", "opt", NULL);
     CHECK(ret != 0);
 
-    ret = _validateVolumeMap("/test1Loc", "etc", NULL);
+    ret = validateVolumeMap("/test1Loc", "etc", NULL);
     CHECK(ret != 0);
 
-    ret = _validateVolumeMap("/test1Loc", "/opt/myStuff", NULL);
+    ret = validateVolumeMap("/test1Loc", "/opt/myStuff", NULL);
     CHECK(ret == 0);
 
-    ret = _validateVolumeMap("/scratch1/data", "/input", NULL);
+    ret = validateVolumeMap("/scratch1/data", "/input", NULL);
     CHECK(ret == 0);
 }
 

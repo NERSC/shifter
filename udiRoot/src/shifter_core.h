@@ -85,3 +85,4 @@ int forkAndExecvp(char *const *args);
 int forkAndExecv(char *const *argvs);
 int killSshd(void);
 char **parseMounts(size_t *n_mounts);
+char *userInputPathFilter(const char *input);
