@@ -153,6 +153,31 @@ static int _validateVolumeMap(const char *from, const char *to, const char *flag
     return 0;
 }
 
+/** fprint_volumeMap - write formatted output to specified FILE pointer */
+size_t fprint_VolumeMap(FILE *fp, struct VolumeMap *volMap) {
+    if (fp == NULL) return 0;
+
+    size_t count = 0;
+    size_t nBytes = 0;
+    if (volMap != NULL) count = volMap->n;
+    nBytes += fprintf(fp, "Volume Map: %lu maps\n", count);
+    if (volMap == NULL) return nBytes;
+
+    for (count = 0; count < volMap->n; count++) {
+        char *from = volMap->from[count];
+        char *to = volMap->to[count];
+        char *flags = volMap->flags[count];
+        char *cflags = (flags == NULL ? "None" : flags);
+        if (from == NULL || to == NULL) continue;
+
+        nBytes += fprintf(fp, "FROM: %s, TO: %s, FLAGS: %s\n", from, to, cflags);
+    }
+    return nBytes;
+}
+
+/* _vstrcmp: adaptor function to dereference points, cast and run strcmp
+ *    this is for qsort call below
+ */
 static int _vstrcmp(const void *a, const void *b) {
     return strcmp(*((const char **) a), *((const char **) b));
 }

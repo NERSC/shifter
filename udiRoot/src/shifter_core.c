@@ -68,6 +68,7 @@
 #include "UdiRootConfig.h"
 #include "shifter_core.h"
 #include "utility.h"
+#include "VolumeMap.h"
 
 #ifndef ROOTFS_TYPE
 #define ROOTFS_TYPE "tmpfs"
@@ -372,8 +373,8 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     char **mountCache = NULL;
     char **mntPtr = NULL;
     char *const *fnamePtr = NULL;
-    int ret = 0;
     size_t mountCache_cnt = 0;
+    int ret = 0;
     struct stat statData;
 
     char *const mandatorySiteEtcFiles[4] = {
@@ -684,7 +685,7 @@ _prepSiteMod_unclean:
         mountCache = NULL;
     }
     destructUDI(udiConfig);
-    return 1;
+    return ret;
 }
 
 int mountImageVFS(ImageData *imageData, const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig) {
@@ -818,7 +819,7 @@ _mntImgLoop_unclean:
     return 1;
 } 
 
-int setupUserMounts(ImageData *imageData, char **volumeMapFrom, char **volumeMapTo, char **volumeMapFlags, UdiRootConfig *udiConfig) {
+int setupUserMounts(ImageData *imageData, struct VolumeMap *map, UdiRootConfig *udiConfig) {
     char **from = NULL;
     char **to = NULL;
     char **flags = NULL;
@@ -835,7 +836,7 @@ int setupUserMounts(ImageData *imageData, char **volumeMapFrom, char **volumeMap
     if (imageData == NULL || udiConfig == NULL) {
         return 1;
     }
-    if (volumeMapFrom == NULL) {
+    if (map == NULL || map->n == 0) {
         return 0;
     }
 
@@ -852,9 +853,9 @@ int setupUserMounts(ImageData *imageData, char **volumeMapFrom, char **volumeMap
     snprintf(udiRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
     udiRoot[PATH_MAX-1] = 0;
 
-    from = volumeMapFrom;
-    to = volumeMapTo;
-    flags = volumeMapFlags;
+    from = map->from;
+    to = map->to;
+    flags = map->flags;
     for (; *from && *to; from++, to++, flags++) {
         filtered_from = _filterString(*from);
         filtered_to =   _filterString(*to);

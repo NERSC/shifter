@@ -66,6 +66,7 @@
 #include "ImageData.h"
 #include "UdiRootConfig.h"
 #include "shifter_core.h"
+#include "VolumeMap.h"
 
 #include "config.h"
 
@@ -78,14 +79,8 @@ typedef struct _SetupRootConfig {
     char *imageIdentifier;
     uid_t uid;
     char *minNodeSpec;
-    char **volumeMapFrom;
-    char **volumeMapTo;
-    char **volumeMapFlags;
+    struct VolumeMap volumeMap;
 
-    size_t volumeMap_capacity;
-    char **volumeMapFrom_ptr;
-    char **volumeMapTo_ptr;
-    char **volumeMapFlags_ptr;
     int verbose;
 } SetupRootConfig;
 
@@ -153,7 +148,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (setupUserMounts(&image, config.volumeMapFrom, config.volumeMapTo, config.volumeMapFlags, &udiConfig) != 0) {
+    if (setupUserMounts(&image, &(config.volumeMap), &udiConfig) != 0) {
         fprintf(stderr, "FAILED to setup user-requested mounts.\n");
         exit(1);
     }
@@ -173,41 +168,9 @@ int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
         switch (opt) {
             case 'V': config->verbose = 1; break;
             case 'v':
-                {
-                    char *from  = strtok(optarg, ":");
-                    char *to    = strtok(NULL,   ":");
-                    char *flags = strtok(NULL,   ":");
-                    size_t cnt = config->volumeMapFrom_ptr - config->volumeMapFrom;
-
-                    if (from == NULL || to == NULL) {
-                        fprintf(stderr, "ERROR: invalid format for volume map!");
-                        _usage(1);
-                    }
-
-                    if (config->volumeMapFrom == NULL || (cnt + 2) >= config->volumeMap_capacity) {
-                        char **fromPtr = realloc(config->volumeMapFrom, config->volumeMap_capacity + VOLUME_ALLOC_BLOCK);
-                        char **toPtr = realloc(config->volumeMapTo, config->volumeMap_capacity + VOLUME_ALLOC_BLOCK);
-                        char **flagsPtr = realloc(config->volumeMapFlags, config->volumeMap_capacity + VOLUME_ALLOC_BLOCK);
-                        if (fromPtr == NULL || toPtr == NULL || flagsPtr == NULL) {
-                            fprintf(stderr, "ERROR: unable to allocate memory for volume map!\n");
-                            _usage(1);
-                        }
-                        config->volumeMapFrom = fromPtr;
-                        config->volumeMapTo = toPtr;
-                        config->volumeMapFlags = flagsPtr;
-                        config->volumeMapFrom_ptr = fromPtr + cnt;
-                        config->volumeMapTo_ptr = toPtr + cnt;
-                        config->volumeMapFlags_ptr = flagsPtr + cnt;
-                    }
-                    *(config->volumeMapFrom_ptr) = strdup(from);
-                    *(config->volumeMapTo_ptr) = strdup(to);
-                    *(config->volumeMapFlags_ptr) = (flags ? strdup(flags) : NULL);
-                    config->volumeMapFrom_ptr++;
-                    config->volumeMapTo_ptr++;
-                    config->volumeMapFlags_ptr++;
-                    *(config->volumeMapFrom_ptr) = NULL;
-                    *(config->volumeMapTo_ptr) = NULL;
-                    *(config->volumeMapFlags_ptr) = NULL;
+                if (parseVolumeMap(optarg, &(config->volumeMap)) != 0) {
+                    fprintf(stderr, "Failed to parse volume map request: %s\n", optarg);
+                    _usage(1);
                 }
 
                 break;
@@ -243,7 +206,6 @@ int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
 }
 
 void free_SetupRootConfig(SetupRootConfig *config) {
-    char **volPtr = NULL;
     if (config->sshPubKey != NULL) {
         free(config->sshPubKey);
     }
@@ -259,24 +221,7 @@ void free_SetupRootConfig(SetupRootConfig *config) {
     if (config->minNodeSpec != NULL) {
         free(config->minNodeSpec);
     }
-    for (volPtr = config->volumeMapFrom; volPtr && *volPtr; volPtr++) {
-        free(*volPtr);
-    }
-    for (volPtr = config->volumeMapTo; volPtr && *volPtr; volPtr++) {
-        free(*volPtr);
-    }
-    for (volPtr = config->volumeMapFlags; volPtr && *volPtr; volPtr++) {
-        free(*volPtr);
-    }
-    if (config->volumeMapFrom) {
-        free(config->volumeMapFrom);
-    }
-    if (config->volumeMapTo) {
-        free(config->volumeMapTo);
-    }
-    if (config->volumeMapFlags) {
-        free(config->volumeMapFlags);
-    }
+    free_VolumeMap(&(config->volumeMap), 0);
     free(config);
 }
 
@@ -289,15 +234,8 @@ void fprint_SetupRootConfig(FILE *fp, SetupRootConfig *config) {
     fprintf(fp, "user: %s\n", (config->user ? config->user : ""));
     fprintf(fp, "uid: %d\n", config->uid);
     fprintf(fp, "minNodeSpec: %s\n", (config->minNodeSpec ? config->minNodeSpec : ""));
-    fprintf(fp, "volumeMap: %lu maps\n", (config->volumeMapFrom_ptr - config->volumeMapFrom));
-    if (config->volumeMapFrom) {
-        char **from = config->volumeMapFrom;
-        char **to = config->volumeMapTo;
-        char **flags = config->volumeMapFlags;
-        for (; *from && *to; from++, to++, flags++) {
-            fprintf(fp, "    FROM: %s, TO: %s, FLAGS: %s\n", *from, *to, (*flags ? *flags : "NONE"));
-        }
-    }
+    fprintf(fp, "volumeMap: %lu maps\n", config->volumeMap.n);
+    fprint_VolumeMap(fp, &(config->volumeMap));
     fprintf(fp, "***** END SetupRootConfig *****\n");
 }
 

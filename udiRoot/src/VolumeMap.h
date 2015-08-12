@@ -66,6 +66,7 @@ struct VolumeMap {
 
 int parseVolumeMap(const char *input, struct VolumeMap *volMap);
 char *getVolMapSignature(struct VolumeMap *volMap);
+size_t fprint_VolumeMap(FILE *fp, struct VolumeMap *volMap);
 void free_VolumeMap(struct VolumeMap *volMap, int freeStruct);
 
 #endif

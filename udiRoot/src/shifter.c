@@ -68,6 +68,7 @@
 #include "shifter_core.h"
 #include "ImageData.h"
 #include "utility.h"
+#include "VolumeMap.h"
 
 extern char **environ;
 
@@ -86,18 +87,9 @@ struct options {
     uid_t tgtUid;
     gid_t tgtGid;
     char **args;
-    char **volumeStrings;
-    char **volumeMapFrom;
-    char **volumeMapTo;
-    char **volumeMapFlags;
+    struct VolumeMap volumeMap;
     int verbose;
     int useEntryPoint;
-
-    /* state variables only used at parse time */
-    size_t volumeMap_capacity;
-    char **volumeMapFrom_ptr;
-    char **volumeMapTo_ptr;
-    char **volumeMapFlags_ptr;
 };
 
 
@@ -109,10 +101,8 @@ static int _appendStringArray(const char *target, size_t nChars, char ***wptr,
 char **copyenv(void);
 int parse_options(int argc, char **argv, struct options *opts);
 int parse_environment(struct options *opts);
-int parse_volume_mounts(struct options *opts);
 int fprint_options(FILE *, struct options *);
-void free_options(struct options *);
-int appendVolumeMap(struct options *config, char *volumeDesc);
+void free_options(struct options *, int freeStruct);
 int local_putenv(char ***environ, const char *newVar);
 
 #ifndef _TESTHARNESS_SHIFTER
@@ -450,7 +440,7 @@ int parse_options(int argc, char **argv, struct options *config) {
     }
 
     /* validate and organize any user-requested bind-mounts */
-    if (parse_volume_mounts(config) != 0) {
+    if (parseVolumeMap(config->rawVolumes, &(config->volumeMap)) != 0) {
         _usage(1);
     }
 
@@ -473,107 +463,6 @@ int parse_environment(struct options *opts) {
         opts->rawVolumes = strdup(envPtr);
     }
 
-    return 0;
-}
-
-int parse_volume_mounts(struct options *config) {
-    int n_bindMounts = 0;
-    size_t rawVolumesLen = 0;
-    char *ptr = NULL;
-    char *eptr = NULL;
-    char **bindMountStrings = NULL;
-    char **bindMountPtr = NULL;
-    size_t bindMountStrings_capacity = 0;
-    int ret = 0;
-
-    if (config == NULL) return -1;
-    if (config->rawVolumes == NULL) return 0; /* no error if none */
-
-    rawVolumesLen = strlen(config->rawVolumes);
-    if (rawVolumesLen == 0) return 0; /* no error if none */
-
-    /* count how many mounts we see */
-    n_bindMounts = 0;
-    ptr = config->rawVolumes;
-    while (ptr < config->rawVolumes + rawVolumesLen) {
-
-        /* find end of current substring */
-        eptr = strchr(ptr, ',');
-        if (eptr == NULL) {
-            eptr = config->rawVolumes + rawVolumesLen;
-        }
-
-        /* copy substring into array */
-        ret = _appendStringArray(
-                ptr, eptr - ptr, &bindMountPtr, &bindMountStrings,
-                &bindMountStrings_capacity, VOLUME_ALLOC_BLOCK
-        );
-        if (ret != 0) {
-            ret *= -1;
-            goto _parseVolumeMounts_end;
-        }
-
-        /* increment to next substring */
-        ptr = eptr + 1;
-        n_bindMounts++;
-    }
-
-    /* sort array - important for comparing mounts */
-    qsort(bindMountStrings, bindMountPtr - bindMountStrings, sizeof(char *), strcmp);
-
-    for (bindMountPtr = bindMountStrings; *bindMountPtr != NULL; bindMountPtr++) {
-
-    }
-
-
-    ret = n_bindMounts;
-_parseVolumeMounts_end:
-    if (bindMountStrings != NULL) {
-        for (bindMountPtr = bindMountStrings; *bindMountPtr != NULL; bindMountPtr++) {
-            free(*bindMountPtr);
-        }
-        free(bindMountStrings);
-        bindMountStrings = NULL;
-    }
-    return ret;
-}
-
-int appendVolumeMap(struct options *config, char *volumeDesc) {
-    char *tokloc = NULL;
-    char *from  = strtok_r(volumeDesc, ":", &tokloc);
-    char *to    = strtok_r(NULL,   ":", &tokloc);
-    char *flags = strtok_r(NULL,   ":", &tokloc);
-    size_t cnt = config->volumeMapFrom_ptr - config->volumeMapFrom;
-
-    if (from == NULL || to == NULL) {
-        fprintf(stderr, "ERROR: invalid format for volume map!");
-        _usage(1);
-    }
-
-    if (config->volumeMapFrom == NULL || (cnt + 2) >= config->volumeMap_capacity) {
-        char **fromPtr = (char **) realloc(config->volumeMapFrom, config->volumeMap_capacity + VOLUME_ALLOC_BLOCK);
-        char **toPtr = (char **) realloc(config->volumeMapTo, config->volumeMap_capacity + VOLUME_ALLOC_BLOCK);
-        char **flagsPtr = (char **) realloc(config->volumeMapFlags, config->volumeMap_capacity + VOLUME_ALLOC_BLOCK);
-        if (fromPtr == NULL || toPtr == NULL || flagsPtr == NULL) {
-            fprintf(stderr, "ERROR: unable to allocate memory for volume map!\n");
-            _usage(1);
-        }
-        config->volumeMapFrom = fromPtr;
-        config->volumeMapTo = toPtr;
-        config->volumeMapFlags = flagsPtr;
-        config->volumeMapFrom_ptr = fromPtr + cnt;
-        config->volumeMapTo_ptr = toPtr + cnt;
-        config->volumeMapFlags_ptr = flagsPtr + cnt;
-    }
-    *(config->volumeMapFrom_ptr) = strdup(from);
-    *(config->volumeMapTo_ptr) = strdup(to);
-    *(config->volumeMapFlags_ptr) = (flags ? strdup(flags) : NULL);
-    config->volumeMapFrom_ptr++;
-    config->volumeMapTo_ptr++;
-    config->volumeMapFlags_ptr++;
-    *(config->volumeMapFrom_ptr) = NULL;
-    *(config->volumeMapTo_ptr) = NULL;
-    *(config->volumeMapFlags_ptr) = NULL;
     return 0;
 }
 
@@ -655,34 +544,7 @@ void free_options(struct options *opts, int freeStruct) {
         free(opts->args);
         opts->args = NULL;
     }
-    if (opts->volumeStrings != NULL) {
-        for (ptr = opts->volumeStrings; *ptr != NULL; ptr++) {
-            free(*ptr);
-        }
-        free(opts->volumeStrings);
-        opts->volumeStrings = NULL;
-    }
-    if (opts->volumeMapFrom != NULL) {
-        for (ptr = opts->volumeMapFrom; *ptr != NULL; ptr++) {
-            free(*ptr);
-        }
-        free(opts->volumeMapFrom);
-        opts->volumeMapFrom = NULL;
-    }
-    if (opts->volumeMapTo != NULL) {
-        for (ptr = opts->volumeMapTo; *ptr != NULL; ptr++) {
-            free(*ptr);
-        }
-        free(opts->volumeMapTo);
-        opts->volumeMapTo = NULL;
-    }
-    if (opts->volumeMapFlags != NULL) {
-        for (ptr = opts->volumeMapFlags; *ptr != NULL; ptr++) {
-            free(*ptr);
-        }
-        free(opts->volumeMapFlags);
-        opts->volumeMapFlags = NULL;
-    }
+    free_VolumeMap(&(opts->volumeMap), 0);
     if (freeStruct != 0) {
         free(opts);
     }
@@ -775,24 +637,6 @@ TEST(ShifterTestGroup, LocalPutEnv_basic) {
 
     free(testenv0Ptr);
     free(testenv2Ptr);
-}
-
-TEST(ShifterTestGroup, TestVolumeParse) {
-    struct options opts;
-    memset(&opts, 0, sizeof(struct options));
-    int ret = parse_volume_mounts(&opts);
-    CHECK(ret == 0);
-
-    opts.rawVolumes = strdup("/test/path/1:/mnt/tp1");
-    ret = parse_volume_mounts(&opts);
-    CHECK(ret == 1);
-    free_options(&opts, 0);
-
-    opts.rawVolumes = strdup("/test/path/1:/mnt/tp1,/test/path/2:/mnt/tp2");
-    ret = parse_volume_mounts(&opts);
-    CHECK(ret == 2);
-    free_options(&opts, 0);
-
 }
 
 int main(int argc, char **argv) {

@@ -42,11 +42,11 @@ shiftrun: shiftrun.in
 config.h: config.h.in
 	cat $< | $(SED_MODIFY) > $@
 
-setupRoot: setupRoot.c UdiRootConfig.c utility.c ImageData.c config.h shifter_core.c
+setupRoot: setupRoot.c UdiRootConfig.c utility.c ImageData.c config.h shifter_core.c VolumeMap.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) -DROOTFS_TYPE=$(ROOTFS_TYPE) -DNO_ROOT_OWN_CHECK $^ -o $@
 unsetupRoot: unsetupRoot.c UdiRootConfig.c utility.c config.h shifter_core.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) -DROOTFS_TYPE=$(ROOTFS_TYPE) -DNO_ROOT_OWN_CHECK $^ -o $@
-shifter: shifter.c UdiRootConfig.c utility.c config.h shifter_core.c ImageData.c
+shifter: shifter.c UdiRootConfig.c utility.c config.h shifter_core.c ImageData.c VolumeMap.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) -DROOTFS_TYPE=$(ROOTFS_TYPE) -DNO_ROOT_OWN_CHECK $^ -o $@
 
 install: all
