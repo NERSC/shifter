@@ -7,15 +7,15 @@ test: test_utility test_VolumeMap test_UdiRootConfig test_shifter
 test_utility: ../utility.h ../utility.c
 	g++ -fprofile-arcs -ftest-coverage -O0 -I.. ../utility.c $(CPPUTEST_FLAGS) $(TEST_FLAGS) -D _TESTHARNESS_UTILITY -o test_utility
 	./test_utility
-	gcov -b ../utility.c
-	cat utility.c.gcov | grep "#####:"
+#gcov -b ../utility.c
+#cat utility.c.gcov | grep "#####:"
 	valgrind --tool=memcheck --leak-check=full --suppressions=valgrind.suppressions ./test_utility
 
 test_VolumeMap: ../VolumeMap.h ../VolumeMap.c ../utility.h ../utility.c
 	g++ -fprofile-arcs -ftest-coverage -O0 -I.. ../VolumeMap.c ../utility.c $(CPPUTEST_FLAGS) $(TEST_FLAGS) -D _TESTHARNESS_VOLMAP -o test_VolumeMap
 	./test_VolumeMap
-	gcov -b ../VolumeMap.c
-	cat VolumeMap.c.gcov | grep "#####:"
+#gcov -b ../VolumeMap.c
+#cat VolumeMap.c.gcov | grep "#####:"
 	valgrind --tool=memcheck --leak-check=full --suppressions=valgrind.suppressions ./test_VolumeMap
 
 test_UdiRootConfig: ../UdiRootConfig.h ../UdiRootConfig.c ../utility.c

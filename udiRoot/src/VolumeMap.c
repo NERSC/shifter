@@ -71,12 +71,12 @@ int parseVolumeMap(const char *input, struct VolumeMap *volMap) {
         strncpy(tmp, ptr, eptr - ptr);
         tmp[eptr - ptr] = 0;
 
-        to = strtok(tmp, ":");
-        from = strtok(NULL, ":");
+        from = strtok(tmp, ":");
+        to = strtok(NULL, ":");
         flags = strtok(NULL, ":");
 
-        if (_validateVolumeMap(to, from, flags) != 0) {
-            fprintf("Invalid Volume Map: %*s, aborting!\n", (eptr - ptr), ptr);
+        if (_validateVolumeMap(from, to, flags) != 0) {
+            fprintf(stderr, "Invalid Volume Map: %*s, aborting!\n", (eptr - ptr), ptr);
             goto _parseVolumeMap_unclean;
         }
 
@@ -88,20 +88,20 @@ int parseVolumeMap(const char *input, struct VolumeMap *volMap) {
         else cflags = flags;
 
         /* append to raw array */
-        ret = strncpy_StringArray(ptr, eptr - ptr, &(volMap->raw),
-                &rawPtr, &(volMap->rawCapacity), VOLUME_ALLOC_BLOCK);
+        ret = strncpy_StringArray(ptr, eptr - ptr, &rawPtr, &(volMap->raw),
+                &(volMap->rawCapacity), VOLUME_ALLOC_BLOCK);
         if (ret != 0) goto _parseVolumeMap_unclean;
 
-        ret = strncpy_StringArray(to, strlen(to), &(volMap->to),
-                &toPtr, &(volMap->toCapacity), VOLUME_ALLOC_BLOCK);
+        ret = strncpy_StringArray(to, strlen(to), &toPtr, &(volMap->to),
+                &(volMap->toCapacity), VOLUME_ALLOC_BLOCK);
         if (ret != 0) goto _parseVolumeMap_unclean;
 
-        ret = strncpy_StringArray(from, strlen(from), &(volMap->from),
-                &fromPtr, &(volMap->fromCapacity), VOLUME_ALLOC_BLOCK);
+        ret = strncpy_StringArray(from, strlen(from), &fromPtr, &(volMap->from),
+                &(volMap->fromCapacity), VOLUME_ALLOC_BLOCK);
         if (ret != 0) goto _parseVolumeMap_unclean;
 
-        ret = strncpy_StringArray(cflags, strlen(cflags), &(volMap->flags),
-                &flagsPtr, &(volMap->flagsCapacity), VOLUME_ALLOC_BLOCK);
+        ret = strncpy_StringArray(cflags, strlen(cflags), &flagsPtr, &(volMap->flags),
+                &(volMap->flagsCapacity), VOLUME_ALLOC_BLOCK);
         if (ret != 0) goto _parseVolumeMap_unclean;
 
         ptr = eptr + 1;
@@ -118,11 +118,71 @@ _parseVolumeMap_unclean:
     return 1;
 }
 
-static int _validateVolumeMap(const char *to, const char *from, const char *flags) {
+static int _validateVolumeMap(const char *from, const char *to, const char *flags) {
+    const char *toStartsWithDisallowed[] = {"/etc", "/var", "etc", "var", "/opt/udiImage", "opt/udiImage", NULL};
+    const char *toExactDisallowed[] = {"/opt", "opt", NULL};
+    const char *fromStartsWithDisallowed[] = { NULL };
+    const char *fromExactDisallowed[] = { NULL };
+    const char **ptr = NULL;
+
+    if (from == NULL || to == NULL) return 1;
+
+    for (ptr = toStartsWithDisallowed; *ptr != NULL; ptr++) {
+        size_t len = strlen(*ptr);
+        if (strncmp(to, *ptr, len) == 0) {
+            return 1;
+        }
+    }
+    for (ptr = toExactDisallowed; *ptr != NULL; ptr++) {
+        if (strcmp(to, *ptr) == 0) {
+            return 1;
+        }
+    }
+    for (ptr = fromStartsWithDisallowed; *ptr != NULL; ptr++) {
+        size_t len = strlen(*ptr);
+        if (strncmp(from, *ptr, len) == 0) {
+            return 1;
+        }
+    }
+    for (ptr = fromExactDisallowed; *ptr != NULL; ptr++) {
+        if (strcmp(from, *ptr) == 0) {
+            return 1;
+        }
+    }
+
     return 0;
 }
 
+static int _vstrcmp(const void *a, const void *b) {
+    return strcmp(*((const char **) a), *((const char **) b));
+}
+
 char *getVolMapSignature(struct VolumeMap *volMap) {
+    char **ptr = NULL;
+    size_t len = 0;
+    char *ret = NULL;
+    char *wptr = NULL;
+    char *limit = NULL;
+
+    if (volMap == NULL || volMap->raw == NULL || volMap->n == 0) {
+        return NULL;
+    }
+
+    qsort(volMap->raw, volMap->n, sizeof(char *), _vstrcmp);
+    for (ptr = volMap->raw; *ptr != NULL; ptr++) {
+        len += strlen(*ptr);
+    }
+
+    ret = (char *) malloc(sizeof(char) * (len + volMap->n));
+    wptr = ret;
+    limit = ret + (len + volMap->n);
+    for (ptr = volMap->raw; *ptr != NULL; ptr++) {
+        wptr += snprintf(wptr, (limit - wptr), "%s,", *ptr);
+    }
+    wptr--;
+    *wptr = 0;
+
+    return ret;
 }
 
 /**
@@ -145,8 +205,10 @@ void free_VolumeMap(struct VolumeMap *volMap, int freeStruct) {
     for (ptr = arrays; *ptr != NULL; ptr++) {
         char **iptr = NULL;
         for (iptr = *ptr; *iptr != NULL; iptr++) {
-            fprintf(stderr, "value: %s\n" *iptr);
+            free(*iptr);
         }
+        free(*ptr);
+        *ptr = NULL;
     }
     if (freeStruct == 1) {
         free(volMap);
@@ -166,6 +228,61 @@ TEST(VolumeMapTestGroup, VolumeMapParse_basic) {
     int ret = parseVolumeMap("/path1/is/here:/target1", &volMap);
     CHECK(ret == 0);
     CHECK(volMap.n == 1);
+
+    ret = parseVolumeMap("/evilPath:/etc", &volMap);
+    CHECK(ret != 0);
+    CHECK(volMap.n == 1);
+
+    ret = parseVolumeMap("/scratch1/test:/input:ro", &volMap);
+    CHECK(ret == 0);
+    CHECK(volMap.n == 2);
+
+    ret = parseVolumeMap("/scratch1/output:/output", &volMap);
+    CHECK(ret == 0);
+    CHECK(volMap.n == 3);
+
+    free_VolumeMap(&volMap, 0);
+}
+
+TEST(VolumeMapTestGroup, ValidateVolumeMap_basic) {
+    int ret = 0;
+
+    ret = _validateVolumeMap("/test1Loc", "/etc/passwd", NULL);
+    CHECK(ret != 0);
+
+    ret = _validateVolumeMap("/test1Loc", "/var/log", NULL);
+    CHECK(ret != 0);
+
+    ret = _validateVolumeMap("/test1Loc", "/opt", NULL);
+    CHECK(ret != 0);
+
+    ret = _validateVolumeMap("/test1Loc", "opt", NULL);
+    CHECK(ret != 0);
+
+    ret = _validateVolumeMap("/test1Loc", "etc", NULL);
+    CHECK(ret != 0);
+
+    ret = _validateVolumeMap("/test1Loc", "/opt/myStuff", NULL);
+    CHECK(ret == 0);
+
+    ret = _validateVolumeMap("/scratch1/data", "/input", NULL);
+    CHECK(ret == 0);
+}
+
+TEST(VolumeMapTestGroup, GetVolumeMapSignature_basic) {
+    int ret = 0;
+    VolumeMap volMap;
+
+    memset(&volMap, 0, sizeof(VolumeMap));
+    ret = parseVolumeMap("/d:/c,/a:/b,/q:/r,/a:/c", &volMap);
+    CHECK(ret == 0);
+    CHECK(volMap.n == 4);
+
+    char *sig = getVolMapSignature(&volMap);
+    fprintf(stderr, "%s\n", sig);
+
+    free(sig);
+
 
     free_VolumeMap(&volMap, 0);
 }
