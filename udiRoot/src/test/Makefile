@@ -7,7 +7,7 @@ USE_VALGRIND=1
 test: test_utility test_VolumeMap test_UdiRootConfig test_shifter
 
 define RUNTEST =
-./$@
+timeout 30 ./$@ -v
 if [[ $(USE_GCOV) == 1 ]]; then \
 	gcov -b $(firstword $^); \
 	cat $(firstword $^).gcov | grep "#####:"; \
@@ -33,9 +33,14 @@ test_shifter: ../shifter.c ../shifter_core.c ../UdiRootConfig.c ../utility.c ../
 	g++ -fprofile-arcs -ftest-coverage -O0 -I.. $^ $(CPPUTEST_FLAGS) -o $@ $(TEST_FLAGS) -D_TESTHARNESS_SHIFTER
 	$(RUNTEST)
 
+test_ImageData: ../ImageData.c ../utility.c
+	g++ -fprofile-arcs -ftest-coverage -O0 -I.. $^ $(CPPUTEST_FLAGS) -o $@ $(TEST_FLAGS) -D_TESTHARNESS_IMAGEDATA
+	$(RUNTEST)
+
 clean:
 	if [[ -e test_utility ]]; then rm test_utility; fi
 	if [[ -e test_UdiRootConfig ]]; then rm test_UdiRootConfig; fi
 	if [[ -e test_shifter ]]; then rm test_shifter; fi
+	if [[ -e test_VolumeMap ]]; then rm test_VolumeMap; fi
 	rm *.gcov *.gcda *.gcno
 

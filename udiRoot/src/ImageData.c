@@ -56,7 +56,7 @@
 #define ENV_ALLOC_SIZE 512
 #define VOL_ALLOC_SIZE 256
 
-static int _assign(char *key, char *value, void *t_imageData);
+static int _assign(const char *key, const char *value, void *t_imageData);
 
 int parse_ImageData(char *identifier, UdiRootConfig *config, ImageData *image) {
     char *fname = NULL;
@@ -111,7 +111,9 @@ int parse_ImageData(char *identifier, UdiRootConfig *config, ImageData *image) {
     return 0;
 }
 
-void free_ImageData(ImageData *image) {
+void free_ImageData(ImageData *image, int freeStruct) {
+    if (image == NULL) return;
+
     if (image->env != NULL) {
         char **envPtr = NULL;
         for (envPtr = image->env ; *envPtr != NULL; envPtr++) {
@@ -132,16 +134,35 @@ void free_ImageData(ImageData *image) {
         }
         free(image->volume);
     }
-    free(image);
+    if (freeStruct == 1) {
+        free(image);
+    }
 }
 
-void fprint_ImageData(FILE *fp, ImageData *image) {
+/** fprint_ImageData
+ *  Displays formatted output of the image data structure.
+ *  Returns number of bytes written to fp.
+ *
+ *  Parameters:
+ *  fp - pointer to file buffer
+ *  image - pointer to ImageData
+ *
+ *  Error conditions: if fp is NULL or in error at beginning of execution,
+ *  returns 0.
+ */
+size_t fprint_ImageData(FILE *fp, ImageData *image) {
     const char *cptr = NULL;
     char **tptr = NULL;
+    size_t nWrite = 0;
 
-    if (image == NULL || fp == NULL) return;
+    if (fp == NULL) return 0;
 
-    fprintf(fp, "***** ImageData *****\n");
+    nWrite += fprintf(fp, "***** ImageData *****\n");
+    if (image == NULL) {
+        nWrite += fprintf(fp, "Null Image - Nothing to Display\n");
+        return nWrite;
+    }
+
     switch(image->format) {
         case FORMAT_VFS: cptr = "VFS"; break;
         case FORMAT_EXT4: cptr = "EXT4"; break;
@@ -149,22 +170,41 @@ void fprint_ImageData(FILE *fp, ImageData *image) {
         case FORMAT_CRAMFS: cptr = "CRAMFS"; break;
         case FORMAT_INVALID: cptr = "INVALID"; break;
     }
-    fprintf(fp, "Image Format: %s\n", cptr);
-    fprintf(fp, "Filename: %s\n", (image->filename ? image->filename : ""));
-    fprintf(fp, "Image Env: %lu defined variables\n", (image->envPtr - image->env));
+    nWrite += fprintf(fp, "Image Format: %s\n", cptr);
+    nWrite += fprintf(fp, "Filename: %s\n", (image->filename ? image->filename : ""));
+    nWrite += fprintf(fp, "Image Env: %lu defined variables\n", image->env_size);
     for (tptr = image->env; tptr && *tptr; tptr++) {
-        fprintf(fp, "    %s\n", *tptr);
+        nWrite += fprintf(fp, "    %s\n", *tptr);
     }
-    fprintf(fp, "EntryPoint: %s\n", (image->entryPoint != NULL ? image->entryPoint : ""));
-    fprintf(fp, "Volume Mounts: %lu mount points\n", (image->volPtr - image->volume));
+    nWrite += fprintf(fp, "EntryPoint: %s\n", (image->entryPoint != NULL ? image->entryPoint : ""));
+    nWrite += fprintf(fp, "Volume Mounts: %lu mount points\n", image->volume_size);
     for (tptr = image->volume; tptr && *tptr; tptr++) {
-        fprintf(fp, "    %s\n", *tptr);
+        nWrite += fprintf(fp, "    %s\n", *tptr);
     }
-    fprintf(fp, "***** END ImageData *****\n");
+    nWrite += fprintf(fp, "***** END ImageData *****\n");
+    return nWrite;
 }
 
-static int _assign(char *key, char *value, void *t_image) {
+/**
+ * _assign - utility function to write data into ImageData structure when
+ * parsing configuration file.
+ *
+ * Parameters:
+ * key - identifier from configuration file
+ * value - value from configuration file
+ * t_image - anonymous pointer which *should* point to an ImageData structure
+ *
+ * Returns:
+ * 0 if value successfully set or appended
+ * 1 if invalid input
+ * 2 invalid key
+ */
+static int _assign(const char *key, const char *value, void *t_image) {
     ImageData *image = (ImageData *) t_image;
+
+    if (image == NULL || key == NULL || value == NULL) {
+        return 1;
+    }
 
     if (strcmp(key, "FORMAT") == 0) {
         if (strcmp(value, "VFS") == 0) {
@@ -179,20 +219,9 @@ static int _assign(char *key, char *value, void *t_image) {
             image->format = FORMAT_INVALID;
         }
     } else if (strcmp(key, "ENV") == 0) {
-        char **tmp = NULL;
-        size_t cnt = image->envPtr - image->env;
-        if (image->env == NULL || cnt >= image->env_capacity) {
-            tmp = (char **) realloc(image->env, sizeof(char*) * (image->env_capacity + ENV_ALLOC_SIZE));
-            if (tmp == NULL) {
-                return 1;
-            }
-            image->env_capacity += ENV_ALLOC_SIZE;
-            image->env = tmp;
-            image->envPtr = tmp + cnt;
-        }
-        *(image->envPtr) = strdup(value);
-        image->envPtr++;
-        *(image->envPtr) = NULL;
+        char **tmp = image->env + image->env_size;
+        strncpy_StringArray(value, strlen(value), &tmp, &(image->env), &(image->env_capacity), ENV_ALLOC_SIZE);
+        image->env_size++;
 
     } else if (strcmp(key, "ENTRY") == 0) {
         image->entryPoint = strdup(value);
@@ -200,23 +229,41 @@ static int _assign(char *key, char *value, void *t_image) {
             return 1;
         }
     } else if (strcmp(key, "VOLUME") == 0) {
-        char **tmp = NULL;
-        size_t cnt = image->volPtr - image->volume;
-        if (image->volume == NULL || cnt >= image->volume_capacity) {
-            tmp = (char **) realloc(image->volume, sizeof(char*) * (image->volume_capacity + VOL_ALLOC_SIZE));
-            if (tmp == NULL) {
-                return 1;
-            }
-            image->volume_capacity += VOL_ALLOC_SIZE;
-            image->volume = tmp;
-            image->volPtr = tmp + cnt;
-        }
-        *(image->volPtr) = strdup(value);
-        image->volPtr++;
-        *(image->volPtr) = NULL;
+        char **tmp = image->volume + image->volume_size;
+        strncpy_StringArray(value, strlen(value), &tmp, &(image->volume), &(image->volume_capacity), VOL_ALLOC_SIZE);
+        image->volume_capacity++;
     } else {
         printf("Couldn't understand key: %s\n", key);
         return 2;
     }
     return 0; 
 }
+
+#ifdef _TESTHARNESS_IMAGEDATA
+#include <CppUTest/CommandLineTestRunner.h>
+
+TEST_GROUP(ImageDataTestGroup) {
+};
+
+TEST(ImageDataTestGroup, ConfigAssign_basic) {
+    int ret = 0;
+    ImageData image;
+    memset(&image, 0, sizeof(ImageData));
+
+    ret = _assign(NULL, NULL, NULL);
+    CHECK(ret == 1);
+
+    ret = _assign("FakeKey", "FakeValue", &image);
+    CHECK(ret == 2);
+
+    ret = _assign("ENV", "PATH=/bin:/usr/bin", &image);
+    CHECK(ret == 0);
+
+}
+
+int main(int argc, char** argv) {
+    return CommandLineTestRunner::RunAllTests(argc, argv);
+}
+
+
+#endif

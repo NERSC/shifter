@@ -55,7 +55,7 @@
 #define UDIROOT_VAL_ALL 0xffffffff
 
 #ifndef IMAGEGW_PORT_DEFAULT
-#define IMAGEGW_PORT_DEFAULT 7777
+#define IMAGEGW_PORT_DEFAULT "7777"
 #endif
 
 typedef struct _ImageGwServer {
@@ -78,13 +78,15 @@ typedef struct _UdiRootConfig {
     char *kmodBasePath;
     char *kmodPath;
     char *kmodCacheFile;
-    ImageGwServer **servers;
+    char **gwName;
+    char **gwPort;
     char **siteFs;
 
-    ImageGwServer **svrPtr;
-    char **siteFsPtr;
     size_t siteFs_capacity;
-    size_t servers_capacity;
+    size_t gwName_capacity;
+    size_t gwPort_capacity;
+    size_t siteFs_size;
+    size_t gateway_size;
 } UdiRootConfig;
 
 int parse_UdiRootConfig(const char *, UdiRootConfig *, int validateFlags);

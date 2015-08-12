@@ -61,12 +61,12 @@ typedef struct _ImageData {
 
     size_t env_capacity;    /*!< Current # of allocated char* in env */
     size_t volume_capacity; /*!< Current # of allocated char* in volumes */
-    char **envPtr;          /*!< Temporary write pointer for env */
-    char **volPtr;          /*!< Temporary write pointer for volumes */
+    size_t env_size;        /*!< Number of elements in env array */
+    size_t volume_size;     /*!< Number of elements in volume array */
 } ImageData;
 
 int parse_ImageData(char *identifier, UdiRootConfig *, ImageData *);
-void free_ImageData(ImageData *);
-void fprint_ImageData(FILE *, ImageData *);
+void free_ImageData(ImageData *, int);
+size_t fprint_ImageData(FILE *, ImageData *);
 
 #endif

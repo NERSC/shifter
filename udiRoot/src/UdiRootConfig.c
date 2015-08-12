@@ -57,7 +57,7 @@
 #define SITEFS_ALLOC_BLOCK 16
 #define SERVER_ALLOC_BLOCK 3
 
-static int _assign(char *key, char *value, void *tUdiRootConfig);
+static int _assign(const char *key, const char *value, void *tUdiRootConfig);
 static int _validateConfigFile(const char *);
 
 int parse_UdiRootConfig(const char *configFile, UdiRootConfig *config, int validateFlags) {
@@ -76,6 +76,8 @@ int parse_UdiRootConfig(const char *configFile, UdiRootConfig *config, int valid
 }
 
 void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
+    if (config == NULL) return;
+
     if (config->nodeContextPrefix != NULL) {
         free(config->nodeContextPrefix);
     }
@@ -118,20 +120,16 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
     if (config->kmodCacheFile != NULL) {
         free(config->kmodCacheFile);
     }
-    if (config->servers != NULL) {
-        ImageGwServer **ptr = NULL;
-        for (ptr = config->servers; *ptr != NULL; ptr++) {
-            free((*ptr)->server);
-            free(*ptr);
+
+    char **arrays[] = {config->gwName, config->gwPort, config->siteFs, NULL};
+    char ***arrayPtr = NULL;
+    for (arrayPtr = arrays; *arrayPtr != NULL; arrayPtr++) {
+        char **iPtr = NULL;
+        for (iPtr = *arrayPtr; *iPtr != NULL; iPtr++) {
+            free(*iPtr);
         }
-        free(config->servers);
-    }
-    if (config->siteFs != NULL) {
-        char **ptr = NULL;
-        for (ptr = config->siteFs; *ptr != NULL; ptr++) {
-            free(*ptr);
-        }
-        free(config->siteFs);
+        free(*arrayPtr);
+        *arrayPtr = NULL;
     }
     if (freeStruct) {
         free(config);
@@ -139,8 +137,8 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
 }
 
 size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
-    ImageGwServer **sPtr = NULL;
     char **fsPtr = NULL;
+    size_t idx = 0;
     size_t written = 0;
 
     if (config == NULL || fp == NULL) return 0;
@@ -174,11 +172,13 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->kmodPath != NULL ? config->kmodPath : ""));
     written += fprintf(fp, "kmodCacheFile = %s\n", 
         (config->kmodCacheFile != NULL ? config->kmodCacheFile : ""));
-    written += fprintf(fp, "Image Gateway Servers = %lu servers\n",  (config->svrPtr - config->servers));
-    for (sPtr = config->servers; *sPtr != NULL; sPtr++) {
-        written += fprintf(fp, "    %s:%d\n", (*sPtr)->server, (*sPtr)->port);
+    written += fprintf(fp, "Image Gateway Servers = %lu servers\n", config->gateway_size);
+    for (idx = 0; idx < config->gateway_size; idx++) {
+        char *gwName = config->gwName[idx];
+        char *gwPort = config->gwPort[idx];
+        written += fprintf(fp, "    %s:%s\n", gwName, gwPort);
     }
-    written += fprintf(fp, "Site FS Bind-mounts = %lu fs\n", (config->siteFsPtr - config->siteFs));
+    written += fprintf(fp, "Site FS Bind-mounts = %lu fs\n", config->siteFs_size);
     for (fsPtr = config->siteFs; *fsPtr != NULL; fsPtr++) {
         written += fprintf(fp, "    %s\n", *fsPtr);
     }
@@ -190,7 +190,7 @@ int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
     return 0;
 }
 
-static int _assign(char *key, char *value, void *t_config) {
+static int _assign(const char *key, const char *value, void *t_config) {
     UdiRootConfig *config = (UdiRootConfig *)t_config;
     if (strcmp(key, "udiMount") == 0) {
         config->udiMountPoint = strdup(value);
@@ -235,56 +235,48 @@ static int _assign(char *key, char *value, void *t_config) {
         config->kmodCacheFile = strdup(value);
         if (config->kmodCacheFile == NULL) return 1;
     } else if (strcmp(key, "siteFs") == 0) {
-        char *search = value;
+        char *valueDup = strdup(value);
+        char *search = valueDup;
         char *ptr = NULL;
         while ((ptr = strtok(search, " ")) != NULL) {
-            size_t cnt = config->siteFsPtr - config->siteFs;
+            char **siteFsPtr = config->siteFs + config->siteFs_size;
+            strncpy_StringArray(ptr, strlen(ptr), &siteFsPtr, &(config->siteFs), &(config->siteFs_capacity), SITEFS_ALLOC_BLOCK);
+            config->siteFs_size++;
             search = NULL;
-            if (config->siteFs == NULL || (cnt + 2) >= config->siteFs_capacity) {
-                char **tmp = NULL;
-                tmp = (char **) realloc(config->siteFs, sizeof(char*) * (config->siteFs_capacity + SITEFS_ALLOC_BLOCK));
-                if (tmp == NULL) return 1;
-
-                config->siteFs_capacity += SITEFS_ALLOC_BLOCK;
-                config->siteFs = tmp;
-                config->siteFsPtr = tmp + cnt;
-            }
-            *(config->siteFsPtr) = strdup(ptr);
-            config->siteFsPtr += 1;
-            *(config->siteFsPtr) = NULL;
         }
+        free(valueDup);
     } else if (strcmp(key, "imageGateway") == 0) {
-        char *search = value;
+        char *valueDup = strdup(value);
+        char *search = valueDup;
+        int ret = 0;
         char *ptr = NULL;
         while ((ptr = strtok(search, " ")) != NULL) {
-            char *dPtr = NULL;
-            ImageGwServer *newServer = (ImageGwServer*) malloc(sizeof(ImageGwServer));
-            size_t cnt = 0;
-            if (newServer == NULL) return 1;
-            dPtr = strchr(ptr, ':');
-            if (dPtr == NULL) {
-                newServer->port = IMAGEGW_PORT_DEFAULT;
-            } else {
-                *dPtr++ = 0;
-                newServer->port = atoi(dPtr);
-            }
-            newServer->server = strdup(ptr);
-
+            char *dPtr = strchr(ptr, ':');
+            const char *portStr = NULL;
+            char **gwNamePtr = config->gwName + config->gateway_size;
+            char **gwPortPtr = config->gwPort + config->gateway_size;
             search = NULL;
-
-            cnt = config->svrPtr - config->servers;
-            if (config->servers == NULL || (cnt + 2) > config->servers_capacity) {
-                ImageGwServer **tmp = NULL;
-                tmp = (ImageGwServer**) realloc(config->servers, sizeof(ImageGwServer*) * (config->servers_capacity + SERVER_ALLOC_BLOCK));
-                if (tmp == NULL) return 1;
-                config->servers = tmp;
-                config->svrPtr = tmp + cnt;
-                config->servers_capacity += SERVER_ALLOC_BLOCK;
+            if (dPtr == NULL) {
+                portStr = IMAGEGW_PORT_DEFAULT;
+            } else {
+                int port = 0;
+                *dPtr++ = 0;
+                port = atoi(dPtr);
+                if (port != 0) {
+                    portStr = dPtr;
+                }
             }
-            *(config->svrPtr) = newServer;
-            config->svrPtr += 1;
-            *(config->svrPtr) = NULL;
+            if (ptr != NULL && portStr != NULL) {
+                strncpy_StringArray(ptr, strlen(ptr), &(gwNamePtr), &(config->gwName), &(config->gwName_capacity), SERVER_ALLOC_BLOCK);
+                strncpy_StringArray(portStr, strlen(portStr), &(gwPortPtr), &(config->gwPort), &(config->gwPort_capacity), SERVER_ALLOC_BLOCK);
+                config->gateway_size++;
+            } else {
+                fprintf(stderr, "FAILED to understand image gateway: %s, port %s\n", ptr, portStr);
+                ret = 1;
+            }
         }
+        free(valueDup);
+        return ret;
     } else if (strcmp(key, "batchType") == 0) {
         config->batchType = strdup(value);
         if (config->batchType == NULL) return 1;
@@ -339,6 +331,7 @@ TEST(UdiRootConfigTestGroup, ParseUdiRootConfig_basic) {
 TEST(UdiRootConfigTestGroup, ParseUdiRootConfig_display) {
     UdiRootConfig config;
     memset(&config, 0, sizeof(UdiRootConfig));
+    printf("about to parse\n");
     int ret = parse_UdiRootConfig("test_udiRoot.conf", &config, 0);
     CHECK(ret == 0);
     FILE *output = fopen("ParseUdiRootConfig_display.out", "w");

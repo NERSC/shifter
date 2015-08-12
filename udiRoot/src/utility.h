@@ -51,7 +51,7 @@
 
 
 char *shifter_trim(char *);
-int shifter_parseConfig(const char *fname, char delim, void *obj, int (*assign_fp)(char *, char *, void *));
+int shifter_parseConfig(const char *fname, char delim, void *obj, int (*assign_fp)(const char *, const char *, void *));
 int strncpy_StringArray(const char *str, size_t n, char ***wptr, char ***array, size_t *capacity, size_t allocBlock);
 
 #endif

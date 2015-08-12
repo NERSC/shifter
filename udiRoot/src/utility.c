@@ -51,7 +51,7 @@
 #include "utility.h"
 
 
-int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assign_fp)(char *, char *, void *)) {
+int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assign_fp)(const char *, const char *, void *)) {
     FILE *fp = NULL;
     char *linePtr = NULL;
     char *ptr = NULL;
@@ -275,7 +275,7 @@ struct testConfig {
     double third;
 };
 
-static int _assignTestConfig(char *key, char *value, void *_testConfig) {
+static int _assignTestConfig(const char *key, const char *value, void *_testConfig) {
     struct testConfig *config = (struct testConfig *) _testConfig;
     if (strcmp(key, "first") == 0) {
         config->first = strdup(value);
