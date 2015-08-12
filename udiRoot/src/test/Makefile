@@ -1,36 +1,37 @@
 CPPUTEST_FLAGS=-I../../cpputest/include ../../cpputest/lib/libCppUTest.a
 TEST_FLAGS=-DNO_ROOT_OWN_CHECK=1 -DCONFIG_FILE=\"$(PWD)/udiRoot.conf.test\"
+USE_GCOV=0
+USE_VALGRIND=1
 
 
 test: test_utility test_VolumeMap test_UdiRootConfig test_shifter
 
+define RUNTEST =
+./$@
+if [[ $(USE_GCOV) == 1 ]]; then \
+	gcov -b $(firstword $^); \
+	cat $(firstword $^).gcov | grep "#####:"; \
+fi
+if [[ $(USE_VALGRIND) == 1 ]]; then \
+	valgrind --tool=memcheck --leak-check=full --suppressions=valgrind.suppressions ./$@ ; \
+fi
+endef
+
 test_utility: ../utility.h ../utility.c
 	g++ -fprofile-arcs -ftest-coverage -O0 -I.. ../utility.c $(CPPUTEST_FLAGS) $(TEST_FLAGS) -D _TESTHARNESS_UTILITY -o test_utility
-	./test_utility
-#gcov -b ../utility.c
-#cat utility.c.gcov | grep "#####:"
-	valgrind --tool=memcheck --leak-check=full --suppressions=valgrind.suppressions ./test_utility
+	$(RUNTEST)
 
-test_VolumeMap: ../VolumeMap.h ../VolumeMap.c ../utility.h ../utility.c
-	g++ -fprofile-arcs -ftest-coverage -O0 -I.. ../VolumeMap.c ../utility.c $(CPPUTEST_FLAGS) $(TEST_FLAGS) -D _TESTHARNESS_VOLMAP -o test_VolumeMap
-	./test_VolumeMap
-#gcov -b ../VolumeMap.c
-#cat VolumeMap.c.gcov | grep "#####:"
-	valgrind --tool=memcheck --leak-check=full --suppressions=valgrind.suppressions ./test_VolumeMap
+test_VolumeMap: ../VolumeMap.c ../utility.c ../shifter_core.c
+	g++ -fprofile-arcs -ftest-coverage -O0 -I.. $^ $(CPPUTEST_FLAGS) $(TEST_FLAGS) -D _TESTHARNESS_VOLMAP -o $@
+	$(RUNTEST)
 
-test_UdiRootConfig: ../UdiRootConfig.h ../UdiRootConfig.c ../utility.c
-	g++ -fprofile-arcs -ftest-coverage -O0 -I.. ../UdiRootConfig.c ../utility.c $(CPPUTEST_FLAGS) $(TEST_FLAGS) -D_TESTHARNESS_UDIROOTCONFIG -o test_UdiRootConfig
-	./test_UdiRootConfig
-	gcov -b ../UdiRootConfig.c
-	cat UdiRootConfig.c.gcov | grep "#####:"
-	valgrind --tool=memcheck --leak-check=full --suppressions=valgrind.suppressions ./test_UdiRootConfig
+test_UdiRootConfig: ../UdiRootConfig.c ../utility.c
+	g++ -fprofile-arcs -ftest-coverage -O0 -I.. $^ $(CPPUTEST_FLAGS) $(TEST_FLAGS) -D_TESTHARNESS_UDIROOTCONFIG -o $@
+	$(RUNTEST)
 
-test_shifter: ../shifter.c ../shifter_core.c ../shifter_core.h ../UdiRootConfig.c ../UdiRootConfig.h ../utility.h ../utility.c ../ImageData.h ../ImageData.c
-	g++ -fprofile-arcs -ftest-coverage -O0 -I.. ../shifter.c ../shifter_core.c ../UdiRootConfig.c ../utility.c ../ImageData.c $(CPPUTEST_FLAGS) -o test_shifter $(TEST_FLAGS) -D_TESTHARNESS_SHIFTER
-	./test_shifter
-	gcov -b ../shifter.c
-	cat shifter.c.gcov | grep "#####:"
-	valgrind --tool=memcheck --leak-check=full --suppressions=valgrind.suppressions ./test_shifter
+test_shifter: ../shifter.c ../shifter_core.c ../UdiRootConfig.c ../utility.c ../ImageData.c ../VolumeMap.c
+	g++ -fprofile-arcs -ftest-coverage -O0 -I.. $^ $(CPPUTEST_FLAGS) -o $@ $(TEST_FLAGS) -D_TESTHARNESS_SHIFTER
+	$(RUNTEST)
 
 clean:
 	if [[ -e test_utility ]]; then rm test_utility; fi

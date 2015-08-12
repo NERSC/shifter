@@ -96,8 +96,6 @@ struct options {
 static void _usage(int);
 static void _version(void);
 static char *_filterString(const char *input);
-static int _appendStringArray(const char *target, size_t nChars, char ***wptr,
-        char ***array, size_t *capacity, size_t allocationBlock);
 char **copyenv(void);
 int parse_options(int argc, char **argv, struct options *opts);
 int parse_environment(struct options *opts);

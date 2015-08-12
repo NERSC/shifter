@@ -38,6 +38,10 @@
 ## form.
 */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif 
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -81,12 +85,18 @@ int parseVolumeMap(const char *input, struct VolumeMap *volMap) {
 
         /* ensure the user is asking for a legal mapping */
         if (validateVolumeMap(from, to, flags) != 0) {
-            fprintf(stderr, "Invalid Volume Map: %*s, aborting!\n", (eptr - ptr), ptr);
+            fprintf(stderr, "Invalid Volume Map: %*s, aborting!\n",
+                (int) (eptr - ptr),
+                ptr
+            );
             goto _parseVolumeMap_unclean;
         }
 
         if (to == NULL || from == NULL) {
-            fprintf(stderr, "INVALID format for volume map %*s\n", (eptr - ptr), ptr);
+            fprintf(stderr, "INVALID format for volume map %*s\n", 
+                (int) (eptr - ptr),
+                ptr
+            );
             goto _parseVolumeMap_unclean;
         }
         if (flags == NULL) cflags = "";
@@ -154,10 +164,24 @@ int validateVolumeMap(const char *from, const char *to, const char *flags) {
     const char *toExactDisallowed[] = {"/opt", "opt", NULL};
     const char *fromStartsWithDisallowed[] = { NULL };
     const char *fromExactDisallowed[] = { NULL };
+    const char *allowedFlags[] = { "ro", NULL };
     const char **ptr = NULL;
-    int ret = 0;
 
     if (from == NULL || to == NULL) return 1;
+
+    /* verify that the specified flags are acceptable */
+    if (flags != NULL) {
+        int found = 0;
+        for (ptr = allowedFlags; *ptr != NULL; ptr++) {
+            if (strcmp(*ptr, flags) == 0) {
+                found = 1;
+                break;
+            }
+        }
+        if (found == 0) {
+            return 2;
+        }
+    }
 
     for (ptr = toStartsWithDisallowed; *ptr != NULL; ptr++) {
         size_t len = strlen(*ptr);
@@ -199,7 +223,7 @@ size_t fprint_VolumeMap(FILE *fp, struct VolumeMap *volMap) {
         char *from = volMap->from[count];
         char *to = volMap->to[count];
         char *flags = volMap->flags[count];
-        char *cflags = (flags == NULL ? "None" : flags);
+        const char *cflags = (flags == NULL ? "None" : flags);
         if (from == NULL || to == NULL) continue;
 
         nBytes += fprintf(fp, "FROM: %s, TO: %s, FLAGS: %s\n", from, to, cflags);

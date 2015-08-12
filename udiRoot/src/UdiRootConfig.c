@@ -61,9 +61,11 @@ static int _assign(char *key, char *value, void *tUdiRootConfig);
 static int _validateConfigFile(const char *);
 
 int parse_UdiRootConfig(const char *configFile, UdiRootConfig *config, int validateFlags) {
+    int ret = 0;
 
-    if (_validateConfigFile(configFile) != 0) {
-        return UDIROOT_VAL_CFGFILE;
+    ret = _validateConfigFile(configFile);
+    if (ret != 0) {
+        return ret;
     }
 
     if (shifter_parseConfig(configFile, '=', config, _assign) != 0) {
@@ -328,6 +330,7 @@ TEST(UdiRootConfigTestGroup, ParseUdiRootConfig_basic) {
 
     memset(&config, 0, sizeof(UdiRootConfig));
     int ret = parse_UdiRootConfig("test_udiRoot.conf", &config, 0);
+    printf("value: %d\n", ret);
     CHECK(ret == 0);
     CHECK(strcmp(config.system, "testSystem") == 0);
     free_UdiRootConfig(&config, 0);

@@ -1287,7 +1287,7 @@ _bindMount_unclean:
 char *userInputPathFilter(const char *input) {
     ssize_t len = 0;
     char *ret = NULL;
-    char *rptr = NULL;
+    const char *rptr = NULL;
     char *wptr = NULL;
     if (input == NULL) return NULL;
 
@@ -1447,6 +1447,7 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
     ssize_t nread = 0;
     struct stat statData;
     int loaded = 0;
+    int ret = 0;
 
     if (name == NULL || strlen(name) == 0 || path == NULL || strlen(path) == 0 || udiConfig == NULL) {
         return 1;
@@ -1482,8 +1483,20 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
     kmodPath[PATH_MAX-1] = 0;
 
     if (stat(kmodPath, &statData) == 0) {
-        char *insmodArgs[] = {"insmod", kmodPath, NULL};
-        if (forkAndExecvp(insmodArgs) != 0) {
+        char *insmodArgs[] = {
+            strdup("insmod"), 
+            strdup(kmodPath), 
+            NULL
+        };
+        char **argPtr = NULL;
+
+        /* run insmod and clean up */
+        ret = forkAndExecvp(insmodArgs);
+        for (argPtr = insmodArgs; *argPtr != NULL; argPtr++) {
+            free(*argPtr);
+        }
+
+        if (ret != 0) {
             fprintf(stderr, "FAILED to load kernel module %s (%s)\n", name, kmodPath);
             goto _loadKrnlMod_unclean;
         }
@@ -1491,12 +1504,12 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
         fprintf(stderr, "FAILED to find kernel modules %s (%s)\n", name, kmodPath);
         goto _loadKrnlMod_unclean;
     }
-    return 0;
+    return ret;
 _loadKrnlMod_unclean:
     if (lineBuffer != NULL) {
         free(lineBuffer);
     }
-    return 1;
+    return ret;
 }
 
 /** filterEtcGroup
@@ -1648,6 +1661,7 @@ int destructUDI(UdiRootConfig *udiConfig) {
     size_t mountCache_cnt = 0;
     char **mountCache = parseMounts(&mountCache_cnt);
     size_t idx = 0;
+    char **argPtr = NULL;
     snprintf(udiRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
     udiRoot[PATH_MAX-1] = 0;
     snprintf(loopMount, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->loopMountPoint);
@@ -1663,14 +1677,24 @@ int destructUDI(UdiRootConfig *udiConfig) {
 
             qsort(mountCache, mountCache_cnt, sizeof(char*), _sortFsReverse);
             for (ptr = mountCache; *ptr != NULL; ptr++) {
-                if (strncmp(*ptr, udiRoot, udiRoot_len) == 0) {
-                    char *args[] = {"umount", *ptr, NULL};
+                if (strncmp(*ptr, udiRoot, udiRoot_len) == 0
+                    || strncmp(*ptr, loopMount, loopMount_len) == 0)
+                {
+                    char *args[] = {
+                        strdup("umount"),
+                        strdup(*ptr), 
+                        NULL
+                    };
                     int ret = forkAndExecvp(args);
-                    printf("%d umounted: %s\n", ret, *ptr);
-                } else if (strncmp(*ptr, loopMount, loopMount_len) == 0) {
-                    char *args[] = {"umount", *ptr, NULL};
-                    int ret = forkAndExecvp(args);
-                    printf("%d loop umounted: %s\n", ret, *ptr);
+                    for (argPtr = args; *argPtr != NULL; argPtr++) {
+                        free(*argPtr);
+                    }
+                    if (ret != 0) {
+                        /* failure unmounting, likely caused by busy files 
+                         * stop trying to unmount, sleep in next iteration
+                         */
+                        break;
+                    }
                 }
                 free(*ptr);
             }
