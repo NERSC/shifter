@@ -342,11 +342,13 @@ int _copyFile(const char *source, const char *dest, int keepLink, uid_t owner, g
         goto _copyFile_unclean;
     }
 
-    if (owner == INVALID_USER) owner = sourceStat.st_uid;
-    if (group == INVALID_GROUP) group = sourceStat.st_gid;
-    if (chown(dest, owner, group) != 0) {
-        fprintf(stderr, "Failed to set ownership to %d:%d on %s\n", owner, group, dest);
-        goto _copyFile_unclean;
+    if (owner != INVALID_USER && group != INVALID_GROUP) {
+        if (owner == INVALID_USER) owner = sourceStat.st_uid;
+        if (group == INVALID_GROUP) group = sourceStat.st_gid;
+        if (chown(dest, owner, group) != 0) {
+            fprintf(stderr, "Failed to set ownership to %d:%d on %s\n", owner, group, dest);
+            goto _copyFile_unclean;
+        }
     }
 
     if (mode == 0) tgtMode = sourceStat.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO);
@@ -1798,3 +1800,109 @@ int destructUDI(UdiRootConfig *udiConfig) {
     }
     return 0;
 }
+
+#ifdef _TESTHARNESS_SHIFTERCORE
+#include <CppUTest/CommandLineTestRunner.h>
+#ifdef NOTROOT
+#define ISROOT 0
+#else
+#define ISROOT 1
+#endif
+
+TEST_GROUP(ShifterCoreTestGroup) {
+    void setup() {
+        bool isRoot = getuid() == 0;
+        bool macroIsRoot = ISROOT == 1;
+        if (isRoot && !macroIsRoot) {
+            fprintf(stderr, "WARNING: the bulk of the functional tests are"
+                    " disabled because the test suite is compiled with "
+                    "-DNOTROOT, but could have run since you have root "
+                    "privileges.");
+        } else if (!isRoot && macroIsRoot) {
+            fprintf(stderr, "WARNING: the test suite is built to run root-"
+                    "privileged tests, but you don't have those privileges."
+                    " Several tests will fail.");
+        }
+    }
+};
+
+TEST(ShifterCoreTestGroup, CopyFile_basic) {
+    char buffer[PATH_MAX];
+    char *ptr = NULL;
+    int ret = 0;
+    struct stat statData;
+    
+    getcwd(buffer, PATH_MAX);
+    ptr = buffer + strlen(buffer);
+    snprintf(ptr, PATH_MAX - (ptr - buffer), "/passwd");
+
+    ret = _copyFile(NULL, buffer, 0, INVALID_USER, INVALID_GROUP, 0644);
+    CHECK(ret != 0)
+    ret = _copyFile("/etc/passwd", NULL, 0, INVALID_USER, INVALID_GROUP, 0644);
+    CHECK(ret != 0)
+
+    ret = _copyFile("/etc/passwd", buffer, 0, INVALID_USER, INVALID_GROUP, 0644);
+    CHECK(ret == 0)
+
+    ret = lstat(buffer, &statData);
+    CHECK(ret == 0)
+    CHECK((statData.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO)) == 0644)
+
+    ret = unlink(buffer);
+    CHECK(ret == 0)
+
+    ret = _copyFile("/etc/passwd", buffer, 0, INVALID_USER, INVALID_GROUP, 0755);
+    CHECK(ret == 0)
+
+    ret = lstat(buffer, &statData);
+    CHECK(ret == 0)
+    CHECK((statData.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO)) == 0755)
+
+    ret = unlink(buffer);
+    CHECK(ret == 0)
+}
+
+#ifdef NOTROOT
+IGNORE_TEST(ShifterCoreTestGroup, CopyFile_chown) {
+#else
+TEST(ShifterCoreTestGroup, CopyFile_chown) {
+#endif
+    char buffer[PATH_MAX];
+    char *ptr = NULL;
+    int ret = 0;
+    struct stat statData;
+    
+    getcwd(buffer, PATH_MAX);
+    ptr = buffer + strlen(buffer);
+    snprintf(ptr, PATH_MAX - (ptr - buffer), "/passwd");
+
+    ret = _copyFile("/etc/passwd", buffer, 0, 2, 2, 0644);
+    CHECK(ret == 0)
+
+    ret = lstat(buffer, &statData);
+    CHECK(ret == 0)
+    CHECK((statData.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO)) == 0644)
+    CHECK(statData.st_uid == 2)
+    CHECK(statData.st_gid == 2)
+
+    ret = unlink(buffer);
+    CHECK(ret == 0)
+
+    ret = _copyFile("/etc/passwd", buffer, 0, 2, 2, 0755);
+    CHECK(ret == 0)
+
+    ret = lstat(buffer, &statData);
+    CHECK(ret == 0)
+    CHECK((statData.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO)) == 0755)
+    CHECK(statData.st_uid == 2)
+    CHECK(statData.st_gid == 2)
+
+    ret = unlink(buffer);
+    CHECK(ret == 0)
+}
+
+int main(int argc, char** argv) {
+    return CommandLineTestRunner::RunAllTests(argc, argv);
+}
+
+#endif

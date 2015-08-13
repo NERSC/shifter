@@ -3,8 +3,12 @@ TEST_FLAGS=-DNO_ROOT_OWN_CHECK=1 -DCONFIG_FILE=\"$(PWD)/udiRoot.conf.test\"
 USE_GCOV=0
 USE_VALGRIND=1
 
+UID=$(shell id -u)
+ifneq ($(UID),0)
+	TEST_FLAGS += -DNOTROOT
+endif
 
-test: test_utility test_VolumeMap test_UdiRootConfig test_shifter
+test: test_utility test_VolumeMap test_UdiRootConfig test_shifter test_shifter_core
 
 define RUNTEST =
 timeout 30 ./$@ -v
@@ -37,10 +41,15 @@ test_ImageData: ../ImageData.c ../utility.c
 	g++ -fprofile-arcs -ftest-coverage -O0 -I.. $^ $(CPPUTEST_FLAGS) -o $@ $(TEST_FLAGS) -D_TESTHARNESS_IMAGEDATA
 	$(RUNTEST)
 
+test_shifter_core: ../shifter_core.c ../utility.c ../UdiRootConfig.c ../VolumeMap.c
+	g++ -fprofile-arcs -ftest-coverage -O0 -I.. $^ $(CPPUTEST_FLAGS) -o $@ $(TEST_FLAGS) -D_TESTHARNESS_SHIFTERCORE
+	$(RUNTEST)
+
 clean:
 	if [[ -e test_utility ]]; then rm test_utility; fi
 	if [[ -e test_UdiRootConfig ]]; then rm test_UdiRootConfig; fi
 	if [[ -e test_shifter ]]; then rm test_shifter; fi
 	if [[ -e test_VolumeMap ]]; then rm test_VolumeMap; fi
+	if [[ -e test_shifter_core ]]; then rm test_shifter_core; fi
 	rm *.gcov *.gcda *.gcno
 
