@@ -75,7 +75,7 @@ int userMountFilter(char *udiRoot, char *filtered_from, char *filtered_to, char 
 int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig);
 int mountImageVFS(ImageData *imageData, const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig);
 int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig);
-int destructUDI(UdiRootConfig *udiConfig);
+int destructUDI(UdiRootConfig *udiConfig, int killSshd);
 int bindImageIntoUDI(const char *relpath, ImageData *imageData, UdiRootConfig *udiConfig, int copyFlag);
 int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig);
 int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udiConfig);

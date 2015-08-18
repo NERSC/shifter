@@ -191,16 +191,10 @@ int main(int argc, char **argv) {
         fprintf(stderr, "%s\n", "Not running with root privileges, will fail.");
         exit(1);
     }
-    if (opts.tgtUid == 0 || opts.tgtGid == 0 || opts.username != NULL) {
+    if (opts.tgtUid == 0 || opts.tgtGid == 0 || opts.username == NULL) {
         fprintf(stderr, "%s\n", "Will not run as root.");
+        fprintf(stderr, "%d %d, %s\n", opts.tgtUid, opts.tgtGid, opts.username);
         exit(1);
-    }
-
-    if (isImageLoaded(&imageData, &opts, &udiConfig) == 0) {
-        if (loadImage(&imageData, &opts, &udiConfig) != 0) {
-            fprintf(stderr, "FAILED to setup image.\n");
-            exit(1);
-        }
     }
 
     /* keep cwd to switch back to it (if possible), after chroot */
@@ -209,6 +203,14 @@ int main(int argc, char **argv) {
         exit(1);
     }
     wd[PATH_MAX-1] = 0;
+
+    printf("about to check if image loaded\n");
+    if (isImageLoaded(&imageData, &opts, &udiConfig) == 0) {
+        if (loadImage(&imageData, &opts, &udiConfig) != 0) {
+            fprintf(stderr, "FAILED to setup image.\n");
+            exit(1);
+        }
+    }
 
     /* switch to new / to prevent the chroot jail from being leaky */
     if (chdir(udiRoot) != 0) {
@@ -244,7 +246,7 @@ int main(int argc, char **argv) {
 
     /* source the environment variables from the image */
     char **envPtr = NULL;
-    for (envPtr = imageData.env; *envPtr != NULL; envPtr++) {
+    for (envPtr = imageData.env; envPtr && *envPtr; envPtr++) {
         local_putenv(&environ_copy, *envPtr);
     }
 
@@ -335,11 +337,13 @@ int parse_options(int argc, char **argv, struct options *config) {
                             fprintf(stderr, "Must specify user with --user flag.\n");
                             _usage(1);
                         }
+                        printf("lookup user: %s\n", optarg);
                         pwd = getpwnam(optarg);
                         if (pwd != NULL) {
                             config->tgtUid = pwd->pw_uid;
                             config->tgtGid = pwd->pw_gid;
                             config->username = strdup(pwd->pw_name);
+                            printf("got user: %s, %d\n", config->username, config->tgtUid);
                         } else {
                             uid_t uid = atoi(optarg);
                             if (uid != 0) {
@@ -376,9 +380,10 @@ int parse_options(int argc, char **argv, struct options *config) {
                     _usage(1);
                     break;
                 }
-                *ptr = 0;
+                *ptr++ = 0;
                 config->imageType = _filterString(optarg);
                 config->imageIdentifier = _filterString(ptr);
+                printf("type: %s\nidentifier: %s\n", config->imageType, config->imageIdentifier);
                 break;
             case 'e':
                 config->useEntryPoint = 1;
@@ -431,11 +436,14 @@ int parse_options(int argc, char **argv, struct options *config) {
     }
 
     /* validate and organize any user-requested bind-mounts */
-    if (parseVolumeMap(config->rawVolumes, &(config->volumeMap)) != 0) {
-        _usage(1);
+    if (config->rawVolumes != NULL) {
+        if (parseVolumeMap(config->rawVolumes, &(config->volumeMap)) != 0) {
+            fprintf(stderr, "Failed to parse volume map options\n");
+            _usage(1);
+        }
     }
 
-    if (config->username != NULL) {
+    if (config->username == NULL) {
         struct passwd *pwd = getpwuid(config->tgtUid);
         if (pwd != NULL) {
             config->username = strdup(pwd->pw_name);
@@ -465,6 +473,7 @@ int parse_environment(struct options *opts) {
 }
 
 static void _usage(int status) {
+    fprintf(stderr, "usage: \n");
     exit(status);
 }
 
@@ -555,13 +564,12 @@ void free_options(struct options *opts, int freeStruct) {
  * determine if it is a match.
  * */
 int isImageLoaded(ImageData *image, struct options *options, UdiRootConfig *udiConfig) {
-    if (compareShifterConfig(options->username,
+    int cmpVal = compareShifterConfig(options->username,
                 image,
                 &(options->volumeMap),
-                udiConfig) == 0)
-    {
-        return 1; /* yes, same image */
-    }
+                udiConfig);
+    printf("cmpVal: %d\n", cmpVal);
+    if (cmpVal == 0) return 1;
     return 0;
 }
 
@@ -569,10 +577,8 @@ int isImageLoaded(ImageData *image, struct options *options, UdiRootConfig *udiC
  * Loads the needed image
  */
 int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) {
-    if (unshare(CLONE_NEWNS) != 0) {
-        perror("Failed to unshare the filesystem namespace.");
-        exit(1);
-    }
+    int pid = 0;
+    fprintf(stderr, "about to unsahre\n");
 
     /* must achieve full root privileges to perform mounts */
     if (setresuid(0, 0, 0) != 0) {
@@ -580,7 +586,24 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
         exit(1);
     }
 
+
+    if (unshare(CLONE_NEWNS) != 0) {
+        perror("Failed to unshare the filesystem namespace.");
+        exit(1);
+    }
+
+    if (isSharedMount("/") == 1) {
+        if (mount(NULL, "/", NULL, MS_SLAVE|MS_REC, NULL) != 0) {
+            perror("Failed to remount \"/\" non-shared.");
+            exit(1);
+        }
+    }
+
+    /* remove access to any preexisting mounts in the global namespace to this area */
+    destructUDI(udiConfig, 0);
+
     if (image->useLoopMount) {
+        printf("try loop mount\n");
         if (mountImageLoop(image, udiConfig) != 0) {
             fprintf(stderr, "FAILED to mount image on loop device.\n");
             exit(1);

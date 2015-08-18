@@ -343,6 +343,9 @@ TEST(VolumeMapTestGroup, ValidateVolumeMap_basic) {
     ret = validateVolumeMap("/test1Loc", "etc", NULL);
     CHECK(ret != 0);
 
+    ret = validateVolumeMap("/testLoc", "mnt", NULL);
+    CHECK(ret == 0);
+
     ret = validateVolumeMap("/test1Loc", "/opt/myStuff", NULL);
     CHECK(ret == 0);
 

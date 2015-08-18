@@ -9,7 +9,7 @@ include ../config.mk
 -include ../config.inc
 
 ## configuration
-CFLAGS=-O2 -W -Wall -Wundef -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -ansi
+CFLAGS=-O0 -ggdb -W -Wall -Wundef -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -ansi
 LDFLAGS=
 ROOTFS_TYPE="\"tmpfs\""
 ifeq ($(CRAY_SUPPORT),1)
@@ -26,7 +26,7 @@ define CLEANFILES
     for file in $(1); do echo $$file; done
 endef
 
-all: setupRoot unsetupRoot shifter shiftsh shiftrun getDockerImage.pl
+all: setupRoot unsetupRoot shifter shiftsh shiftrun getDockerImage.pl docker
 
 test:
 	cd test; make test || exit 1

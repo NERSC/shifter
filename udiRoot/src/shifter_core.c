@@ -107,6 +107,7 @@ int bindImageIntoUDI(
     struct dirent *dirEntry = NULL;
     struct stat statData;
     char *itemname = NULL;
+    int rc = 0;
 
     char **mountCache = NULL;
     size_t n_mountCache = 0;
@@ -152,7 +153,9 @@ int bindImageIntoUDI(
     srcBuffer[PATH_MAX-1] = 0;
     subtree = opendir(srcBuffer);
     if (subtree == NULL) {
+        /* desired path is not a directory we can see, skip */
         fprintf(stderr, "FAILED to opendir %s\n", srcBuffer);
+        rc = 1;
         goto _bindImgUDI_unclean;
     }
     while ((dirEntry = readdir(subtree)) != NULL) {
@@ -162,6 +165,7 @@ int bindImageIntoUDI(
         itemname = userInputPathFilter(dirEntry->d_name);
         if (itemname == NULL) {
             fprintf(stderr, "FAILED to correctly filter entry: %s\n", dirEntry->d_name);
+            rc = 2;
             goto _bindImgUDI_unclean;
         }
         if (strlen(itemname) == 0) {
@@ -199,6 +203,7 @@ int bindImageIntoUDI(
             }
             if (ret != 0) {
                 fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
+                rc = 2;
                 goto _bindImgUDI_unclean;
             }
             free(itemname);
@@ -216,6 +221,7 @@ int bindImageIntoUDI(
                 }
                 if (ret != 0) {
                     fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
+                    rc = 2;
                     goto _bindImgUDI_unclean;
                 }
             } else if (copyFlag == 0) {
@@ -242,6 +248,7 @@ int bindImageIntoUDI(
                 }
                 if (ret != 0) {
                     fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
+                    rc = 2;
                     goto _bindImgUDI_unclean;
                 }
             }
@@ -279,7 +286,7 @@ _bindImgUDI_unclean:
         free(itemname);
         itemname = NULL;
     }
-    return 1;
+    return rc;
 }
 
 /*! Copy a file or link as correctly as possible */
@@ -714,6 +721,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     _BINDMOUNT(mountCache, "/tmp", mntBuffer, 0);
 
     /* mount any mount points under /dev */
+    /*
     for (mntPtr = mountCache; *mntPtr != NULL; mntPtr++) {
         if (strncmp(*mntPtr, "/dev/", 4) == 0) {
             snprintf(mntBuffer, PATH_MAX, "%s/%s", udiRoot, *mntPtr);
@@ -721,6 +729,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
             _BINDMOUNT(mountCache, *mntPtr, mntBuffer, 0);
         }
     }
+    */
 
 #undef _MKDIR
 #undef _BINDMOUNT
@@ -735,7 +744,7 @@ _prepSiteMod_unclean:
         free(mountCache);
         mountCache = NULL;
     }
-    destructUDI(udiConfig);
+    destructUDI(udiConfig, 0);
     return ret;
 }
 
@@ -756,7 +765,7 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
 
 #undef _MKDIR
 #define BIND_IMAGE_INTO_UDI(subtree, img, udiConfig, copyFlag) \
-    if (bindImageIntoUDI(subtree, img, udiConfig, copyFlag) != 0) { \
+    if (bindImageIntoUDI(subtree, img, udiConfig, copyFlag) > 1) { \
         fprintf(stderr, "FAILED To setup \"%s\" in %s\n", subtree, udiRoot); \
         goto _mountImgVfs_unclean; \
     }
@@ -941,15 +950,16 @@ int setupUserMounts(ImageData *imageData, VolumeMap *map, UdiRootConfig *udiConf
             fprintf(stderr, "FAILED to location is not directory: %s\n", to_buffer);
             goto _setupUserMounts_unclean;
         }
-        if (validateVolumeMap(filtered_from, filtered_to, filtered_flags) != 0) {
+        /*if (validateVolumeMap(filtered_from, filtered_to, filtered_flags) != 0) {
             fprintf(stderr, "FAILED illegal user-requested mount: %s\n", filtered_to);
             goto _setupUserMounts_unclean;
         }
+        */
         ro = 0;
         if (strcmp(filtered_flags, "ro") == 0) {
             ro = 1;
         }
-        _BINDMOUNT(mountCache, filtered_from, filtered_to, ro);
+        _BINDMOUNT(mountCache, from_buffer, to_buffer, ro);
     }
 
 #undef _BINDMOUNT
@@ -1432,7 +1442,7 @@ static int _bindMount(char **mountCache, const char *from, const char *to, int r
         return 1;
     }
 
-    /* not interesting in mounting over existing mounts, prevents 
+    /* not interested in mounting over existing mounts, prevents 
        things from getting into a weird state later. */
     if (mountCache != NULL) {
         for (ptr = mountCache; *ptr; ptr++) {
@@ -1454,6 +1464,10 @@ static int _bindMount(char **mountCache, const char *from, const char *to, int r
        ALLOW device entires, otherwise remount with noDev */
     if (strcmp(from, "/dev") != 0 && strncmp(from, "/dev/", 5) != 0) {
         remountFlags |= MS_NODEV;
+    }
+
+    if (strcmp(from, "/dev") == 0) {
+        remountFlags |= MS_REC;
     }
 
     /* if readonly is requested, then do it */
@@ -1573,6 +1587,10 @@ _parseMounts_errClean:
     }
     *n_mounts = 0;
     return NULL;
+}
+
+int isSharedMount(const char *mountPoint) {
+    return 1;
 }
 
 static int _sortFsForward(const void *ta, const void *tb) {
@@ -1857,7 +1875,7 @@ _killSshd_unclean:
     return 1;
 }
 
-int destructUDI(UdiRootConfig *udiConfig) {
+int destructUDI(UdiRootConfig *udiConfig, int killSsh) {
     char udiRoot[PATH_MAX];
     char loopMount[PATH_MAX];
     size_t mountCache_cnt = 0;
@@ -1869,7 +1887,7 @@ int destructUDI(UdiRootConfig *udiConfig) {
     snprintf(loopMount, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->loopMountPoint);
     loopMount[PATH_MAX-1] = 0;
     for (idx = 0; idx < 10; idx++) {
-        killSshd();
+        if (killSsh == 1) killSshd();
         if (mountCache != NULL && *mountCache != NULL) {
             size_t udiRoot_len = strlen(udiRoot);
             size_t loopMount_len = strlen(loopMount);

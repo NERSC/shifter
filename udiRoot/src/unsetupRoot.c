@@ -69,7 +69,7 @@ int main(void) {
         exit(1);
     }
 
-    destructUDI(&udiConfig);
+    destructUDI(&udiConfig, 1);
 
     return 0;
 }
