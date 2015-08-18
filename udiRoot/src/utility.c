@@ -47,6 +47,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdarg.h>
 
 #include "utility.h"
 
@@ -223,6 +224,88 @@ int strncpy_StringArray(const char *str, size_t n, char ***wptr,
     (*wptr)++;
     **wptr = NULL;
     return 0;
+}
+
+/**
+ * alloc_strcatf appends to an existing string (or creates a new one) based on
+ * user-supplied format in printf style.  The current capacity and length of
+ * the string are used to determine where to write in the string and when to
+ * allocate.  An eager-allocation strategy is used where the string capacity is
+ * doubled at each reallocation.  This is done to improve performance of
+ * repeated calls
+ * Parameters:
+ *      string - pointer to string to be extended, can be NULL
+ *      currLen - pointer to integer representing current limit of used portion
+ *                of string
+ *      capacity - pointer to integer representing current capacity of string
+ *      format - printf style formatting string
+ *      ...    - variadic arguments for printf
+ *
+ * The dereferenced value of currLen is modified upon successful concatenation
+ * of string.
+ * The dereferenced value of capacity is modified upon successful reallocation
+ * of string.
+ *
+ * Returns pointer to string, possibly realloc'd.  Caller should treat this
+ * function like realloc (test output for NULL before assigning).
+ * Returns NULL upon vsnprintf error or failure to realloc.
+ */
+char *alloc_strcatf(char *string, size_t *currLen, size_t *capacity, const char *format, ...) {
+    int status = 0;
+    int n = 0;
+
+    if (currLen == 0 || capacity == 0 || format == NULL) {
+        return NULL;
+    }
+    if (*currLen > *capacity) {
+        return NULL;
+    }
+
+    if (string == NULL || *capacity == 0) {
+        string = (char *) malloc(sizeof(char) * 128);
+        *capacity = 128;
+    }
+
+    while (1) {
+        char *wptr = string + *currLen;
+        va_list ap;
+
+        va_start(ap, format);
+        n = vsnprintf(wptr, *capacity - (*currLen), format, ap);
+        va_end(ap);
+
+        if (n == -1) {
+            /* error, break */
+            status = 1;
+            break;
+        } else if (n >= (*capacity - *currLen)) {
+            /* if vsnprintf returns larger than allowed buffer, need more space
+             * allocating eagerly to reduce cost for successive strcatf 
+             * operations */
+            size_t newCapacity = *capacity * 2 + 1;
+            char *tmp = NULL;
+            if (newCapacity < n + 1) {
+                newCapacity = n + 1;
+            }
+            
+            tmp = (char *) realloc(string, sizeof(char) * newCapacity);
+            if (tmp == NULL) {
+                status = 2;
+                break;
+            }
+            string = tmp;
+            *capacity = newCapacity;
+        } else {
+            /* success */
+            status = 0;
+            *currLen += n;
+            break;
+        }
+    }
+    if (status == 0) {
+        return string;
+    }
+    return NULL;
 }
 
 #ifdef _TESTHARNESS_UTILITY
@@ -414,6 +497,50 @@ TEST(UtilityTestGroup, strncpyStringArray_basic) {
         free(*wptr);
     }
     free(array);
+}
+
+char *alloc_strcatf(char *string, size_t *currLen, size_t *capacity, const char *format, ...);
+TEST(UtilityTestGroup, allocStrcatf_basic) {
+    size_t len = 0;
+    size_t capacity = 0;
+    char *string = NULL;
+    char *tmp = NULL;
+    char buffer[2048];
+
+    tmp = alloc_strcatf(string, NULL, &capacity, "%s", "hello");
+    CHECK(tmp == NULL);
+
+    tmp = alloc_strcatf(string, &len, NULL, "%s", "hello");
+    CHECK(tmp == NULL);
+
+    tmp = alloc_strcatf(string, &len, &capacity, NULL);
+    CHECK(tmp == NULL);
+
+    /* first real run */
+    tmp = alloc_strcatf(string, &len, &capacity, "%s", "hello");
+    CHECK(tmp != NULL);
+    CHECK(len == 5);
+    CHECK(*(tmp + len) == 0)
+    string = tmp;
+
+    /* extend string */
+    tmp = alloc_strcatf(string, &len, &capacity, ", %s. %d.", "world", 42);
+    CHECK(tmp != NULL);
+    printf("%s\n", tmp);
+    CHECK(strcmp(tmp, "hello, world. 42.") == 0)
+    CHECK(capacity == 128)
+    CHECK(*(tmp + len) == 0)
+    string = tmp;
+
+    memset(buffer, 'A', sizeof(char) * 2048);
+    buffer[2047] = 0;
+    tmp = alloc_strcatf(string, &len, &capacity, "%s", buffer);
+    CHECK(tmp != NULL);
+    CHECK(strncmp(tmp, "hello, world. 42.AAAAAAA", strlen("hello, world. 42.AAAAAAA")) == 0)
+    CHECK(capacity > 2050)
+    string = tmp;
+
+    free(string);
 }
 
 int main(int argc, char** argv) {
