@@ -274,18 +274,18 @@ char *alloc_strcatf(char *string, size_t *currLen, size_t *capacity, const char 
         n = vsnprintf(wptr, *capacity - (*currLen), format, ap);
         va_end(ap);
 
-        if (n == -1) {
+        if (n < 0) {
             /* error, break */
             status = 1;
             break;
-        } else if (n >= (*capacity - *currLen)) {
+        } else if ((size_t) n >= (*capacity - *currLen)) {
             /* if vsnprintf returns larger than allowed buffer, need more space
              * allocating eagerly to reduce cost for successive strcatf 
              * operations */
             size_t newCapacity = *capacity * 2 + 1;
             char *tmp = NULL;
-            if (newCapacity < n + 1) {
-                newCapacity = n + 1;
+            if (newCapacity < (size_t) (n + 1)) {
+                newCapacity = (size_t) (n + 1);
             }
             
             tmp = (char *) realloc(string, sizeof(char) * newCapacity);
@@ -299,6 +299,65 @@ char *alloc_strcatf(char *string, size_t *currLen, size_t *capacity, const char 
             /* success */
             status = 0;
             *currLen += n;
+            break;
+        }
+    }
+    if (status == 0) {
+        return string;
+    }
+    return NULL;
+}
+
+/**
+ * alloc_strgenf allocates and appopriately-sized buffer and populates it with
+ * user-supplied format in printf style.
+ * Parameters:
+ *      format - printf style formatting string
+ *      ...    - variadic arguments for printf
+ *
+ *
+ * Returns pointer to string.
+ * Returns NULL upon vsnprintf error or failure to realloc.
+ */
+char *alloc_strgenf(const char *format, ...) {
+    char *string = NULL;
+    int capacity = 0;
+    int status = 0;
+    int n = 0;
+
+    if (format == NULL) {
+        return NULL;
+    }
+
+    string = (char *) malloc(sizeof(char) * 128);
+    capacity = 128;
+
+    while (1) {
+        va_list ap;
+
+        va_start(ap, format);
+        n = vsnprintf(string, capacity, format, ap);
+        va_end(ap);
+
+        if (n < 0) {
+            /* error, break */
+            status = 1;
+            break;
+        } else if (n >= capacity) {
+            /* if vsnprintf returns larger than allowed buffer, need more space
+             * allocating eagerly to reduce cost for successive strcatf 
+             * operations */
+            size_t newCapacity = n + 1;
+            char *tmp = (char *) realloc(string, sizeof(char) * newCapacity);
+            if (tmp == NULL) {
+                status = 2;
+                break;
+            }
+            string = tmp;
+            capacity = newCapacity;
+        } else {
+            /* success */
+            status = 0;
             break;
         }
     }
@@ -541,6 +600,14 @@ TEST(UtilityTestGroup, allocStrcatf_basic) {
     string = tmp;
 
     free(string);
+}
+
+TEST(UtilityTestGroup, allocStrgenf_basic) {
+    char *myString = alloc_strgenf("This is a test: %d\n", 37*73);
+    CHECK(myString != NULL)
+    CHECK(strcmp(myString, "This is a test: 2701\n") == 0)
+
+    free(myString);
 }
 
 int main(int argc, char** argv) {
