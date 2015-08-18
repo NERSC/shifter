@@ -86,8 +86,9 @@ struct options {
     char *rawVolumes;
     uid_t tgtUid;
     gid_t tgtGid;
+    char *username;
     char **args;
-    struct VolumeMap volumeMap;
+    VolumeMap volumeMap;
     int verbose;
     int useEntryPoint;
 };
@@ -102,6 +103,8 @@ int parse_environment(struct options *opts);
 int fprint_options(FILE *, struct options *);
 void free_options(struct options *, int freeStruct);
 int local_putenv(char ***environ, const char *newVar);
+int isImageLoaded(ImageData *, struct options *, UdiRootConfig *);
+int loadImage(ImageData *, struct options *, UdiRootConfig *);
 
 #ifndef _TESTHARNESS_SHIFTER
 int main(int argc, char **argv) {
@@ -111,10 +114,9 @@ int main(int argc, char **argv) {
 
     /* declare needed variables */
     char wd[PATH_MAX];
-    char exec[PATH_MAX];
     char udiRoot[PATH_MAX];
-    uid_t uid,eUid;
-    gid_t gid,eGid;
+    uid_t eUid = 0;
+    gid_t eGid = 0;
     gid_t *gidList = NULL;
     int nGroups = 0;
     int idx = 0;
@@ -163,13 +165,9 @@ int main(int argc, char **argv) {
     udiRoot[PATH_MAX-1] = 0;
 
     /* figure out who we are and who we want to be */
-    uid = getuid();
     eUid = geteuid();
-    gid = getgid();
     eGid = getegid();
 
-    if (opts.tgtUid == 0) opts.tgtUid = uid;
-    if (opts.tgtGid == 0) opts.tgtGid = gid;
 
     nGroups = getgroups(0, NULL);
     if (nGroups > 0) {
@@ -193,31 +191,17 @@ int main(int argc, char **argv) {
         fprintf(stderr, "%s\n", "Not running with root privileges, will fail.");
         exit(1);
     }
-    if (opts.tgtUid == 0 || opts.tgtGid == 0) {
+    if (opts.tgtUid == 0 || opts.tgtGid == 0 || opts.username != NULL) {
         fprintf(stderr, "%s\n", "Will not run as root.");
         exit(1);
     }
 
-    if (unshare(CLONE_NEWNS) != 0) {
-        perror("Failed to unshare the filesystem namespace.");
-        exit(1);
-    }
-    if (setresuid(0, 0, 0) != 0) {
-        fprintf(stderr, "Failed to setuid to %d\n", 0);
-        exit(1);
-    }
-
-    /* run setupRoot here */
-    snprintf(exec, PATH_MAX, "%s%s/sbin/setupRoot", udiConfig.nodeContextPrefix, udiConfig.udiRootPath);
-    exec[PATH_MAX-1] = 0;
-    {
-        char *args[] = {exec, opts.imageType, opts.imageIdentifier, NULL};
-        if (forkAndExecv(args) != 0) {
-            fprintf(stderr, "FAILED to run setupRoot!\n");
+    if (isImageLoaded(&imageData, &opts, &udiConfig) == 0) {
+        if (loadImage(&imageData, &opts, &udiConfig) != 0) {
+            fprintf(stderr, "FAILED to setup image.\n");
             exit(1);
         }
     }
-
 
     /* keep cwd to switch back to it (if possible), after chroot */
     if (getcwd(wd, PATH_MAX) == NULL) {
@@ -328,6 +312,13 @@ int parse_options(int argc, char **argv, struct options *config) {
     };
     char *ptr = NULL;
 
+    if (config == NULL) {
+        return 1;
+    }
+
+    /* set some defaults */
+    config->tgtUid = getuid();
+    config->tgtGid = getgid();
 
     optind = 1;
     for ( ; ; ) {
@@ -348,12 +339,14 @@ int parse_options(int argc, char **argv, struct options *config) {
                         if (pwd != NULL) {
                             config->tgtUid = pwd->pw_uid;
                             config->tgtGid = pwd->pw_gid;
+                            config->username = strdup(pwd->pw_name);
                         } else {
                             uid_t uid = atoi(optarg);
                             if (uid != 0) {
                                 pwd = getpwuid(uid);
                                 config->tgtUid = pwd->pw_uid;
                                 config->tgtGid = pwd->pw_gid;
+                                config->username = strdup(pwd->pw_name);
                             } else {
                                 fprintf(stderr, "Cannot run as root.\n");
                                 _usage(1);
@@ -440,6 +433,13 @@ int parse_options(int argc, char **argv, struct options *config) {
     /* validate and organize any user-requested bind-mounts */
     if (parseVolumeMap(config->rawVolumes, &(config->volumeMap)) != 0) {
         _usage(1);
+    }
+
+    if (config->username != NULL) {
+        struct passwd *pwd = getpwuid(config->tgtUid);
+        if (pwd != NULL) {
+            config->username = strdup(pwd->pw_name);
+        }
     }
 
     return 0;
@@ -548,6 +548,62 @@ void free_options(struct options *opts, int freeStruct) {
     }
 }
 
+/**
+ * isImageLoaded - Determine if an image with the exact same options is already
+ * loaded on the system.  Calls shifter_core library function with image 
+ * identifier and volume mount options to read the state of the system to 
+ * determine if it is a match.
+ * */
+int isImageLoaded(ImageData *image, struct options *options, UdiRootConfig *udiConfig) {
+    if (compareShifterConfig(options->username,
+                image,
+                &(options->volumeMap),
+                udiConfig) == 0)
+    {
+        return 1; /* yes, same image */
+    }
+    return 0;
+}
+
+/**
+ * Loads the needed image
+ */
+int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) {
+    if (unshare(CLONE_NEWNS) != 0) {
+        perror("Failed to unshare the filesystem namespace.");
+        exit(1);
+    }
+
+    /* must achieve full root privileges to perform mounts */
+    if (setresuid(0, 0, 0) != 0) {
+        fprintf(stderr, "Failed to setuid to %d\n", 0);
+        exit(1);
+    }
+
+    if (image->useLoopMount) {
+        if (mountImageLoop(image, udiConfig) != 0) {
+            fprintf(stderr, "FAILED to mount image on loop device.\n");
+            exit(1);
+        }
+    }
+    if (mountImageVFS(image, opts->username, NULL, udiConfig) != 0) {
+        fprintf(stderr, "FAILED to mount image into UDI\n");
+        exit(1);
+    }
+
+    if (setupUserMounts(image, &(opts->volumeMap), udiConfig) != 0) {
+        fprintf(stderr, "FAILED to setup user-requested mounts.\n");
+        exit(1);
+    }
+
+    if (saveShifterConfig(opts->username, image, &(opts->volumeMap), udiConfig) != 0) {
+        fprintf(stderr, "FAILED to writeout shifter configuration file\n");
+        exit(1);
+    }
+
+    return 0;
+}
+
 #ifdef _TESTHARNESS_SHIFTER
 #include <CppUTest/CommandLineTestRunner.h>
 
@@ -579,8 +635,8 @@ TEST(ShifterTestGroup, CopyEnv_basic) {
     CHECK(getenv("TESTENV1") != NULL);
     for (char **ptr = origEnv; *ptr != NULL; ptr++) {
         putenv(*ptr);
-        // not free'ing *ptr, since *ptr is becoming part of the environment
-        // it is owned by environ now
+        /* not free'ing *ptr, since *ptr is becoming part of the environment
+           it is owned by environ now */
     }
     free(origEnv);
     CHECK(getenv("TESTENV0") != NULL);

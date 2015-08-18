@@ -1066,7 +1066,11 @@ int compareShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMa
     fclose(fp);
     fp = NULL;
 
-    cmpVal = memcmp(configString, buffer, sizeof(char) * len);
+    if (nread == len) {
+        cmpVal = memcmp(configString, buffer, sizeof(char) * len);
+    } else { 
+        cmpVal = -1;
+    }
 
     free(configString);
     configString = NULL;
