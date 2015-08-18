@@ -64,6 +64,10 @@ int parse_ImageData(char *identifier, UdiRootConfig *config, ImageData *image) {
     const char *extension = NULL;
     int ret = 0;
 
+    if (identifier == NULL || config == NULL || image == NULL) {
+        return 1;
+    }
+
     fname_len = strlen(config->imageBasePath) + strlen(identifier) + 7;
     fname = (char *) malloc(sizeof(char) * fname_len);
     if (fname == NULL) {
@@ -108,6 +112,8 @@ int parse_ImageData(char *identifier, UdiRootConfig *config, ImageData *image) {
     }
     snprintf(image->filename, fname_len, "%s/%s.%s", config->imageBasePath, identifier, extension);
 
+    image->identifier = strdup(identifier);
+
     return 0;
 }
 
@@ -133,6 +139,15 @@ void free_ImageData(ImageData *image, int freeStruct) {
             free(*volPtr);
         }
         free(image->volume);
+    }
+    if (image->identifier != NULL) {
+        free(image->identifier);
+    }
+    if (image->tag != NULL) {
+        free(image->tag);
+    }
+    if (image->type != NULL) {
+        free(image->type);
     }
     if (freeStruct == 1) {
         free(image);

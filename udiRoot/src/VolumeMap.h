@@ -51,7 +51,7 @@
 
 #define VOLUME_ALLOC_BLOCK 10
 
-struct VolumeMap {
+typedef struct _VolumeMap {
     char **raw;
     char **to;
     char **from;
@@ -62,12 +62,12 @@ struct VolumeMap {
     size_t toCapacity;
     size_t fromCapacity;
     size_t flagsCapacity;
-};
+} VolumeMap;
 
-int parseVolumeMap(const char *input, struct VolumeMap *volMap);
-char *getVolMapSignature(struct VolumeMap *volMap);
-size_t fprint_VolumeMap(FILE *fp, struct VolumeMap *volMap);
-void free_VolumeMap(struct VolumeMap *volMap, int freeStruct);
+int parseVolumeMap(const char *input, VolumeMap *volMap);
+char *getVolMapSignature(VolumeMap *volMap);
+size_t fprint_VolumeMap(FILE *fp, VolumeMap *volMap);
+void free_VolumeMap(VolumeMap *volMap, int freeStruct);
 int validateVolumeMap(const char *from, const char *to, const char *flags);
 
 #endif

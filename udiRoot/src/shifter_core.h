@@ -70,7 +70,7 @@
 #define FILE_SIZE_LIMIT 5242880
 #define MOUNT_ALLOC_BLOCK 24
 
-int setupUserMounts(ImageData *imageData, struct VolumeMap *map, UdiRootConfig *udiConfig);
+int setupUserMounts(ImageData *imageData, VolumeMap *map, UdiRootConfig *udiConfig);
 int userMountFilter(char *udiRoot, char *filtered_from, char *filtered_to, char *flags);
 int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig);
 int mountImageVFS(ImageData *imageData, const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig);
@@ -86,3 +86,6 @@ int forkAndExecv(char *const *argvs);
 int killSshd(void);
 char **parseMounts(size_t *n_mounts);
 char *userInputPathFilter(const char *input);
+char *generateShifterConfigString(const char *, ImageData *, VolumeMap *);
+int saveShifterConfig(const char *, ImageData *, VolumeMap *, UdiRootConfig *);
+int compareShifterConfig(const char *, ImageData*, VolumeMap *, UdiRootConfig *);

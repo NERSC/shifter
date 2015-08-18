@@ -58,6 +58,9 @@ typedef struct _ImageData {
     char *entryPoint;       /*!< default command used */
     char **volume;          /*!< array of volume mounts */
     int useLoopMount;       /*!< flag if image requires loop mount */
+    char *identifier;       /*!< Image identifier string */
+    char *tag;              /*!< Image tag */
+    char *type;             /*!< Image type */
 
     size_t env_capacity;    /*!< Current # of allocated char* in env */
     size_t volume_capacity; /*!< Current # of allocated char* in volumes */

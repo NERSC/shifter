@@ -878,7 +878,7 @@ _mntImgLoop_unclean:
     return 1;
 } 
 
-int setupUserMounts(ImageData *imageData, struct VolumeMap *map, UdiRootConfig *udiConfig) {
+int setupUserMounts(ImageData *imageData, VolumeMap *map, UdiRootConfig *udiConfig) {
     char **from = NULL;
     char **to = NULL;
     char **flags = NULL;
@@ -982,6 +982,110 @@ _setupUserMounts_unclean:
         mountCache = NULL;
     }
     return 1;
+}
+
+char *generateShifterConfigString(const char *user, ImageData *image, VolumeMap *volumeMap) {
+    char *str = NULL;
+    char *volMapSig = NULL;
+    if (image == NULL || volumeMap == NULL) return NULL;
+
+    volMapSig = getVolMapSignature(volumeMap);
+
+    str = alloc_strgenf(
+            "{\"identifier\":\"%s\","
+            "\"user\":\"%s\","
+            "\"volMap\":\"%s\"}",
+            image->identifier,
+            user,
+            (volMapSig == NULL ? "" : volMapSig)
+    );
+
+    if (volMapSig != NULL) {
+        free(volMapSig);
+    }
+    return str;
+}
+
+int saveShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMap, UdiRootConfig *udiConfig) {
+    char saveFilename[PATH_MAX];
+    FILE *fp = NULL;
+    char *configString = generateShifterConfigString(user, image, volumeMap);
+
+    if (configString == NULL) {
+        goto _saveShifterConfig_error;
+    }
+
+    snprintf(saveFilename, PATH_MAX, "%s%s/var/shifterConfig.json",
+            udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    fp = fopen(saveFilename, "w");
+    if (fp == NULL) {
+        goto _saveShifterConfig_error;
+    }
+    fprintf(fp, "%s\n", configString);
+    fclose(fp);
+    fp = NULL;
+
+    free(configString);
+    configString = NULL;
+
+    return 0;
+_saveShifterConfig_error:
+    if (fp != NULL) {
+        fclose(fp);
+    }
+    if (configString != NULL) {
+        free(configString);
+    }
+    return 1;
+}
+
+int compareShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMap, UdiRootConfig *udiConfig) {
+    char configFilename[PATH_MAX];
+    FILE *fp = NULL;
+    char *configString = generateShifterConfigString(user, image, volumeMap);
+    char *buffer = NULL;
+    size_t len = 0;
+    size_t nread = 0;
+    int cmpVal = 0;
+
+    if (configString == NULL) {
+        goto _compareShifterConfig_error;
+    }
+    len = strlen(configString);
+    buffer = (char *) malloc(sizeof(char) * len);
+
+    snprintf(configFilename, PATH_MAX, "%s%s/var/shifterConfig.json",
+            udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+
+    fp = fopen(configFilename, "r");
+    if (fp == NULL) {
+        goto _compareShifterConfig_error;
+    }
+
+    nread = fread(buffer, sizeof(char), len, fp);
+    fclose(fp);
+    fp = NULL;
+
+    cmpVal = memcmp(configString, buffer, sizeof(char) * len);
+
+    free(configString);
+    configString = NULL;
+
+    free(buffer);
+    buffer = NULL;
+
+    return cmpVal;
+_compareShifterConfig_error:
+    if (fp != NULL) {
+        fclose(fp);
+    }
+    if (configString != NULL) {
+        free(configString);
+    }
+    if (buffer != NULL) {
+        free(buffer);
+    }
+    return -1;
 }
 
 int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udiConfig) {

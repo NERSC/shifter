@@ -79,7 +79,7 @@ typedef struct _SetupRootConfig {
     char *imageIdentifier;
     uid_t uid;
     char *minNodeSpec;
-    struct VolumeMap volumeMap;
+    VolumeMap volumeMap;
 
     int verbose;
 } SetupRootConfig;
@@ -150,6 +150,11 @@ int main(int argc, char **argv) {
 
     if (setupUserMounts(&image, &(config.volumeMap), &udiConfig) != 0) {
         fprintf(stderr, "FAILED to setup user-requested mounts.\n");
+        exit(1);
+    }
+
+    if (saveShifterConfig(config.user, &image, &(config.volumeMap), &udiConfig) != 0) {
+        fprintf(stderr, "FAILED to writeout shifter configuration file\n");
         exit(1);
     }
 

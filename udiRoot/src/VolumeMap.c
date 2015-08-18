@@ -50,7 +50,7 @@
 #include "utility.h"
 #include "shifter_core.h"
 
-int parseVolumeMap(const char *input, struct VolumeMap *volMap) {
+int parseVolumeMap(const char *input, VolumeMap *volMap) {
     if (input == NULL || volMap == NULL) return 1;
     char **rawPtr = volMap->raw + volMap->n;
     char **toPtr = volMap->to + volMap->n;
@@ -210,7 +210,7 @@ int validateVolumeMap(const char *from, const char *to, const char *flags) {
 }
 
 /** fprint_volumeMap - write formatted output to specified FILE pointer */
-size_t fprint_VolumeMap(FILE *fp, struct VolumeMap *volMap) {
+size_t fprint_VolumeMap(FILE *fp, VolumeMap *volMap) {
     if (fp == NULL) return 0;
 
     size_t count = 0;
@@ -238,7 +238,7 @@ static int _vstrcmp(const void *a, const void *b) {
     return strcmp(*((const char **) a), *((const char **) b));
 }
 
-char *getVolMapSignature(struct VolumeMap *volMap) {
+char *getVolMapSignature(VolumeMap *volMap) {
     char **ptr = NULL;
     size_t len = 0;
     char *ret = NULL;
@@ -272,7 +272,7 @@ char *getVolMapSignature(struct VolumeMap *volMap) {
  * release the memory for the struct itself (and not just the
  * instance members).
  */
-void free_VolumeMap(struct VolumeMap *volMap, int freeStruct) {
+void free_VolumeMap(VolumeMap *volMap, int freeStruct) {
     if (volMap == NULL) return;
     char **arrays[] = {
         volMap->raw,
@@ -303,8 +303,8 @@ TEST_GROUP(VolumeMapTestGroup) {
 };
 
 TEST(VolumeMapTestGroup, VolumeMapParse_basic) {
-    struct VolumeMap volMap;
-    memset(&volMap, 0, sizeof(struct VolumeMap));
+    VolumeMap volMap;
+    memset(&volMap, 0, sizeof(VolumeMap));
 
     int ret = parseVolumeMap("/path1/is/here:/target1", &volMap);
     CHECK(ret == 0);
