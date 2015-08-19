@@ -651,6 +651,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
         char *search = minNode;
         char *token = NULL;
         FILE *fp = NULL;
+        char *svptr = NULL;
         snprintf(mntBuffer, PATH_MAX, "%s/var/hostsfile", udiRoot);
         mntBuffer[PATH_MAX-1] = 0;
         fp = fopen(mntBuffer, "w");
@@ -658,12 +659,12 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
             fprintf(stderr, "FAILED to open hostsfile for writing: %s\n", mntBuffer);
             goto _prepSiteMod_unclean;
         }
-        while ((token = strtok(search, "/ ")) != NULL) {
+        while ((token = strtok_r(search, "/ ", &svptr)) != NULL) {
             char *hostname = token;
             int count = 0;
             int i = 0;
             search = NULL;
-            token = strtok(NULL, "/ ");
+            token = strtok_r(NULL, "/ ", &svptr);
             if (token == NULL || ((count = atoi(token)) == 0)) {
                 fprintf(stderr, "FAILED to parse minNodeSpec: %s\n", minNodeSpec);
                 goto _prepSiteMod_unclean;
@@ -1518,18 +1519,19 @@ int isSharedMount(const char *mountPoint) {
     if (fp == NULL) return -1;
     while (!feof(fp) && !ferror(fp)) {
         char *ptr = NULL;
+        char *svptr = NULL;
         size_t n = getline(&lineBuffer, &lineBuffer_size, fp);
         if (n == 0 || feof(fp) || ferror(fp)) {
             break;
         }
-        ptr = strtok(lineBuffer, " ");
-        ptr = strtok(NULL, " ");
-        ptr = strtok(NULL, " ");
-        ptr = strtok(NULL, " ");
-        ptr = strtok(NULL, " ");
+        ptr = strtok_r(lineBuffer, " ", &svptr);
+        ptr = strtok_r(NULL, " ", &svptr);
+        ptr = strtok_r(NULL, " ", &svptr);
+        ptr = strtok_r(NULL, " ", &svptr);
+        ptr = strtok_r(NULL, " ", &svptr);
 
         if (strcmp(ptr, mountPoint) == 0) {
-            ptr = strtok(NULL, "\0"); // get rest of line
+            ptr = strtok_r(NULL, "\0", &svptr); /* get rest of line */
             if (strstr(ptr, " shared:") != NULL) {
                 rc = 1;
             }
@@ -1616,11 +1618,12 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
     }
     while (!feof(fp) && !ferror(fp)) {
         char *ptr = NULL;
+        char *svptr = NULL;
         nread = getline(&lineBuffer, &lineSize, fp);
         if (nread == 0 || feof(fp) || ferror(fp)) {
             break;
         }
-        ptr = strtok(lineBuffer, " ");
+        ptr = strtok_r(lineBuffer, " ", &svptr);
         if (strcmp(name, ptr) == 0) {
             loaded = 1;
             break;
@@ -1704,6 +1707,7 @@ int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname,
     while (!feof(input) && !ferror(input)) {
         size_t nread = getline(&linePtr, &linePtr_size, input);
         char *ptr = NULL;
+        char *svptr = NULL;
 
         char *token = NULL;
         gid_t gid = 0;
@@ -1711,9 +1715,9 @@ int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname,
         int foundUsername = 0;
         if (nread == 0) break;
         ptr = shifter_trim(linePtr);
-        for (token = strtok(ptr, ":,");
+        for (token = strtok_r(ptr, ":,", &svptr);
              token != NULL;
-             token = strtok(NULL, ":,")) {
+             token = strtok_r(NULL, ":,", &svptr)) {
 
             switch (counter) {
                 case 0: group_name = strdup(token);
