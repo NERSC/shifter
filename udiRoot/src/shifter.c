@@ -577,7 +577,6 @@ int isImageLoaded(ImageData *image, struct options *options, UdiRootConfig *udiC
  * Loads the needed image
  */
 int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) {
-    int pid = 0;
     fprintf(stderr, "about to unsahre\n");
 
     /* must achieve full root privileges to perform mounts */
@@ -585,7 +584,6 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
         fprintf(stderr, "Failed to setuid to %d\n", 0);
         exit(1);
     }
-
 
     if (unshare(CLONE_NEWNS) != 0) {
         perror("Failed to unshare the filesystem namespace.");

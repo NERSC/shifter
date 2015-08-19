@@ -91,7 +91,6 @@ int parse_MountList(MountList *mounts) {
     char *lineBuffer = NULL;
     size_t lineBuffer_size = 0;
     ssize_t nRead = 0;
-    size_t n_mounts = 0;
 
     if (mounts == NULL) {
         return 1;

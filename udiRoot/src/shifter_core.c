@@ -78,8 +78,6 @@
 
 
 static int _bindMount(MountList *mounts, const char *from, const char *to, int ro, int overwrite);
-static int _sortFsForward(const void *, const void *);
-static int _sortFsReverse(const void *, const void *);
 static int _copyFile(const char *source, const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode);
 
 /*! Bind subtree of static image into UDI rootfs */
@@ -385,7 +383,6 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     char mntBuffer[PATH_MAX];
     char srcBuffer[PATH_MAX];
     char **volPtr = NULL;
-    char **mntPtr = NULL;
     const char **fnamePtr = NULL;
     int ret = 0;
     struct stat statData;
@@ -1495,22 +1492,56 @@ char *userInputPathFilter(const char *input) {
     return ret;
 }
 
+/**
+ * isSharedMount
+ * Determine if the string " shared:" exists in /proc/<pid>/mountinfo for the
+ * specified mountpoint.
+ *
+ * \param mountPoint the mountpoint to consider
+ *
+ * Returns:
+ * 0: not shared
+ * 1: shared
+ * -1: error
+ */
 int isSharedMount(const char *mountPoint) {
-    return 1;
-}
+    char filename[PATH_MAX];
+    char *lineBuffer = NULL;
+    size_t lineBuffer_size = 0;
+    FILE *fp = NULL;
+    pid_t pid = getpid();
+    int rc = 0;
 
-static int _sortFsForward(const void *ta, const void *tb) {
-    const char **a = (const char **) ta;
-    const char **b = (const char **) tb;
+    snprintf(filename, PATH_MAX, "/proc/%d/mountinfo", pid);
+    fp = fopen(filename, "r");
 
-    return strcmp(*a, *b);
-}
+    if (fp == NULL) return -1;
+    while (!feof(fp) && !ferror(fp)) {
+        char *ptr = NULL;
+        size_t n = getline(&lineBuffer, &lineBuffer_size, fp);
+        if (n == 0 || feof(fp) || ferror(fp)) {
+            break;
+        }
+        ptr = strtok(lineBuffer, " ");
+        ptr = strtok(NULL, " ");
+        ptr = strtok(NULL, " ");
+        ptr = strtok(NULL, " ");
+        ptr = strtok(NULL, " ");
 
-static int _sortFsReverse(const void *ta, const void *tb) {
-    const char **a = (const char **) ta;
-    const char **b = (const char **) tb;
+        if (strcmp(ptr, mountPoint) == 0) {
+            ptr = strtok(NULL, "\0"); // get rest of line
+            if (strstr(ptr, " shared:") != NULL) {
+                rc = 1;
+            }
+            break;
+        }
+    }
+    fclose(fp);
+    if (lineBuffer != NULL) {
+        free(lineBuffer);
+    }
 
-    return -1 * strcmp(*a, *b);
+    return rc;
 }
 
 int userMountFilter(char *udiRoot, char *filtered_from, char *filtered_to, char *flags) {
@@ -1644,10 +1675,9 @@ _loadKrnlMod_unclean:
  *  function reads a given etcgroup file and filters the content to only
  *  include the specified user
  *
- *  Parameters:
- *  group_dest_fname - filename of filtered group file
- *  group_source_fname - filename of to-be-filtered group file
- *  username - user to identify
+ *  \param group_dest_fname filename of filtered group file
+ *  \param group_source_fname filename of to-be-filtered group file
+ *  \param username user to identify
  */
 int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname, const char *username) {
     FILE *input = NULL;
@@ -1781,12 +1811,23 @@ _killSshd_unclean:
     return 1;
 }
 
+/**
+ * destructUDI
+ * Unmounts all aspects of the UDI, possibly killing the sshd running first.
+ * This is called in the unsetupRoot program when dealing with the global
+ * linux namespace.  It should also be called when trying to get rid of an
+ * existing UDI before setting up a new one in a private linux namespace.
+ *
+ * \param udiConfig configuration
+ * \param killSsh flag to denote whether or not the udiRoot sshd should be killed
+ *     (1 for yes, 0 for no)
+ */
 int destructUDI(UdiRootConfig *udiConfig, int killSsh) {
     char udiRoot[PATH_MAX];
     char loopMount[PATH_MAX];
     MountList mounts;
     size_t idx = 0;
-    char **argPtr = NULL;
+    int rc = 1; /* assume failure */
 
     if (parse_MountList(&mounts) != 0) {
         /*error*/
@@ -1796,9 +1837,6 @@ int destructUDI(UdiRootConfig *udiConfig, int killSsh) {
     snprintf(loopMount, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->loopMountPoint);
     loopMount[PATH_MAX-1] = 0;
     for (idx = 0; idx < 10; idx++) {
-        size_t udiRoot_len = strlen(udiRoot);
-        size_t loopMount_len = strlen(loopMount);
-        char **ptr = NULL;
 
         if (idx > 0) usleep(300);
         if (killSsh == 1) killSshd();
@@ -1809,11 +1847,33 @@ int destructUDI(UdiRootConfig *udiConfig, int killSsh) {
         if (unmountTree(&mounts, loopMount) != 0) {
             continue;
         }
+        rc = 0; /* mark success */
+        break;
     }
     free_MountList(&mounts, 0);
-    return 0;
+    return rc;
 }
 
+/**
+ * unmountTree
+ * Unmount everything under a particular base path.  Uses a MountList assumed
+ * to be up-to-date with the current mount state of the process namespace.
+ * unmountTree will remove any and all unmounted paths from the MountList.
+ * unmountTree will change the sort order of the MountList, and will try
+ * to restore it upon success or failure of the unmount operations.
+ * unmountTree will try to unmount all paths inclusive and under a given base
+ * path.  e.g., if base is "/a", then "/a", "/a/b", and "/a/b/c" will all be
+ * unmounted.  These are done in reverse alphabetic order, meaning that 
+ * "/a/b/c" will be unmounted first, then "/a/b", then "/a".
+ * The first error encountered will stop all unmounts.
+ *
+ * \param mounts pointer to up-to-date MountList
+ * \param base basepath to look for for unmounts
+ *
+ * Returns:
+ * 0 of all possible paths were unmounted
+ * 1 if some or none were unmounted
+ */
 int unmountTree(MountList *mounts, const char *base) {
     MountList mountCache;
     size_t baseLen = 0;
@@ -1954,6 +2014,64 @@ TEST(ShifterCoreTestGroup, CopyFile_chown) {
 
     ret = unlink(buffer);
     CHECK(ret == 0)
+}
+
+#ifdef NOTROOT
+IGNORE_TEST(ShifterCoreTestGroup, isSharedMount_basic) {
+#else
+TEST(ShifterCoreTestGroup, isSharedMount_basic) {
+#endif
+    CHECK(unshare(CLONE_NEWNS) == 0);
+    CHECK(mount(NULL, "/", NULL, MS_SHARED, NULL) == 0);
+
+    CHECK(isSharedMount("/") == 1);
+
+    CHECK(mount(NULL, "/", NULL, MS_PRIVATE, NULL) == 0);
+    CHECK(isSharedMount("/") == 0);
+}
+
+#ifdef NOTROOT
+IGNORE_TEST(ShifterCoreTestGroup, validatePrivateNamespace) {
+#else
+TEST(ShifterCoreTestGroup, validatePrivateNamespace) {
+#endif
+    struct stat statInfo;
+    pid_t child = 0;
+
+    CHECK(stat("/tmp", &statInfo) == 0);
+    CHECK(stat("/tmp/test_shifter_core", &statInfo) != 0);
+    
+    child = fork();
+    if (child == 0) {
+        char currDir[PATH_MAX];
+        struct stat localStatInfo;
+
+        printf("about to unshare\n");
+        if (unshare(CLONE_NEWNS) != 0) exit(1);
+        if (isSharedMount("/") == 1) {
+            printf("about to make private mount\n");
+            if (mount(NULL, "/", NULL, MS_PRIVATE|MS_REC, NULL) != 0) exit(1);
+        }
+        printf("about to getcwd\n");
+        if (getcwd(currDir, PATH_MAX) == NULL) exit(1);
+        currDir[PATH_MAX - 1] = 0;
+
+        printf("about to bind %s to /tmp\n", currDir);
+        if (mount(currDir, "/tmp", NULL, MS_BIND, NULL) != 0) exit(1);
+        printf("about to stat /tmp/test_shifter_core\n");
+        if (stat("/tmp/test_shifter_core", &localStatInfo) == 0) {
+            exit(0);
+        }
+        exit(1);
+    } else if (child > 0) {
+        int status = 0;
+        waitpid(child, &status, 0);
+
+        status = WEXITSTATUS(status);
+        CHECK(status == 0);
+
+        CHECK(stat("/tmp/test_shifter_core", &statInfo) != 0);
+    }
 }
 
 int main(int argc, char** argv) {
