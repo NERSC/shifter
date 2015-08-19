@@ -64,11 +64,11 @@
 #include "ImageData.h"
 #include "UdiRootConfig.h"
 #include "VolumeMap.h"
+#include "MountList.h"
 
 #define INVALID_USER UINT_MAX
 #define INVALID_GROUP UINT_MAX
 #define FILE_SIZE_LIMIT 5242880
-#define MOUNT_ALLOC_BLOCK 24
 
 int setupUserMounts(ImageData *imageData, VolumeMap *map, UdiRootConfig *udiConfig);
 int userMountFilter(char *udiRoot, char *filtered_from, char *filtered_to, char *flags);
@@ -89,3 +89,5 @@ char *userInputPathFilter(const char *input);
 char *generateShifterConfigString(const char *, ImageData *, VolumeMap *);
 int saveShifterConfig(const char *, ImageData *, VolumeMap *, UdiRootConfig *);
 int compareShifterConfig(const char *, ImageData*, VolumeMap *, UdiRootConfig *);
+int unmountTree(MountList *mounts, const char *base);
+int isSharedMount(const char *);

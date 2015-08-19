@@ -322,6 +322,7 @@ void free_MountList(MountList *mounts, int freeStruct) {
         }
         free(mounts->mountPointList);
     }
+    memset(mounts, 0, sizeof(MountList));
     if (freeStruct) {
         free(mounts);
     }

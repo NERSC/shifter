@@ -25,7 +25,7 @@ test_utility: ../utility.h ../utility.c
 	g++ -fprofile-arcs -ftest-coverage -O0 -I.. ../utility.c $(CPPUTEST_FLAGS) $(TEST_FLAGS) -D _TESTHARNESS_UTILITY -o test_utility
 	$(RUNTEST)
 
-test_VolumeMap: ../VolumeMap.c ../utility.c ../shifter_core.c
+test_VolumeMap: ../VolumeMap.c ../utility.c ../shifter_core.c ../MountList.c
 	g++ -fprofile-arcs -ftest-coverage -O0 -I.. $^ $(CPPUTEST_FLAGS) $(TEST_FLAGS) -D _TESTHARNESS_VOLMAP -o $@
 	$(RUNTEST)
 
@@ -33,7 +33,7 @@ test_UdiRootConfig: ../UdiRootConfig.c ../utility.c
 	g++ -fprofile-arcs -ftest-coverage -O0 -I.. $^ $(CPPUTEST_FLAGS) $(TEST_FLAGS) -D_TESTHARNESS_UDIROOTCONFIG -o $@
 	$(RUNTEST)
 
-test_shifter: ../shifter.c ../shifter_core.c ../UdiRootConfig.c ../utility.c ../ImageData.c ../VolumeMap.c
+test_shifter: ../shifter.c ../shifter_core.c ../UdiRootConfig.c ../utility.c ../ImageData.c ../VolumeMap.c ../MountList.c
 	g++ -fprofile-arcs -ftest-coverage -O0 -I.. $^ $(CPPUTEST_FLAGS) -o $@ $(TEST_FLAGS) -D_TESTHARNESS_SHIFTER
 	$(RUNTEST)
 
@@ -41,7 +41,7 @@ test_ImageData: ../ImageData.c ../utility.c
 	g++ -fprofile-arcs -ftest-coverage -O0 -I.. $^ $(CPPUTEST_FLAGS) -o $@ $(TEST_FLAGS) -D_TESTHARNESS_IMAGEDATA
 	$(RUNTEST)
 
-test_shifter_core: ../shifter_core.c ../utility.c ../UdiRootConfig.c ../VolumeMap.c
+test_shifter_core: ../shifter_core.c ../utility.c ../UdiRootConfig.c ../VolumeMap.c ../MountList.c
 	g++ -fprofile-arcs -ftest-coverage -O0 -I.. $^ $(CPPUTEST_FLAGS) -o $@ $(TEST_FLAGS) -D_TESTHARNESS_SHIFTERCORE
 	$(RUNTEST)
 
@@ -55,5 +55,6 @@ clean:
 	if [[ -e test_shifter ]]; then rm test_shifter; fi
 	if [[ -e test_VolumeMap ]]; then rm test_VolumeMap; fi
 	if [[ -e test_shifter_core ]]; then rm test_shifter_core; fi
+	if [[ -e test_MountList ]]; then rm test_MountList; fi
 	rm *.gcov *.gcda *.gcno
 
