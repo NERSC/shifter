@@ -70,6 +70,7 @@ int parseVolumeMap(const char *input, VolumeMap *volMap) {
 
     while (ptr < input + len) {
         const char *cflags;
+        char *svptr = NULL;
         eptr = strchr(ptr, ',');
         if (eptr == NULL) eptr = input + len;
 
@@ -79,9 +80,9 @@ int parseVolumeMap(const char *input, VolumeMap *volMap) {
         tmp[eptr - ptr] = 0;
 
         /* tokenize and filter the input string */
-        from = userInputPathFilter(strtok(tmp, ":"));
-        to = userInputPathFilter(strtok(NULL, ":"));
-        flags = userInputPathFilter(strtok(NULL, ":"));
+        from = userInputPathFilter(strtok_r(tmp, ":", &svptr), 1);
+        to = userInputPathFilter(strtok_r(NULL, ":", &svptr), 1);
+        flags = userInputPathFilter(strtok_r(NULL, ":", &svptr), 0);
 
         /* ensure the user is asking for a legal mapping */
         if (validateVolumeMap(from, to, flags) != 0) {
