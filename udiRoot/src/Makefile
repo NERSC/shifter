@@ -26,7 +26,7 @@ define CLEANFILES
     for file in $(1); do echo $$file; done
 endef
 
-all: setupRoot unsetupRoot shifter shiftsh shiftrun getDockerImage.pl docker
+all: setupRoot unsetupRoot shifter getDockerImage.pl docker
 
 test:
 	cd test; make test || exit 1
@@ -35,10 +35,6 @@ getDockerImage.pl: getDockerImage.pl.in
 	cat $< | $(SED_MODIFY) > $@
 docker: getDockerImage.pl
 	cp getDockerImage.pl docker
-shiftsh: shiftsh.in
-	cat $< | $(SED_MODIFY) > $@
-shiftrun: shiftrun.in
-	cat $< | $(SED_MODIFY) > $@
 config.h: config.h.in
 	cat $< | $(SED_MODIFY) > $@
 
@@ -56,9 +52,7 @@ install: all
 	$(INSTALL) --owner=root --group=root --mode=555  unsetupRoot $(DESTDIR)/sbin/unsetupRoot
 	$(INSTALL) --owner=root --group=root --mode=4555  shifter $(DESTDIR)/bin/shifter
 	$(INSTALL) --owner=root --group=root --mode=555  getDockerImage.pl $(DESTDIR)/bin/getDockerImage.pl
-	$(INSTALL) --owner=root --group=root --mode=555  shiftsh $(DESTDIR)/bin/shiftsh
-	$(INSTALL) --owner=root --group=root --mode=555  shiftrun $(DESTDIR)/bin/shiftrun
 	$(INSTALL) --owner=root --group=root docker $(DESTDIR)/bin/docker
 
-clean: setupRoot unsetupRoot shifter docker getDockerImage.pl shiftsh shiftrun config.h
+clean: setupRoot unsetupRoot shifter docker getDockerImage.pl config.h
 	set -x; for file in $^; do if [[ -e "$$file" ]]; then rm "$$file"; fi; done

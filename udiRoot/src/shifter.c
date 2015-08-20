@@ -82,6 +82,7 @@ extern char **environ;
 struct options {
     char *request;
     char *imageType;
+    char *imageTag;
     char *imageIdentifier;
     char *rawVolumes;
     uid_t tgtUid;
@@ -98,7 +99,7 @@ static void _usage(int);
 static void _version(void);
 static char *_filterString(const char *input);
 char **copyenv(void);
-int parse_options(int argc, char **argv, struct options *opts);
+int parse_options(int argc, char **argv, struct options *opts, UdiRootConfig *);
 int parse_environment(struct options *opts);
 int fprint_options(FILE *, struct options *);
 void free_options(struct options *, int freeStruct);
@@ -141,7 +142,7 @@ int main(int argc, char **argv) {
     }
 
     /* parse config file and command line options */
-    if (parse_options(argc, argv, &opts) != 0) {
+    if (parse_options(argc, argv, &opts, &udiConfig) != 0) {
         fprintf(stderr, "FAILED to parse command line arguments.\n");
         exit(1);
     }
@@ -301,7 +302,7 @@ int local_putenv(char ***environ, const char *newVar) {
     return 0;
 }
 
-int parse_options(int argc, char **argv, struct options *config) {
+int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *udiConfig) {
     int opt = 0;
     static struct option long_options[] = {
         {"help", 0, 0, 'h'},
@@ -382,8 +383,11 @@ int parse_options(int argc, char **argv, struct options *config) {
                 }
                 *ptr++ = 0;
                 config->imageType = _filterString(optarg);
-                config->imageIdentifier = _filterString(ptr);
-                printf("type: %s\nidentifier: %s\n", config->imageType, config->imageIdentifier);
+                config->imageTag = _filterString(ptr);
+                if (config->imageIdentifier != NULL) {
+                    free(config->imageIdentifier);
+                    config->imageIdentifier = NULL;
+                }
                 break;
             case 'e':
                 config->useEntryPoint = 1;
@@ -395,6 +399,18 @@ int parse_options(int argc, char **argv, struct options *config) {
             default:
                 break;
         }
+    }
+
+    if (config->imageType == NULL || config->imageTag == NULL) {
+        fprintf(stderr, "No image specified, or specified incorrectly!\n");
+        _usage(1);
+    }
+    if (config->imageIdentifier == NULL) {
+        config->imageIdentifier = lookup_ImageIdentifier(config->imageType, config->imageTag, config->verbose, udiConfig);
+    }
+    if (config->imageIdentifier == NULL) {
+        fprintf(stderr, "FAILED tp lookup %s image %s\n", config->imageType, config->imageTag);
+        _usage(1);
     }
 
     if (config->rawVolumes != NULL) {
@@ -463,7 +479,19 @@ int parse_environment(struct options *opts) {
         opts->imageIdentifier = strdup(envPtr);
     }
     if ((envPtr = getenv("SHIFTER")) != NULL) {
+        char *ptr = NULL;
         opts->request = strdup(envPtr);
+        ptr = strchr(opts->request, ':');
+        if (ptr != NULL) {
+            *ptr = 0;
+            if (strcmp(ptr, opts->imageType) == 0) {
+                ptr++;
+                opts->imageTag = strdup(ptr);
+            }
+            /* put things back the way they were */
+            ptr--;
+            *ptr = ':';
+        }
     }
     if ((envPtr = getenv("SHIFTER_VOLUME")) != NULL) {
         opts->rawVolumes = strdup(envPtr);
@@ -536,6 +564,10 @@ void free_options(struct options *opts, int freeStruct) {
         free(opts->imageType);
         opts->imageType = NULL;
     }
+    if (opts->imageTag != NULL) {
+        free(opts->imageTag);
+        opts->imageTag = NULL;
+    }
     if (opts->imageIdentifier != NULL) {
         free(opts->imageIdentifier);
         opts->imageIdentifier = NULL;
@@ -577,7 +609,6 @@ int isImageLoaded(ImageData *image, struct options *options, UdiRootConfig *udiC
  * Loads the needed image
  */
 int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) {
-    fprintf(stderr, "about to unsahre\n");
 
     /* must achieve full root privileges to perform mounts */
     if (setresuid(0, 0, 0) != 0) {
@@ -591,7 +622,7 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
     }
 
     if (isSharedMount("/") == 1) {
-        if (mount(NULL, "/", NULL, MS_SLAVE|MS_REC, NULL) != 0) {
+        if (mount(NULL, "/", NULL, MS_PRIVATE|MS_REC, NULL) != 0) {
             perror("Failed to remount \"/\" non-shared.");
             exit(1);
         }

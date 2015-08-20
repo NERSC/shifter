@@ -68,6 +68,7 @@ typedef struct _ImageData {
     size_t volume_size;     /*!< Number of elements in volume array */
 } ImageData;
 
+char *lookup_ImageIdentifier(const char *imageType, const char *imageTag, int verbose, UdiRootConfig *);
 int parse_ImageData(char *identifier, UdiRootConfig *, ImageData *);
 void free_ImageData(ImageData *, int);
 size_t fprint_ImageData(FILE *, ImageData *);

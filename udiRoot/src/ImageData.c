@@ -45,6 +45,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <limits.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -57,6 +58,113 @@
 #define VOL_ALLOC_SIZE 256
 
 static int _assign(const char *key, const char *value, void *t_imageData);
+
+/*! Contact image gateway to lookup mapping between tag/type and identifier */
+/*!
+ * Contact the image gateway to lookup the detailed image identifier for the
+ * requested image tag.  It is legal to lookup an identifier mislabeled as a
+ * tag.  This provides a deterministic and trusted path for always getting a
+ * valid identifier.  If imageType is "id", then imageTag is assumed to already
+ * be an identifier and no lookup will occur, a copy of imageTag will be 
+ * returned.
+ *
+ * \param imageType the image type, any string the gateway might understand,
+ *      special values include "local" and "id".  If either of the special
+ *      values, then a copy of the imageTag is returned.  Any other value will
+ *      cause a gateway lookup to occur.
+ * \param imageTag user understandable "name" for an image. In the case of
+ *      imageType == "local", then imageTag is understood to be a path.  In the
+ *      case of imageType == "id", then imageTag is understood to be an already
+ *      looked-up identifier.  In other cases, imageTag is provided to the
+ *      gateway as the key lookup.
+ * \param verbose level of output (1 for much, 0 for terse)
+ * \param config UDI configuration object
+ *
+ * \returns An allocated string referring to the successfully looked-up image
+ *      identifier.  NULL if nothing found.
+ */
+char *lookup_ImageIdentifier(
+        const char *imageType,
+        const char *imageTag,
+        int verbose,
+        UdiRootConfig *config)
+{
+    char lookupCmd[PATH_MAX];
+    FILE *pp = NULL;
+    int status = 0;
+    char *lineBuffer = NULL;
+    char *identifier = NULL;
+    char *ptr = NULL;
+    size_t lineBuffer_size = 0;
+    size_t nread = 0;
+
+    printf("dmj here!\n");
+
+    if (imageType == NULL || imageTag == NULL || config == NULL) return NULL;
+    if (strlen(imageType) == 0 || strlen(imageTag) == 0) return NULL;
+
+    if (strcmp(imageType, "id") == 0 || strcmp(imageType, "local") == 0) {
+        return strdup(imageTag);
+    }
+
+    snprintf(lookupCmd, PATH_MAX, "%s%s/bin/getDockerImage.pl %slookup %s",
+            config->nodeContextPrefix, config->udiRootPath,
+            (verbose == 0 ? "-quiet " : ""), imageTag);
+
+    pp = popen(lookupCmd, "r");
+    while ((nread = getline(&lineBuffer, &lineBuffer_size, pp)) > 0) {
+        lineBuffer[nread] = 0;
+        ptr = shifter_trim(lineBuffer);
+        if (verbose) {
+            char buff1[1024];
+            char buff2[1024];
+            printf("%s\n", ptr);
+            int val = sscanf(ptr, "Retrieved docker image %1024s resolving to ID %1024s", buff1, buff2);
+            if (val != 2) {
+                continue;
+            }
+            if (strcmp(buff1, imageTag) != 0) {
+                fprintf(stderr, "lookup_ImageIdentiier: Got wrong image back! %s != %s", imageTag ,buff1);
+                goto _lookupImageIdentifier_error;
+            }
+            identifier = strdup(buff2);
+            break;
+        } else {
+            if (strncmp(ptr, "ENV:", 4) == 0) {
+                ptr += 4;
+                ptr = shifter_trim(ptr);
+            } else if (strncmp(ptr, "ENTRY:", 6) == 0) {
+                ptr += 6;
+                ptr = shifter_trim(ptr);
+            } else {
+                /* this is the image id */
+                identifier = strdup(ptr);
+                break;
+            }
+        }
+    }
+    status = pclose(pp);
+    pp = NULL;
+    if (WEXITSTATUS(status) != 0) {
+        goto _lookupImageIdentifier_error;
+    }
+    if (lineBuffer != NULL) {
+        free(lineBuffer);
+        lineBuffer = NULL;
+    }
+    return identifier;
+_lookupImageIdentifier_error:
+    if (pp != NULL) {
+        pclose(pp);
+    }
+    if (lineBuffer != NULL) {
+        free(lineBuffer);
+    }
+    if (identifier != NULL) {
+        free(identifier);
+    }
+    return NULL;
+}
 
 int parse_ImageData(char *identifier, UdiRootConfig *config, ImageData *image) {
     char *fname = NULL;
