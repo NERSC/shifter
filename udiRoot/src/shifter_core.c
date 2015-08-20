@@ -160,7 +160,7 @@ int bindImageIntoUDI(
         if (strcmp(dirEntry->d_name, ".") == 0 || strcmp(dirEntry->d_name, "..") == 0) {
             continue;
         }
-        itemname = userInputPathFilter(dirEntry->d_name);
+        itemname = userInputPathFilter(dirEntry->d_name, 0);
         if (itemname == NULL) {
             fprintf(stderr, "FAILED to correctly filter entry: %s\n", dirEntry->d_name);
             rc = 2;
@@ -519,7 +519,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
             if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
                 continue;
             }
-            filename = userInputPathFilter(entry->d_name);
+            filename = userInputPathFilter(entry->d_name, 0);
             if (filename == NULL) {
                 fprintf(stderr, "FAILED to allocate filename string.\n");
                 goto _prepSiteMod_unclean;
@@ -900,9 +900,9 @@ int setupUserMounts(ImageData *imageData, VolumeMap *map, UdiRootConfig *udiConf
     to = map->to;
     flags = map->flags;
     for (; *from && *to; from++, to++, flags++) {
-        filtered_from = userInputPathFilter(*from);
-        filtered_to =   userInputPathFilter(*to);
-        filtered_flags = userInputPathFilter(*flags);
+        filtered_from = userInputPathFilter(*from, 1);
+        filtered_to =   userInputPathFilter(*to, 1);
+        filtered_flags = userInputPathFilter(*flags, 1);
         snprintf(from_buffer, PATH_MAX, "%s/%s", udiConfig->nodeContextPrefix, filtered_from);
         from_buffer[PATH_MAX-1] = 0;
         snprintf(to_buffer, PATH_MAX, "%s/%s", udiRoot, filtered_to);
@@ -1470,7 +1470,7 @@ _bindMount_unclean:
     return 1;
 }
 
-char *userInputPathFilter(const char *input) {
+char *userInputPathFilter(const char *input, int allowSlash) {
     ssize_t len = 0;
     char *ret = NULL;
     const char *rptr = NULL;
@@ -1485,6 +1485,9 @@ char *userInputPathFilter(const char *input) {
     wptr = ret;
     while (wptr - ret < len && *rptr != 0) {
         if (isalnum(*rptr) || *rptr == '_' || *rptr == ':' || *rptr == '.' || *rptr == '+' || *rptr == '-') {
+            *wptr++ = *rptr;
+        }
+        if (allowSlash && *rptr == '/') {
             *wptr++ = *rptr;
         }
         rptr++;
@@ -1598,6 +1601,17 @@ _userMntFilter_unclean:
     return 1;
 }
 
+/*! Loads a kernel module if required */
+/*!
+ * Checks to see if the specified kernel module is already loaded, if so, does
+ * nothing.  Otherwise, will try to load the module using modprobe (i.e., from 
+ * the system /lib paths.  Finally, will attempt to load the from the shifter-
+ * specific store installed with Shifter
+ *
+ * \param name name of kernel module
+ * \param path path to kernel module within shifter structure
+ * \param udiConfig UDI configuration structure
+ */
 int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig) {
     char kmodPath[PATH_MAX];
     FILE *fp = NULL;
@@ -1887,6 +1901,7 @@ int unmountTree(MountList *mounts, const char *base) {
 
     if (mounts == NULL || base == NULL) return 1;
 
+    memset(&mountCache, 0, sizeof(MountList));
     baseLen = strlen(base);
     if (baseLen == 0) return 1;
 
@@ -2076,6 +2091,24 @@ TEST(ShifterCoreTestGroup, validatePrivateNamespace) {
 
         CHECK(stat("/tmp/test_shifter_core", &statInfo) != 0);
     }
+}
+
+TEST(ShifterCoreTestGroup, userInputPathFilter_basic) {
+    char *filtered = userInputPathFilter("benign", 0);
+    CHECK(strcmp(filtered, "benign") == 0);
+    free(filtered);
+    
+    filtered = userInputPathFilter("benign; rm -rf *", 0);
+    CHECK(strcmp(filtered, "benignrm-rf") == 0);
+    free(filtered);
+
+    filtered = userInputPathFilter("/path/to/something/great", 0);
+    CHECK(strcmp(filtered, "pathtosomethinggreat") == 0);
+    free(filtered);
+
+    filtered = userInputPathFilter("/path/to/something/great", 1);
+    CHECK(strcmp(filtered, "/path/to/something/great") == 0);
+    free(filtered);
 }
 
 int main(int argc, char** argv) {
