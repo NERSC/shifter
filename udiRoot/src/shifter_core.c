@@ -825,7 +825,7 @@ int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig) {
     loopMount[PATH_MAX-1] = 0;
     snprintf(imagePath, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, imageData->filename);
     imagePath[PATH_MAX-1] = 0;
-    snprintf(mountExec, PATH_MAX, "%s/sbin/mount", udiConfig->udiRootPath);
+    snprintf(mountExec, PATH_MAX, "%s%s/sbin/mount", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
 
     if (stat(mountExec, &statData) != 0) {
         fprintf(stderr, "udiRoot mount executable missing: %s\n", mountExec);
@@ -1269,14 +1269,14 @@ _setupImageSsh_unclean:
   * chroots into image and runs the secured sshd
   */
 int startSshd(UdiRootConfig *udiConfig) {
-    char udiRootPath[PATH_MAX];
+    char chrootPath[PATH_MAX];
     pid_t pid = 0;
 
-    snprintf(udiRootPath, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
-    udiRootPath[PATH_MAX - 1] = 0;
+    snprintf(chrootPath, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    chrootPath[PATH_MAX - 1] = 0;
 
-    if (chdir(udiRootPath) != 0) {
-        fprintf(stderr, "FAILED to chdir to %s while attempted to start sshd\n", udiRootPath);
+    if (chdir(chrootPath) != 0) {
+        fprintf(stderr, "FAILED to chdir to %s while attempted to start sshd\n", chrootPath);
         goto _startSshd_unclean;
     }
 
@@ -1286,8 +1286,8 @@ int startSshd(UdiRootConfig *udiConfig) {
         goto _startSshd_unclean;
     }
     if (pid == 0) {
-        if (chroot(udiRootPath) != 0) {
-            fprintf(stderr, "FAILED to chroot to %s while attempting to start sshd\n", udiRootPath);
+        if (chroot(chrootPath) != 0) {
+            fprintf(stderr, "FAILED to chroot to %s while attempting to start sshd\n", chrootPath);
             /* no goto, this is the child, we want it to end if this failed */
         } else  {
             char *sshdArgs[2] = {
