@@ -97,7 +97,7 @@ struct options {
 
 static void _usage(int);
 static void _version(void);
-static char *_filterString(const char *input);
+static char *_filterString(const char *input, int allowSlash);
 char **copyenv(void);
 int parse_options(int argc, char **argv, struct options *opts, UdiRootConfig *);
 int parse_environment(struct options *opts);
@@ -148,7 +148,7 @@ int main(int argc, char **argv) {
     }
 
     /* discover information about this image */
-    if (parse_ImageData(opts.imageIdentifier, &udiConfig, &imageData) != 0) {
+    if (parse_ImageData(opts.imageType, opts.imageIdentifier, &udiConfig, &imageData) != 0) {
         fprintf(stderr, "FAILED to find requested image.\n");
         exit(1);
     }
@@ -374,18 +374,24 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                     break;
                 }
             case 'i':
-                ptr = strchr(optarg, ':');
-                if (ptr == NULL) {
-                    fprintf(stderr, "Incorrect format for image identifier:  need \"image_type:image_id\"\n");
-                    _usage(1);
-                    break;
-                }
-                *ptr++ = 0;
-                config->imageType = _filterString(optarg);
-                config->imageTag = _filterString(ptr);
-                if (config->imageIdentifier != NULL) {
-                    free(config->imageIdentifier);
-                    config->imageIdentifier = NULL;
+                {
+                    int isLocal = 0;
+                    ptr = strchr(optarg, ':');
+                    if (ptr == NULL) {
+                        fprintf(stderr, "Incorrect format for image identifier:  need \"image_type:image_id\"\n");
+                        _usage(1);
+                        break;
+                    }
+                    *ptr++ = 0;
+                    config->imageType = _filterString(optarg, 0);
+                    if (strcmp(config->imageType, "local") == 0) {
+                        isLocal = 1;
+                    }
+                    config->imageTag = _filterString(ptr, isLocal);
+                    if (config->imageIdentifier != NULL) {
+                        free(config->imageIdentifier);
+                        config->imageIdentifier = NULL;
+                    }
                 }
                 break;
             case 'e':
@@ -408,7 +414,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         config->imageIdentifier = lookup_ImageIdentifier(config->imageType, config->imageTag, config->verbose, udiConfig);
     }
     if (config->imageIdentifier == NULL) {
-        fprintf(stderr, "FAILED tp lookup %s image %s\n", config->imageType, config->imageTag);
+        fprintf(stderr, "FAILED to lookup %s image %s\n", config->imageType, config->imageTag);
         _usage(1);
     }
 
@@ -529,7 +535,7 @@ char **copyenv(void) {
     return outenv;
 }
 
-static char *_filterString(const char *input) {
+static char *_filterString(const char *input, int allowSlash) {
     ssize_t len = 0;
     char *ret = NULL;
     const char *rptr = NULL;
@@ -544,6 +550,9 @@ static char *_filterString(const char *input) {
     wptr = ret;
     while (wptr - ret < len && *rptr != 0) {
         if (isalnum(*rptr) || *rptr == '_' || *rptr == ':' || *rptr == '.' || *rptr == '+' || *rptr == '-') {
+            *wptr++ = *rptr;
+        }
+        if (allowSlash && *rptr == '/') {
             *wptr++ = *rptr;
         }
         rptr++;
@@ -660,14 +669,14 @@ TEST_GROUP(ShifterTestGroup) {
 };
 
 TEST(ShifterTestGroup, FilterString_basic) {
-    CHECK(_filterString(NULL) == NULL);
-    char *output = _filterString("echo test; rm -rf thing1");
-    CHECK(strcmp(output, "echotestrm-rfthing1") == 0);
+    CHECK(_filterString(NULL, 0) == NULL);
+    char *output = _filterString("echo test; rm -rf thing1", 0);
+    CHECK(strcmp(output, "echotestrm-rfthing1", 0) == 0);
     free(output);
-    output = _filterString("V4l1d-str1ng.input");
-    CHECK(strcmp(output, "V4l1d-str1ng.input") == 0);
+    output = _filterString("V4l1d-str1ng.input", 0);
+    CHECK(strcmp(output, "V4l1d-str1ng.input", 0) == 0);
     free(output);
-    output = _filterString("");
+    output = _filterString("", 0);
     CHECK(output != NULL);
     CHECK(strlen(output) == 0);
     free(output);

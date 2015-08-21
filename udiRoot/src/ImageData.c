@@ -164,7 +164,7 @@ _lookupImageIdentifier_error:
     return NULL;
 }
 
-int parse_ImageData(char *identifier, UdiRootConfig *config, ImageData *image) {
+int parse_ImageData(char *type, char *identifier, UdiRootConfig *config, ImageData *image) {
     char *fname = NULL;
     size_t fname_len = 0;
     const char *extension = NULL;
@@ -172,6 +172,13 @@ int parse_ImageData(char *identifier, UdiRootConfig *config, ImageData *image) {
 
     if (identifier == NULL || config == NULL || image == NULL) {
         return 1;
+    }
+
+    if (type != NULL && strcmp(type, "local") == 0) {
+        image->identifier = strdup(identifier);
+        image->filename = strdup(identifier);
+        image->format = FORMAT_VFS;
+        return 0;
     }
 
     fname_len = strlen(config->imageBasePath) + strlen(identifier) + 7;

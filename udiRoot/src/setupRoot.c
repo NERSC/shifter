@@ -85,7 +85,7 @@ typedef struct _SetupRootConfig {
 } SetupRootConfig;
 
 static void _usage(int);
-static char *_filterString(char *input);
+static char *_filterString(char *input, int allowSlash);
 int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config);
 void free_SetupRootConfig(SetupRootConfig *config);
 void fprint_SetupRootConfig(FILE *, SetupRootConfig *config);
@@ -167,6 +167,7 @@ static void _usage(int exitStatus) {
 
 int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
     int opt = 0;
+    int isLocal = 0;
     optind = 1;
 
     while ((opt = getopt(argc, argv, "v:s:u:U:N:V")) != -1) {
@@ -205,8 +206,11 @@ int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
         fprintf(stderr, "Must specify image type and image identifier\n");
         _usage(1);
     }
-    config->imageType = _filterString(argv[optind++]);
-    config->imageIdentifier = _filterString(argv[optind++]);
+    config->imageType = _filterString(argv[optind++], 0);
+    if (strcmp(config->imageType, "local") == 0) {
+        isLocal = 1;
+    }
+    config->imageIdentifier = _filterString(argv[optind++], isLocal);
     return 0;
 }
 
@@ -245,11 +249,11 @@ void fprint_SetupRootConfig(FILE *fp, SetupRootConfig *config) {
 }
 
 int getImage(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiConfig) {
-    int ret = parse_ImageData(config->imageIdentifier, udiConfig, imageData);
+    int ret = parse_ImageData(config->imageType, config->imageIdentifier, udiConfig, imageData);
     return ret;
 }
 
-static char *_filterString(char *input) {
+static char *_filterString(char *input, int allowSlash) {
     ssize_t len = 0;
     char *ret = NULL;
     char *rptr = NULL;
@@ -264,6 +268,9 @@ static char *_filterString(char *input) {
     wptr = ret;
     while (wptr - ret < len && *rptr != 0) {
         if (isalnum(*rptr) || *rptr == '_' || *rptr == ':' || *rptr == '.' || *rptr == '+' || *rptr == '-') {
+            *wptr++ = *rptr;
+        }
+        if (allowSlash && *rptr == '/') {
             *wptr++ = *rptr;
         }
         rptr++;

@@ -69,7 +69,7 @@ typedef struct _ImageData {
 } ImageData;
 
 char *lookup_ImageIdentifier(const char *imageType, const char *imageTag, int verbose, UdiRootConfig *);
-int parse_ImageData(char *identifier, UdiRootConfig *, ImageData *);
+int parse_ImageData(char *type, char *identifier, UdiRootConfig *, ImageData *);
 void free_ImageData(ImageData *, int);
 size_t fprint_ImageData(FILE *, ImageData *);
 
