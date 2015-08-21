@@ -152,7 +152,6 @@ int bindImageIntoUDI(
     subtree = opendir(srcBuffer);
     if (subtree == NULL) {
         /* desired path is not a directory we can see, skip */
-        fprintf(stderr, "FAILED to opendir %s\n", srcBuffer);
         rc = 1;
         goto _bindImgUDI_unclean;
     }
@@ -924,11 +923,10 @@ int setupUserMounts(ImageData *imageData, VolumeMap *map, UdiRootConfig *udiConf
             fprintf(stderr, "FAILED to location is not directory: %s\n", to_buffer);
             goto _setupUserMounts_unclean;
         }
-        /*if (validateVolumeMap(filtered_from, filtered_to, filtered_flags) != 0) {
-            fprintf(stderr, "FAILED illegal user-requested mount: %s\n", filtered_to);
+        if (validateVolumeMap(filtered_from, filtered_to, filtered_flags) != 0) {
+            fprintf(stderr, "FAILED illegal user-requested mount: %s %s %s\n", filtered_from, filtered_to, filtered_flags);
             goto _setupUserMounts_unclean;
         }
-        */
         ro = 0;
         if (strcmp(filtered_flags, "ro") == 0) {
             ro = 1;

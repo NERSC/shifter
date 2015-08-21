@@ -165,7 +165,7 @@ int validateVolumeMap(const char *from, const char *to, const char *flags) {
     const char *toExactDisallowed[] = {"/opt", "opt", NULL};
     const char *fromStartsWithDisallowed[] = { NULL };
     const char *fromExactDisallowed[] = { NULL };
-    const char *allowedFlags[] = { "ro", NULL };
+    const char *allowedFlags[] = { "ro", "", NULL };
     const char **ptr = NULL;
 
     if (from == NULL || to == NULL) return 1;

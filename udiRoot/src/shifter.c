@@ -205,7 +205,6 @@ int main(int argc, char **argv) {
     }
     wd[PATH_MAX-1] = 0;
 
-    printf("about to check if image loaded\n");
     if (isImageLoaded(&imageData, &opts, &udiConfig) == 0) {
         if (loadImage(&imageData, &opts, &udiConfig) != 0) {
             fprintf(stderr, "FAILED to setup image.\n");
@@ -600,7 +599,6 @@ int isImageLoaded(ImageData *image, struct options *options, UdiRootConfig *udiC
                 image,
                 &(options->volumeMap),
                 udiConfig);
-    printf("cmpVal: %d\n", cmpVal);
     if (cmpVal == 0) return 1;
     return 0;
 }
@@ -632,7 +630,6 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
     destructUDI(udiConfig, 0);
 
     if (image->useLoopMount) {
-        printf("try loop mount\n");
         if (mountImageLoop(image, udiConfig) != 0) {
             fprintf(stderr, "FAILED to mount image on loop device.\n");
             exit(1);

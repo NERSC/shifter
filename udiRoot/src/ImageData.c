@@ -98,8 +98,6 @@ char *lookup_ImageIdentifier(
     size_t lineBuffer_size = 0;
     size_t nread = 0;
 
-    printf("dmj here!\n");
-
     if (imageType == NULL || imageTag == NULL || config == NULL) return NULL;
     if (strlen(imageType) == 0 || strlen(imageTag) == 0) return NULL;
 
