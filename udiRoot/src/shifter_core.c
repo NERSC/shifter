@@ -1547,58 +1547,6 @@ int isSharedMount(const char *mountPoint) {
     return rc;
 }
 
-int userMountFilter(char *udiRoot, char *filtered_from, char *filtered_to, char *flags) {
-    const char *disallowedPaths[] = {"/etc", "/opt", "/opt/udiImage", "/var", NULL};
-    const char **strPtr = NULL;
-    char mntBuffer[PATH_MAX];
-
-    char *to_real = NULL;
-    char *req_real = NULL;
-
-    if (filtered_from == NULL || filtered_to == NULL) {
-        return 1;
-    }
-    if (flags != NULL) {
-        if (strcmp(flags, "ro") != 0) {
-            return 1;
-        }
-    }
-    req_real = realpath(filtered_to, NULL);
-    if (req_real == NULL) {
-        fprintf(stderr, "ERROR: unable to determine real path for %s\n", filtered_to);
-        goto _userMntFilter_unclean;
-    }
-    for (strPtr = disallowedPaths; *strPtr; strPtr++) {
-        int len = 0;
-        snprintf(mntBuffer, PATH_MAX, "%s%s", udiRoot, *strPtr);
-        to_real = realpath(mntBuffer, NULL);
-        if (to_real == NULL) {
-            fprintf(stderr, "ERROR: unable to determine real path for %s\n", mntBuffer);
-            goto _userMntFilter_unclean;
-        }
-        len = strlen(to_real);
-        if (strncmp(to_real, req_real, len) == 0) {
-            fprintf(stderr, "ERROR: user requested mount matches illegal pattern: %s matches %s\n", req_real, to_real);
-            goto _userMntFilter_unclean;
-        }
-        free(to_real);
-        to_real = NULL;
-    }
-    if (req_real != NULL) {
-        free(req_real);
-    }
-
-    return 0;
-_userMntFilter_unclean:
-    if (to_real != NULL) {
-        free(to_real);
-    }
-    if (req_real != NULL) {
-        free(req_real);
-    }
-    return 1;
-}
-
 /*! Loads a kernel module if required */
 /*!
  * Checks to see if the specified kernel module is already loaded, if so, does
