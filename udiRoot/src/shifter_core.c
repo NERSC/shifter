@@ -645,35 +645,11 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
 
     /* setup hostlist for current allocation 
        format of minNodeSpec is "host1/16 host2/16" for 16 copies each of host1 and host2 */
-    if (minNodeSpec) {
-        char *minNode = strdup(minNodeSpec);
-        char *search = minNode;
-        char *token = NULL;
-        FILE *fp = NULL;
-        char *svptr = NULL;
-        snprintf(mntBuffer, PATH_MAX, "%s/var/hostsfile", udiRoot);
-        mntBuffer[PATH_MAX-1] = 0;
-        fp = fopen(mntBuffer, "w");
-        if (fp == NULL) {
-            fprintf(stderr, "FAILED to open hostsfile for writing: %s\n", mntBuffer);
+    if (minNodeSpec != NULL) {
+        if (writeHostFile(minNodeSpec, udiConfig) != 0) {
+            fprintf(stderr, "FAILED to write out hostsfile\n");
             goto _prepSiteMod_unclean;
         }
-        while ((token = strtok_r(search, "/ ", &svptr)) != NULL) {
-            char *hostname = token;
-            int count = 0;
-            int i = 0;
-            search = NULL;
-            token = strtok_r(NULL, "/ ", &svptr);
-            if (token == NULL || ((count = atoi(token)) == 0)) {
-                fprintf(stderr, "FAILED to parse minNodeSpec: %s\n", minNodeSpec);
-                goto _prepSiteMod_unclean;
-            }
-
-            for (i = 0; i < count; i++) {
-                fprintf(fp, "%s\n", hostname);
-            }
-        }
-        fclose(fp);
     }
 
     /***** setup linux needs ******/
@@ -720,6 +696,91 @@ _prepSiteMod_unclean:
     free_MountList(&mountCache, 0);
     destructUDI(udiConfig, 0);
     return ret;
+}
+
+/*! Write out hostsfile into image */
+/*!
+ * Writes out an MPI-style hostsfile, e.g., one element per task.
+ *     nid00001
+ *     nid00001
+ *     nid00002
+ *     nid00002
+ * For a two node/four task job.
+ * Written to /var/hostsfile within the image.
+ *
+ * \param minNodeSpec string formatted like "nid00001/2 nid00002/2" for above
+ * \param udiConfig UDI configuration object
+ *
+ * \returns 0 upon success, 1 upon failure
+ */
+int writeHostFile(const char *minNodeSpec, UdiRootConfig *udiConfig) {
+    char *minNode = NULL;
+    char *sptr = NULL;
+    char *eptr = NULL;
+    char *limit = NULL;
+    FILE *fp = NULL;
+    char filename[PATH_MAX];
+    int idx = 0;
+
+    if (minNodeSpec == NULL || udiConfig == NULL) return 1;
+
+    minNode = strdup(minNodeSpec);
+    limit = minNode + strlen(minNode);
+
+    snprintf(filename, PATH_MAX, "%s%s/var/hostsfile",  udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    filename[PATH_MAX-1] = 0;
+
+    fp = fopen(filename, "w");
+    if (fp == NULL) {
+        fprintf(stderr, "FAILED to open hostsfile for writing: %s\n", filename);
+        goto _writeHostFile_error;
+    }
+
+    sptr = minNode;
+    while (sptr < limit) {
+        /* find hostname */
+        char *hostname = sptr;
+        int count = 0;
+        eptr = strchr(sptr, '/');
+        if (eptr == NULL) {
+            /* parse error, should be hostname/number (e.g., nid00001/24) */
+            fprintf(stderr, "FAILED to identify hostname when writing hosts list\n");
+            goto _writeHostFile_error;
+        }
+        *eptr = 0;
+
+        /* find count */
+        sptr = eptr + 1;
+        eptr = strchr(sptr, ' ');
+        if (eptr == NULL) eptr = sptr + strlen(sptr);
+        *eptr = 0;
+        count = atoi(sptr);
+        if (count == 0) {
+            /* parse error, not a number */
+            goto _writeHostFile_error;
+        }
+
+        /* write out */
+        for (idx = 0; idx < count; idx++) {
+            fprintf(fp, "%s\n", hostname);
+        }
+
+        sptr = eptr + 1;
+    }
+    fclose(fp);
+    fp = NULL;
+    free(minNode);
+    minNode = NULL;
+    return 0;
+
+_writeHostFile_error:
+    if (minNode != NULL) {
+        free(minNode);
+    }
+    if (fp != NULL) {
+        fclose(fp);
+    }
+    return 1;
 }
 
 int mountImageVFS(ImageData *imageData, const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig) {
@@ -1454,12 +1515,12 @@ _bindMount_exit:
     return ret;
 _bindMount_unclean:
     if (to_real != NULL) {
-        ret = umount(to_real);
+        ret = umount2(to_real, UMOUNT_NOFOLLOW|MNT_DETACH);
         remove_MountList(mountCache, to_real);
         free(to_real);
         to_real = NULL;
     } else {
-        ret = umount(to);
+        ret = umount2(to, UMOUNT_NOFOLLOW|MNT_DETACH);
         remove_MountList(mountCache, to);
     }
     if (ret != 0) {
@@ -1856,6 +1917,8 @@ int unmountTree(MountList *mounts, const char *base) {
 
     for (ptr = mounts->mountPointList; ptr && *ptr; ptr++) {
         if (strncmp(*ptr, base, baseLen) == 0) {
+            rc = umount2(*ptr, UMOUNT_NOFOLLOW|MNT_DETACH);
+/*
             char **argPtr = NULL;
             char *args[] = {
                 strdup("umount"),
@@ -1866,6 +1929,7 @@ int unmountTree(MountList *mounts, const char *base) {
             for (argPtr = args; *argPtr != NULL; argPtr++) {
                 free(*argPtr);
             }
+*/
             if (rc != 0) {
                 goto _unmountTree_exit;
             }
@@ -2055,6 +2119,81 @@ TEST(ShifterCoreTestGroup, userInputPathFilter_basic) {
     filtered = userInputPathFilter("/path/to/something/great", 1);
     CHECK(strcmp(filtered, "/path/to/something/great") == 0);
     free(filtered);
+}
+
+TEST(ShifterCoreTestGroup, writeHostFile_basic) { 
+   char tmpDir[] = "/tmp/shifter.XXXXXX"; 
+   char tmpDirVar[] = "/tmp/shifter.XXXXXX/var";
+   char hostsFilename[] = "/tmp/shifter.XXXXXX/var/hostsfile";
+   FILE *fp = NULL;
+   char *linePtr = NULL;
+   size_t linePtr_size = 0;
+   int count = 0;
+
+   CHECK(mkdtemp(tmpDir) != NULL);
+   memcpy(tmpDirVar, tmpDir, sizeof(char) * strlen(tmpDir));
+   memcpy(hostsFilename, tmpDir, sizeof(char) * strlen(tmpDir));
+   CHECK(mkdir(tmpDirVar, 0755) == 0);
+
+   UdiRootConfig config;
+   memset(&config, 0, sizeof(UdiRootConfig));
+
+   config.nodeContextPrefix = strdup("");
+   config.udiMountPoint = tmpDir;
+
+   int ret = writeHostFile("host1/4", &config);
+   CHECK(ret == 0);
+
+   fp = fopen(hostsFilename, "r");
+   while (fp && !feof(fp) && !ferror(fp)) {
+       size_t nread = getline(&linePtr, &linePtr_size, fp);
+       if (nread == 0 || feof(fp) || ferror(fp)) break;
+
+       if (count < 4) {
+           CHECK(strcmp(linePtr, "host1\n") == 0);
+           count++;
+           continue;
+       }
+       FAIL("Got beyond where we should be");
+   }
+   fclose(fp);
+
+   ret = writeHostFile(NULL, &config);
+   CHECK(ret == 1);
+
+   ret = writeHostFile("host1 host2", &config);
+   CHECK(ret == 1);
+
+   ret = writeHostFile("host1/24 host2/24 host3/24", &config);
+   count = 0;
+   fp = fopen(hostsFilename, "r");
+   while (fp && !feof(fp) && !ferror(fp)) {
+       size_t nread = getline(&linePtr, &linePtr_size, fp);
+       if (nread == 0 || feof(fp) || ferror(fp)) break;
+
+       if (count < 24) {
+           CHECK(strcmp(linePtr, "host1\n") == 0);
+           count++;
+           continue;
+       } else if (count < 48) {
+           CHECK(strcmp(linePtr, "host2\n") == 0);
+           count++;
+           continue;
+       } else if (count < 72) {
+           CHECK(strcmp(linePtr, "host3\n") == 0);
+           count++;
+           continue;
+       }
+       FAIL("Got beyond where we should be");
+   }
+   fclose(fp);
+
+   unlink(hostsFilename);
+   rmdir(tmpDirVar);
+   rmdir(tmpDir);
+
+   if (linePtr != NULL) free(linePtr);
+   free(config.nodeContextPrefix);
 }
 
 int main(int argc, char** argv) {
