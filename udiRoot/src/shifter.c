@@ -671,14 +671,21 @@ TEST_GROUP(ShifterTestGroup) {
 TEST(ShifterTestGroup, FilterString_basic) {
     CHECK(_filterString(NULL, 0) == NULL);
     char *output = _filterString("echo test; rm -rf thing1", 0);
-    CHECK(strcmp(output, "echotestrm-rfthing1", 0) == 0);
+    CHECK(strcmp(output, "echotestrm-rfthing1") == 0);
     free(output);
     output = _filterString("V4l1d-str1ng.input", 0);
-    CHECK(strcmp(output, "V4l1d-str1ng.input", 0) == 0);
+    CHECK(strcmp(output, "V4l1d-str1ng.input") == 0);
     free(output);
     output = _filterString("", 0);
     CHECK(output != NULL);
     CHECK(strlen(output) == 0);
+    free(output);
+
+    output = _filterString("/this/is/not/allowed", 0);
+    CHECK(strcmp(output, "thisisnotallowed") == 0);
+    free(output);
+    output = _filterString("/this/is/allowed", 1);
+    CHECK(strcmp(output, "/this/is/allowed") == 0);
     free(output);
 }
 
