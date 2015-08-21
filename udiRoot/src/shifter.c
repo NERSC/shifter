@@ -251,7 +251,7 @@ int main(int argc, char **argv) {
     }
 
     execve(opts.args[0], opts.args, environ_copy);
-    return 0;
+    return 127;
 }
 #endif
 
