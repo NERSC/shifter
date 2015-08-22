@@ -53,8 +53,8 @@
 
 typedef enum _MountListSortOrder {
     MOUNT_SORT_UNSORTED = 0,
-    MOUNT_SORT_FORWARD,
-    MOUNT_SORT_REVERSE
+    MOUNT_SORT_FORWARD = 1,
+    MOUNT_SORT_REVERSE = 2
 } MountListSortOrder;
 
 typedef struct _MountList {
