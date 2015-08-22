@@ -1035,6 +1035,46 @@ char *generateShifterConfigString(const char *user, ImageData *image, VolumeMap 
     return str;
 }
 
+/*! Read JSON configuration values from a string */
+/*!
+ * Parses the JSON configuration string and updates the parameters to send
+ * values back to the calling function.  This is likely used to draw a default
+ * configuration from an already constructed environment.
+ *
+ * \param configStr JSON formatted string without any leading or trailing
+ *                  whitespace
+ * \param user char** to store allocated string for username
+ * \param imageIdentifier char** to store allocated string for identifier
+ * \param volMap should be an empty VolumeMap
+ *
+ * Returns: 0 upon success, 1 upon failure
+ */
+int readShifterConfigString(const char *configStr, char **user, char **imageIdentifier, VolumeMap *volMap) {
+    char *volstr;
+    int count = sscanf(configStr, "{\"identifier\":\"%m[^\"]\",\"user\":\"%m[^\"]\",\"volMap\":\"%m[^\"]\"}", imageIdentifier, user, &volstr);
+    if (count < 2) {
+        fprintf(stderr, "FAILED to parse shifter configuration JSON string\n");
+        goto _readShifterConfigString_error;
+    }
+    if (volstr != NULL) {
+        if (parseVolumeMap(volstr, volMap) != 0) {
+            fprintf(stderr, "FAILED to parse shifter JSON configuration volumeMap\n");
+            goto _readShifterConfigString_error;
+        }
+    }
+    if (volstr != NULL) {
+        free(volstr);
+        volstr = NULL;
+    }
+    return 0;
+_readShifterConfigString_error:
+    if (volstr != NULL) {
+        free(volstr);
+        volstr = NULL;
+    }
+    return 1;
+}
+
 int saveShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMap, UdiRootConfig *udiConfig) {
     char saveFilename[PATH_MAX];
     FILE *fp = NULL;
@@ -1918,18 +1958,6 @@ int unmountTree(MountList *mounts, const char *base) {
     for (ptr = mounts->mountPointList; ptr && *ptr; ptr++) {
         if (strncmp(*ptr, base, baseLen) == 0) {
             rc = umount2(*ptr, UMOUNT_NOFOLLOW|MNT_DETACH);
-/*
-            char **argPtr = NULL;
-            char *args[] = {
-                strdup("umount"),
-                strdup(*ptr), 
-                NULL
-            };
-            rc = forkAndExecvp(args);
-            for (argPtr = args; *argPtr != NULL; argPtr++) {
-                free(*argPtr);
-            }
-*/
             if (rc != 0) {
                 goto _unmountTree_exit;
             }
@@ -1945,6 +1973,28 @@ _unmountTree_exit:
     return rc;
 }
 
+/*! validate that in this namespace the named path is unmounted */
+/*! Constructs a fresh MountList and searches for the specified path; if it is
+ * not found, return 0 (success), otherwise return 1 (failure), -1 for error
+ */
+int validateUnmounted(const char *path) {
+    MountList mounts;
+    int rc = 0;
+    memset(&mounts, 0, sizeof(MountList));
+    if (parse_MountList(&mounts) != 0) {
+        goto _validateUnmounted_error;
+    }
+    if (find_MountList(&mounts, path) != NULL) {
+        rc = 1;
+    }
+    free_MountList(&mounts, 0);
+    return rc;
+_validateUnmounted_error:
+    free_MountList(&mounts, 0);
+    return -1;
+}
+    
+
 #ifdef _TESTHARNESS_SHIFTERCORE
 #include <CppUTest/CommandLineTestRunner.h>
 #ifdef NOTROOT
@@ -1953,10 +2003,20 @@ _unmountTree_exit:
 #define ISROOT 1
 #endif
 
+#include <vector>
+#include <string>
+using namespace std;
+
 TEST_GROUP(ShifterCoreTestGroup) {
+    bool isRoot;
+    char *tmpDir = NULL;
+    vector<string> tmpFiles;
+    vector<string> tmpDirs;
+
     void setup() {
         bool isRoot = getuid() == 0;
         bool macroIsRoot = ISROOT == 1;
+        tmpDir = strdup("/tmp/shifter.XXXXXX");
         if (isRoot && !macroIsRoot) {
             fprintf(stderr, "WARNING: the bulk of the functional tests are"
                     " disabled because the test suite is compiled with "
@@ -1967,7 +2027,24 @@ TEST_GROUP(ShifterCoreTestGroup) {
                     "privileged tests, but you don't have those privileges."
                     " Several tests will fail.");
         }
+        if (mkdtemp(tmpDir) == NULL) {
+            fprintf(stderr, "WARNING mkdtemp failed, some tests will crash.\n");
+        }
     }
+
+    void teardown() {
+        for (size_t idx = 0; idx < tmpFiles.size(); idx++) {
+            unlink(tmpFiles[idx].c_str());
+        }
+        tmpFiles.clear();
+        for (size_t idx = 0; idx < tmpDirs.size(); idx++) {
+            rmdir(tmpDirs[idx].c_str());
+        }
+        tmpDirs.clear();
+        rmdir(tmpDir);
+        free(tmpDir);
+    }
+
 };
 
 TEST(ShifterCoreTestGroup, CopyFile_basic) {
@@ -2050,7 +2127,7 @@ IGNORE_TEST(ShifterCoreTestGroup, isSharedMount_basic) {
 #else
 TEST(ShifterCoreTestGroup, isSharedMount_basic) {
 #endif
-    CHECK(unshare(CLONE_NEWNS) == 0);
+    /* main() already generated a new namespace for this process */
     CHECK(mount(NULL, "/", NULL, MS_SHARED, NULL) == 0);
 
     CHECK(isSharedMount("/") == 1);
@@ -2075,19 +2152,14 @@ TEST(ShifterCoreTestGroup, validatePrivateNamespace) {
         char currDir[PATH_MAX];
         struct stat localStatInfo;
 
-        printf("about to unshare\n");
         if (unshare(CLONE_NEWNS) != 0) exit(1);
         if (isSharedMount("/") == 1) {
-            printf("about to make private mount\n");
             if (mount(NULL, "/", NULL, MS_PRIVATE|MS_REC, NULL) != 0) exit(1);
         }
-        printf("about to getcwd\n");
         if (getcwd(currDir, PATH_MAX) == NULL) exit(1);
         currDir[PATH_MAX - 1] = 0;
 
-        printf("about to bind %s to /tmp\n", currDir);
         if (mount(currDir, "/tmp", NULL, MS_BIND, NULL) != 0) exit(1);
-        printf("about to stat /tmp/test_shifter_core\n");
         if (stat("/tmp/test_shifter_core", &localStatInfo) == 0) {
             exit(0);
         }
@@ -2121,8 +2193,34 @@ TEST(ShifterCoreTestGroup, userInputPathFilter_basic) {
     free(filtered);
 }
 
+TEST(ShifterCoreTestGroup, readShifterConfigString_functions) {
+    char *identifier = NULL;
+    char *user = NULL;
+    int ret = 0;
+    VolumeMap v;
+    memset(&v, 0, sizeof(VolumeMap));
+
+    ret = readShifterConfigString("{\"identifier\":\"0123456789abcdef\",\"user\":\"testuser\",\"volMap\":\"\"}", &user, &identifier, &v);
+    CHECK(ret == 0);
+    CHECK(strcmp(user, "testuser") == 0);
+    CHECK(strcmp(identifier, "0123456789abcdef") == 0);
+    CHECK(v.n == 0);
+
+    free(identifier);
+    free(user);
+
+    ret = readShifterConfigString("{\"identifier\":\"0123456789abcdef\",\"user\":\"testuser\",\"volMap\":\"/a:/b,/c:/d\"}", &user, &identifier, &v);
+    CHECK(ret == 0);
+    CHECK(strcmp(user, "testuser") == 0);
+    CHECK(strcmp(identifier, "0123456789abcdef") == 0);
+    CHECK(v.n == 2);
+
+    free(identifier);
+    free(user);
+    free_VolumeMap(&v, 0);
+}
+
 TEST(ShifterCoreTestGroup, writeHostFile_basic) { 
-   char tmpDir[] = "/tmp/shifter.XXXXXX"; 
    char tmpDirVar[] = "/tmp/shifter.XXXXXX/var";
    char hostsFilename[] = "/tmp/shifter.XXXXXX/var/hostsfile";
    FILE *fp = NULL;
@@ -2130,9 +2228,11 @@ TEST(ShifterCoreTestGroup, writeHostFile_basic) {
    size_t linePtr_size = 0;
    int count = 0;
 
-   CHECK(mkdtemp(tmpDir) != NULL);
    memcpy(tmpDirVar, tmpDir, sizeof(char) * strlen(tmpDir));
    memcpy(hostsFilename, tmpDir, sizeof(char) * strlen(tmpDir));
+   tmpDirs.push_back(tmpDirVar);
+   tmpFiles.push_back(hostsFilename);
+
    CHECK(mkdir(tmpDirVar, 0755) == 0);
 
    UdiRootConfig config;
@@ -2188,15 +2288,47 @@ TEST(ShifterCoreTestGroup, writeHostFile_basic) {
    }
    fclose(fp);
 
-   unlink(hostsFilename);
-   rmdir(tmpDirVar);
-   rmdir(tmpDir);
-
    if (linePtr != NULL) free(linePtr);
    free(config.nodeContextPrefix);
 }
 
+#ifdef NOTROOT
+IGNORE_TEST(ShifterCoreTestGroup, validateUnmounted_Basic) { 
+#else
+TEST(ShifterCoreTestGroup, validateUnmounted_Basic) { 
+#endif
+    int rc = 0;
+    MountList mounts;
+
+    memset(&mounts, 0, sizeof(MountList));
+    CHECK(parse_MountList(&mounts) == 0);
+
+    rc = validateUnmounted(tmpDir);
+    CHECK(rc == 0);
+
+    CHECK(_bindMount(&mounts, "/", tmpDir, 1, 0) == 0);
+    
+    rc = validateUnmounted(tmpDir);
+    CHECK(rc == 1);
+
+    CHECK(unmountTree(&mounts, tmpDir) == 0);
+
+    rc = validateUnmounted(tmpDir);
+    CHECK(rc == 0);
+
+    free_MountList(&mounts, 0);
+}
+
+
 int main(int argc, char** argv) {
+    if (getuid() == 0) {
+#ifndef NOTROOT
+        if (unshare(CLONE_NEWNS) != 0) {
+            fprintf(stderr, "FAILED to unshare, test handler will exit in error.\n");
+            exit(1);
+        }
+#endif
+    }
     return CommandLineTestRunner::RunAllTests(argc, argv);
 }
 
