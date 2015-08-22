@@ -96,7 +96,6 @@ struct options {
 
 
 static void _usage(int);
-static void _version(void);
 static char *_filterString(const char *input, int allowSlash);
 char **copyenv(void);
 int parse_options(int argc, char **argv, struct options *opts, UdiRootConfig *);
@@ -552,10 +551,6 @@ static void _usage(int status) {
     exit(status);
 }
 
-static void _version(void) {
-    printf("interactive shifter version %s\n", VERSION);
-}
-
 char **copyenv(void) {
     char **outenv = NULL;
     char **ptr = NULL;
@@ -813,6 +808,7 @@ TEST(ShifterTestGroup, LocalPutEnv_basic) {
     free(testenv0Ptr);
     free(testenv2Ptr);
 }
+
 
 int main(int argc, char **argv) {
     return CommandLineTestRunner::RunAllTests(argc, argv);
