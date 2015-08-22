@@ -1526,7 +1526,7 @@ static int _bindMount(MountList *mountCache, const char *from, const char *to, i
                 usleep(300000); /* sleep for 0.3s */
             }
         } else {
-            fprintf(stderr, "%s was already mounted, not allowed to unmount existingm fail.\n", to_real);
+            fprintf(stderr, "%s was already mounted, not allowed to unmount existing, fail.\n", to_real);
             ret = 1;
             goto _bindMount_exit;
         }
@@ -2169,11 +2169,11 @@ IGNORE_TEST(ShifterCoreTestGroup, isSharedMount_basic) {
 TEST(ShifterCoreTestGroup, isSharedMount_basic) {
 #endif
     /* main() already generated a new namespace for this process */
-    CHECK(mount(NULL, "/", NULL, MS_SHARED, NULL) == 0);
+    CHECK(mount(NULL, "/", "", MS_SHARED, NULL) == 0);
 
     CHECK(isSharedMount("/") == 1);
 
-    CHECK(mount(NULL, "/", NULL, MS_PRIVATE, NULL) == 0);
+    CHECK(mount(NULL, "/", "", MS_PRIVATE, NULL) == 0);
     CHECK(isSharedMount("/") == 0);
 }
 
@@ -2195,16 +2195,15 @@ TEST(ShifterCoreTestGroup, validatePrivateNamespace) {
 
         if (unshare(CLONE_NEWNS) != 0) exit(1);
         if (isSharedMount("/") == 1) {
-            if (mount(NULL, "/", NULL, MS_PRIVATE|MS_REC, NULL) != 0) exit(1);
+            if (mount(NULL, "/", "", MS_PRIVATE|MS_REC, NULL) != 0) exit(1);
         }
         if (getcwd(currDir, PATH_MAX) == NULL) exit(1);
         currDir[PATH_MAX - 1] = 0;
 
-        if (mount(currDir, "/tmp", NULL, MS_BIND, NULL) != 0) exit(1);
+        if (mount(currDir, "/tmp", "bind", MS_BIND, NULL) != 0) exit(1);
         if (stat("/tmp/test_shifter_core", &localStatInfo) == 0) {
             exit(0);
         }
-        fprintf(stderr, "here\n");
         exit(1);
     } else if (child > 0) {
         int status = 0;
@@ -2361,45 +2360,53 @@ TEST(ShifterCoreTestGroup, validateUnmounted_Basic) {
     free_MountList(&mounts, 0);
 }
 
+int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const char *tmpDir, const char *cwd) {
+    *config = (UdiRootConfig *) malloc(sizeof(UdiRootConfig));
+    *image = (ImageData *) malloc(sizeof(ImageData));
+
+    memset(*config, 0, sizeof(UdiRootConfig));
+    memset(*image, 0, sizeof(ImageData));
+
+    (*image)->type = strdup("local");
+    (*image)->identifier = strdup("/");
+    (*config)->udiMountPoint = strdup(tmpDir);
+    (*config)->nodeContextPrefix = strdup("");
+    (*config)->etcPath = alloc_strgenf("%s/%s", cwd, "etc");
+    (*config)->allowLocalChroot = 1;
+    return 0;
+}
+
 #ifdef NOTROOT
 IGNORE_TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
 #else
 TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
 #endif
-    UdiRootConfig config;
-    ImageData image;
+    UdiRootConfig *config = NULL;
+    ImageData *image = NULL;
     MountList mounts;
     int rc = 0;
-    memset(&config, 0, sizeof(UdiRootConfig));
-    memset(&image, 0, sizeof(UdiRootConfig));
     memset(&mounts, 0, sizeof(MountList));
+    CHECK(setupLocalRootVFSConfig(&config, &image, tmpDir, cwd) == 0);
+    config->allowLocalChroot = 0;
 
-    image.type = strdup("local");
-    image.identifier = strdup("/");
-
-    config.udiMountPoint = strdup(tmpDir);
-    config.nodeContextPrefix = strdup("");
-    config.allowLocalChroot = 0;
-    config.etcPath = alloc_strgenf("%s/%s", cwd, "etc");
-
-    rc = mountImageVFS(&image, "dmj", NULL, &config);
+    rc = mountImageVFS(image, "dmj", NULL, config);
     CHECK(rc == 1);
     CHECK(parse_MountList(&mounts) == 0);
     CHECK(find_MountList(&mounts, tmpDir) == NULL);
 
-    rc = unmountTree(&mounts, config.udiMountPoint);
+    rc = unmountTree(&mounts, config->udiMountPoint);
     CHECK(rc == 0);
     free_MountList(&mounts, 0);
     memset(&mounts, 0, sizeof(MountList));
 
-    config.allowLocalChroot = 1;
-    rc = mountImageVFS(&image, "dmj", NULL, &config);
+    config->allowLocalChroot = 1;
+    rc = mountImageVFS(image, "dmj", NULL, config);
     CHECK(rc == 0);
     CHECK(parse_MountList(&mounts) == 0);
     CHECK(find_MountList(&mounts, tmpDir) != NULL);
-    rc = unmountTree(&mounts, config.udiMountPoint);
-    free_UdiRootConfig(&config, 0);
-    free_ImageData(&image, 0);
+    rc = unmountTree(&mounts, config->udiMountPoint);
+    free_UdiRootConfig(config, 1);
+    free_ImageData(image, 1);
     free_MountList(&mounts, 0);
 }
 
@@ -2468,6 +2475,42 @@ IGNORE_TEST(ShifterCoreTestGroup, mountDangerousImage) {
 #endif
 
 }
+
+#if 0
+#if ISROOT
+TEST(ShifterCoreTestGroup, destructUDI_test) {
+#else
+IGNORE_TEST(ShifterCoreTestGroup, destructUDI_test) {
+#endif
+    UdiRootConfig *config = NULL;
+    ImageData *image = NULL;
+    MountList *mounts = NULL;
+    struct stat statData;
+    int rc = 0;
+    init_MountList(&mounts, 1);
+    CHECK(setupLocalRootVFSConfig(&config, &image, tmpDir, cwd) == 0);
+    config->allowLocalChroot = 1;
+    CHECK(mountImageVFS(image, "dmj", NULL, config) == 0);
+
+    CHECK(parse_MountList(mounts) == 0);
+    CHECK(find_MountList(mounts, tmpDir) != NULL);
+    
+    free_MountList(mounts, 1);
+    init_MountList(&mounts, 1);
+    CHECK(destructUDI(config, 0) == 0);
+    CHECK(parse_MountList(mounts) == 0);
+    CHECK(find_MountList(mounts, tmpDir) == NULL);
+    free_MountList(mounts, 1);
+
+    /* i haven't found a way to reliably make destructUDI fail, so for now
+     * that case will not be tested
+     */
+
+
+    free_ImageData(image, 1);
+    free_UdiRootConfig(config, 1);
+}
+#endif
 
 int main(int argc, char** argv) {
     if (getuid() == 0) {
