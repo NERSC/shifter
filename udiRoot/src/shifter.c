@@ -505,8 +505,50 @@ int parse_environment(struct options *opts) {
     return 0;
 }
 
+
 static void _usage(int status) {
-    fprintf(stderr, "usage: \n");
+    printf("\n"
+        "Usage:\n"
+        "shifter [-h|--help] [-v|--verbose] [--image=<imageType>:<imageTag>]\n"
+        "    [--entry] [-V|--volume=/path/to/bind:/mnt/in/image[:<flags>][,...]]\n"
+        "    [-- /command/to/exec/in/shifter [args...]]\n"
+        );
+    printf("\n");
+    printf(
+"Image Selection:  Images can be selected in any of three ways, explicit\n"
+"specification as an argument, e.g.:\n"
+"    shifter --image=docker:ubuntu/15.04\n"
+"Or an image can be specified in the environment by passing either:\n"
+"    export SHIFTER=docker:ubuntu/15.04\n"
+"                    or\n"
+"    export SHIFTER_IMAGETYPE=docker\n"
+"    export SHIFTER_IMAGE=ubuntu/15.04\n"
+"Or if an image is already loaded in the global namespace owned by the\n"
+"running user, and none of the above options are set, then the image loaded\n" 
+"in the global namespace will be used.\n"
+"\n"
+"Command Selection: If a command is supplied on the command line Shifter will\n"
+"attempt to exec that command within the image.  Otherwise, if \"--entry\" is\n"
+"specified and an entry point is defined for the image, then the entrypoint\n"
+"will be executed.  Finally if nothing else is specified /bin/sh will be\n"
+"attempted.\n"
+"\n"
+"Environmental Transfer: All the environment variables defined in the\n"
+"calling processes's environment will be transferred into the container,\n"
+"however, any environment variables defined in the container desription,\n"
+"e.g., Docker ENV-defined variables, will be sourced and override those.\n"
+"\n"
+"Volume Mapping:  You can request any path available in the current\n"
+"environment to be mapped to some other path within the container.\n"
+"e.g.,\n"
+"    shifter --volume=/scratch/path/to/my/data:/data\n"
+"Would cause /data within the container to be bound to\n"
+"/scratch/path/to/my/data.  The mount-point (e.g., /data) must already exist\n"
+"in the provided image.  You can not bind a path into any path including or\n"
+"under /dev, /etc, /opt/udiImage, /proc, or /var; or overwrite any bind-\n"
+"requested by the system configuration.\n"
+"\n"
+        );
     exit(status);
 }
 
@@ -616,50 +658,64 @@ int isImageLoaded(ImageData *image, struct options *options, UdiRootConfig *udiC
  * Loads the needed image
  */
 int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) {
+    int retryCnt = 0;
+    char chrootPath[PATH_MAX];
+    snprintf(chrootPath, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    chrootPath[PATH_MAX - 1] = 0;
 
     /* must achieve full root privileges to perform mounts */
     if (setresuid(0, 0, 0) != 0) {
         fprintf(stderr, "Failed to setuid to %d\n", 0);
-        exit(1);
+        goto _loadImage_error;
     }
 
     if (unshare(CLONE_NEWNS) != 0) {
         perror("Failed to unshare the filesystem namespace.");
-        exit(1);
+        goto _loadImage_error;
     }
 
     if (isSharedMount("/") == 1) {
         if (mount(NULL, "/", NULL, MS_PRIVATE|MS_REC, NULL) != 0) {
             perror("Failed to remount \"/\" non-shared.");
-            exit(1);
+            goto _loadImage_error;
         }
     }
 
     /* remove access to any preexisting mounts in the global namespace to this area */
     destructUDI(udiConfig, 0);
+    for (retryCnt = 0; retryCnt < 10; retryCnt++) {
+        if (validateUnmounted(chrootPath) == 0) break;
+        usleep(300000); /* sleep for 0.3s */
+    }
+    if (retryCnt == 10) {
+        fprintf(stderr, "FAILED to unmount old image in this namespace, cannot conintue.\n");
+        goto _loadImage_error;
+    }
 
     if (image->useLoopMount) {
         if (mountImageLoop(image, udiConfig) != 0) {
             fprintf(stderr, "FAILED to mount image on loop device.\n");
-            exit(1);
+            goto _loadImage_error;
         }
     }
     if (mountImageVFS(image, opts->username, NULL, udiConfig) != 0) {
         fprintf(stderr, "FAILED to mount image into UDI\n");
-        exit(1);
+        goto _loadImage_error;
     }
 
     if (setupUserMounts(image, &(opts->volumeMap), udiConfig) != 0) {
         fprintf(stderr, "FAILED to setup user-requested mounts.\n");
-        exit(1);
+        goto _loadImage_error;
     }
 
     if (saveShifterConfig(opts->username, image, &(opts->volumeMap), udiConfig) != 0) {
         fprintf(stderr, "FAILED to writeout shifter configuration file\n");
-        exit(1);
+        goto _loadImage_error;
     }
 
     return 0;
+_loadImage_error:
+    return 1;
 }
 
 #ifdef _TESTHARNESS_SHIFTER
