@@ -434,7 +434,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     _MKDIR("tmp", 0777);
 
     /* run site-defined pre-mount procedure */
-    if (strlen(udiConfig->sitePreMountHook) > 0) {
+    if (udiConfig->sitePreMountHook && strlen(udiConfig->sitePreMountHook) > 0) {
         char *args[] = {
             strdup("/bin/sh"), strdup(udiConfig->sitePreMountHook), NULL
         };
@@ -451,7 +451,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     }
 
     /* do site-defined mount activities */
-    for (volPtr = udiConfig->siteFs; *volPtr != NULL; volPtr++) {
+    for (volPtr = udiConfig->siteFs; volPtr && *volPtr; volPtr++) {
         char to_buffer[PATH_MAX];
         snprintf(to_buffer, PATH_MAX, "%s/%s", udiRoot, *volPtr);
         to_buffer[PATH_MAX-1] = 0;
@@ -460,7 +460,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     }
 
     /* run site-defined post-mount procedure */
-    if (strlen(udiConfig->sitePostMountHook) > 0) {
+    if (udiConfig->sitePostMountHook && strlen(udiConfig->sitePostMountHook) > 0) {
         char *args[] = {
             strdup("/bin/sh"), strdup(udiConfig->sitePostMountHook), NULL
         };
@@ -507,6 +507,10 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     }
 
     /* --> loop over everything in site etc-files and copy into image etc */
+    if (udiConfig->etcPath == NULL || strlen(udiConfig->etcPath) == 0) {
+        fprintf(stderr, "UDI etcPath source directory not defined.\n");
+        goto _prepSiteMod_unclean;
+    }
     snprintf(srcBuffer, PATH_MAX, "%s/%s", udiConfig->nodeContextPrefix, udiConfig->etcPath);
     srcBuffer[PATH_MAX-1] = 0;
     memset(&statData, 0, sizeof(struct stat));
@@ -786,6 +790,15 @@ _writeHostFile_error:
 int mountImageVFS(ImageData *imageData, const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig) {
     struct stat statData;
     char udiRoot[PATH_MAX];
+
+    if (imageData == NULL || username == NULL || udiConfig == NULL) {
+        fprintf(stderr, "Invalid arguments to mountImageVFS(), error.\n");
+        goto _mountImgVfs_unclean;
+    }
+    if (imageData->type != NULL && strcmp(imageData->type, "local") == 0 && udiConfig->allowLocalChroot == 0) {
+        fprintf(stderr, "local chroot path requested, but this is disallowed by site policy, Fail.\n");
+        goto _mountImgVfs_unclean;
+    }
 
 #define _MKDIR(dir, perm) if (mkdir(dir, perm) != 0) { \
     fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", dir); \
@@ -2010,12 +2023,14 @@ using namespace std;
 TEST_GROUP(ShifterCoreTestGroup) {
     bool isRoot;
     char *tmpDir = NULL;
+    char cwd[PATH_MAX];
     vector<string> tmpFiles;
     vector<string> tmpDirs;
 
     void setup() {
         bool isRoot = getuid() == 0;
         bool macroIsRoot = ISROOT == 1;
+        getcwd(cwd, PATH_MAX);
         tmpDir = strdup("/tmp/shifter.XXXXXX");
         if (isRoot && !macroIsRoot) {
             fprintf(stderr, "WARNING: the bulk of the functional tests are"
@@ -2033,6 +2048,9 @@ TEST_GROUP(ShifterCoreTestGroup) {
     }
 
     void teardown() {
+        MountList mounts;
+        memset(&mounts, 0, sizeof(MountList));
+        parse_MountList(&mounts);
         for (size_t idx = 0; idx < tmpFiles.size(); idx++) {
             unlink(tmpFiles[idx].c_str());
         }
@@ -2041,8 +2059,13 @@ TEST_GROUP(ShifterCoreTestGroup) {
             rmdir(tmpDirs[idx].c_str());
         }
         tmpDirs.clear();
+        if (find_MountList(&mounts, tmpDir) != NULL) {
+            unmountTree(&mounts, tmpDir);
+        }
+        chdir(cwd);
         rmdir(tmpDir);
         free(tmpDir);
+        free_MountList(&mounts, 0);
     }
 
 };
@@ -2053,7 +2076,10 @@ TEST(ShifterCoreTestGroup, CopyFile_basic) {
     int ret = 0;
     struct stat statData;
     
-    getcwd(buffer, PATH_MAX);
+    if (getcwd(buffer, PATH_MAX) == NULL) {
+        perror("Failed to getcwd()\n");
+        FAIL("Couldn't getcwd()")
+    }
     ptr = buffer + strlen(buffer);
     snprintf(ptr, PATH_MAX - (ptr - buffer), "/passwd");
 
@@ -2163,6 +2189,7 @@ TEST(ShifterCoreTestGroup, validatePrivateNamespace) {
         if (stat("/tmp/test_shifter_core", &localStatInfo) == 0) {
             exit(0);
         }
+        fprintf(stderr, "here\n");
         exit(1);
     } else if (child > 0) {
         int status = 0;
@@ -2319,14 +2346,58 @@ TEST(ShifterCoreTestGroup, validateUnmounted_Basic) {
     free_MountList(&mounts, 0);
 }
 
+#ifdef NOTROOT
+IGNORE_TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
+#else
+TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
+#endif
+    UdiRootConfig config;
+    ImageData image;
+    MountList mounts;
+    int rc = 0;
+    memset(&config, 0, sizeof(UdiRootConfig));
+    memset(&image, 0, sizeof(UdiRootConfig));
+    memset(&mounts, 0, sizeof(MountList));
+
+    image.type = strdup("local");
+    image.identifier = strdup("/");
+
+    config.udiMountPoint = strdup(tmpDir);
+    config.nodeContextPrefix = strdup("");
+    config.allowLocalChroot = 0;
+    config.etcPath = alloc_strgenf("%s/%s", cwd, "etc");
+
+    rc = mountImageVFS(&image, "dmj", NULL, &config);
+    CHECK(rc == 1);
+    CHECK(parse_MountList(&mounts) == 0);
+    CHECK(find_MountList(&mounts, tmpDir) == NULL);
+
+    rc = unmountTree(&mounts, config.udiMountPoint);
+    CHECK(rc == 0);
+    free_MountList(&mounts, 0);
+    memset(&mounts, 0, sizeof(MountList));
+
+    config.allowLocalChroot = 1;
+    rc = mountImageVFS(&image, "dmj", NULL, &config);
+    CHECK(rc == 0);
+    CHECK(parse_MountList(&mounts) == 0);
+    CHECK(find_MountList(&mounts, tmpDir) != NULL);
+    rc = unmountTree(&mounts, config.udiMountPoint);
+    free_UdiRootConfig(&config, 0);
+    free_ImageData(&image, 0);
+    free_MountList(&mounts, 0);
+}
 
 int main(int argc, char** argv) {
     if (getuid() == 0) {
 #ifndef NOTROOT
+        char buffer[PATH_MAX];
+        getcwd(buffer, PATH_MAX);
         if (unshare(CLONE_NEWNS) != 0) {
             fprintf(stderr, "FAILED to unshare, test handler will exit in error.\n");
             exit(1);
         }
+        chdir(buffer);
 #endif
     }
     return CommandLineTestRunner::RunAllTests(argc, argv);
