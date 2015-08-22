@@ -1,5 +1,5 @@
 CPPUTEST_FLAGS=-I../../cpputest/include ../../cpputest/lib/libCppUTest.a
-TEST_FLAGS=-DNO_ROOT_OWN_CHECK=1 -DCONFIG_FILE=\"$(PWD)/udiRoot.conf.test\"
+TEST_FLAGS=-DNO_ROOT_OWN_CHECK=1 -DCONFIG_FILE=\"$(PWD)/udiRoot.conf.test\" -ggdb
 ifeq ($(DANGEROUSTESTS), 1)
 	TEST_FLAGS+=-DDANGEROUSTESTS=1
 endif
