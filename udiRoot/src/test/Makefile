@@ -1,5 +1,8 @@
 CPPUTEST_FLAGS=-I../../cpputest/include ../../cpputest/lib/libCppUTest.a
 TEST_FLAGS=-DNO_ROOT_OWN_CHECK=1 -DCONFIG_FILE=\"$(PWD)/udiRoot.conf.test\"
+ifeq ($(DANGEROUSTESTS), 1)
+	TEST_FLAGS+=-DDANGEROUSTESTS=1
+endif
 USE_GCOV=0
 USE_VALGRIND=1
 
@@ -8,6 +11,7 @@ ifneq ($(UID),0)
 	TEST_FLAGS += -DNOTROOT
 endif
 
+all:
 test: test_utility test_VolumeMap test_UdiRootConfig test_shifter test_shifter_core
 
 define RUNTEST =
