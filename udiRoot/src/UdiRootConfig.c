@@ -216,6 +216,8 @@ static int _assign(const char *key, const char *value, void *t_config) {
     } else if (strcmp(key, "etcPath") == 0) {
         config->etcPath = strdup(value);
         if (config->etcPath == NULL) return 1;
+    } else if (strcmp(key, "allowLocalChroot") == 0) {
+        config->allowLocalChroot = atoi(value) != 0;
     } else if (strcmp(key, "kmodBasePath") == 0) {
         struct utsname uts;
         size_t kmodLength = 0;
