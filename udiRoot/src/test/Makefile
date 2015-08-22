@@ -41,7 +41,7 @@ test_ImageData: ../ImageData.c ../utility.c
 	g++ -fprofile-arcs -ftest-coverage -O0 -I.. $^ $(CPPUTEST_FLAGS) -o $@ $(TEST_FLAGS) -D_TESTHARNESS_IMAGEDATA
 	$(RUNTEST)
 
-test_shifter_core: ../shifter_core.c ../utility.c ../UdiRootConfig.c ../VolumeMap.c ../MountList.c
+test_shifter_core: ../shifter_core.c ../utility.c ../UdiRootConfig.c ../VolumeMap.c ../MountList.c ../ImageData.c
 	g++ -fprofile-arcs -ftest-coverage -O0 -I.. $^ $(CPPUTEST_FLAGS) -o $@ $(TEST_FLAGS) -D_TESTHARNESS_SHIFTERCORE
 	$(RUNTEST)
 

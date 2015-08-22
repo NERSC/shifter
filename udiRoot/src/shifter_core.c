@@ -75,7 +75,9 @@
 #define ROOTFS_TYPE "tmpfs"
 #endif
 
-
+#ifndef BINDMOUNT_OVERWRITE_UNMOUNT_RETRY
+#define BINDMOUNT_OVERWRITE_UNMOUNT_RETRY 3
+#endif
 
 static int _bindMount(MountList *mounts, const char *from, const char *to, int ro, int overwrite);
 static int _copyFile(const char *source, const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode);
@@ -681,20 +683,11 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     mntBuffer[PATH_MAX-1] = 0;
     _BINDMOUNT(&mountCache, "/tmp", mntBuffer, 0, 1);
 
-    /* mount any mount points under /dev */
-    /*
-    for (mntPtr = mountCache; *mntPtr != NULL; mntPtr++) {
-        if (strncmp(*mntPtr, "/dev/", 4) == 0) {
-            snprintf(mntBuffer, PATH_MAX, "%s/%s", udiRoot, *mntPtr);
-            mntBuffer[PATH_MAX-1] = 0;
-            _BINDMOUNT(mountCache, *mntPtr, mntBuffer, 0);
-        }
-    }
-    */
 
 #undef _MKDIR
 #undef _BINDMOUNT
 
+    free_MountList(&mountCache, 0);
     return 0;
 _prepSiteMod_unclean:
     free_MountList(&mountCache, 0);
@@ -1520,10 +1513,17 @@ static int _bindMount(MountList *mountCache, const char *from, const char *to, i
     ptr = find_MountList(mountCache, to_real);
     if (ptr != NULL) {
         if (overwriteMounts) {
-            if (unmountTree(mountCache, to_real) != 0) {
-                fprintf(stderr, "%s was already mounted, failed to unmount existing, fail.\n", to_real);
-                ret = 1;
-                goto _bindMount_exit;
+            int retry = 0;
+            for (retry = 0; retry < BINDMOUNT_OVERWRITE_UNMOUNT_RETRY; retry++) {
+                if (unmountTree(mountCache, to_real) != 0) {
+                    fprintf(stderr, "%s was already mounted, failed to unmount existing, fail.\n", to_real);
+                    ret = 1;
+                    goto _bindMount_exit;
+                }
+                if (validateUnmounted(to_real) == 0) {
+                    break;
+                }
+                usleep(300000); /* sleep for 0.3s */
             }
         } else {
             fprintf(stderr, "%s was already mounted, not allowed to unmount existingm fail.\n", to_real);
@@ -1712,6 +1712,8 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
     if (loaded) {
         return 0;
     }
+
+    /* try to load kernel module from system cache */
 
     snprintf(kmodPath, PATH_MAX, "%s%s/%s", udiConfig->nodeContextPrefix, udiConfig->kmodPath, path);
     kmodPath[PATH_MAX-1] = 0;
@@ -1916,13 +1918,23 @@ int destructUDI(UdiRootConfig *udiConfig, int killSsh) {
     loopMount[PATH_MAX-1] = 0;
     for (idx = 0; idx < 10; idx++) {
 
-        if (idx > 0) usleep(300);
-        if (killSsh == 1) killSshd();
+        if (idx > 0) {
+            usleep(300000);
+        }
+        if (killSsh == 1) {
+            killSshd();
+        }
 
         if (unmountTree(&mounts, udiRoot) != 0) {
             continue;
         }
+        if (validateUnmounted(udiRoot) != 0) {
+            continue;
+        }
         if (unmountTree(&mounts, loopMount) != 0) {
+            continue;
+        }
+        if (validateUnmounted(loopMount) != 0) {
             continue;
         }
         rc = 0; /* mark success */
@@ -2015,6 +2027,9 @@ _validateUnmounted_error:
 #else
 #define ISROOT 1
 #endif
+#ifndef DANGEROUSTESTS
+#define DANGEROUSTESTS 0
+#endif
 
 #include <vector>
 #include <string>
@@ -2071,42 +2086,41 @@ TEST_GROUP(ShifterCoreTestGroup) {
 };
 
 TEST(ShifterCoreTestGroup, CopyFile_basic) {
-    char buffer[PATH_MAX];
+    char *toFile = NULL;
     char *ptr = NULL;
     int ret = 0;
     struct stat statData;
     
-    if (getcwd(buffer, PATH_MAX) == NULL) {
-        perror("Failed to getcwd()\n");
-        FAIL("Couldn't getcwd()")
-    }
-    ptr = buffer + strlen(buffer);
-    snprintf(ptr, PATH_MAX - (ptr - buffer), "/passwd");
+    toFile = alloc_strgenf("%s/passwd", tmpDir);
 
-    ret = _copyFile(NULL, buffer, 0, INVALID_USER, INVALID_GROUP, 0644);
-    CHECK(ret != 0)
+    /* check invalid input */
+    ret = _copyFile(NULL, toFile, 0, INVALID_USER, INVALID_GROUP, 0644);
+    CHECK(ret != 0);
     ret = _copyFile("/etc/passwd", NULL, 0, INVALID_USER, INVALID_GROUP, 0644);
-    CHECK(ret != 0)
+    CHECK(ret != 0);
 
-    ret = _copyFile("/etc/passwd", buffer, 0, INVALID_USER, INVALID_GROUP, 0644);
-    CHECK(ret == 0)
+    /* should succeed */
+    ret = _copyFile("/etc/passwd", toFile, 0, INVALID_USER, INVALID_GROUP, 0644);
+    tmpFiles.push_back(toFile);
+    CHECK(ret == 0);
 
-    ret = lstat(buffer, &statData);
-    CHECK(ret == 0)
+    ret = lstat(toFile, &statData);
+    CHECK(ret == 0);
     CHECK((statData.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO)) == 0644)
 
-    ret = unlink(buffer);
-    CHECK(ret == 0)
+    ret = unlink(toFile);
+    CHECK(ret == 0);
 
-    ret = _copyFile("/etc/passwd", buffer, 0, INVALID_USER, INVALID_GROUP, 0755);
-    CHECK(ret == 0)
+    ret = _copyFile("/etc/passwd", toFile, 0, INVALID_USER, INVALID_GROUP, 0755);
+    CHECK(ret == 0);
 
-    ret = lstat(buffer, &statData);
-    CHECK(ret == 0)
+    ret = lstat(toFile, &statData);
+    CHECK(ret == 0);
     CHECK((statData.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO)) == 0755)
 
-    ret = unlink(buffer);
-    CHECK(ret == 0)
+    ret = unlink(toFile);
+    CHECK(ret == 0);
+    free(toFile);
 }
 
 #ifdef NOTROOT
@@ -2114,38 +2128,39 @@ IGNORE_TEST(ShifterCoreTestGroup, CopyFile_chown) {
 #else
 TEST(ShifterCoreTestGroup, CopyFile_chown) {
 #endif
-    char buffer[PATH_MAX];
+    char *toFile = NULL;
     char *ptr = NULL;
     int ret = 0;
     struct stat statData;
+
+    toFile = alloc_strgenf("%s/passwd", tmpDir);
+    CHECK(toFile != NULL);
     
-    getcwd(buffer, PATH_MAX);
-    ptr = buffer + strlen(buffer);
-    snprintf(ptr, PATH_MAX - (ptr - buffer), "/passwd");
+    ret = _copyFile("/etc/passwd", toFile, 0, 2, 2, 0644);
+    tmpFiles.push_back(toFile);
+    CHECK(ret == 0);
 
-    ret = _copyFile("/etc/passwd", buffer, 0, 2, 2, 0644);
-    CHECK(ret == 0)
+    ret = lstat(toFile, &statData);
+    CHECK(ret == 0);
+    CHECK((statData.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO)) == 0644);
+    CHECK(statData.st_uid == 2);
+    CHECK(statData.st_gid == 2);
 
-    ret = lstat(buffer, &statData);
-    CHECK(ret == 0)
-    CHECK((statData.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO)) == 0644)
-    CHECK(statData.st_uid == 2)
-    CHECK(statData.st_gid == 2)
+    ret = unlink(toFile);
+    CHECK(ret == 0);
 
-    ret = unlink(buffer);
-    CHECK(ret == 0)
+    ret = _copyFile("/etc/passwd", toFile, 0, 2, 2, 0755);
+    CHECK(ret == 0);
 
-    ret = _copyFile("/etc/passwd", buffer, 0, 2, 2, 0755);
-    CHECK(ret == 0)
-
-    ret = lstat(buffer, &statData);
-    CHECK(ret == 0)
+    ret = lstat(toFile, &statData);
+    CHECK(ret == 0);
     CHECK((statData.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO)) == 0755)
-    CHECK(statData.st_uid == 2)
-    CHECK(statData.st_gid == 2)
+    CHECK(statData.st_uid == 2);
+    CHECK(statData.st_gid == 2);
 
-    ret = unlink(buffer);
-    CHECK(ret == 0)
+    ret = unlink(toFile);
+    CHECK(ret == 0);
+    free(toFile);
 }
 
 #ifdef NOTROOT
@@ -2386,6 +2401,72 @@ TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
     free_UdiRootConfig(&config, 0);
     free_ImageData(&image, 0);
     free_MountList(&mounts, 0);
+}
+
+#ifdef NOTROOT
+IGNORE_TEST(ShifterCoreTestGroup, _bindMount_basic) {
+#else
+TEST(ShifterCoreTestGroup, _bindMount_basic) {
+#endif
+    MountList mounts;
+    int rc = 0;
+    struct stat statData;
+    memset(&mounts, 0, sizeof(MountList));
+    memset(&statData, 0, sizeof(struct stat));
+
+    CHECK(parse_MountList(&mounts) == 0);
+
+    rc = _bindMount(&mounts, "/", tmpDir, 0, 0);
+    CHECK(rc == 0);
+
+    char *usrPath = alloc_strgenf("%s/%s", tmpDir, "usr");
+    char *test_shifter_corePath = alloc_strgenf("%s/%s", tmpDir, "test_shifter_core");
+    CHECK(usrPath != NULL);
+    CHECK(test_shifter_corePath != NULL);
+
+    /* make sure we can see /usr in the bind-mount location */
+    CHECK(stat(usrPath, &statData) == 0);
+    CHECK(find_MountList(&mounts, tmpDir) != NULL);
+
+    /* make sure that without overwrite set the mount is unchanged */
+    CHECK(_bindMount(&mounts, cwd, tmpDir, 0, 0) != 0);
+    CHECK(stat(test_shifter_corePath, &statData) != 0);
+    CHECK(stat(usrPath, &statData) == 0);
+    CHECK(find_MountList(&mounts, tmpDir) != NULL);
+
+    /* set overwrite and make sure that works */
+    CHECK(_bindMount(&mounts, cwd, tmpDir, 0, 1) == 0);
+    CHECK(stat(test_shifter_corePath, &statData) == 0);
+    CHECK(stat(usrPath, &statData) != 0);
+    CHECK(find_MountList(&mounts, tmpDir) != NULL);
+
+    /* make sure that the directory is writable */
+    char *tmpFile = alloc_strgenf("%s/testFile.XXXXXX", tmpDir);
+    mkstemp(tmpFile);
+    CHECK(stat(tmpFile, &statData) == 0);
+    CHECK(unlink(tmpFile) == 0);
+    free(tmpFile);
+
+    /* remount with read-only set */
+    CHECK(_bindMount(&mounts, cwd, tmpDir, 1, 1) == 0);
+    tmpFile = alloc_strgenf("%s/testFile.XXXXXX", tmpDir);
+    mkstemp(tmpFile);
+    CHECK(stat(tmpFile, &statData) != 0);
+    free(tmpFile);
+
+    /* clean up */
+    CHECK(unmountTree(&mounts, tmpDir) == 0);
+    free_MountList(&mounts, 0);
+    free(usrPath);
+    free(test_shifter_corePath);
+}
+
+#if ISROOT & DANGEROUSTESTS
+TEST(ShifterCoreTestGroup, mountDangerousImage) {
+#else
+IGNORE_TEST(ShifterCoreTestGroup, mountDangerousImage) {
+#endif
+
 }
 
 int main(int argc, char** argv) {
