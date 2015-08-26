@@ -91,6 +91,6 @@ int readShifterConfigString(const char *configStr, char **user, char **imageIden
 int saveShifterConfig(const char *, ImageData *, VolumeMap *, UdiRootConfig *);
 int compareShifterConfig(const char *, ImageData*, VolumeMap *, UdiRootConfig *);
 int unmountTree(MountList *mounts, const char *base);
-int validateUnmounted(const char *path);
+int validateUnmounted(const char *path, int subtree);
 int isSharedMount(const char *);
 int writeHostFile(const char *minNodeSpec, UdiRootConfig *udiConfig);

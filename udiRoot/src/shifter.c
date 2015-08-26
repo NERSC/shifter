@@ -679,7 +679,7 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
     /* remove access to any preexisting mounts in the global namespace to this area */
     destructUDI(udiConfig, 0);
     for (retryCnt = 0; retryCnt < 10; retryCnt++) {
-        if (validateUnmounted(chrootPath) == 0) break;
+        if (validateUnmounted(chrootPath, 1) == 0) break;
         usleep(300000); /* sleep for 0.3s */
     }
     if (retryCnt == 10) {

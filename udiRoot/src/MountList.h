@@ -69,6 +69,7 @@ void setSort_MountList(MountList *, MountListSortOrder);
 int insert_MountList(MountList *mounts, const char *mountPoint);
 int remove_MountList(MountList *mounts, const char *mountPoint);
 char **find_MountList(MountList *mounts, const char *mountPoint);
+char **findstartswith_MountList(MountList *mounts, const char *mountPoint);
 void free_MountList(MountList *mounts, int freeStruct);
 
 #endif

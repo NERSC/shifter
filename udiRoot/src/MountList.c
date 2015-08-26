@@ -301,6 +301,34 @@ char **find_MountList(MountList *mounts, const char *mountPoint) {
 }
 
 /**
+ * findstartswith_MountList
+ * Return pointer to the first (lowest memory address) mount which starts with
+ * key.
+ * \param mounts pointer to the MountList structure
+ * \param key string to search for
+ *
+ * Returns lowest matching key or NULL if there are no matches
+ */
+char **findstartswith_MountList(MountList *mounts, const char *key) {
+    char **ptr = NULL;
+    size_t len = 0;
+
+    /* TODO implement modified bsearch to allow partial key matching and
+     * stably return the first matching key.
+     * For now, just do the linear search since the list of mounts should
+     * be relatively short*/
+
+    if (mounts == NULL || key == NULL) return NULL;
+    len = strlen(key);
+    if (len == 0) return NULL;
+
+    for (ptr = mounts->mountPointList; ptr && *ptr; ptr++) {
+        if (strncmp(*ptr, key, len) == 0) return ptr;
+    }
+    return NULL;
+}
+
+/**
  * free_MountList
  * Fully destruct all components of the MountList, optionally, destruct the
  * MountList itself
@@ -506,8 +534,42 @@ TEST(MountListTestGroup, findBoundary) {
     free_MountList(&m, 0);
 }
 
+TEST(MountListTestGroup, findstartswith) {
+    MountList m;
+    char **ptr = NULL;
+    memset(&m, 0, sizeof(MountList));
 
+    insert_MountList(&m, "abdec");
+    insert_MountList(&m, "abcde");
+    insert_MountList(&m, "abcd");
+    insert_MountList(&m, "abctuv");
+    insert_MountList(&m, "abbbcd");
 
+    /* should be sorted in forward direction */
+    ptr = findstartswith_MountList(&m, "abc");
+    CHECK(ptr != NULL);
+    CHECK(strcmp(*ptr, "abcd") == 0);
+
+    ptr = findstartswith_MountList(&m, "ab");
+    CHECK(ptr != NULL);
+    CHECK(strcmp(*ptr, "abbbcd") == 0);
+
+    /* reverse the sort and make sure we get the correct result */
+    setSort_MountList(&m, MOUNT_SORT_REVERSE);
+    ptr = findstartswith_MountList(&m, "ab");
+    CHECK(ptr != NULL);
+    CHECK(strcmp(*ptr, "abdec") == 0);
+
+    /* see what happens when we search for something not in the list */
+    CHECK(findstartswith_MountList(&m, "notInList") == NULL);
+
+    /* check invalid input */
+    CHECK(findstartswith_MountList(&m, "") == NULL);
+    CHECK(findstartswith_MountList(&m, NULL) == NULL);
+    CHECK(findstartswith_MountList(NULL, "key") == NULL);
+
+    free_MountList(&m, 0);
+}
 
 int main(int argc, char** argv) {
     return CommandLineTestRunner::RunAllTests(argc, argv);

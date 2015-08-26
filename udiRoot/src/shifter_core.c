@@ -839,6 +839,12 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
     BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
 
 #undef BIND_IMAGE_INTO_UDI
+
+    if (mount(NULL, udiRoot, ROOTFS_TYPE, MS_REMOUNT|MS_NOSUID|MS_NODEV|MS_RDONLY, NULL) != 0) {
+        fprintf(stderr, "FAILED to remount rootfs readonly on %s\n", udiRoot);
+        perror("   --- REASON: ");
+        goto _mountImgVfs_unclean;
+    }
     return 0;
 
 _mountImgVfs_unclean:
@@ -1520,7 +1526,7 @@ static int _bindMount(MountList *mountCache, const char *from, const char *to, i
                     ret = 1;
                     goto _bindMount_exit;
                 }
-                if (validateUnmounted(to_real) == 0) {
+                if (validateUnmounted(to_real, 0) == 0) {
                     break;
                 }
                 usleep(300000); /* sleep for 0.3s */
@@ -1909,7 +1915,7 @@ int destructUDI(UdiRootConfig *udiConfig, int killSsh) {
     size_t idx = 0;
     int rc = 1; /* assume failure */
 
-    bzero(&mounts, sizeof(MountList));
+    memset(&mounts, 0, sizeof(MountList));
     if (parse_MountList(&mounts) != 0) {
         /*error*/
     }
@@ -1929,13 +1935,13 @@ int destructUDI(UdiRootConfig *udiConfig, int killSsh) {
         if (unmountTree(&mounts, udiRoot) != 0) {
             continue;
         }
-        if (validateUnmounted(udiRoot) != 0) {
+        if (validateUnmounted(udiRoot, 1) != 0) {
             continue;
         }
         if (unmountTree(&mounts, loopMount) != 0) {
             continue;
         }
-        if (validateUnmounted(loopMount) != 0) {
+        if (validateUnmounted(loopMount, 0) != 0) {
             continue;
         }
         rc = 0; /* mark success */
@@ -2003,15 +2009,21 @@ _unmountTree_exit:
 /*! Constructs a fresh MountList and searches for the specified path; if it is
  * not found, return 0 (success), otherwise return 1 (failure), -1 for error
  */
-int validateUnmounted(const char *path) {
+int validateUnmounted(const char *path, int subtree) {
     MountList mounts;
     int rc = 0;
     memset(&mounts, 0, sizeof(MountList));
     if (parse_MountList(&mounts) != 0) {
         goto _validateUnmounted_error;
     }
-    if (find_MountList(&mounts, path) != NULL) {
-        rc = 1;
+    if (subtree) {
+        if (findstartswith_MountList(&mounts, path) != NULL) {
+            rc = 1;
+        }
+    } else {
+        if (find_MountList(&mounts, path) != NULL) {
+            rc = 1;
+        }
     }
     free_MountList(&mounts, 0);
     return rc;
@@ -2345,17 +2357,17 @@ TEST(ShifterCoreTestGroup, validateUnmounted_Basic) {
     memset(&mounts, 0, sizeof(MountList));
     CHECK(parse_MountList(&mounts) == 0);
 
-    rc = validateUnmounted(tmpDir);
+    rc = validateUnmounted(tmpDir, 0);
     CHECK(rc == 0);
 
     CHECK(_bindMount(&mounts, "/", tmpDir, 1, 0) == 0);
     
-    rc = validateUnmounted(tmpDir);
+    rc = validateUnmounted(tmpDir, 0);
     CHECK(rc == 1);
 
     CHECK(unmountTree(&mounts, tmpDir) == 0);
 
-    rc = validateUnmounted(tmpDir);
+    rc = validateUnmounted(tmpDir, 0);
     CHECK(rc == 0);
 
     free_MountList(&mounts, 0);
@@ -2497,12 +2509,12 @@ IGNORE_TEST(ShifterCoreTestGroup, destructUDI_test) {
     CHECK(find_MountList(&mounts, tmpDir) != NULL);
     
     free_MountList(&mounts, 0);
+    memset(&mounts, 0, sizeof(MountList));
+
     CHECK(destructUDI(config, 0) == 0);
-    /*
-    CHECK(parse_MountList(mounts) == 0);
-    CHECK(find_MountList(mounts, tmpDir) == NULL);
-    free_MountList(mounts, 1);
-    */
+    CHECK(parse_MountList(&mounts) == 0);
+    CHECK(find_MountList(&mounts, tmpDir) == NULL);
+    free_MountList(&mounts, 0);
 
     /* i haven't found a way to reliably make destructUDI fail, so for now
      * that case will not be tested
