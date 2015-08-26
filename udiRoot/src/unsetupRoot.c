@@ -54,8 +54,6 @@
 
 #include "config.h"
 
-static void _usage(int);
-
 int main(void) {
     UdiRootConfig udiConfig;
 
@@ -72,8 +70,4 @@ int main(void) {
     destructUDI(&udiConfig, 1);
 
     return 0;
-}
-
-static void _usage(int exitStatus) {
-    exit(exitStatus);
 }
