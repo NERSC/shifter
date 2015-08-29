@@ -1667,29 +1667,22 @@ int isSharedMount(const char *mountPoint) {
     return rc;
 }
 
-/*! Loads a kernel module if required */
-/*!
- * Checks to see if the specified kernel module is already loaded, if so, does
- * nothing.  Otherwise, will try to load the module using modprobe (i.e., from 
- * the system /lib paths.  Finally, will attempt to load the from the shifter-
- * specific store installed with Shifter
+/*! Check if a kernel module is loaded 
  *
  * \param name name of kernel module
- * \param path path to kernel module within shifter structure
- * \param udiConfig UDI configuration structure
+ *
+ * Returns 1 if loaded
+ * Returns 0 if not
+ * Returns -1 upon error
  */
-int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig) {
-    char kmodPath[PATH_MAX];
+int isKernelModuleLoaded(const char *name) {
     FILE *fp = NULL;
     char *lineBuffer = NULL;
     size_t lineSize = 0;
     ssize_t nread = 0;
-    struct stat statData;
     int loaded = 0;
-    int ret = 0;
-
-    if (name == NULL || strlen(name) == 0 || path == NULL || strlen(path) == 0 || udiConfig == NULL) {
-        return 1;
+    if (name == NULL || strlen(name) == 0) {
+        return -1;
     }
 
     fp = fopen("/proc/modules", "r");
@@ -1714,13 +1707,57 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
         free(lineBuffer);
         lineBuffer = NULL;
     }
+    return loaded;
+}
 
-    if (loaded) {
-        return 0;
+/*! Loads a kernel module if required */
+/*!
+ * Checks to see if the specified kernel module is already loaded, if so, does
+ * nothing.  Otherwise, will try to load the module using modprobe (i.e., from 
+ * the system /lib paths.  Finally, will attempt to load the from the shifter-
+ * specific store installed with Shifter
+ *
+ * \param name name of kernel module
+ * \param path path to kernel module within shifter structure
+ * \param udiConfig UDI configuration structure
+ */
+int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig) {
+    char kmodPath[PATH_MAX];
+    struct stat statData;
+    int ret = 0;
+
+    if (name == NULL || strlen(name) == 0 || path == NULL || strlen(path) == 0 || udiConfig == NULL) {
+        return -1;
     }
 
-    /* try to load kernel module from system cache */
+    if (isKernelModuleLoaded(name)) {
+        return 0;
+    } else if (udiConfig->autoLoadKernelModule) {
+        /* try to load kernel module from system cache */
+        char *args[] = {
+            strdup("modprobe"),
+            strdup(name),
+            NULL
+        };
+        char **argPtr = NULL;
+        ret = forkAndExecvp(args);
+        for (argPtr = args; argPtr && *argPtr; argPtr++) {
+            free(*argPtr);
+        }
+        if (isKernelModuleLoaded(name)) {
+            return 0;
+        }
+    }
 
+    if (udiConfig->nodeContextPrefix == NULL
+            || udiConfig->kmodPath == NULL
+            || strlen(udiConfig->kmodPath) == 0
+            || !udiConfig->autoLoadKernelModule)
+    {
+        return -1;
+    }
+
+    /* construct path to kernel modulefile */
     snprintf(kmodPath, PATH_MAX, "%s%s/%s", udiConfig->nodeContextPrefix, udiConfig->kmodPath, path);
     kmodPath[PATH_MAX-1] = 0;
 
@@ -1739,18 +1776,16 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
         }
 
         if (ret != 0) {
-            fprintf(stderr, "FAILED to load kernel module %s (%s)\n", name, kmodPath);
+            fprintf(stderr, "FAILED to load kernel module %s (%s); insmod exit status: %d\n", name, kmodPath, ret);
             goto _loadKrnlMod_unclean;
         }
     } else {
         fprintf(stderr, "FAILED to find kernel modules %s (%s)\n", name, kmodPath);
         goto _loadKrnlMod_unclean;
     }
-    return ret;
+    if (isKernelModuleLoaded(name)) return 0;
+    return 1;
 _loadKrnlMod_unclean:
-    if (lineBuffer != NULL) {
-        free(lineBuffer);
-    }
     return ret;
 }
 

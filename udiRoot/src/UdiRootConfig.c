@@ -166,6 +166,8 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->optUdiImage != NULL ? config->optUdiImage : ""));
     written += fprintf(fp, "etcPath = %s\n", 
         (config->etcPath != NULL ? config->etcPath : ""));
+    written += fprintf(fp, "autoLoadKernelModule = %d\n",
+        config->autoLoadKernelModule);
     written += fprintf(fp, "kmodBasePath = %s\n", 
         (config->kmodBasePath != NULL ? config->kmodBasePath : ""));
     written += fprintf(fp, "kmodPath = %s\n", 
@@ -187,6 +189,25 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
 }
 
 int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
+    if (config == NULL) return -1;
+
+#define VAL_ERROR(message, code) fprintf(stderr, "%s\n", message); \
+    return code;
+
+    if (validateFlags & UDIROOT_VAL_PARSE) {
+        if (config->nodeContextPrefix == NULL)
+            VAL_ERROR("nodeContextPrefix is not defined", UDIROOT_VAL_PARSE);
+        if (config->udiMountPoint == NULL || strlen(config->udiMountPoint) == 0)
+            VAL_ERROR("Base mount point \"udiMount\" is not defined", UDIROOT_VAL_PARSE);
+        if (config->loopMountPoint == NULL || strlen(config->loopMountPoint) == 0)
+            VAL_ERROR("Loop mount mount \"loopMount\" is not defined", UDIROOT_VAL_PARSE);
+        if (config->imageBasePath == NULL || strlen(config->imageBasePath) == 0)
+            VAL_ERROR("\"imagePath\" is not defined", UDIROOT_VAL_PARSE);
+        if (config->udiRootPath == NULL || strlen(config->udiRootPath) == 0)
+            VAL_ERROR("\"udiRootPath\" is not defined", UDIROOT_VAL_PARSE);
+        if (config->etcPath == NULL || strlen(config->etcPath) == 0)
+            VAL_ERROR("\"etcPath\" is not defined", UDIROOT_VAL_PARSE);
+    }
     return 0;
 }
 
@@ -218,9 +239,10 @@ static int _assign(const char *key, const char *value, void *t_config) {
         if (config->etcPath == NULL) return 1;
     } else if (strcmp(key, "allowLocalChroot") == 0) {
         config->allowLocalChroot = atoi(value) != 0;
+    } else if (strcmp(key, "autoLoadKernelModule") == 0) {
+        config->autoLoadKernelModule = atoi(value);
     } else if (strcmp(key, "kmodBasePath") == 0) {
         struct utsname uts;
-        size_t kmodLength = 0;
         memset(&uts, 0, sizeof(struct utsname));
         if (uname(&uts) != 0) {
             fprintf(stderr, "FAILED to get uname data!\n");
@@ -228,11 +250,7 @@ static int _assign(const char *key, const char *value, void *t_config) {
         }
         config->kmodBasePath = strdup(value);
         if (config->kmodBasePath == NULL) return 1;
-        kmodLength = strlen(config->kmodBasePath);
-        kmodLength += strlen(uts.release);
-        kmodLength += 2;
-        config->kmodPath = (char *) malloc(sizeof(char) * kmodLength);
-        snprintf(config->kmodPath, kmodLength, "%s/%s", config->kmodBasePath, uts.release);
+        config->kmodPath = alloc_strgenf("%s/%s", config->kmodBasePath, uts.release);
     } else if (strcmp(key, "kmodCacheFile") == 0) {
         config->kmodCacheFile = strdup(value);
         if (config->kmodCacheFile == NULL) return 1;

@@ -72,6 +72,7 @@
 
 int setupUserMounts(ImageData *imageData, VolumeMap *map, UdiRootConfig *udiConfig);
 int userMountFilter(char *udiRoot, char *filtered_from, char *filtered_to, char *flags);
+int isKernelModuleLoaded(const char *name);
 int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig);
 int mountImageVFS(ImageData *imageData, const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig);
 int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig);

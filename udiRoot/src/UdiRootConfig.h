@@ -82,6 +82,7 @@ typedef struct _UdiRootConfig {
     char **gwPort;
     char **siteFs;
     int allowLocalChroot;
+    int autoLoadKernelModule;
 
     size_t siteFs_capacity;
     size_t gwName_capacity;

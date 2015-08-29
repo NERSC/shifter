@@ -135,7 +135,7 @@ int main(int argc, char **argv) {
     /* destroy this environment */
     clearenv();
 
-    if (parse_UdiRootConfig(CONFIG_FILE, &udiConfig, 0) != 0) {
+    if (parse_UdiRootConfig(CONFIG_FILE, &udiConfig, UDIROOT_VAL_ALL) != 0) {
         fprintf(stderr, "FAILED to parse udiRoot configuration.\n");
         exit(1);
     }

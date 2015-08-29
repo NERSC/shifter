@@ -62,7 +62,7 @@ int main(void) {
     clearenv();
     setenv("PATH", "/usr/bin:/usr/sbin:/bin:/sbin", 1);
 
-    if (parse_UdiRootConfig(UDIROOT_CONFIG_FILE, &udiConfig, 0) != 0) {
+    if (parse_UdiRootConfig(UDIROOT_CONFIG_FILE, &udiConfig, UDIROOT_VAL_ALL) != 0) {
         fprintf(stderr, "FAILED to parse udiRoot configuration. Exiting.\n");
         exit(1);
     }
