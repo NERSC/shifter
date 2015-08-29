@@ -844,15 +844,30 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
 
 #undef BIND_IMAGE_INTO_UDI
 
-    if (mount(NULL, udiRoot, ROOTFS_TYPE, MS_REMOUNT|MS_NOSUID|MS_NODEV|MS_RDONLY, NULL) != 0) {
-        fprintf(stderr, "FAILED to remount rootfs readonly on %s\n", udiRoot);
-        perror("   --- REASON: ");
-        goto _mountImgVfs_unclean;
-    }
     return 0;
 
 _mountImgVfs_unclean:
     /* do needed unmounts */
+    return 1;
+}
+
+int remountUdiRootReadonly(UdiRootConfig *udiConfig) {
+    char udiRoot[PATH_MAX];
+
+    if (udiConfig == NULL || udiConfig->nodeContextPrefix == NULL ||
+            udiConfig->udiMountPoint == NULL) {
+        return 1;
+    }
+    snprintf(udiRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+
+    if (mount(udiRoot, udiRoot, ROOTFS_TYPE, MS_REMOUNT|MS_NOSUID|MS_NODEV|MS_RDONLY, NULL) != 0) {
+        fprintf(stderr, "FAILED to remount rootfs readonly on %s\n", udiRoot);
+        perror("   --- REASON: ");
+        goto _remountUdiRootReadonly_unclean;
+    }
+    return 0;
+
+_remountUdiRootReadonly_unclean:
     return 1;
 }
 
