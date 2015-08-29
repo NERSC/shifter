@@ -79,6 +79,10 @@
 #define BINDMOUNT_OVERWRITE_UNMOUNT_RETRY 3
 #endif
 
+#ifndef UMOUNT_NOFOLLOW
+#define UMOUNT_NOFOLLOW 0x00000008 /* do not follow symlinks when unmounting */
+#endif
+
 static int _bindMount(MountList *mounts, const char *from, const char *to, int ro, int overwrite);
 static int _copyFile(const char *source, const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode);
 

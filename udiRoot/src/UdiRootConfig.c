@@ -72,7 +72,8 @@ int parse_UdiRootConfig(const char *configFile, UdiRootConfig *config, int valid
         return UDIROOT_VAL_PARSE;
     }
 
-    return validate_UdiRootConfig(config, validateFlags);
+    ret = validate_UdiRootConfig(config, validateFlags);
+    return ret;
 }
 
 void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
@@ -191,22 +192,30 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
 int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
     if (config == NULL) return -1;
 
-#define VAL_ERROR(message, code) fprintf(stderr, "%s\n", message); \
-    return code;
+#define VAL_ERROR(message, code) { \
+    fprintf(stderr, "%s\n", message); \
+    return code; \
+}
 
     if (validateFlags & UDIROOT_VAL_PARSE) {
-        if (config->nodeContextPrefix == NULL)
+        if (config->nodeContextPrefix == NULL) {
             VAL_ERROR("nodeContextPrefix is not defined", UDIROOT_VAL_PARSE);
-        if (config->udiMountPoint == NULL || strlen(config->udiMountPoint) == 0)
+        }
+        if (config->udiMountPoint == NULL || strlen(config->udiMountPoint) == 0) {
             VAL_ERROR("Base mount point \"udiMount\" is not defined", UDIROOT_VAL_PARSE);
-        if (config->loopMountPoint == NULL || strlen(config->loopMountPoint) == 0)
+        }
+        if (config->loopMountPoint == NULL || strlen(config->loopMountPoint) == 0) {
             VAL_ERROR("Loop mount mount \"loopMount\" is not defined", UDIROOT_VAL_PARSE);
-        if (config->imageBasePath == NULL || strlen(config->imageBasePath) == 0)
+        }
+        if (config->imageBasePath == NULL || strlen(config->imageBasePath) == 0) {
             VAL_ERROR("\"imagePath\" is not defined", UDIROOT_VAL_PARSE);
-        if (config->udiRootPath == NULL || strlen(config->udiRootPath) == 0)
+        }
+        if (config->udiRootPath == NULL || strlen(config->udiRootPath) == 0) {
             VAL_ERROR("\"udiRootPath\" is not defined", UDIROOT_VAL_PARSE);
-        if (config->etcPath == NULL || strlen(config->etcPath) == 0)
+        }
+        if (config->etcPath == NULL || strlen(config->etcPath) == 0) {
             VAL_ERROR("\"etcPath\" is not defined", UDIROOT_VAL_PARSE);
+        }
     }
     return 0;
 }
