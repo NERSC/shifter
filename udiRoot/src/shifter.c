@@ -486,20 +486,17 @@ int parse_environment(struct options *opts) {
     if ((envPtr = getenv("SHIFTER")) != NULL) {
         char *ptr = NULL;
         opts->request = strdup(envPtr);
-        ptr = strchr(opts->request, ':');
-        if (ptr != NULL) {
-            *ptr = 0;
-            if (strcmp(ptr, opts->imageType) == 0) {
-                ptr++;
-                if (opts->imageTag != NULL) {
-                    free(opts->imageTag);
-                    opts->imageTag = NULL;
-                }
+        /* if the the imageType and Tag weren't specified earlier, parse from here */
+        if (opts->imageType == NULL && opts->imageTag == NULL) {
+            ptr = strchr(opts->request, ':');
+            if (ptr != NULL) {
+                *ptr++ = 0;
+                opts->imageType = strdup(opts->request); /* temporarily truncated at former ';' */
                 opts->imageTag = strdup(ptr);
+                /* put things back the way they were */
+                ptr--;
+                *ptr = ':';
             }
-            /* put things back the way they were */
-            ptr--;
-            *ptr = ':';
         }
     }
     if ((envPtr = getenv("SHIFTER_VOLUME")) != NULL) {
