@@ -481,6 +481,7 @@ int parse_environment(struct options *opts) {
     }
     if ((envPtr = getenv("SHIFTER_IMAGE")) != NULL) {
         opts->imageIdentifier = strdup(envPtr);
+        opts->imageTag = strdup(envPtr);
     }
     if ((envPtr = getenv("SHIFTER")) != NULL) {
         char *ptr = NULL;
@@ -490,6 +491,10 @@ int parse_environment(struct options *opts) {
             *ptr = 0;
             if (strcmp(ptr, opts->imageType) == 0) {
                 ptr++;
+                if (opts->imageTag != NULL) {
+                    free(opts->imageTag);
+                    opts->imageTag = NULL;
+                }
                 opts->imageTag = strdup(ptr);
             }
             /* put things back the way they were */
