@@ -249,7 +249,7 @@ int main(int argc, char **argv) {
         local_putenv(&environ_copy, *envPtr);
     }
 
-    execve(opts.args[0], opts.args, environ_copy);
+    execvpe(opts.args[0], opts.args, environ_copy);
     return 127;
 }
 #endif
