@@ -10,7 +10,7 @@ include ../../config.mk
 
 ## configuration
 CFLAGS=-O2 -Wall -I$(SLURM_ROOT)/include -I../../src
-LDFLAGS=-L$(SLURM_ROOT)/lib -lslurm -Wl,-rpath=$(SLURM_ROOT)/lib
+LDFLAGS=-L$(SLURM_ROOT)/lib64 -lslurm -Wl,-rpath=$(SLURM_ROOT)/lib64
 
 ALL=shifter.so
 ifeq ($(IS_NATIVE_SLURM),1)

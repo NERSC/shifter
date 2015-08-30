@@ -184,7 +184,7 @@ UdiRootConfig *read_config(int argc, char **argv) {
     }
     memset(udiConfig, 0, sizeof(UdiRootConfig));
 
-    if (parse_UdiRootConfig(config_filename, udiConfig, 0) != 0) {
+    if (parse_UdiRootConfig(config_filename, udiConfig, UDIROOT_VAL_ALL) != 0) {
         fprintf(stderr, "FAILED to read udiRoot configuration file!\n");
         free(udiConfig);
         return NULL;
@@ -604,7 +604,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     }
     
 _prolog_exit_unclean:
-    if (udiConfig != NULL) free_UdiRootConfig(udiConfig);
+    if (udiConfig != NULL) free_UdiRootConfig(udiConfig, 1);
     if (setupRootArgs != NULL) {
         char **ptr = setupRootArgs;
         while (*ptr != NULL) free(*ptr++);
@@ -682,7 +682,7 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     
 _epilog_exit_unclean:
     if (udiConfig != NULL)
-        free_UdiRootConfig(udiConfig);
+        free_UdiRootConfig(udiConfig, 1);
     return rc;
 }
 
@@ -730,6 +730,6 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     }
 _taskInitPriv_exit_unclean:
     if (udiConfig != NULL)
-        free_UdiRootConfig(udiConfig);
+        free_UdiRootConfig(udiConfig, 1);
     return rc;
 }
