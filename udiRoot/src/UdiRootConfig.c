@@ -81,45 +81,84 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
 
     if (config->nodeContextPrefix != NULL) {
         free(config->nodeContextPrefix);
+        config->nodeContextPrefix = NULL;
     }
     if (config->udiMountPoint != NULL) {
         free(config->udiMountPoint);
+        config->udiMountPoint = NULL;
     }
     if (config->loopMountPoint != NULL) {
         free(config->loopMountPoint);
+        config->loopMountPoint = NULL;
     }
     if (config->batchType != NULL) {
         free(config->batchType);
+        config->batchType = NULL;
     }
     if (config->system != NULL) {
         free(config->system);
+        config->system = NULL;
     }
     if (config->imageBasePath != NULL) {
         free(config->imageBasePath);
+        config->imageBasePath = NULL;
     }
     if (config->udiRootPath != NULL) {
         free(config->udiRootPath);
+        config->udiRootPath = NULL;
     }
     if (config->sitePreMountHook != NULL) {
         free(config->sitePreMountHook);
+        config->sitePreMountHook = NULL;
     }
     if (config->sitePostMountHook != NULL) {
         free(config->sitePostMountHook);
+        config->sitePostMountHook = NULL;
     }
     if (config->optUdiImage != NULL) {
         free(config->optUdiImage);
+        config->optUdiImage = NULL;
     }
     if (config->etcPath != NULL) {
         free(config->etcPath);
+        config->etcPath = NULL;
     }
     if (config->kmodBasePath != NULL) {
         free(config->kmodBasePath);
+        config->kmodBasePath = NULL;
     }
     if (config->kmodPath != NULL) {
         free(config->kmodPath);
+        config->kmodPath = NULL;
     }
     if (config->kmodCacheFile != NULL) {
         free(config->kmodCacheFile);
+        config->kmodCacheFile = NULL;
+    }
+    if (config->modprobePath != NULL) {
+        free(config->modprobePath);
+        config->modprobePath = NULL;
+    }
+    if (config->insmodPath != NULL) {
+        free(config->insmodPath);
+        config->insmodPath = NULL;
+    }
+    if (config->cpPath != NULL) {
+        free(config->cpPath);
+        config->cpPath = NULL;
+    }
+    if (config->mvPath != NULL) {
+        free(config->mvPath);
+        config->mvPath = NULL;
+    }
+    if (config->chmodPath != NULL) {
+        free(config->chmodPath);
+        config->chmodPath = NULL;
+        config->chmodPath = NULL;
+    }
+    if (config->rootfsType != NULL) {
+        free(config->rootfsType);
+        config->rootfsType = NULL;
     }
 
     char **arrays[] = {config->gwName, config->gwPort, config->siteFs, NULL};
@@ -167,6 +206,8 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->optUdiImage != NULL ? config->optUdiImage : ""));
     written += fprintf(fp, "etcPath = %s\n", 
         (config->etcPath != NULL ? config->etcPath : ""));
+    written += fprintf(fp, "allowLocalChroot = %d\n",
+            config->allowLocalChroot);
     written += fprintf(fp, "autoLoadKernelModule = %d\n",
         config->autoLoadKernelModule);
     written += fprintf(fp, "kmodBasePath = %s\n", 
@@ -175,6 +216,18 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->kmodPath != NULL ? config->kmodPath : ""));
     written += fprintf(fp, "kmodCacheFile = %s\n", 
         (config->kmodCacheFile != NULL ? config->kmodCacheFile : ""));
+    written += fprintf(fp, "rootfsType = %s\n",
+        (config->rootfsType != NULL ? config->rootfsType : ""));
+    written += fprintf(fp, "modprobePath = %s\n",
+        (config->modprobePath != NULL ? config->modprobePath : ""));
+    written += fprintf(fp, "insmodPath = %s\n",
+        (config->insmodPath != NULL ? config->insmodPath : ""));
+    written += fprintf(fp, "cpPath = %s\n",
+        (config->cpPath != NULL ? config->cpPath : ""));
+    written += fprintf(fp, "mvPath = %s\n",
+        (config->mvPath != NULL ? config->mvPath : ""));
+    written += fprintf(fp, "chmodPath = %s\n",
+        (config->chmodPath != NULL ? config->chmodPath : ""));
     written += fprintf(fp, "Image Gateway Servers = %lu servers\n", config->gateway_size);
     for (idx = 0; idx < config->gateway_size; idx++) {
         char *gwName = config->gwName[idx];
@@ -216,6 +269,52 @@ int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
         if (config->etcPath == NULL || strlen(config->etcPath) == 0) {
             VAL_ERROR("\"etcPath\" is not defined", UDIROOT_VAL_PARSE);
         }
+        if (config->modprobePath == NULL || strlen(config->modprobePath) == 0) {
+            VAL_ERROR("\"modprobePath\" is not defined", UDIROOT_VAL_PARSE);
+        }
+        if (config->insmodPath == NULL || strlen(config->insmodPath) == 0) {
+            VAL_ERROR("\"insmodPath\" is not defined", UDIROOT_VAL_PARSE);
+        }
+        if (config->cpPath == NULL || strlen(config->cpPath) == 0) {
+            VAL_ERROR("\"cpPath\" is not defined", UDIROOT_VAL_PARSE);
+        }
+        if (config->mvPath == NULL || strlen(config->mvPath) == 0) {
+            VAL_ERROR("\"mvPath\" is not defined", UDIROOT_VAL_PARSE);
+        }
+        if (config->chmodPath == NULL || strlen(config->chmodPath) == 0) {
+            VAL_ERROR("\"chmodPath\" is not defined", UDIROOT_VAL_PARSE);
+        }
+        if (config->rootfsType == NULL || strlen(config->rootfsType) == 0) {
+            VAL_ERROR("\"rootfsType\" is not defined", UDIROOT_VAL_PARSE);
+        }
+    }
+    if (validateFlags & UDIROOT_VAL_FILEVAL) {
+        struct stat statData;
+        if (stat(config->modprobePath, &statData) != 0) {
+            VAL_ERROR("Specified \"modprobePath\" doesn't appear to exist.", UDIROOT_VAL_FILEVAL);
+        } else if (!(statData.st_mode & S_IXUSR)) {
+            VAL_ERROR("Specified \"modprobePath\" is not executable.", UDIROOT_VAL_FILEVAL);
+        }
+        if (stat(config->insmodPath, &statData) != 0) {
+            VAL_ERROR("Specified \"insmodPath\" doesn't appear to exist.", UDIROOT_VAL_FILEVAL);
+        } else if (!(statData.st_mode & S_IXUSR)) {
+            VAL_ERROR("Specified \"insmodPath\" is not executable.", UDIROOT_VAL_FILEVAL);
+        }
+        if (stat(config->cpPath, &statData) != 0) {
+            VAL_ERROR("Specified \"cpPath\" doesn't appear to exist.", UDIROOT_VAL_FILEVAL);
+        } else if (!(statData.st_mode & S_IXUSR)) {
+            VAL_ERROR("Specified \"cpPath\" is not executable.", UDIROOT_VAL_FILEVAL);
+        }
+        if (stat(config->mvPath, &statData) != 0) {
+            VAL_ERROR("Specified \"mvPath\" doesn't appear to exist.", UDIROOT_VAL_FILEVAL);
+        } else if (!(statData.st_mode & S_IXUSR)) {
+            VAL_ERROR("Specified \"mvPath\" is not executable.", UDIROOT_VAL_FILEVAL);
+        }
+        if (stat(config->chmodPath, &statData) != 0) {
+            VAL_ERROR("Specified \"chmodPath\" doesn't appear to exist.", UDIROOT_VAL_FILEVAL);
+        } else if (!(statData.st_mode & S_IXUSR)) {
+            VAL_ERROR("Specified \"chmodPath\" is not executable.", UDIROOT_VAL_FILEVAL);
+        }
     }
     return 0;
 }
@@ -250,6 +349,18 @@ static int _assign(const char *key, const char *value, void *t_config) {
         config->allowLocalChroot = atoi(value) != 0;
     } else if (strcmp(key, "autoLoadKernelModule") == 0) {
         config->autoLoadKernelModule = atoi(value);
+    } else if (strcmp(key, "modprobePath") == 0) {
+        config->modprobePath = strdup(value);
+    } else if (strcmp(key, "insmodPath") == 0) {
+        config->insmodPath = strdup(value);
+    } else if (strcmp(key, "cpPath") == 0) {
+        config->cpPath = strdup(value);
+    } else if (strcmp(key, "mvPath") == 0) {
+        config->mvPath = strdup(value);
+    } else if (strcmp(key, "chmodPath") == 0) {
+        config->chmodPath = strdup(value);
+    } else if (strcmp(key, "rootfsType") == 0) {
+        config->rootfsType = strdup(value);
     } else if (strcmp(key, "kmodBasePath") == 0) {
         struct utsname uts;
         memset(&uts, 0, sizeof(struct utsname));

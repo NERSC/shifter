@@ -83,7 +83,6 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
 int startSshd(UdiRootConfig *udiConfig);
 int filterEtcGroup(const char *dest, const char *from, const char *username);
 int remountUdiRootReadonly(UdiRootConfig *udiConfig);
-int forkAndExecvp(char *const *args);
 int forkAndExecv(char *const *argvs);
 int killSshd(void);
 char **parseMounts(size_t *n_mounts);

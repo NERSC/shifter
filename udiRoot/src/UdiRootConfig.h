@@ -52,6 +52,7 @@
 #define UDIROOT_VAL_PARSE   0x02
 #define UDIROOT_VAL_SSH     0x04 
 #define UDIROOT_VAL_KMOD    0x08
+#define UDIROOT_VAL_FILEVAL 0x10
 #define UDIROOT_VAL_ALL 0xffffffff
 
 #ifndef IMAGEGW_PORT_DEFAULT
@@ -78,11 +79,18 @@ typedef struct _UdiRootConfig {
     char *kmodBasePath;
     char *kmodPath;
     char *kmodCacheFile;
+    char *rootfsType;
     char **gwName;
     char **gwPort;
     char **siteFs;
     int allowLocalChroot;
     int autoLoadKernelModule;
+
+    char *modprobePath;
+    char *insmodPath;
+    char *cpPath;
+    char *mvPath;
+    char *chmodPath;
 
     size_t siteFs_capacity;
     size_t gwName_capacity;

@@ -84,7 +84,7 @@
 #endif
 
 static int _bindMount(MountList *mounts, const char *from, const char *to, int ro, int overwrite);
-static int _copyFile(const char *source, const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode);
+static int _copyFile(const char *cpPath, const char *source, const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode);
 
 /*! Bind subtree of static image into UDI rootfs */
 /*!
@@ -196,11 +196,11 @@ int bindImageIntoUDI(
 
         /* if target is a symlink, copy it */
         if (S_ISLNK(statData.st_mode)) {
-            char *args[] = { strdup("cp"), strdup("-P"), 
+            char *args[] = { strdup(udiConfig->cpPath), strdup("-P"), 
                 strdup(srcBuffer), strdup(mntBuffer), NULL
             };
             char **argsPtr = NULL;
-            int ret = forkAndExecvp(args);
+            int ret = forkAndExecv(args);
             for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
                 free(*argsPtr);
             }
@@ -214,11 +214,11 @@ int bindImageIntoUDI(
         }
         if (S_ISREG(statData.st_mode)) {
             if (statData.st_size < FILE_SIZE_LIMIT) {
-                char *args[] = { strdup("cp"), strdup("-p"),
+                char *args[] = { strdup(udiConfig->cpPath), strdup("-p"),
                     strdup(srcBuffer), strdup(mntBuffer), NULL
                 };
                 char **argsPtr = NULL;
-                int ret = forkAndExecvp(args);
+                int ret = forkAndExecv(args);
                 for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
                     free(*argsPtr);
                 }
@@ -241,11 +241,11 @@ int bindImageIntoUDI(
                 MKDIR(mntBuffer, 0755);
                 BINDMOUNT(&mountCache, srcBuffer, mntBuffer, 0, 1);
             } else {
-                char *args[] = { strdup("cp"), strdup("-rp"),
+                char *args[] = { strdup(udiConfig->cpPath), strdup("-rp"),
                     strdup(srcBuffer), strdup(mntBuffer), NULL
                 };
                 char **argsPtr = NULL;
-                int ret = forkAndExecvp(args);
+                int ret = forkAndExecv(args);
                 for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
                     free(*argsPtr);
                 }
@@ -281,6 +281,7 @@ _bindImgUDI_unclean:
 /*! Copy a file or link as correctly as possible */
 /*!
  * Copy file (or symlink) from source to dest.
+ * \param cpPath path to cp exectutable
  * \param source Filename to copy, must be an existing regular file or an
  *             existing symlink
  * \param dest Destination of copy, must be an existing directory name or a
@@ -293,7 +294,7 @@ _bindImgUDI_unclean:
  *
  * In all cases stick/setuid bits will be removed.
  */
-int _copyFile(const char *source, const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode) {
+int _copyFile(const char *cpPath, const char *source, const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode) {
     struct stat destStat;
     struct stat sourceStat;
     char *cmdArgs[5] = { NULL, NULL, NULL, NULL, NULL };
@@ -302,7 +303,7 @@ int _copyFile(const char *source, const char *dest, int keepLink, uid_t owner, g
     int isLink = 0;
     mode_t tgtMode = mode;
 
-    if (dest == NULL || source == NULL || strlen(dest) == 0 || strlen(source) == 0) {
+    if (cpPath == NULL || dest == NULL || source == NULL || strlen(dest) == 0 || strlen(source) == 0) {
         fprintf(stderr, "Invalid arguments for _copyFile\n");
         goto _copyFile_unclean;
     }
@@ -325,7 +326,7 @@ int _copyFile(const char *source, const char *dest, int keepLink, uid_t owner, g
         }
     }
 
-    cmdArgs[cmdArgs_idx++] = strdup("cp");
+    cmdArgs[cmdArgs_idx++] = strdup(cpPath);
     if (isLink == 1 && keepLink == 1) {
         cmdArgs[cmdArgs_idx++] = strdup("-P");
     }
@@ -333,7 +334,7 @@ int _copyFile(const char *source, const char *dest, int keepLink, uid_t owner, g
     cmdArgs[cmdArgs_idx++] = strdup(dest);
     cmdArgs[cmdArgs_idx++] = NULL;
 
-    if (forkAndExecvp(cmdArgs) != 0) {
+    if (forkAndExecv(cmdArgs) != 0) {
         fprintf(stderr, "Failed to copy %s to %s\n", source, dest);
         goto _copyFile_unclean;
     }
@@ -445,7 +446,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
             strdup("/bin/sh"), strdup(udiConfig->sitePreMountHook), NULL
         };
         char **argsPtr = NULL;
-        int ret = forkAndExecvp(args);
+        int ret = forkAndExecv(args);
         for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
             free(*argsPtr);
         }
@@ -471,7 +472,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
             strdup("/bin/sh"), strdup(udiConfig->sitePostMountHook), NULL
         };
         char **argsPtr = NULL;
-        int ret = forkAndExecvp(args);
+        int ret = forkAndExecv(args);
         for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
             free(*argsPtr);
         }
@@ -495,7 +496,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
         snprintf(dest, PATH_MAX, "%s/etc/%s", udiRoot, *fnamePtr);
         source[PATH_MAX - 1] = 0;
         dest[PATH_MAX - 1] = 0;
-        if (_copyFile(source, dest, 1, 0, 0, 0644) != 0) {
+        if (_copyFile(udiConfig->cpPath, source, dest, 1, 0, 0, 0644) != 0) {
             fprintf(stderr, "Failed to copy %s to %s\n", source, dest);
             goto _prepSiteMod_unclean;
         }
@@ -548,9 +549,9 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
                 fprintf(stderr, "Couldn't copy %s because file already exists.\n", mntBuffer);
                 goto _prepSiteMod_unclean;
             } else {
-                char *args[] = { strdup("cp"), strdup("-p"), strdup(srcBuffer), strdup(mntBuffer), NULL };
+                char *args[] = { strdup(udiConfig->cpPath), strdup("-p"), strdup(srcBuffer), strdup(mntBuffer), NULL };
                 char **argsPtr = NULL;
-                int ret = forkAndExecvp(args);
+                int ret = forkAndExecv(args);
                 for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
                     free(*argsPtr);
                 }
@@ -595,11 +596,11 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
         snprintf(toGroupFile, PATH_MAX, "%s/etc/group.orig", udiRoot);
         fromGroupFile[PATH_MAX - 1] = 0;
         toGroupFile[PATH_MAX - 1] = 0;
-        mvArgs[0] = strdup("mv");
+        mvArgs[0] = strdup(udiConfig->mvPath);
         mvArgs[1] = strdup(fromGroupFile);
         mvArgs[2] = strdup(toGroupFile);
         mvArgs[3] = NULL;
-        ret = forkAndExecvp(mvArgs);
+        ret = forkAndExecv(mvArgs);
         for (argsPtr = mvArgs; *argsPtr != NULL; argsPtr++) {
             free(*argsPtr);
         }
@@ -629,16 +630,16 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
             fprintf(stderr, "FAILED to stat udiImage target directory: %s\n", mntBuffer);
             goto _prepSiteMod_unclean;
         } else {
-            char *args[] = {strdup("cp"), strdup("-rp"),
+            char *args[] = {strdup(udiConfig->cpPath), strdup("-rp"),
                 strdup(srcBuffer), strdup(mntBuffer), NULL
             };
-            char *chmodArgs[] = {strdup("chmod"), strdup("-R"),
+            char *chmodArgs[] = {strdup(udiConfig->chmodPath), strdup("-R"),
                 strdup("a+rX"), strdup(mntBuffer), NULL
             };
             char **argsPtr = NULL;
-            int ret = forkAndExecvp(args);
+            int ret = forkAndExecv(args);
             if (ret == 0) {
-                ret = forkAndExecvp(chmodArgs);
+                ret = forkAndExecv(chmodArgs);
                 if (ret != 0) {
                     fprintf(stderr, "FAILED to fix permissions on %s.\n", mntBuffer);
                 }
@@ -899,7 +900,7 @@ int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig) {
         strdup(from), strdup(to), \
         NULL}; \
     char **argsPtr = NULL; \
-    int ret = forkAndExecvp(args); \
+    int ret = forkAndExecv(args); \
     for (argsPtr = args; *argsPtr != NULL; argsPtr++) { \
         free(*argsPtr); \
     } \
@@ -1297,13 +1298,13 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
         fprintf(stderr, "FAILED to find new sshd_config file, cannot setup sshd\n");
         goto _setupImageSsh_unclean;
     } else {
-        char *moveCmd[] = { strdup("mv"),
+        char *moveCmd[] = { strdup(udiConfig->mvPath),
             strdup(sshdConfigPathNew),
             strdup(sshdConfigPath),
             NULL
         };
         char **argsPtr = NULL;
-        int ret = forkAndExecvp(moveCmd);
+        int ret = forkAndExecv(moveCmd);
         for (argsPtr = moveCmd; *argsPtr != NULL; argsPtr++) {
             free(*argsPtr);
         }
@@ -1353,14 +1354,14 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
         snprintf(from, PATH_MAX, "%s/etc/ssh_config", udiImage);
         snprintf(to, PATH_MAX, "%s%s/etc/ssh/ssh_config", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
         if (stat(to, &statData) == 0) {
-            char *args[] = {strdup("cp"),
+            char *args[] = {strdup(udiConfig->cpPath),
                 strdup("-p"),
                 strdup(from),
                 strdup(to),
                 NULL
             };
             char **argsPtr = NULL;
-            int ret = forkAndExecvp(args);
+            int ret = forkAndExecv(args);
             for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
                 free(*argsPtr);
             }
@@ -1451,38 +1452,6 @@ _startSshd_unclean:
     return 1;
 }
 
-int forkAndExecvp(char *const *args) {
-    pid_t pid = 0;
-
-    pid = fork();
-    if (pid < 0) {
-        fprintf(stderr, "FAILED to fork! Exiting.\n");
-        return 1;
-    }
-    if (pid > 0) {
-        /* this is the parent */
-        int status = 0;
-        do {
-            pid_t ret = waitpid(pid, &status, 0);
-            if (ret != pid) {
-                fprintf(stderr, "This might be impossible: forked by couldn't wait, FAIL!\n");
-                return 1;
-            }
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-        if (WIFEXITED(status)) {
-            status = WEXITSTATUS(status);
-        } else {
-            status = 1;
-        }
-        return status;
-    }
-    /* this is the child */
-    execvp(args[0], args);
-    fprintf(stderr, "FAILED to execvp! Exiting.\n");
-    exit(1);
-    return 1;
-}
-
 int forkAndExecv(char *const *args) {
     pid_t pid = 0;
 
@@ -1511,8 +1480,7 @@ int forkAndExecv(char *const *args) {
     /* this is the child */
     execv(args[0], args);
     fprintf(stderr, "FAILED to execvp! Exiting.\n");
-    exit(1);
-    return 1;
+    exit(127);
 }
 
 static int _bindMount(MountList *mountCache, const char *from, const char *to, int ro, int overwriteMounts) {
@@ -1754,12 +1722,12 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
     } else if (udiConfig->autoLoadKernelModule) {
         /* try to load kernel module from system cache */
         char *args[] = {
-            strdup("modprobe"),
+            strdup(udiConfig->modprobePath),
             strdup(name),
             NULL
         };
         char **argPtr = NULL;
-        ret = forkAndExecvp(args);
+        ret = forkAndExecv(args);
         for (argPtr = args; argPtr && *argPtr; argPtr++) {
             free(*argPtr);
         }
@@ -1782,14 +1750,14 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
 
     if (stat(kmodPath, &statData) == 0) {
         char *insmodArgs[] = {
-            strdup("insmod"), 
+            strdup(udiConfig->insmodPath),
             strdup(kmodPath), 
             NULL
         };
         char **argPtr = NULL;
 
         /* run insmod and clean up */
-        ret = forkAndExecvp(insmodArgs);
+        ret = forkAndExecv(insmodArgs);
         for (argPtr = insmodArgs; *argPtr != NULL; argPtr++) {
             free(*argPtr);
         }
@@ -2161,13 +2129,13 @@ TEST(ShifterCoreTestGroup, CopyFile_basic) {
     toFile = alloc_strgenf("%s/passwd", tmpDir);
 
     /* check invalid input */
-    ret = _copyFile(NULL, toFile, 0, INVALID_USER, INVALID_GROUP, 0644);
+    ret = _copyFile("/bin/cp", NULL, toFile, 0, INVALID_USER, INVALID_GROUP, 0644);
     CHECK(ret != 0);
-    ret = _copyFile("/etc/passwd", NULL, 0, INVALID_USER, INVALID_GROUP, 0644);
+    ret = _copyFile("/bin/cp", "/etc/passwd", NULL, 0, INVALID_USER, INVALID_GROUP, 0644);
     CHECK(ret != 0);
 
     /* should succeed */
-    ret = _copyFile("/etc/passwd", toFile, 0, INVALID_USER, INVALID_GROUP, 0644);
+    ret = _copyFile("/bin/cp", "/etc/passwd", toFile, 0, INVALID_USER, INVALID_GROUP, 0644);
     tmpFiles.push_back(toFile);
     CHECK(ret == 0);
 
@@ -2178,7 +2146,7 @@ TEST(ShifterCoreTestGroup, CopyFile_basic) {
     ret = unlink(toFile);
     CHECK(ret == 0);
 
-    ret = _copyFile("/etc/passwd", toFile, 0, INVALID_USER, INVALID_GROUP, 0755);
+    ret = _copyFile("/bin/cp", "/etc/passwd", toFile, 0, INVALID_USER, INVALID_GROUP, 0755);
     CHECK(ret == 0);
 
     ret = lstat(toFile, &statData);
@@ -2203,7 +2171,7 @@ TEST(ShifterCoreTestGroup, CopyFile_chown) {
     toFile = alloc_strgenf("%s/passwd", tmpDir);
     CHECK(toFile != NULL);
     
-    ret = _copyFile("/etc/passwd", toFile, 0, 2, 2, 0644);
+    ret = _copyFile("/bin/cp", "/etc/passwd", toFile, 0, 2, 2, 0644);
     tmpFiles.push_back(toFile);
     CHECK(ret == 0);
 
@@ -2216,7 +2184,7 @@ TEST(ShifterCoreTestGroup, CopyFile_chown) {
     ret = unlink(toFile);
     CHECK(ret == 0);
 
-    ret = _copyFile("/etc/passwd", toFile, 0, 2, 2, 0755);
+    ret = _copyFile("/bin/cp", "/etc/passwd", toFile, 0, 2, 2, 0755);
     CHECK(ret == 0);
 
     ret = lstat(toFile, &statData);

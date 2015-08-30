@@ -79,6 +79,7 @@ int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assig
     while (!feof(fp) && !ferror(fp)) {
         nRead = getline(&linePtr, &lineSize, fp);
         if (nRead <= 0) break;
+        if (linePtr[0] == '#') continue;
 
         /* get key/value pair */
         if (!multiline) {
