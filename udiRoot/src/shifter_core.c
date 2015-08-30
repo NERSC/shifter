@@ -71,10 +71,6 @@
 #include "VolumeMap.h"
 #include "MountList.h"
 
-#ifndef ROOTFS_TYPE
-#define ROOTFS_TYPE "tmpfs"
-#endif
-
 #ifndef BINDMOUNT_OVERWRITE_UNMOUNT_RETRY
 #define BINDMOUNT_OVERWRITE_UNMOUNT_RETRY 3
 #endif
@@ -817,7 +813,7 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
     }
 
     /* mount a new rootfs to work in */
-    if (mount(NULL, udiRoot, ROOTFS_TYPE, MS_NOSUID|MS_NODEV, NULL) != 0) {
+    if (mount(NULL, udiRoot, udiConfig->rootfsType, MS_NOSUID|MS_NODEV, NULL) != 0) {
         fprintf(stderr, "FAILED to mount rootfs on %s\n", udiRoot);
         perror("   --- REASON: ");
         goto _mountImgVfs_unclean;
@@ -861,7 +857,7 @@ int remountUdiRootReadonly(UdiRootConfig *udiConfig) {
     }
     snprintf(udiRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
 
-    if (mount(udiRoot, udiRoot, ROOTFS_TYPE, MS_REMOUNT|MS_NOSUID|MS_NODEV|MS_RDONLY, NULL) != 0) {
+    if (mount(udiRoot, udiRoot, udiConfig->rootfsType, MS_REMOUNT|MS_NOSUID|MS_NODEV|MS_RDONLY, NULL) != 0) {
         fprintf(stderr, "FAILED to remount rootfs readonly on %s\n", udiRoot);
         perror("   --- REASON: ");
         goto _remountUdiRootReadonly_unclean;

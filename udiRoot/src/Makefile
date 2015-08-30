@@ -11,10 +11,6 @@ include ../config.mk
 ## configuration
 CFLAGS=-O0 -ggdb -W -Wall -Wundef -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -ansi
 LDFLAGS=
-ROOTFS_TYPE="\"tmpfs\""
-ifeq ($(CRAY_SUPPORT),1)
-	ROOTFS_TYPE="\"rootfs\""
-endif
 
 SED_MODIFY=sed 's|@@@CONFIG_FILE@@@|$(CONFIG_FILE)|g' |\
            sed 's|@@@CONFIG_DIR@@@|$(CONFIG_DIR)|g' |\
@@ -39,11 +35,11 @@ config.h: config.h.in
 	cat $< | $(SED_MODIFY) > $@
 
 setupRoot: setupRoot.c UdiRootConfig.c utility.c ImageData.c config.h shifter_core.c VolumeMap.c MountList.c
-	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) -DROOTFS_TYPE=$(ROOTFS_TYPE) -DNO_ROOT_OWN_CHECK $^ -o $@
+	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" $^ -o $@
 unsetupRoot: unsetupRoot.c UdiRootConfig.c utility.c config.h shifter_core.c VolumeMap.c MountList.c
-	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) -DROOTFS_TYPE=$(ROOTFS_TYPE) -DNO_ROOT_OWN_CHECK $^ -o $@
+	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" $^ -o $@
 shifter: shifter.c UdiRootConfig.c utility.c config.h shifter_core.c ImageData.c VolumeMap.c MountList.c
-	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" -DKEYLEN=$(KEYLEN) -DROOTFS_TYPE=$(ROOTFS_TYPE) -DNO_ROOT_OWN_CHECK $^ -o $@
+	$(CC) $(LDFLAGS) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DCONFIG_FILE=\"$(CONFIG_FILE)\" -DVERSION=\"$(UDI_VERSION)\" $^ -o $@
 
 install: all
 	mkdir -m 755 -p $(DESTDIR)/sbin
