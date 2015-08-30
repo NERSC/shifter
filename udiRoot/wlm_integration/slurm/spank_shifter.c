@@ -30,6 +30,7 @@ static char image[IMAGE_MAXLEN] = "";
 static char image_type[IMAGE_MAXLEN] = "";
 static char imagevolume[IMAGEVOLUME_MAXLEN] = "";
 static int nativeSlurm = IS_NATIVE_SLURM;
+static int ccmMode = 0;
 static int serialMode = 0;
 
 static int _opt_image(int val, const char *optarg, int remote);
@@ -57,23 +58,28 @@ char *trim(char *string) {
 }
 
 int _opt_ccm(int val, const char *optarg, int remote) {
-    snprintf(image, IMAGE_MAXLEN, "dsl");
+    snprintf(image, IMAGE_MAXLEN, "/");
     snprintf(image_type, IMAGE_MAXLEN, "local");
+    ccmMode = 1;
     return ESPANK_SUCCESS;
 }
 
 int _opt_image(int val, const char *optarg, int remote) {
+    char *tmp = NULL;
+    int rc = ESPANK_SUCCESS;
     if (optarg != NULL && strlen(optarg) > 0) {
-        char *tmp = strdup(optarg);
+        tmp = strdup(optarg);
         char *p = strchr(tmp, ':');
         if (p == NULL) {
             slurm_error("Invalid image input: must specify image type: %s", optarg);
-            return ESPANK_ERROR;
+            rc = ESPANK_ERROR;
+            goto _opt_image_exit;
         }
         *p++ = 0;
         snprintf(image_type, IMAGE_MAXLEN, "%s", tmp);
         snprintf(image, IMAGE_MAXLEN, "%s", p);
         free(tmp);
+        tmp = NULL;
         p = trim(image);
         if (p != image) memmove(image, p, strlen(p) + 1);
         p = trim(image_type);
@@ -82,20 +88,27 @@ int _opt_image(int val, const char *optarg, int remote) {
         for (p = image_type; *p != 0 && p-image_type < IMAGE_MAXLEN; ++p) {
             if (!isalpha(*p)) {
                 slurm_error("Invalid image type - alphabetic characters only");
-                return ESPANK_ERROR;
+                rc = ESPANK_ERROR;
+                goto _opt_image_exit;
             }
         }
         for (p = image; *p != 0 && p-image < IMAGE_MAXLEN; ++p) {
             if (!isalnum(*p) && (*p!=':') && (*p!='_') && (*p!='-') && (*p!='.') && (*p!='/')) {
                 slurm_error("Invalid image type - A-Za-z:-_./ characters only");
-                return ESPANK_ERROR;
+                rc =  ESPANK_ERROR;
+                goto _opt_image_exit;
             }
         }
         return ESPANK_SUCCESS;
     }
     slurm_error("Invalid image - must not be zero length");
-    return ESPANK_ERROR;
+_opt_image_exit:
+    if (tmp != NULL) {
+        free(tmp);
+    }
+    return rc;
 }
+
 int _opt_imagevolume(int val, const char *optarg, int remote) {
     if (optarg != NULL && strlen(optarg) > 0) {
         /* validate input */
@@ -121,6 +134,10 @@ int generateSshKey(spank_t sp) {
     struct passwd *ptr = NULL;
     int generateKey = 0;
     int rc = 0;
+    char *linePtr = NULL;
+    size_t n_linePtr = 0;
+    FILE *fp = NULL;
+
     getpwuid_r(getuid(), &pwd, buffer, 4096, &ptr);
     if (ptr == NULL) {
         slurm_error("FAIL cannot lookup current_user");
@@ -147,20 +164,32 @@ int generateSshKey(spank_t sp) {
         rc = system(cmd);
     }
     if (rc == 0) {
-        FILE *fp = NULL;
-        char *linePtr = NULL;
-        size_t n_linePtr = 0;
         snprintf(filename, 1024, "%s/.udiRoot/id_rsa.key.pub", pwd.pw_dir);
         fp = fopen(filename, "r");
-        if (fp != NULL && !feof(fp) && !ferror(fp)) {
-            getline(&linePtr, &n_linePtr, fp);
-            fclose(fp);
-            if (linePtr != NULL) {
+        if (fp == NULL) {
+            slurm_error("FAILED to open udiRoot pubkey: %s", filename);
+            rc = 1;
+            goto generateSshKey_exit;
+        }
+        if (!feof(fp) && !ferror(fp)) {
+            size_t nread = getline(&linePtr, &n_linePtr, fp);
+            if (nread > 0 && linePtr != NULL) {
                 spank_job_control_setenv(sp, "SHIFTER_SSH_PUBKEY", linePtr, 1);
+                free(linePtr);
+                linePtr = NULL;
             }
         }
+        fclose(fp);
+        fp = NULL;
     }
-    return 0;
+generateSshKey_exit:
+    if (linePtr != NULL) {
+        free(linePtr);
+    }
+    if (fp != NULL) {
+        fclose(fp);
+    }
+    return rc;
 }
 
 UdiRootConfig *read_config(int argc, char **argv) {
@@ -193,64 +222,7 @@ UdiRootConfig *read_config(int argc, char **argv) {
     return udiConfig;
 }
 
-int lookup_image(UdiRootConfig *config, int verbose, const char *mode, char **image_id) {
-    int rc = 0;
-    char buffer[4096];
-    char buff1[1024];
-    char buff2[1024];
-    FILE *fp = NULL;
-    ssize_t nread = 0;
-    char *ptr = NULL;
-    char *linePtr = NULL;
-    size_t linePtrSize = 0;
-    //verbose = 0;
-    /* perform image lookup */
-    snprintf(buffer, 4096, "%s%s/bin/getDockerImage.pl %s%s %s", config->nodeContextPrefix, config->udiRootPath, (verbose == 0 ? "-quiet " : ""), mode, image);
-    printf("LOOKUP COMMAND: %s\n", buffer);
-    fp = popen(buffer, "r");
-    while ((nread = getline(&linePtr, &linePtrSize, fp)) > 0) {
-        linePtr[nread] = 0;
-        ptr = trim(linePtr);
-        if (verbose) {
-            printf("%s\n", linePtr);
-            int val = sscanf(linePtr, "Retrieved docker image %1024s resolving to ID %1024s", buff1, buff2);
-            if (val != 2) {
-                continue;
-            }
-            if (strcmp(buff1, image) != 0) {
-                slurm_error("Got wrong image back!");
-                return ESPANK_ERROR;
-            }
-            *image_id = (char *) realloc(*image_id, sizeof(char) * (strlen(buff2) + 1));
-            snprintf(*image_id, strlen(buff2)+1, "%s", buff2);
-        } else {
-            if (strncmp(ptr, "ENV:", 4) == 0) {
-                ptr += 4;
-                ptr = trim(ptr);
-            } else if (strncmp(ptr, "ENTRY:", 6) == 0) {
-                ptr += 6;
-                ptr = trim(ptr);
-            } else {
-                /* this is the image id */
-                size_t nbytes = 0;
-                *image_id = (char *) realloc(*image_id, sizeof(char) * (strlen(ptr) + 2));
-                nbytes = snprintf(*image_id, strlen(ptr) + 1, "%s", ptr);
-                *image_id[nbytes] = 0;
-            }
-        }
-
-    }
-    if (linePtr != NULL) {
-        free(linePtr);
-        linePtr = NULL;
-        linePtrSize = 0;
-    }
-    if ((rc = pclose(fp)) != 0) {
-        slurm_error("Image lookup process failed, exit status: %d", rc);
-        exit(-1);
-    }
-    return 0;
-}
+char *lookup_ImageIdentifier(const char *imageType, const char *imageTag, int verbose, UdiRootConfig *);
 
 int slurm_spank_init(spank_t sp, int argc, char **argv) {
     spank_context_t context;
@@ -293,19 +265,20 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     }
 
     verbose_lookup = 1;
-    if (imagevolume != NULL && image == NULL) {
+    if (strlen(imagevolume) > 0 && strlen(image) == 0) {
         slurm_error("Cannot specify shifter volumes without specifying the image first!");
         exit(-1);
     }
     
-    if (strncmp(image_type, "docker", IMAGE_MAXLEN) == 0) {
+    if (strcmp(image_type, "id") != 0 && strcmp(image_type, "local") != 0) {
         char *image_id = NULL;
-        lookup_image(udiConfig, verbose_lookup, "lookup", &image_id);
+        image_id = lookup_ImageIdentifier(image_type, image, verbose_lookup, udiConfig);
         if (image_id == NULL) {
             slurm_error("Failed to lookup image.  Aborting.");
             exit(-1);
         }
         snprintf(image, IMAGE_MAXLEN, "%s", image_id);
+        snprintf(image_type, IMAGE_MAXLEN, "id");
         free(image_id);
     }
     if (strlen(image) == 0) {
@@ -323,7 +296,7 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     spank_job_control_setenv(sp, "SHIFTER_IMAGE", image, 1);
     spank_job_control_setenv(sp, "SHIFTER_IMAGETYPE", image_type, 1);
     
-    if (imagevolume != NULL) {
+    if (strlen(imagevolume) > 0) {
          spank_setenv(sp, "SHIFTER_VOLUME", imagevolume, 1);
     }
     return rc;
@@ -569,12 +542,10 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         setupRootArgs[idx++] = strdup("-s");
         setupRootArgs[idx++] = strdup(sshPubKey);
     }
-    /*
     if (nodelist != NULL) {
         setupRootArgs[idx++] = strdup("-N");
         setupRootArgs[idx++] = strdup(nodelist);
     }
-    */
     setupRootArgs[idx++] = strdup(image_type);
     setupRootArgs[idx++] = strdup(image);
     setupRootArgs[idx++] = NULL;
@@ -601,6 +572,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         if (status != 0) PROLOG_ERROR("FAILED to run setupRoot", ESPANK_ERROR);
     } else {
         execv(setupRootArgs[0], setupRootArgs);
+        exit(127);
     }
     
 _prolog_exit_unclean:
@@ -678,6 +650,7 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
         if (status != 0) EPILOG_ERROR("FAILED to run unsetupRoot", ESPANK_ERROR);
     } else {
         execv(epilogueArgs[0], epilogueArgs);
+        exit(127);
     }
     
 _epilog_exit_unclean:
@@ -700,6 +673,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     if (strlen(image) == 0 || strlen(image_type) == 0) {
         return rc;
     }
+    if (ccmMode != 1) return rc;
     udiConfig = read_config(argc, argv);
     if (udiConfig == NULL) {
         TASKINITPRIV_ERROR("Failed to load udiRoot config!", ESPANK_ERROR);
