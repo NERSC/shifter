@@ -22,7 +22,7 @@ postmount.sh: postmount.sh.$(SYSTEM).in
 
 
 install: all
-	mkdir -p $(DESTDIR)/etc
+	mkdir -p $(CONFIGINST_DIR)
 	$(INSTALL) --owner=root --group=root --mode=444  udiRoot.conf $(CONFIGINST_DIR)/udiRoot.conf
 	$(INSTALL) --owner=root --group=root --mode=400  premount.sh $(CONFIGINST_DIR)/premount.sh; \
 	$(INSTALL) --owner=root --group=root --mode=400  postmount.sh $(CONFIGINST_DIR)/postmount.sh; \
