@@ -375,6 +375,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
             case 'i':
                 {
                     int isLocal = 0;
+                    char *tmp = NULL;
                     ptr = strchr(optarg, ':');
                     if (ptr == NULL) {
                         fprintf(stderr, "Incorrect format for image identifier:  need \"image_type:image_id\"\n");
@@ -382,11 +383,15 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                         break;
                     }
                     *ptr++ = 0;
-                    config->imageType = _filterString(optarg, 0);
+                    tmp = _filterString(optarg, 0);
+                    if (config->imageType != NULL) free(config->imageType);
+                    config->imageType = tmp;
                     if (strcmp(config->imageType, "local") == 0) {
                         isLocal = 1;
                     }
-                    config->imageTag = _filterString(ptr, isLocal);
+                    tmp = _filterString(ptr, isLocal);
+                    if (config->imageTag != NULL) free(config->imageTag);
+                    config->imageTag = tmp;
                     if (config->imageIdentifier != NULL) {
                         free(config->imageIdentifier);
                         config->imageIdentifier = NULL;
@@ -478,14 +483,24 @@ int parse_environment(struct options *opts) {
 
     if ((envPtr = getenv("SHIFTER_IMAGETYPE")) != NULL) {
         opts->imageType = strdup(envPtr);
+    } else if ((envPtr = getenv("SLURM_SPANK_SHIFTER_IMAGETYPE")) != NULL) {
+        opts->imageType = strdup(envPtr);
     }
     if ((envPtr = getenv("SHIFTER_IMAGE")) != NULL) {
         opts->imageIdentifier = strdup(envPtr);
         opts->imageTag = strdup(envPtr);
+    } else if ((envPtr = getenv("SLURM_SPANK_SHIFTER_IMAGE")) != NULL) {
+        opts->imageIdentifier = strdup(envPtr);
+        opts->imageTag = strdup(envPtr);
     }
+
     if ((envPtr = getenv("SHIFTER")) != NULL) {
-        char *ptr = NULL;
         opts->request = strdup(envPtr);
+    } else if ((envPtr = getenv("SLURM_SPANK_SHIFTER")) != NULL) {
+        opts->request = strdup(envPtr);
+    }
+    if (opts->request != NULL) {
+        char *ptr = NULL;
         /* if the the imageType and Tag weren't specified earlier, parse from here */
         if (opts->imageType == NULL && opts->imageTag == NULL) {
             ptr = strchr(opts->request, ':');
@@ -500,6 +515,8 @@ int parse_environment(struct options *opts) {
         }
     }
     if ((envPtr = getenv("SHIFTER_VOLUME")) != NULL) {
+        opts->rawVolumes = strdup(envPtr);
+    } else if ((envPtr = getenv("SLURM_SPANK_SHIFTER_VOLUME")) != NULL) {
         opts->rawVolumes = strdup(envPtr);
     }
 

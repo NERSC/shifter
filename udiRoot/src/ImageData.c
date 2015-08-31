@@ -110,7 +110,9 @@ char *lookup_ImageIdentifier(
             (verbose == 0 ? "-quiet " : ""), imageTag);
 
     pp = popen(lookupCmd, "r");
-    while ((nread = getline(&lineBuffer, &lineBuffer_size, pp)) > 0) {
+    while (!feof(pp) && !ferror(pp)) {
+        nread = getline(&lineBuffer, &lineBuffer_size, pp);
+        if (nread == 0 || feof(pp) || ferror(pp)) break;
         lineBuffer[nread] = 0;
         ptr = shifter_trim(lineBuffer);
         if (verbose) {
@@ -134,7 +136,7 @@ char *lookup_ImageIdentifier(
             } else if (strncmp(ptr, "ENTRY:", 6) == 0) {
                 ptr += 6;
                 ptr = shifter_trim(ptr);
-            } else {
+            } else if (identifier != NULL && strchr(ptr, ':') == NULL) {
                 /* this is the image id */
                 identifier = strdup(ptr);
                 break;
