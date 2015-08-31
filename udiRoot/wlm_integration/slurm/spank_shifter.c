@@ -17,6 +17,7 @@
 
 #include "UdiRootConfig.h"
 #include "shifter_core.h"
+#include "utility.h"
 
 SPANK_PLUGIN(shifter, 1)
 
@@ -257,6 +258,9 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     if (context != S_CTX_ALLOCATOR) {
         return ESPANK_SUCCESS;
     }
+    if (strlen(image) == 0) {
+        return rc;
+    }
 
     udiConfig = read_config(argc, argv);
     if (udiConfig == NULL) {
@@ -394,8 +398,10 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     char buffer[1024];
     char setupRootPath[PATH_MAX];
     char **setupRootArgs = NULL;
+    char **setupRootArgs_sv = NULL;
     size_t n_setupRootArgs = 0;
     char **volArgs = NULL;
+    char **volArgs_sv = NULL;
     size_t n_volArgs = 0;
     char *nodelist = NULL;
     char *username = NULL;
@@ -505,17 +511,14 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
        /path/to/setupRoot <imageType> <imageIdentifier> -u <uid> -U <username>
             [-v volMap ...] -s <sshPubKey> -N <nodespec> NULL
      */
-    n_setupRootArgs = 4;
-    if (sshPubKey != NULL && username != NULL && uid != 0) {
-        n_setupRootArgs += 6;
-    }
     if (strlen(imagevolume) > 0) {
         char *ptr = imagevolume;
         for ( ; ; ) {
             char *limit = strchr(ptr, ',');
-            volArgs = (char **) realloc(volArgs,sizeof(char *) * (n_volArgs + 1));
+            volArgs = (char **) realloc(volArgs,sizeof(char *) * (n_volArgs + 2));
             if (limit != NULL) *limit = 0;
             volArgs[n_volArgs++] = strdup(ptr);
+            volArgs[n_volArgs] = NULL;
 
 
             if (limit == NULL) {
@@ -523,35 +526,32 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
             }
             ptr = limit + 1;
         }
-        n_setupRootArgs += 2 * n_volArgs;
     }
     snprintf(setupRootPath, PATH_MAX, "%s%s/sbin/setupRoot", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
-    setupRootArgs = malloc(sizeof(char*) * n_setupRootArgs);
     idx = 0;
-    setupRootArgs[idx++] = strdup(setupRootPath);
+    strncpy_StringArray(setupRootPath, strlen(setupRootPath), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     if (uid != 0) {
         snprintf(buffer, 1024, "%u", uid);
-        setupRootArgs[idx++] = strdup("-U");
-        setupRootArgs[idx++] = strdup(buffer);
+        strncpy_StringArray("-U", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+        strncpy_StringArray(buffer, strlen(buffer), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
     if (username != NULL) {
-        setupRootArgs[idx++] = strdup("-u");
-        setupRootArgs[idx++] = strdup(username);
+        strncpy_StringArray("-u", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+        strncpy_StringArray(username, strlen(username), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
     if (sshPubKey != NULL) {
-        setupRootArgs[idx++] = strdup("-s");
-        setupRootArgs[idx++] = strdup(sshPubKey);
+        strncpy_StringArray("-s", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+        strncpy_StringArray(sshPubKey, strlen(sshPubKey), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
     if (nodelist != NULL) {
-        setupRootArgs[idx++] = strdup("-N");
-        setupRootArgs[idx++] = strdup(nodelist);
+        strncpy_StringArray("-N", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+        strncpy_StringArray(nodelist, strlen(nodelist), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
-    setupRootArgs[idx++] = strdup(image_type);
-    setupRootArgs[idx++] = strdup(image);
-    setupRootArgs[idx++] = NULL;
+    strncpy_StringArray(image_type, strlen(image_type), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+    strncpy_StringArray(image, strlen(image), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
 
-    for (i = 0; i < idx && setupRootArgs[i] != NULL; i++) {
-        slurm_error("setupRoot arg %d: %s", i, setupRootArgs[i]);
+    for (setupRootArgs_sv = setupRootArgs; setupRootArgs_sv && *setupRootArgs_sv; setupRootArgs_sv++) {
+        slurm_error("setupRoot arg %d: %s", (int)(setupRootArgs_sv - setupRootArgs), *setupRootArgs_sv);
     }
 
     /* return success because we don't want bad input to mark node in
@@ -569,7 +569,9 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         } else {
              status = 1;
         }
-        if (status != 0) PROLOG_ERROR("FAILED to run setupRoot", ESPANK_ERROR);
+        if (status != 0) {
+            PROLOG_ERROR("FAILED to run setupRoot", ESPANK_ERROR);
+        }
     } else {
         execv(setupRootArgs[0], setupRootArgs);
         exit(127);
@@ -579,7 +581,9 @@ _prolog_exit_unclean:
     if (udiConfig != NULL) free_UdiRootConfig(udiConfig, 1);
     if (setupRootArgs != NULL) {
         char **ptr = setupRootArgs;
-        while (*ptr != NULL) free(*ptr++);
+        for (ptr = setupRootArgs; ptr && *ptr; ptr++) {
+            free(*ptr);
+        }
         free(setupRootArgs);
     }
     if (volArgs != NULL) {
