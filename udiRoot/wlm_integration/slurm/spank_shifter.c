@@ -456,7 +456,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     }
 
     for (ptr = image_type; ptr - image_type < strlen(image_type); ptr++) {
-        *ptr = toupper(*ptr);
+        *ptr = tolower(*ptr);
     }
 
     slurm_error("DMJ: SHIFTER, about to read job data");
