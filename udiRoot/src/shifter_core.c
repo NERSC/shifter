@@ -605,7 +605,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
             goto _prepSiteMod_unclean;
         }
 
-        if (filterEtcGroup(fromGroupFile, toGroupFile, username) != 0) {
+        if (filterEtcGroup(fromGroupFile, toGroupFile, username, 32) != 0) {
             fprintf(stderr, "Failed to filter group file %s\n", fromGroupFile);
             goto _prepSiteMod_unclean;
         }
@@ -1061,46 +1061,6 @@ char *generateShifterConfigString(const char *user, ImageData *image, VolumeMap 
         free(volMapSig);
     }
     return str;
-}
-
-/*! Read JSON configuration values from a string */
-/*!
- * Parses the JSON configuration string and updates the parameters to send
- * values back to the calling function.  This is likely used to draw a default
- * configuration from an already constructed environment.
- *
- * \param configStr JSON formatted string without any leading or trailing
- *                  whitespace
- * \param user char** to store allocated string for username
- * \param imageIdentifier char** to store allocated string for identifier
- * \param volMap should be an empty VolumeMap
- *
- * Returns: 0 upon success, 1 upon failure
- */
-int readShifterConfigString(const char *configStr, char **user, char **imageIdentifier, VolumeMap *volMap) {
-    char *volstr;
-    int count = sscanf(configStr, "{\"identifier\":\"%m[^\"]\",\"user\":\"%m[^\"]\",\"volMap\":\"%m[^\"]\"}", imageIdentifier, user, &volstr);
-    if (count < 2) {
-        fprintf(stderr, "FAILED to parse shifter configuration JSON string\n");
-        goto _readShifterConfigString_error;
-    }
-    if (volstr != NULL) {
-        if (parseVolumeMap(volstr, volMap) != 0) {
-            fprintf(stderr, "FAILED to parse shifter JSON configuration volumeMap\n");
-            goto _readShifterConfigString_error;
-        }
-    }
-    if (volstr != NULL) {
-        free(volstr);
-        volstr = NULL;
-    }
-    return 0;
-_readShifterConfigString_error:
-    if (volstr != NULL) {
-        free(volstr);
-        volstr = NULL;
-    }
-    return 1;
 }
 
 int saveShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMap, UdiRootConfig *udiConfig) {
@@ -1781,13 +1741,15 @@ _loadKrnlMod_unclean:
  *  \param group_dest_fname filename of filtered group file
  *  \param group_source_fname filename of to-be-filtered group file
  *  \param username user to identify
+ *  \param maxGroups maximum number of groups to write out for user, 0 for unlimited
  */
-int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname, const char *username) {
+int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname, const char *username, size_t maxGroups) {
     FILE *input = NULL;
     FILE *output = NULL;
     char *linePtr = NULL;
     size_t linePtr_size = 0;
     char *group_name = NULL;
+    size_t foundGroups = 0;
 
     if (group_dest_fname == NULL || strlen(group_dest_fname) == 0
             || group_source_fname == NULL || strlen(group_source_fname) == 0
@@ -1838,10 +1800,14 @@ int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname,
         }
         if (group_name != NULL && foundUsername == 1) {
             fprintf(output, "%s:x:%d:%s\n", group_name, gid, username);
+            foundCount++;
         }
         if (group_name != NULL) {
             free(group_name);
             group_name = NULL;
+        }
+        if (maxGroups > 0 && foundCount == maxGroups) {
+            break;
         }
     }
     fclose(input);
@@ -2263,33 +2229,6 @@ TEST(ShifterCoreTestGroup, userInputPathFilter_basic) {
     filtered = userInputPathFilter("/path/to/something/great", 1);
     CHECK(strcmp(filtered, "/path/to/something/great") == 0);
     free(filtered);
-}
-
-TEST(ShifterCoreTestGroup, readShifterConfigString_functions) {
-    char *identifier = NULL;
-    char *user = NULL;
-    int ret = 0;
-    VolumeMap v;
-    memset(&v, 0, sizeof(VolumeMap));
-
-    ret = readShifterConfigString("{\"identifier\":\"0123456789abcdef\",\"user\":\"testuser\",\"volMap\":\"\"}", &user, &identifier, &v);
-    CHECK(ret == 0);
-    CHECK(strcmp(user, "testuser") == 0);
-    CHECK(strcmp(identifier, "0123456789abcdef") == 0);
-    CHECK(v.n == 0);
-
-    free(identifier);
-    free(user);
-
-    ret = readShifterConfigString("{\"identifier\":\"0123456789abcdef\",\"user\":\"testuser\",\"volMap\":\"/a:/b,/c:/d\"}", &user, &identifier, &v);
-    CHECK(ret == 0);
-    CHECK(strcmp(user, "testuser") == 0);
-    CHECK(strcmp(identifier, "0123456789abcdef") == 0);
-    CHECK(v.n == 2);
-
-    free(identifier);
-    free(user);
-    free_VolumeMap(&v, 0);
 }
 
 TEST(ShifterCoreTestGroup, writeHostFile_basic) { 
