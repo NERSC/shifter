@@ -81,7 +81,7 @@ int bindImageIntoUDI(const char *relpath, ImageData *imageData, UdiRootConfig *u
 int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig);
 int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udiConfig);
 int startSshd(UdiRootConfig *udiConfig);
-int filterEtcGroup(const char *dest, const char *from, const char *username);
+int filterEtcGroup(const char *dest, const char *from, const char *username, size_t maxGroups);
 int remountUdiRootReadonly(UdiRootConfig *udiConfig);
 int forkAndExecv(char *const *argvs);
 int killSshd(void);

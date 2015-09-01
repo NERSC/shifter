@@ -1800,13 +1800,13 @@ int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname,
         }
         if (group_name != NULL && foundUsername == 1) {
             fprintf(output, "%s:x:%d:%s\n", group_name, gid, username);
-            foundCount++;
+            foundGroups++;
         }
         if (group_name != NULL) {
             free(group_name);
             group_name = NULL;
         }
-        if (maxGroups > 0 && foundCount == maxGroups) {
+        if (maxGroups > 0 && foundGroups == maxGroups) {
             break;
         }
     }
