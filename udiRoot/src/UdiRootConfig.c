@@ -349,6 +349,10 @@ static int _assign(const char *key, const char *value, void *t_config) {
         config->allowLocalChroot = atoi(value) != 0;
     } else if (strcmp(key, "autoLoadKernelModule") == 0) {
         config->autoLoadKernelModule = atoi(value);
+    } else if (strcmp(key, "mountUdiRootWritable") == 0) {
+        config->mountUdiRootWritable = atoi(value);
+    } else if (strcmp(key, "maxGroupCount") == 0) {
+        config->maxGroupCount = strtoul(value, NULL, 10);
     } else if (strcmp(key, "modprobePath") == 0) {
         config->modprobePath = strdup(value);
     } else if (strcmp(key, "insmodPath") == 0) {

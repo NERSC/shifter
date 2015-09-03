@@ -85,6 +85,8 @@ typedef struct _UdiRootConfig {
     char **siteFs;
     int allowLocalChroot;
     int autoLoadKernelModule;
+    int mountUdiRootWritable;
+    size_t maxGroupCount;
 
     char *modprobePath;
     char *insmodPath;
