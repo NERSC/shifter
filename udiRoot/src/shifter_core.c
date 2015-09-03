@@ -605,7 +605,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
             goto _prepSiteMod_unclean;
         }
 
-        if (filterEtcGroup(fromGroupFile, toGroupFile, username, 32) != 0) {
+        if (filterEtcGroup(fromGroupFile, toGroupFile, username, udiConfig->maxGroupCount) != 0) {
             fprintf(stderr, "Failed to filter group file %s\n", fromGroupFile);
             goto _prepSiteMod_unclean;
         }
@@ -784,6 +784,7 @@ _writeHostFile_error:
 int mountImageVFS(ImageData *imageData, const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig) {
     struct stat statData;
     char udiRoot[PATH_MAX];
+    char *sshPath = NULL;
 
     if (imageData == NULL || username == NULL || udiConfig == NULL) {
         fprintf(stderr, "Invalid arguments to mountImageVFS(), error.\n");
@@ -805,7 +806,6 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
         _MKDIR(udiRoot, 0755);
     }
 
-#undef _MKDIR
 #define BIND_IMAGE_INTO_UDI(subtree, img, udiConfig, copyFlag) \
     if (bindImageIntoUDI(subtree, img, udiConfig, copyFlag) > 1) { \
         fprintf(stderr, "FAILED To setup \"%s\" in %s\n", subtree, udiRoot); \
@@ -835,11 +835,18 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
     BIND_IMAGE_INTO_UDI("/opt", imageData, udiConfig, 0);
 
     /* setup sshd configuration */
+    sshPath = alloc_strgenf("%s/etc/ssh", udiRoot);
+    if (sshPath != NULL) {
+        _MKDIR(sshPath, 0755);
+        free(sshPath);
+        sshPath = NULL;
+    }
 
     /* copy image /etc into place */
     BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
 
 #undef BIND_IMAGE_INTO_UDI
+#undef _MKDIR
 
     return 0;
 
@@ -1309,7 +1316,7 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
         }
         snprintf(from, PATH_MAX, "%s/etc/ssh_config", udiImage);
         snprintf(to, PATH_MAX, "%s%s/etc/ssh/ssh_config", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
-        if (stat(to, &statData) == 0) {
+        {
             char *args[] = {strdup(udiConfig->cpPath),
                 strdup("-p"),
                 strdup(from),
@@ -1321,7 +1328,7 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
             for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
                 free(*argsPtr);
             }
-            if (ret == 0) {
+            if (ret != 0) {
                 fprintf(stderr, "FAILED to copy ssh_config to %s\n", to);
                 goto _setupImageSsh_unclean;
             }
@@ -1839,44 +1846,63 @@ _filterEtcGroup_unclean:
     return 1;
 }
 
-int killSshd(void) {
-    FILE *psOutput = popen("ps -eo pid,command", "r");
-    char *linePtr = NULL;
-    size_t linePtr_size = 0;
-    if (psOutput == NULL) {
-        fprintf(stderr, "FAILED to run ps to find sshd\n");
-        goto _killSshd_unclean;
+pid_t findSshd(void) {
+    DIR *proc = opendir("/proc");
+    struct dirent *dirEntry = NULL;
+    FILE *cmdlineFile = NULL;
+    char *filename = NULL;
+    char buffer[1024];
+    pid_t found = 0;
+
+    if (proc == NULL) {
+        return -1;
     }
-    while (!feof(psOutput) && !ferror(psOutput)) {
-        size_t nRead = getline(&linePtr, &linePtr_size, psOutput);
-        char *ptr = NULL;
-        char *command = NULL;
-        if (nRead == 0) break;
-        ptr = shifter_trim(linePtr);
-        command = strchr(ptr, ' ');
-        if (command != NULL) {
-            *command++ = 0;
-            if (strcmp(command, "/opt/udiImage/sbin/sshd") == 0) {
-                pid_t pid = strtoul(ptr, NULL, 10);
-                if (pid != 0) kill(pid, SIGTERM);
+    while ((dirEntry = readdir(proc)) != NULL) {
+        size_t nread = 0;
+        pid_t pid = atoi(dirEntry->d_name);
+        if (pid == 0) {
+            continue;
+        }
+        filename = alloc_strgenf("/proc/%d/cmdline", pid);
+        if (filename != NULL) {
+            cmdlineFile = fopen(filename, "r");
+            free(filename);
+            filename = NULL;
+        }
+        if (cmdlineFile == NULL) {
+            continue;
+        } else if (feof(cmdlineFile) || ferror(cmdlineFile)) {
+            fclose(cmdlineFile);
+            continue;
+        }
+        nread = fread(buffer, sizeof(char), 1024, cmdlineFile);
+        fclose(cmdlineFile);
+        cmdlineFile = NULL;
+
+        if (nread > 0) {
+            buffer[nread-1] = 0;
+            if (strcmp(buffer, "/opt/udiImage/sbin/sshd") == 0) {
+                found = pid;
+                break;
             }
         }
     }
-    pclose(psOutput);
-    psOutput = NULL;
-    if (linePtr != NULL) {
-        free(linePtr);
-        linePtr = NULL;
+_findSshd_exit:
+    closedir(proc);
+    if (filename != NULL) {
+        free(filename);
     }
-    return 0;
-_killSshd_unclean:
-    if (psOutput != NULL) {
-        pclose(psOutput);
-        psOutput = NULL;
+    if (cmdlineFile != NULL) {
+        fclose(cmdlineFile);
     }
-    if (linePtr != NULL) {
-        free(linePtr);
-        linePtr = NULL;
+    return found;
+}
+
+int killSshd(void) {
+    pid_t sshdPid = findSshd();
+    if (sshdPid > 0) {
+        kill(sshdPid, SIGTERM);
+        return 0;
     }
     return 1;
 }

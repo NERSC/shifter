@@ -84,6 +84,7 @@ int startSshd(UdiRootConfig *udiConfig);
 int filterEtcGroup(const char *dest, const char *from, const char *username, size_t maxGroups);
 int remountUdiRootReadonly(UdiRootConfig *udiConfig);
 int forkAndExecv(char *const *argvs);
+pid_t findSshd(void);
 int killSshd(void);
 char **parseMounts(size_t *n_mounts);
 char *userInputPathFilter(const char *input, int allowSlash);
