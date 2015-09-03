@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <fcntl.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <limits.h>
@@ -376,7 +377,7 @@ int read_data_from_job(spank_t sp, uint32_t *jobid, char **nodelist, size_t *tas
             if (e_ptr == NULL) e_ptr = r_ptr + strlen(r_ptr);
             *e_ptr = 0;
             w_ptr += snprintf(w_ptr, limit_ptr - w_ptr,
-                    "%s/%s%c", r_ptr, tmp, (i + 1 == n_nodes ? '\0' : ','));
+                    "%s/%s%c", r_ptr, tmp, (i + 1 == n_nodes ? '\0' : ' '));
             r_ptr = e_ptr + 1;
         }
         free(raw_host_string);
@@ -384,6 +385,18 @@ int read_data_from_job(spank_t sp, uint32_t *jobid, char **nodelist, size_t *tas
     slurm_free_job_info_msg(job_buf);
     slurm_hostlist_destroy(hl);
     return ESPANK_SUCCESS;
+}
+
+const char *find_memory_cgroup_base(int argc, char **argv) {
+    int idx = 0;
+    for (idx = 0; idx < argc; idx++) {
+        if (strncmp(argv[idx], "memory_cgroup=", 14) == 0) {
+            const char *ptr = argv[idx];
+            ptr += 14;
+            return ptr;
+        }
+    }
+    return NULL;
 }
 
 int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
@@ -407,6 +420,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     char *username = NULL;
     char *uid_str = NULL;
     char *sshPubKey = NULL;
+    char *memory_cgroup_base = NULL;
     size_t tasksPerNode = 0;
     UdiRootConfig *udiConfig = NULL;
     pid_t pid = 0;
@@ -454,6 +468,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     if (udiConfig == NULL) {
         PROLOG_ERROR("Failed to read/parse shifter configuration.\n", rc);
     }
+    memory_cgroup_base = find_memory_cgroup_base(argc, argv);
 
     for (ptr = image_type; ptr - image_type < strlen(image_type); ptr++) {
         *ptr = tolower(*ptr);
@@ -486,10 +501,12 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
 
     /* try to get username from environment first, then fallback to getpwuid */
     username = getenv("SLURM_JOB_USER");
-    if (username != NULL) {
+    if (username != NULL && strcmp(username, "(null)") != 0) {
         username = strdup(username);
+        slurm_debug("shifter prolog: got username from environment: %s", username);
     } else if (uid != 0) {
         /* getpwuid may not be optimal on cray compute node, but oh well */
+        slurm_debug("shifter prolog: failed to get username from environment, trying getpwuid_r on %d", uid);
         char buffer[4096];
         struct passwd pw, *result;
         while (1) {
@@ -498,8 +515,10 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
             if (rc != 0) result = NULL;
             break;
         }
-        if (result != NULL) 
+        if (result != NULL) {
             username = strdup(result->pw_name);
+            slurm_debug("shifter prolog: got username from getpwuid_r: %s", username);
+        }
     }
 
     uid_str = getenv("SLURM_JOB_UID");
@@ -576,6 +595,47 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         execv(setupRootArgs[0], setupRootArgs);
         exit(127);
     }
+    slurm_error("after setupRoot");
+
+    pid = findSshd();
+    slurm_debug("shifter_prolog: sshd on pid %d\n", pid);
+    if (pid > 0 && memory_cgroup_base != NULL) {
+        char *path = NULL;
+        size_t pathLen = 0;
+        size_t pathCapacity = 0;
+        int taskFilefd = 0;
+
+        /* create cgroup and append ssnd to cgroup */
+        path = alloc_strcatf(path, &pathLen, &pathCapacity, "%s/shifter", memory_cgroup_base);
+        slurm_debug("shifter_prolog: about to attempt to create: %s", path);
+        mkdir(path, 0755);
+        path = alloc_strcatf(path, &pathLen, &pathCapacity, "/uid_%d", uid);
+        slurm_debug("shifter_prolog: about to attempt to create: %s", path);
+        mkdir(path, 0755);
+        path = alloc_strcatf(path, &pathLen, &pathCapacity, "/job_%d", job);
+        slurm_debug("shifter_prolog: about to attempt to create: %s", path);
+        mkdir(path, 0755);
+        path = alloc_strcatf(path, &pathLen, &pathCapacity, "/ssh");
+        slurm_debug("shifter_prolog: about to attempt to create: %s", path);
+        mkdir(path, 0755);
+        path = alloc_strcatf(path, &pathLen, &pathCapacity, "/tasks");
+        slurm_debug("shifter_prolog: about to attempt to create: %s", path);
+        taskFilefd = open(path, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0666);
+        if (taskFilefd >= 0) {
+            char buffer[128];
+            ssize_t written_bytes = 0;
+            snprintf(buffer, 128, "%d", pid);
+            written_bytes = write(taskFilefd, buffer, strlen(buffer));
+            slurm_debug("shifter_prolog: write %d bytes to put pid %d on %s task list, %d", written_bytes, pid, path, errno);
+            close(taskFilefd);
+        } else {
+            slurm_error("shifter_prolog: failed to add sshd %d to %s cgroup", pid, path);
+        }
+        if (path != NULL) {
+            free(path);
+            path = NULL;
+        }
+    }
     
 _prolog_exit_unclean:
     if (udiConfig != NULL) free_UdiRootConfig(udiConfig, 1);
@@ -606,6 +666,14 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     char *epilogueArgs[2];
     int i, j;
     pid_t pid = 0;
+    FILE *cgroup_tasks = NULL;
+    char *lineBuffer = NULL;
+    size_t lineBuffer_sz = 0;
+    char *cgroup_path = NULL;
+    char *memory_cgroup_base = NULL;
+    uid_t uid = 0;
+    int job = 0;
+    int retry = 0;
 
 #define EPILOG_ERROR(message, errCode) \
     slurm_error(message); \
@@ -630,16 +698,53 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
         EPILOG_ERROR("Failed to read/parse shifter configuration.\n", rc);
     }
 
+    if (spank_get_item(sp, S_JOB_UID, &uid) != ESPANK_SUCCESS) {
+        EPILOG_ERROR("FAILED to get job uid!", ESPANK_ERROR);
+    }
+    if (spank_get_item(sp, S_JOB_ID, &job) != ESPANK_SUCCESS) {
+        EPILOG_ERROR("Couldnt get job id", ESPANK_ERROR);
+    }
+
+    memory_cgroup_base = find_memory_cgroup_base(argc, argv);
+    if (memory_cgroup_base != NULL) {
+        cgroup_path = alloc_strgenf("%s/shifter/uid_%d/job_%d/ssh/tasks", memory_cgroup_base, uid, job);
+        slurm_debug("shifter_epilog: cgroup_path is %s", cgroup_path);
+        while (retry < 10) {
+            int count = 0;
+            cgroup_tasks = fopen(cgroup_path, "r");
+            if (cgroup_tasks == NULL) break;
+            while (!feof(cgroup_tasks) && !ferror(cgroup_tasks)) {
+                size_t nread = getline(&lineBuffer, &lineBuffer_sz, cgroup_tasks);
+                int pid = 0;
+                if (nread == 0 || feof(cgroup_tasks) || ferror(cgroup_tasks)) {
+                    break;
+                }
+                pid = atoi(lineBuffer);
+                if (pid == 0) continue;
+                slurm_debug("shifter_epilog: sending SIGKILL to %d", pid);
+                kill(pid, SIGKILL);
+            }
+            fclose(cgroup_tasks);
+            if (count == 0) break;
+            retry++;
+        }
+        if (lineBuffer != NULL) {
+            free(lineBuffer);
+            lineBuffer = NULL;
+        }
+        free(cgroup_path);
+    }
 
     snprintf(path, PATH_MAX, "%s%s/sbin/unsetupRoot", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
     epilogueArgs[0] = path;
     epilogueArgs[1] = NULL;
+    pid = 0;
     pid = fork();
     if (pid < 0) {
         EPILOG_ERROR("FAILED to fork unsetupRoot", ESPANK_ERROR);
     } else if (pid > 0) {
         int status = 0;
-        slurm_error("waiting on child\n");
+        slurm_error("shifter_epilog: waiting on unsetupRoot\n");
         do {
             pid_t ret = waitpid(pid, &status, 0);
             if (ret != pid) {
@@ -649,17 +754,41 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
         if (WIFEXITED(status)) {
              status = WEXITSTATUS(status);
         } else {
-             status = 1;
+             status = -1;
         }
-        if (status != 0) EPILOG_ERROR("FAILED to run unsetupRoot", ESPANK_ERROR);
+        slurm_error("shifter_epilog: unsetupRoot completed with status %d", status);
+        if (status != 0) {
+            rc = ESPANK_ERROR;
+        }
     } else {
         execv(epilogueArgs[0], epilogueArgs);
         exit(127);
     }
+
+    slurm_debug("shifter_epilog: done with unsetupRoot");
+    if (memory_cgroup_base != NULL) {
+        slurm_debug("shifter_epilog: about to remove cgroups");
+        cgroup_path = alloc_strgenf("%s/shifter/uid_%d/job_%d/ssh", memory_cgroup_base, uid, job);
+        if (rmdir(cgroup_path) != 0) {
+            slurm_debug("shifter_epilog: failed to remove %s, errno: %d", cgroup_path, errno);
+        }
+        free(cgroup_path);
+        cgroup_path = alloc_strgenf("%s/shifter/uid_%d/job_%d", memory_cgroup_base, uid, job);
+        if (rmdir(cgroup_path) != 0) {
+            slurm_debug("shifter_epilog: failed to remove %s, errno: %d", cgroup_path, errno);
+        }
+        free(cgroup_path);
+        cgroup_path = alloc_strgenf("%s/shifter/uid_%d", memory_cgroup_base, uid);
+        if (rmdir(cgroup_path) != 0) {
+            slurm_debug("shifter_epilog: failed to remove %s, errno: %d", cgroup_path, errno);
+        }
+        free(cgroup_path);
+    }
     
 _epilog_exit_unclean:
-    if (udiConfig != NULL)
+    if (udiConfig != NULL) {
         free_UdiRootConfig(udiConfig, 1);
+    }
     return rc;
 }
 
