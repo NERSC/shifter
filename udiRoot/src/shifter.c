@@ -727,9 +727,11 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
         goto _loadImage_error;
     }
 
-    if (remountUdiRootReadonly(udiConfig) != 0) {
-        fprintf(stderr, "FAILED to remount udiRoot readonly, fail!\n");
-        goto _loadImage_error;
+    if (!udiConfig->mountUdiRootWritable) {
+        if (remountUdiRootReadonly(udiConfig) != 0) {
+            fprintf(stderr, "FAILED to remount udiRoot readonly, fail!\n");
+            goto _loadImage_error;
+        }
     }
 
     return 0;

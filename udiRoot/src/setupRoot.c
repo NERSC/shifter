@@ -158,9 +158,11 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    if (remountUdiRootReadonly(&udiConfig) != 0) {
-        fprintf(stderr, "FAILED to remount udiRoot readonly, fail!\n");
-        exit(1);
+    if (!udiConfig.mountUdiRootWritable) {
+        if (remountUdiRootReadonly(&udiConfig) != 0) {
+            fprintf(stderr, "FAILED to remount udiRoot readonly, fail!\n");
+            exit(1);
+        }
     }
 
     return 0;
