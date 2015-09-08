@@ -46,6 +46,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <limits.h>
+#include <ctype.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -58,6 +59,7 @@
 #define VOL_ALLOC_SIZE 256
 
 static int _assign(const char *key, const char *value, void *t_imageData);
+static char *_filterString(const char *input, int allowSlash);
 
 /*! Contact image gateway to lookup mapping between tag/type and identifier */
 /*!
@@ -365,13 +367,41 @@ static int _assign(const char *key, const char *value, void *t_image) {
         }
     } else if (strcmp(key, "VOLUME") == 0) {
         char **tmp = image->volume + image->volume_size;
-        strncpy_StringArray(value, strlen(value), &tmp, &(image->volume), &(image->volume_capacity), VOL_ALLOC_SIZE);
+        char *tvalue = _filterString(value, 1);
+        strncpy_StringArray(tvalue, strlen(tvalue), &tmp, &(image->volume), &(image->volume_capacity), VOL_ALLOC_SIZE);
         image->volume_capacity++;
+        free(tvalue);
     } else {
         printf("Couldn't understand key: %s\n", key);
         return 2;
     }
     return 0; 
+}
+
+static char *_filterString(const char *input, int allowSlash) {
+    ssize_t len = 0;
+    char *ret = NULL;
+    const char *rptr = NULL;
+    char *wptr = NULL;
+    if (input == NULL) return NULL;
+
+    len = strlen(input) + 1;
+    ret = (char *) malloc(sizeof(char) * len);
+    if (ret == NULL) return NULL;
+
+    rptr = input;
+    wptr = ret;
+    while (wptr - ret < len && *rptr != 0) {
+        if (isalnum(*rptr) || *rptr == '_' || *rptr == ':' || *rptr == '.' || *rptr == '+' || *rptr == '-') {
+            *wptr++ = *rptr;
+        }
+        if (allowSlash && *rptr == '/') {
+            *wptr++ = *rptr;
+        }
+        rptr++;
+    }
+    *wptr = 0;
+    return ret;
 }
 
 #ifdef _TESTHARNESS_IMAGEDATA

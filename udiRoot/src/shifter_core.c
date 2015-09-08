@@ -785,6 +785,8 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
     struct stat statData;
     char udiRoot[PATH_MAX];
     char *sshPath = NULL;
+    char *path = NULL;
+    char *tmpPath = NULL;
 
     if (imageData == NULL || username == NULL || udiConfig == NULL) {
         fprintf(stderr, "Invalid arguments to mountImageVFS(), error.\n");
@@ -842,6 +844,47 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
         sshPath = NULL;
     }
 
+    if (imageData->volume != NULL) {
+        char **ptr = imageData->volume;
+        for (ptr = imageData->volume; ptr && *ptr; ptr++) {
+            if (strlen(*ptr) == 0) continue;
+
+            path = strdup(*ptr);
+            char *pathPtr = path;
+            char *pathEnd = NULL;
+            int stop = 0;
+            
+            /* skip leading slashes */
+            while (*pathPtr == '/') {
+                pathPtr++;
+            }
+
+            /* create subcomponents along the path, if any exist along the way, STOP */
+            pathEnd = pathPtr;
+            while ((pathEnd = strchr(pathEnd + 1, '/')) != NULL) {
+                *pathEnd = 0;
+                if (stat(pathPtr, &statData) == 0) {
+                    stop = 1;
+                    break;
+                } else {
+                    tmpPath = alloc_strgenf("%s/%s", udiRoot, pathPtr);
+                    _MKDIR(tmpPath, 0755);
+                    free(tmpPath);
+                    tmpPath = NULL;
+                }
+                *pathEnd = '/';
+            }
+            if (stop == 0) {
+                tmpPath = alloc_strgenf("%s/%s", udiRoot, pathPtr);
+                _MKDIR(tmpPath, 0755);
+                free(tmpPath);
+                tmpPath = NULL;
+            }
+            free(path);
+            path = NULL;
+        }
+    }
+
     /* copy image /etc into place */
     BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
 
@@ -851,7 +894,15 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
     return 0;
 
 _mountImgVfs_unclean:
-    /* do needed unmounts */
+    if (path != NULL) {
+        free(path);
+    }
+    if (sshPath != NULL) {
+        free(sshPath);
+    }
+    if (tmpPath != NULL) {
+        free(tmpPath);
+    }
     return 1;
 }
 

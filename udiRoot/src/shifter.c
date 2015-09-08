@@ -255,6 +255,8 @@ int main(int argc, char **argv) {
     for (envPtr = imageData.env; envPtr && *envPtr; envPtr++) {
         local_putenv(&environ_copy, *envPtr);
     }
+    char *shifterRuntime = strdup("SHIFTER_RUNTIME=1");
+    local_putenv(&environ_copy, shifterRuntime);
 
     execvpe(opts.args[0], opts.args, environ_copy);
     return 127;
