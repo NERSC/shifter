@@ -88,6 +88,7 @@ struct options {
     uid_t tgtUid;
     gid_t tgtGid;
     char *username;
+    char *workdir;
     char **args;
     VolumeMap volumeMap;
     int verbose;
@@ -156,6 +157,9 @@ int main(int argc, char **argv) {
     if (opts.useEntryPoint == 1) {
         if (imageData.entryPoint != NULL) {
             opts.args[0] = strdup(imageData.entryPoint);
+            if (imageData.workdir != NULL) {
+                opts.workdir = strdup(imageData.workdir);
+            }
         } else {
             fprintf(stderr, "Image does not have a defined entrypoint.\n");
         }
@@ -203,6 +207,9 @@ int main(int argc, char **argv) {
         exit(1);
     }
     wd[PATH_MAX-1] = 0;
+    if (opts.workdir == NULL) {
+        opts.workdir = strdup(wd);
+    }
 
     if (isImageLoaded(&imageData, &opts, &udiConfig) == 0) {
         if (loadImage(&imageData, &opts, &udiConfig) != 0) {
@@ -238,8 +245,8 @@ int main(int argc, char **argv) {
     }
 
     /* chdir (within chroot) to where we belong again */
-    if (chdir(wd) != 0) {
-        fprintf(stderr, "Failed to switch to original cwd: %s\n", wd);
+    if (chdir(opts.workdir) != 0) {
+        fprintf(stderr, "Failed to switch to working dir: %s\n", opts.workdir);
         exit(1);
     }
 
@@ -374,7 +381,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                 }
             case 'i':
                 {
-                    int isLocal = 0;
+                    int isLocalOrDocker = 0;
                     char *tmp = NULL;
                     ptr = strchr(optarg, ':');
                     if (ptr == NULL) {
@@ -386,10 +393,10 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                     tmp = _filterString(optarg, 0);
                     if (config->imageType != NULL) free(config->imageType);
                     config->imageType = tmp;
-                    if (strcmp(config->imageType, "local") == 0) {
-                        isLocal = 1;
+                    if (strcmp(config->imageType, "local") == 0 || strcmp(config->imageType, "docker") == 0) {
+                        isLocalOrDocker = 1;
                     }
-                    tmp = _filterString(ptr, isLocal);
+                    tmp = _filterString(ptr, isLocalOrDocker);
                     if (config->imageTag != NULL) free(config->imageTag);
                     config->imageTag = tmp;
                     if (config->imageIdentifier != NULL) {
@@ -631,6 +638,10 @@ void free_options(struct options *opts, int freeStruct) {
     if (opts->imageTag != NULL) {
         free(opts->imageTag);
         opts->imageTag = NULL;
+    }
+    if (opts->workdir != NULL) {
+        free(opts->workdir);
+        opts->workdir = NULL;
     }
     if (opts->imageIdentifier != NULL) {
         free(opts->imageIdentifier);

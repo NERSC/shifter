@@ -358,6 +358,11 @@ static int _assign(const char *key, const char *value, void *t_image) {
         if (image->entryPoint == NULL) {
             return 1;
         }
+    } else if (strcmp(key, "WORKDIR") == 0) {
+        image->workdir = strdup(value);
+        if (image->workdir == NULL) {
+            return 1;
+        }
     } else if (strcmp(key, "VOLUME") == 0) {
         char **tmp = image->volume + image->volume_size;
         strncpy_StringArray(value, strlen(value), &tmp, &(image->volume), &(image->volume_capacity), VOL_ALLOC_SIZE);

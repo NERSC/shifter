@@ -56,6 +56,7 @@ typedef struct _ImageData {
     char *filename;         /*!< path to image */
     char **env;             /*!< array of environment variables */
     char *entryPoint;       /*!< default command used */
+    char *workdir;          /*!< working dir of entrypoint */
     char **volume;          /*!< array of volume mounts */
     int useLoopMount;       /*!< flag if image requires loop mount */
     char *identifier;       /*!< Image identifier string */
