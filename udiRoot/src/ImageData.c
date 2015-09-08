@@ -136,7 +136,7 @@ char *lookup_ImageIdentifier(
             } else if (strncmp(ptr, "ENTRY:", 6) == 0) {
                 ptr += 6;
                 ptr = shifter_trim(ptr);
-            } else if (identifier != NULL && strchr(ptr, ':') == NULL) {
+            } else if (identifier == NULL && strchr(ptr, ':') == NULL) {
                 /* this is the image id */
                 identifier = strdup(ptr);
                 break;
