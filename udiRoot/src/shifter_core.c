@@ -851,8 +851,6 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
         for (ptr = imageData->volume; ptr && *ptr; ptr++) {
             if (strlen(*ptr) == 0) continue;
 
-            fprintf(stderr, "checking volume mount pt: %s\n", *ptr);
-
             path = strdup(*ptr);
             char *pathPtr = path;
             char *pathEnd = NULL;
@@ -871,11 +869,9 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
             while (stop == 0 && (pathEnd = strchr(pathEnd + 1, '/')) != NULL) {
                 *pathEnd = 0;
                 tmpPath = alloc_strgenf("%s/%s", udiRoot, pathPtr);
-                fprintf(stderr, "does %s exist?\n", tmpPath);
                 if (stat(tmpPath, &statData) == 0) {
                     stop = 1;
                 } else {
-                    fprintf(stderr, "no, create it: %s\n", tmpPath);
                     _MKDIR(tmpPath, 0755);
                 }
                 *pathEnd = '/';
@@ -884,12 +880,9 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
             }
             if (stop == 0) {
                 tmpPath = alloc_strgenf("%s/%s", udiRoot, pathPtr);
-                fprintf(stderr, "attempting to create whole path: %s\n", tmpPath);
                 _MKDIR(tmpPath, 0755);
                 free(tmpPath);
                 tmpPath = NULL;
-            } else {
-                fprintf(stderr, "got stopped along the way, not getting %s\n", tmpPath);
             }
             free(path);
             path = NULL;
