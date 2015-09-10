@@ -369,7 +369,7 @@ static int _assign(const char *key, const char *value, void *t_image) {
         char **tmp = image->volume + image->volume_size;
         char *tvalue = _filterString(value, 1);
         strncpy_StringArray(tvalue, strlen(tvalue), &tmp, &(image->volume), &(image->volume_capacity), VOL_ALLOC_SIZE);
-        image->volume_capacity++;
+        image->volume_size++;
         free(tvalue);
     } else {
         printf("Couldn't understand key: %s\n", key);
