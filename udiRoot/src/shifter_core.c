@@ -788,6 +788,8 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
     char *path = NULL;
     char *tmpPath = NULL;
 
+    umask(022);
+
     if (imageData == NULL || username == NULL || udiConfig == NULL) {
         fprintf(stderr, "Invalid arguments to mountImageVFS(), error.\n");
         goto _mountImgVfs_unclean;
