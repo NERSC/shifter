@@ -849,6 +849,8 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
         for (ptr = imageData->volume; ptr && *ptr; ptr++) {
             if (strlen(*ptr) == 0) continue;
 
+            fprintf(stderr, "checking volume mount pt: %s\n", *ptr);
+
             path = strdup(*ptr);
             char *pathPtr = path;
             char *pathEnd = NULL;
@@ -858,27 +860,34 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
             while (*pathPtr == '/') {
                 pathPtr++;
             }
+            if (*pathPtr == 0) {
+                continue;
+            }
 
             /* create subcomponents along the path, if any exist along the way, STOP */
             pathEnd = pathPtr;
-            while ((pathEnd = strchr(pathEnd + 1, '/')) != NULL) {
+            while (stop == 0 && (pathEnd = strchr(pathEnd + 1, '/')) != NULL) {
                 *pathEnd = 0;
-                if (stat(pathPtr, &statData) == 0) {
+                tmpPath = alloc_strgenf("%s/%s", udiRoot, pathPtr);
+                fprintf(stderr, "does %s exist?\n", tmpPath);
+                if (stat(tmpPath, &statData) == 0) {
                     stop = 1;
-                    break;
                 } else {
-                    tmpPath = alloc_strgenf("%s/%s", udiRoot, pathPtr);
+                    fprintf(stderr, "no, create it: %s\n", tmpPath);
                     _MKDIR(tmpPath, 0755);
-                    free(tmpPath);
-                    tmpPath = NULL;
                 }
                 *pathEnd = '/';
+                free(tmpPath);
+                tmpPath = NULL;
             }
             if (stop == 0) {
                 tmpPath = alloc_strgenf("%s/%s", udiRoot, pathPtr);
+                fprintf(stderr, "attempting to create whole path: %s\n", tmpPath);
                 _MKDIR(tmpPath, 0755);
                 free(tmpPath);
                 tmpPath = NULL;
+            } else {
+                fprintf(stderr, "got stopped along the way, not getting %s\n", tmpPath);
             }
             free(path);
             path = NULL;
