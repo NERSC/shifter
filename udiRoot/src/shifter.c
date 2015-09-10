@@ -689,13 +689,21 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
     char chrootPath[PATH_MAX];
     snprintf(chrootPath, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
     chrootPath[PATH_MAX - 1] = 0;
+    gid_t gidZero = 0;
 
     /* must achieve full root privileges to perform mounts */
+    if (setgroups(1, &gidZero) != 0) {
+        fprintf(stderr, "Failed to setgroups to %d\n", gidZero);
+        goto _loadImage_error;
+    }
+    if (setresgid(0, 0, 0) != 0) {
+        fprintf(stderr, "Failed to setgid to %d\n", 0);
+        goto _loadImage_error;
+    }
     if (setresuid(0, 0, 0) != 0) {
         fprintf(stderr, "Failed to setuid to %d\n", 0);
         goto _loadImage_error;
     }
-
     if (unshare(CLONE_NEWNS) != 0) {
         perror("Failed to unshare the filesystem namespace.");
         goto _loadImage_error;
