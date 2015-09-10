@@ -411,7 +411,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                 config->useEntryPoint = 1;
                 break;
             case 'h':
-                usage(0);
+                _usage(0);
                 break;
             case '?':
                 fprintf(stderr, "Missing an argument!\n");
