@@ -161,7 +161,7 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         config->rootfsType = NULL;
     }
 
-    char **arrays[] = {config->gwName, config->gwPort, config->siteFs, NULL};
+    char **arrays[] = {config->gwName, config->gwPort, config->siteFs, config->siteEnv, config->siteEnvAppend, config->siteEnvPrepend, NULL};
     char ***arrayPtr = NULL;
     for (arrayPtr = arrays; *arrayPtr != NULL; arrayPtr++) {
         char **iPtr = NULL;
@@ -381,11 +381,48 @@ static int _assign(const char *key, const char *value, void *t_config) {
     } else if (strcmp(key, "siteFs") == 0) {
         char *valueDup = strdup(value);
         char *search = valueDup;
+        char *svPtr = NULL;
         char *ptr = NULL;
-        while ((ptr = strtok(search, " ")) != NULL) {
+        while ((ptr = strtok_r(search, " ", &svPtr)) != NULL) {
             char **siteFsPtr = config->siteFs + config->siteFs_size;
             strncpy_StringArray(ptr, strlen(ptr), &siteFsPtr, &(config->siteFs), &(config->siteFs_capacity), SITEFS_ALLOC_BLOCK);
             config->siteFs_size++;
+            search = NULL;
+        }
+        free(valueDup);
+    } else if (strcmp(key, "siteEnv") == 0) {
+        char *valueDup = strdup(value);
+        char *search = valueDup;
+        char *svPtr = NULL;
+        char *ptr = NULL;
+        while ((ptr = strtok_r(search, " ", &svPtr)) != NULL) {
+            char **siteEnvPtr = config->siteEnv + config->siteEnv_size;
+            strncpy_StringArray(ptr, strlen(ptr), &siteEnvPtr, &(config->siteEnv), &(config->siteEnv_capacity), SITEFS_ALLOC_BLOCK);
+            config->siteEnv_size++;
+            search = NULL;
+        }
+        free(valueDup);
+    } else if (strcmp(key, "siteEnvAppend") == 0) {
+        char *valueDup = strdup(value);
+        char *search = valueDup;
+        char *svPtr = NULL;
+        char *ptr = NULL;
+        while ((ptr = strtok_r(search, " ", &svPtr)) != NULL) {
+            char **siteEnvAppendPtr = config->siteEnvAppend + config->siteEnvAppend_size;
+            strncpy_StringArray(ptr, strlen(ptr), &siteEnvAppendPtr, &(config->siteEnvAppend), &(config->siteEnvAppend_capacity), SITEFS_ALLOC_BLOCK);
+            config->siteEnvAppend_size++;
+            search = NULL;
+        }
+        free(valueDup);
+    } else if (strcmp(key, "siteEnvPrepend") == 0) {
+        char *valueDup = strdup(value);
+        char *search = valueDup;
+        char *svPtr = NULL;
+        char *ptr = NULL;
+        while ((ptr = strtok_r(search, " ", &svPtr)) != NULL) {
+            char **siteEnvPrependPtr = config->siteEnvPrepend + config->siteEnvPrepend_size;
+            strncpy_StringArray(ptr, strlen(ptr), &siteEnvPrependPtr, &(config->siteEnvPrepend), &(config->siteEnvPrepend_capacity), SITEFS_ALLOC_BLOCK);
+            config->siteEnvPrepend_size++;
             search = NULL;
         }
         free(valueDup);

@@ -83,6 +83,9 @@ typedef struct _UdiRootConfig {
     char **gwName;
     char **gwPort;
     char **siteFs;
+    char **siteEnv;
+    char **siteEnvAppend;
+    char **siteEnvPrepend;
     int allowLocalChroot;
     int autoLoadKernelModule;
     int mountUdiRootWritable;
@@ -95,9 +98,15 @@ typedef struct _UdiRootConfig {
     char *chmodPath;
 
     size_t siteFs_capacity;
+    size_t siteEnv_capacity;
+    size_t siteEnvAppend_capacity;
+    size_t siteEnvPrepend_capacity;
     size_t gwName_capacity;
     size_t gwPort_capacity;
     size_t siteFs_size;
+    size_t siteEnv_size;
+    size_t siteEnvAppend_size;
+    size_t siteEnvPrepend_size;
     size_t gateway_size;
 } UdiRootConfig;
 

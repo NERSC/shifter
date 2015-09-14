@@ -255,8 +255,15 @@ int main(int argc, char **argv) {
     for (envPtr = imageData.env; envPtr && *envPtr; envPtr++) {
         local_putenv(&environ_copy, *envPtr);
     }
-    char *shifterRuntime = strdup("SHIFTER_RUNTIME=1");
-    local_putenv(&environ_copy, shifterRuntime);
+    for (envPtr = udiConfig.siteEnv; envPtr && *envPtr; envPtr++) {
+        local_putenv(&environ_copy, *envPtr);
+    }
+    for (envPtr = udiConfig.siteEnvAppend; envPtr && *envPtr; envPtr++) {
+        local_appendenv(&environ_copy, *envPtr);
+    }
+    for (envPtr = udiConfig.siteEnvPrepend; envPtr && *envPtr; envPtr++) {
+        local_prependenv(&environ_copy, *envPtr);
+    }
 
     execvpe(opts.args[0], opts.args, environ_copy);
     return 127;
@@ -306,6 +313,16 @@ int local_putenv(char ***environ, const char *newVar) {
     *environ = tmp;
     (*environ)[envSize++] = strdup(newVar);
     (*environ)[envSize++] = NULL;
+    return 0;
+}
+
+int local_appendenv(char ***environ, const char *appvar) {
+    if (environ == NULL || appvar == NULL || *environ == NULL) return 1;
+    return 0;
+}
+
+int local_prependenv(char ***environ, const char *prepvar) {
+    if (environ == NULL || prepvar == NULL || *environ == NULL) return 1;
     return 0;
 }
 
