@@ -2096,7 +2096,119 @@ _validateUnmounted_error:
     free_MountList(&mounts, 0);
     return -1;
 }
-    
+
+static char **_shifter_findenv(char ***env, char *var, size_t n, size_t *nElement) {
+    char **ptr = NULL;
+    if (env == NULL || *env == NULL || var == NULL || n == 0) {
+        return NULL;
+    }
+    if (nElement != NULL) {
+        *nElement = 0;
+    }
+    for (ptr = *env; ptr && *ptr; ptr++) {
+        if (strncmp(*ptr, var, n) == 0) {
+            return ptr;
+        }
+        if (nElement != NULL) {
+            (*nElement)++;
+        }
+    }
+    return NULL;
+}
+
+static int _shifter_putenv(char ***env, char *var, int mode) {
+    size_t namelen = 0;
+    size_t envsize = 0;
+    char *ptr = NULL;
+    char **pptr = NULL;
+    if (env == NULL || *env == NULL || var == NULL) {
+        return 1;
+    }
+    ptr = strchr(var, '=');
+    if (ptr == NULL) {
+        return 1;
+    }
+    namelen = ptr - var;
+    pptr = _shifter_findenv(env, var, namelen, &envsize);
+    if (pptr != NULL) {
+        char *value = strchr(*pptr, '=');
+        if (value != NULL) {
+            value++;
+        }
+        if (*value == 0) {
+            value = NULL;
+        }
+        if (mode == 0) {
+            /* replace */
+            *pptr = var;
+            return 0;
+        } else if (mode == 1) {
+            /* prepend */
+            char *newptr = NULL;
+            if (value == NULL) {
+                *pptr = var;
+                return 0;
+            }
+
+            newptr = alloc_strgenf("%s:%s", var, value);
+            *pptr = newptr;
+            return 0;
+        } else if (mode == 2) {
+            /* append */
+            char *newptr = NULL;
+
+            if (value == NULL) {
+                *pptr = var;
+                return 0;
+            }
+            newptr = alloc_strgenf("%s:%s", *pptr, (var + namelen + 1));
+            *pptr = newptr;
+            return 0;
+        } else {
+            return 1;
+        }
+    }
+    char **tmp = realloc(*env, sizeof(char *) * (envsize + 2));
+    if (tmp != NULL) {
+        *env = tmp;
+    }
+    tmp[envsize] = var;
+    tmp[envsize+1] = NULL;
+    return 0;
+}
+
+int shifter_putenv(char ***env, char *var) {
+    return _shifter_putenv(env, var, 0);
+}
+
+int shifter_appendenv(char ***env, char *var) {
+    return _shifter_putenv(env, var, 2);
+}
+
+int shifter_prependenv(char ***env, char *var) {
+    return _shifter_putenv(env, var, 1);
+}
+
+int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
+    char **envPtr = NULL;
+    if (env == NULL || *env == NULL || image == NULL || udiConfig == NULL) {
+        return 1;
+    }
+    for (envPtr = image->env; envPtr && *envPtr; envPtr++) {
+        shifter_putenv(env, *envPtr);
+    }
+    for (envPtr = udiConfig->siteEnv; envPtr && *envPtr; envPtr++) {
+        shifter_putenv(env, *envPtr);
+    }
+    for (envPtr = udiConfig->siteEnvAppend; envPtr && *envPtr; envPtr++) {
+        shifter_appendenv(env, *envPtr);
+    }
+    for (envPtr = udiConfig->siteEnvPrepend; envPtr && *envPtr; envPtr++) {
+        shifter_prependenv(env, *envPtr);
+    }
+    return 0;
+}
+
 
 #ifdef _TESTHARNESS_SHIFTERCORE
 #include <CppUTest/CommandLineTestRunner.h>

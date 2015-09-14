@@ -103,7 +103,7 @@ int parse_options(int argc, char **argv, struct options *opts, UdiRootConfig *);
 int parse_environment(struct options *opts);
 int fprint_options(FILE *, struct options *);
 void free_options(struct options *, int freeStruct);
-int local_putenv(char ***environ, const char *newVar);
+/*int local_putenv(char ***environ, const char *newVar);*/
 int isImageLoaded(ImageData *, struct options *, UdiRootConfig *);
 int loadImage(ImageData *, struct options *, UdiRootConfig *);
 
@@ -251,25 +251,13 @@ int main(int argc, char **argv) {
     }
 
     /* source the environment variables from the image */
-    char **envPtr = NULL;
-    for (envPtr = imageData.env; envPtr && *envPtr; envPtr++) {
-        local_putenv(&environ_copy, *envPtr);
-    }
-    for (envPtr = udiConfig.siteEnv; envPtr && *envPtr; envPtr++) {
-        local_putenv(&environ_copy, *envPtr);
-    }
-    for (envPtr = udiConfig.siteEnvAppend; envPtr && *envPtr; envPtr++) {
-        local_appendenv(&environ_copy, *envPtr);
-    }
-    for (envPtr = udiConfig.siteEnvPrepend; envPtr && *envPtr; envPtr++) {
-        local_prependenv(&environ_copy, *envPtr);
-    }
-
+    shifter_setupenv(&environ_copy, &imageData, &udiConfig);
     execvpe(opts.args[0], opts.args, environ_copy);
     return 127;
 }
 #endif
 
+#if 0
 /* local_putenv
  * Provides similar functionality to linux putenv, but on a targetted
  * environment.  Expects all strings to be in "var=value" format.
@@ -325,6 +313,7 @@ int local_prependenv(char ***environ, const char *prepvar) {
     if (environ == NULL || prepvar == NULL || *environ == NULL) return 1;
     return 0;
 }
+#endif
 
 int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *udiConfig) {
     int opt = 0;
@@ -827,6 +816,7 @@ TEST(ShifterTestGroup, CopyEnv_basic) {
     MemoryLeakWarningPlugin::turnOnNewDeleteOverloads();
 }
 
+#if 0
 TEST(ShifterTestGroup, LocalPutEnv_basic) {
     setenv("TESTENV0", "qwerty123", 1);
     unsetenv("TESTENV2");
@@ -875,6 +865,7 @@ TEST(ShifterTestGroup, LocalPutEnv_basic) {
     free(testenv0Ptr);
     free(testenv2Ptr);
 }
+#endif
 
 
 int main(int argc, char **argv) {

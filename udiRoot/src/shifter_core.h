@@ -95,3 +95,7 @@ int unmountTree(MountList *mounts, const char *base);
 int validateUnmounted(const char *path, int subtree);
 int isSharedMount(const char *);
 int writeHostFile(const char *minNodeSpec, UdiRootConfig *udiConfig);
+int shifter_putenv(char ***env, char *var);
+int shifter_appendenv(char ***env, char *var);
+int shifter_prependenv(char ***env, char *var);
+int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig);
