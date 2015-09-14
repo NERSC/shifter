@@ -613,6 +613,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
 
     /* recursively copy /opt/udiImage (to allow modifications) */
     if (udiConfig->optUdiImage != NULL) {
+        char finalPath[PATH_MAX];
         snprintf(srcBuffer, PATH_MAX, "%s/%s/", udiConfig->nodeContextPrefix, udiConfig->optUdiImage);
         srcBuffer[PATH_MAX-1] = 0;
         if (stat(srcBuffer, &statData) != 0) {
@@ -621,6 +622,8 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
         }
         snprintf(mntBuffer, PATH_MAX, "%s/opt", udiRoot);
         mntBuffer[PATH_MAX-1] = 0;
+        snprintf(finalPath, PATH_MAX, "%s/udiImage", mntBuffer);
+        finalPath[PATH_MAX-1] = 0;
 
         if (stat(mntBuffer, &statData) != 0) {
             fprintf(stderr, "FAILED to stat udiImage target directory: %s\n", mntBuffer);
@@ -630,7 +633,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
                 strdup(srcBuffer), strdup(mntBuffer), NULL
             };
             char *chmodArgs[] = {strdup(udiConfig->chmodPath), strdup("-R"),
-                strdup("a+rX"), strdup(mntBuffer), NULL
+                strdup("a+rX"), strdup(finalPath), NULL
             };
             char **argsPtr = NULL;
             int ret = forkAndExecv(args);
