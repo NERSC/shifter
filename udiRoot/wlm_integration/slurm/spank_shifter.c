@@ -34,6 +34,7 @@ static char imagevolume[IMAGEVOLUME_MAXLEN] = "";
 static int nativeSlurm = IS_NATIVE_SLURM;
 static int ccmMode = 0;
 static int serialMode = 0;
+static int trustedImage = 1;
 
 static int _opt_image(int val, const char *optarg, int remote);
 static int _opt_imagevolume(int val, const char *optarg, int remote);
@@ -795,6 +796,9 @@ _epilog_exit_unclean:
 int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     int rc = ESPANK_SUCCESS;
     UdiRootConfig *udiConfig = NULL;
+    ImageData imageData;
+
+    memset(&imageData, 0, sizeof(ImageData));
 
 #define TASKINITPRIV_ERROR(message, errCode) \
     slurm_error(message); \
@@ -806,11 +810,12 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     if (strlen(image) == 0 || strlen(image_type) == 0) {
         return rc;
     }
-    if (ccmMode != 1) return rc;
+    if (ccmMode != 1 || trustedImage != 1) return rc;
     udiConfig = read_config(argc, argv);
     if (udiConfig == NULL) {
         TASKINITPRIV_ERROR("Failed to load udiRoot config!", ESPANK_ERROR);
     }
+    parse_ImageData(image_type, image, udiConfig, &imageData);
 
     if (strlen(udiConfig->udiMountPoint) > 0) {
         char currcwd[PATH_MAX];
@@ -834,8 +839,12 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
         if (chroot(udiConfig->udiMountPoint) != 0) {
             TASKINITPRIV_ERROR("FAILED to chroot to designated image", ESPANK_ERROR);
         }
+        if (shifter_setupenv(&environ, &imageData, udiConfig) != 0) {
+            TASKINITPRIV_ERROR("FAILED to setup shifter environment", ESPANK_ERROR);
+        }
     }
 _taskInitPriv_exit_unclean:
+    free_ImageData(&imageData, 0);
     if (udiConfig != NULL)
         free_UdiRootConfig(udiConfig, 1);
     return rc;
