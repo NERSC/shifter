@@ -35,15 +35,18 @@ static int nativeSlurm = IS_NATIVE_SLURM;
 static int ccmMode = 0;
 static int serialMode = 0;
 static int trustedImage = 1;
+static int autoshift = 0;
 
 static int _opt_image(int val, const char *optarg, int remote);
 static int _opt_imagevolume(int val, const char *optarg, int remote);
 static int _opt_ccm(int val, const char *optarg, int remote);
+static int _opt_autoshift(int val, const char *optarg, int remote);
 
 struct spank_option spank_option_array[] = {
     { "image", "image", "shifter image to use", 1, 0, (spank_opt_cb_f) _opt_image},
     { "imagevolume", "imagevolume", "shifter image bindings", 1, 0, (spank_opt_cb_f) _opt_imagevolume },
     { "ccm", "ccm", "ccm emulation mode", 0, 0, (spank_opt_cb_f) _opt_ccm},
+    { "autoshift", "autoshift", "automatically enter shifter image", 0, 0, (spank_opt_cb_f) _opt_autoshift},
     SPANK_OPTIONS_TABLE_END
 };
 
@@ -64,6 +67,11 @@ int _opt_ccm(int val, const char *optarg, int remote) {
     snprintf(image, IMAGE_MAXLEN, "/");
     snprintf(image_type, IMAGE_MAXLEN, "local");
     ccmMode = 1;
+    return ESPANK_SUCCESS;
+}
+
+int _opt_autoshift(int val, const char *optarg, int remote) {
+    autoshift = 1;
     return ESPANK_SUCCESS;
 }
 
@@ -810,7 +818,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     if (strlen(image) == 0 || strlen(image_type) == 0) {
         return rc;
     }
-    if (ccmMode != 1 || trustedImage != 1) return rc;
+    if (ccmMode == 0 && autoshift == 0) return rc;
     udiConfig = read_config(argc, argv);
     if (udiConfig == NULL) {
         TASKINITPRIV_ERROR("Failed to load udiRoot config!", ESPANK_ERROR);
