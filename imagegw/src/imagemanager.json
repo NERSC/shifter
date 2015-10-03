@@ -6,6 +6,9 @@
     "DefaultImageFormat": "squashfs",
     "PullUpdateTimeout": 300,
     "ImageExpirationTimeout": "90:00:00:00",
+    "MongoDBURI":"mongodb://192.168.99.100:32768/",
+    "MongoDB":"Shifter",
+    "Broker":"redis://192.168.99.100:32769/",
 
     "Locations": {
         "index.docker.io": {
@@ -48,4 +51,3 @@
         }
     }
 }
-
