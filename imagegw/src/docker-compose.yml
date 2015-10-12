@@ -1,0 +1,42 @@
+api:
+  image: imagegwapi
+  ports:
+   - 5555:5000
+  links:
+   - mongo
+   - redis
+  volumes:
+   - /mnt/sda1/imagegw:/data
+  command: api
+mongo:
+  image: mongo:2.4
+  volumes:
+    - /mnt/sda1/data/mongo:/data/db
+  command: mongod --smallfiles --quiet
+redis:
+   image: redis
+systema:
+  container_name: systema
+  build: test
+  links:
+   - api
+  ports:
+   - 22
+  volumes:
+  - /mnt/sda1/data/systema:/data
+worker:
+  image: imagegwapi
+  links:
+   - api
+   - redis
+   - systema:systema
+  volumes:
+   - /mnt/sda1/imagegw:/data
+  command: worker
+flower:
+  image: imagegwapi
+  links:
+   - redis
+  ports:
+   - 5556:5555
+  command: flower

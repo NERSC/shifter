@@ -1,0 +1,5 @@
+#!/bin/sh
+
+# For test purposes on a mac
+(echo "mock mksquahfs called with $@";date) > $2
+#    ret = subprocess.call(["mksquashfs", expandedPath, imageTempPath, "-all-root"])
