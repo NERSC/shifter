@@ -14,7 +14,10 @@ class GWTestCase(unittest.TestCase):
         with open(self.configfile) as config_file:
             self.config = json.load(config_file)
         os.environ['GWCONFIG']=self.configfile
-        client = MongoClient(self.config['MongoDBURI'])
+        os.environ['CONFIG']=self.configfile
+        mongouri=self.config['MongoDBURI']
+        print "Debug: Connecting to %s"%mongouri
+        client = MongoClient(mongouri)
         db=self.config['MongoDB']
         self.images=client[db].images
         self.images.drop()

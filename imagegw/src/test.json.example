@@ -6,47 +6,48 @@
     "DefaultImageFormat": "squashfs",
     "PullUpdateTimeout": 300,
     "ImageExpirationTimeout": "90:00:00:00",
-    "MongoDBURI":"mongodb://mongoserver/",
-    "MongoDB":"Shifter",
-    "Broker":"redis://redisserver/",
+    "CacheDirectory": "/tmp/imagegw/",
+    "MongoDBURI":"mongodb://mongo/",
+    "MongoDB":"ShifterTest",
+    "Broker":"redis://redis/",
 
     "Locations": {
         "index.docker.io": {
             "remotetype": "dockerv2",
             "authentication": "http"
         },
-        "registry.services.nersc.gov": {
+        "registry.host.com": {
             "remotetype": "dockerv2",
-            "sslcacert": "/path/to/cacert.pem",
+            "sslcacert": "./cacert.pem",
             "authentication": "http"
         }
     },
 
     "Platforms": {
-        "edison": {
-            "mungeSocketPath": "/path/to/edison/munge.socket",
+        "systema": {
+            "mungeSocketPath": "/tmp/systema/munge.socket",
             "usergroupService": "ldap",
             "accesstype": "remote",
+            "mountCommand": "/bin/mount",
             "host": [
-                "edison01-eth4.nersc.gov",
-                "edison02-eth4.nersc.gov"
+                "localhost"
             ],
             "ssh": {
-                "username": "shifter",
-                "key": "/path/to/ssh/key",
-                "imageDir": "/remote/path/for/images"
+                "username": "imageuser",
+                "keyx": "/tmp/systema/ssh.key",
+                "imageDir": "/tmp/systema/images"
             },
             "ldap": {
-                "userBase": "ou=People,ou=edison,ou=Host,o=ldapsvc,dc=nersc,dc=gov",
-                "groupBase": "ou=PosixGroup,ou=edison,ou=Host,o=ldapsvc,dc=nersc,dc=gov"
+                "userBase": "ou=People,ou=system,ou=Host,o=ldapsvc,dc=nersc,dc=gov",
+                "groupBase": "ou=PosixGroup,ou=system,ou=Host,o=ldapsvc,dc=nersc,dc=gov"
             }
         },
-        "cori": {
-            "mungeSocketPath": "/path/to/cori/munge.socket",
+        "systemb": {
+            "mungeSocketPath": "/tmp/systemb/munge.socket",
             "accesstype": "local",
             "usergroupService": "local",
             "local": {
-                "imageDir": "/local/path/for/cori/images"
+                "imageDir": "/tmp/systemb/images"
             }
         }
     }

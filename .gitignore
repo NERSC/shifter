@@ -1,1 +1,5 @@
 *.pyc
+ssh.key
+ssh.pub
+munge.key
+test.json

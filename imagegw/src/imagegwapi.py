@@ -42,7 +42,7 @@ def help():
 
 def create_response(rec):
     resp={'id':'TODO'}
-    for field in ('system','tag','status','userAcl','groupAcl','ENV','ENTRY'):
+    for field in ('system','itype','tag','status','userAcl','groupAcl','ENV','ENTRY'):
         try:
             resp[field]=rec[field]
         except KeyError,e:
@@ -108,7 +108,7 @@ def expire(system,type,tag,id):
 # Initialization
 with open(CONFIG) as config_file:
     config = json.load(config_file)
-mgr=imagemngr.imagemngr(CONFIG)
+mgr=imagemngr.imagemngr(CONFIG,logger=imagegwapi.logger)
 
 
 if __name__ == '__main__':

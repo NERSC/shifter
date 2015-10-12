@@ -1,4 +1,5 @@
 import os
+os.environ['CONFIG']='test.json'
 import imagemngr
 import unittest
 import tempfile
@@ -14,7 +15,8 @@ class ImageMngrTestCase(unittest.TestCase):
         self.configfile='test.json'
         with open(self.configfile) as config_file:
             self.config = json.load(config_file)
-        client = MongoClient(self.config['MongoDBURI'])
+        mongodb=self.config['MongoDBURI']
+        client = MongoClient(mongodb)
         db=self.config['MongoDB']
         self.images=client[db].images
         self.images.drop()
@@ -25,7 +27,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.id='fakeid'
         self.auth='good'
         self.badauth='bad'
-        self.logfile='worker.log'
+        self.logfile='/tmp/worker.log'
         self.pid=0
         self.query={'system':self.system,'itype':self.itype,'tag':self.tag}
         if os.path.exists(self.logfile):
@@ -64,13 +66,18 @@ class ImageMngrTestCase(unittest.TestCase):
         # TODO: Test bad auth
         l=self.m.lookup(self.badauth,i)
 
-    def start_worker(self,TESTMODE=1):
+    def start_worker(self,TESTMODE=1,system='systema'):
         # Start a celery worker.
         pid=os.fork()
         if pid==0:  # Child process
             os.environ['CONFIG']='test.json'
             os.environ['TESTMODE']='%d'%(TESTMODE)
-            os.execvp('celery',['celery','-A','imageworker','worker','--loglevel=INFO','-c','1','-f',self.logfile])
+            os.execvp('celery',['celery','-A','imageworker',
+                'worker','--quiet',
+                '-Q','%s'%(system),
+                '--loglevel=WARNING',
+                '-c','1',
+                '-f',self.logfile])
         else:
             self.pid=pid
 
@@ -90,20 +97,32 @@ class ImageMngrTestCase(unittest.TestCase):
 			'groupAcl':[]
         }
         # Do the pull
+        print "DEBUG: Starting worker"
         self.start_worker()
-        id=self.m.pull(self.auth,pr)#,delay=False)
+        id=self.m.pull(self.auth,pr,TESTMODE=1)#,delay=False)
         assert id!=None
         # Confirm record
-        print self.images.find_one(self.query.copy())
+        q=self.query.copy()
+        mrec=self.images.find_one(q)
+        assert '_id' in mrec
         # Track through transistions
         TIMEOUT=0
         state='UNKNOWN'
-        while (state!='READY' and TIMEOUT<40):
+        while (state!='READY' and TIMEOUT<20):
+            print "DEBUG: %s"%state
             state=self.m.get_state(id)
             TIMEOUT+=1
             time.sleep(0.5)
         #Debug
         assert state=='READY'
+        # Cause a failure
+        self.images.drop()
+        id=self.m.pull(self.auth,pr,TESTMODE=2)
+        assert id!=None
+        time.sleep(1)
+        state=self.m.get_state(id)
+        print "DEBUG: %s"%state
+        assert state=='FAILURE'
         #for r in self.images.find():
         #    print r
         self.stop_worker()

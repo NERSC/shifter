@@ -5,13 +5,21 @@ import json
 from imageworker import dopull
 import bson
 import celery
+import sys, os
+import logging
 
+
+logger = logging.getLogger('imagemngr')
+logger.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+logger.addHandler(ch)
 
 # Image Manager class
 # This class handles most of the backend work
 class imagemngr:
 
-  def __init__(self, CONFIGFILE):
+  def __init__(self, CONFIGFILE, logger=None):
       with open(CONFIGFILE) as config_file:
           self.config = json.load(config_file)
       if 'Platforms' not in self.config:
@@ -50,7 +58,10 @@ class imagemngr:
 
   def lookup(self,auth,image):
       # Do lookup
-      q={'system':image['system'],'itype':image['itype'],'tag':image['tag']}
+      q={'system':image['system'],
+        'itype':image['itype'],
+        'tag':image['tag']}
+      self.update_states()
       rec=self.images.find_one(q)
       # verify access
       return rec
@@ -62,7 +73,13 @@ class imagemngr:
           return True
       return False
 
-  def image_record(self,image):
+  def new_image_record(self,auth,image):
+      """
+      Creates a new image in mongo.  If the image already exist it returns the mongo record.
+      """
+      record=self.lookup(auth,image)
+      if record is not None:
+          return record
       newimage={'format':'ext4',#<ext4|squashfs|vfs>
           'arch':'amd64', #<amd64|...>
           'os':'linux', #<linux|...>
@@ -75,19 +92,26 @@ class imagemngr:
           'groupAcl':[]}
       for p in image:
           newimage[p]=image[p]
+      self.images.insert(newimage)
       return newimage
 
 
-  def pull(self,auth,request,delay=True):
+  def pull(self,auth,request,delay=True,TESTMODE=0):
+      """
+      pull the image
+      Takes an auth token, a request object
+      Optional: deplay=True/False
+      """
+      logger.debug('pull called TM=%d'%TESTMODE) # will print a message to the console
       if self.isready(request)==False:
-          rec=self.image_record(request)
-          rec['status']='ENQUEUED'
-          result=self.images.insert(rec)
+          rec=self.new_image_record(auth,request)
           id=rec.pop('_id',None)
-          if result==None:
-              return False
+          logger.debug("Setting state")
+          self.update_mongo_state(id,'ENQUEUED')
           if delay:
-              pullreq=dopull.delay(request)
+              logger.debug("Calling do pull with queue=%s"%(request['system']))
+              pullreq=dopull.apply_async([request],queue=request['system'],
+                    kwargs={'TESTMODE':TESTMODE})
           else: # Fake celery
               dopull(request)
               pullreq=id
@@ -95,6 +119,9 @@ class imagemngr:
           self.tasks.append(pullreq)
           #def pullImage(options, config[''], repo, tag, cacert=None, username=None, password=None):
           #pullImage(None, 'https://registry.services.nersc.gov', 'lcls_xfel_edison', '201509081609', cacert='local.crt')
+      else:
+        rec=self.new_image_record(auth,request)
+        id=rec.pop('_id',None)
       return id
 
   def update_mongo_state(self,id,state):
@@ -108,10 +135,12 @@ class imagemngr:
 
 
   def update_states(self):
+      logger.debug("Update_states called")
       for req in self.tasks:
           state='PENDING'
           if isinstance(req,celery.result.AsyncResult):
               state=req.state
+              #logger.debug(" state=%s"%state)
           elif isinstance(req,bson.objectid.ObjectId):
               print "Non-Async"
           #print self.task_image_id[req]
@@ -124,3 +153,31 @@ class imagemngr:
       # Do lookup
       resp=dict()
       return resp
+
+def usage():
+    print "Usage: imagemngr <lookup|pull|expire>"
+    sys.exit(0)
+
+if __name__ == '__main__':
+    configfile='test.json'
+    if 'CONFIG' in os.environ:
+        configfile=os.environ['CONFIG']
+    m=imagemngr(configfile)
+    sys.argv.pop(0)
+    if len(sys.argv)<1:
+        usage()
+        sys.exit(0)
+    command=sys.argv.pop(0)
+    if command=='lookup':
+        if len(sys.argv)<3:
+            usage()
+    elif command=='pull':
+        if len(sys.argv)<3:
+            usage()
+        print "pull"
+        req=dict()
+        (req['system'],req['itype'],req['tag'])=sys.argv
+        m.pull('good',req)
+    else:
+        print "Unknown command %s"%(command)
+        usage()

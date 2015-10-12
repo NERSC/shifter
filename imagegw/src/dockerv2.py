@@ -9,8 +9,22 @@ import base64
 import binascii
 import struct
 import tempfile
+import socket
+import socks
+import urllib2
+
+# Option to use a SOCKS proxy
+if 'all_proxy' in os.environ:
+   (socks_type,socks_host,socks_port)=os.environ['all_proxy'].split(':')
+   socks_host=socks_host.replace('//','')
+   socks.set_default_proxy(socks.SOCKS5, socks_host,int(socks_port))
+   socket.socket = socks.socksocket  #dont add ()!!!
+
 
 def joseDecodeBase64(input):
+    """
+    Helper function to Decode base64
+    """
     bytes = len(input) % 4
     if bytes == 0 or bytes == 2:
         return base64.b64decode(input + '==')
@@ -40,6 +54,9 @@ def joseDecodeBase64(input):
 #u'jwk': {u'y': u'bXqd0VJTYsgrEXaH5e4fZuF2N4iv9Yr9eq3KPTdeasU', u'x': u'6sJpqwsUmNsNQuv-mzNT2Rq7T13yGL3EW00yE1MMyN4', u'crv': u'P-256', u'kty': u'EC', u'kid': u'CQZS:2SC5:NETK:VLRQ:UCYA:XI5R:AHBC:JQSB:SYTX:LVCW:GAKG:5FDN'}
 
 def verifyManifestDigestAndSignature(manifest, text, hashalgo, digest):
+    """
+    verifyManifestDigestAndSignature - Verify the manifest
+    """
     formatLen = None
     formatTail = None
 
@@ -63,6 +80,10 @@ def verifyManifestDigestAndSignature(manifest, text, hashalgo, digest):
     return True
 
 def setupHttpConn(url, cacert=None):
+    """
+    setupHttpConn - Helper function to initialize the http connection
+    returns a connection object
+    """
     (protocol, url) = url.split('://', 1)
     location = None
     conn = None
@@ -79,12 +100,15 @@ def setupHttpConn(url, cacert=None):
             sslContext = ssl.create_default_context(cafile=cacert)
         conn = httplib.HTTPSConnection(server, context=sslContext)
     else:
-        print "Error, unknown protocol %s" % protocol
-        return None
+        raise NotImplementedError('Unsupported protocol %s' % protocol)
     return conn
 
 def getImageManifest(url, repo, tag, cacert=None, username=None, password=None):
-    conn = setupHttpConn(url, cacert)
+    """
+    getImageManifest - Get the image manifest
+    returns a dictionary object of the manifest.
+    """
+    conn = setupHttpConn(url,cacert)
     if conn is None:
         return None
 
@@ -92,7 +116,7 @@ def getImageManifest(url, repo, tag, cacert=None, username=None, password=None):
     r1 = conn.getresponse()
 
     if r1.status != 200:
-        raise ValueError("Bad response from registry")
+        raise ValueError("Bad response from registry status=%d"%(r1.status))
     expected_hash = r1.getheader('docker-content-digest')
     content_len = r1.getheader('content-length')
     if expected_hash is None or len(expected_hash) == 0:
@@ -106,18 +130,21 @@ def getImageManifest(url, repo, tag, cacert=None, username=None, password=None):
         raise e
     return jdata
 
-def saveLayer(url, repo, layer, cacert=None, username=None, password=None):
+def saveLayer(url, repo, layer, cachedir='./', cacert=None, username=None, password=None):
+    """
+    saveLayer - Save a layer and verify with the digest
+    """
     conn = setupHttpConn(url, cacert)
     if conn is None:
         return None
 
-    filename = '%s.tar' % layer
+    filename = '%s/%s.tar' % (cachedir,layer)
     if os.path.exists(filename):
         return True
     conn.request("GET", "/v2/%s/blobs/%s" % (repo, layer))
     r1 = conn.getresponse()
-    print r1.status, r1.reason
-    print r1.getheaders()
+    #print r1.status, r1.reason
+    #print r1.getheaders()
     maxlen = int(r1.getheader('content-length'))
     nread = 0
     output = open(filename, "w")
@@ -128,7 +155,7 @@ def saveLayer(url, repo, layer, cacert=None, username=None, password=None):
             break
         if type(buff) != str:
             print buff
-            
+
         output.write(buff)
         nread += len(buff)
     output.close()
@@ -136,11 +163,10 @@ def saveLayer(url, repo, layer, cacert=None, username=None, password=None):
     (hashType,value) = layer.split(':', 1)
     execName = '%s%s' % (hashType, 'sum')
     process = subprocess.Popen([execName, filename], stdout=subprocess.PIPE)
+
     (stdoutData, stderrData) = process.communicate()
     (sum,other) = stdoutData.split(' ', 1)
-    if sum == value:
-        print "got match: %s == %s" % (sum, value)
-    else:
+    if sum != value:
         raise ValueError("checksum mismatch, failure")
     return True
 
@@ -193,29 +219,52 @@ def constructImageMetadata(manifest):
     return (noParent,curr,)
 
 def setupImageBase(options):
+    """
+    setupImageBase - Helper function to create a work area
+    """
     return tempfile.mkdtemp()
 
-def extractDockerLayers(basePath, layer):
+def extractDockerLayers(basePath, layer, cachedir='./'):
+    """
+    extractDockerLayers - Recusrively Untar the layers
+    """
     if layer is None:
         return
     os.umask(022)
     devnull = open(os.devnull, 'w')
-    ret = subprocess.call(['tar','xf', '%s.tar' % layer['fsLayer']['blobSum'], '-C', basePath, '--force-local'], stdout=devnull, stderr=devnull)
+    tarfile='%s/%s.tar'%(cachedir,layer['fsLayer']['blobSum'])
+    #ret = subprocess.call(['tar','xf', '%s.tar' % layer['fsLayer']['blobSum'], '-C', basePath, '--force-local'], stdout=devnull, stderr=devnull)
+    ret = subprocess.call(['tar','xf', tarfile, '-C', basePath], stdout=devnull, stderr=devnull)
     devnull.close()
+    if ret>1:
+        raise OSError("Extraction of layer (%s) to %s failed %d"%(tarfile,basePath,ret))
     # ignore errors since some things like mknod are expected to fail
-    extractDockerLayers(basePath, layer['child'])
+    extractDockerLayers(basePath, layer['child'],cachedir=cachedir)
 
-def pullImage(options, baseUrl, repo, tag, cacert=None, username=None, password=None):
+def pullImage(options, baseUrl, repo, tag, cachedir='./', expanddir='./', cacert=None, username=None, password=None):
+    """
+    pullImage - Uber function to pull the manifest, layers, and extract the layers
+    """
     manifest = getImageManifest(baseUrl, repo, tag, cacert, username, password)
     (eldest,youngest) = constructImageMetadata(manifest)
     layer = eldest
     while layer is not None:
-        saveLayer(baseUrl, repo, layer['fsLayer']['blobSum'], cacert, username, password)
+        saveLayer(baseUrl, repo, layer['fsLayer']['blobSum'], cachedir, cacert, username, password)
         layer = layer['child']
 
-    basePath = setupImageBase(options)
-    print basePath
     layer = eldest
-    extractDockerLayers(basePath, layer)
+    if not os.path.exists(expanddir):
+        os.mkdir(expanddir)
 
-pullImage(None, 'https://registry.services.nersc.gov', 'lcls_xfel_edison', '201509081609', cacert='local.crt')
+    try:
+        extractDockerLayers(expanddir, layer, cachedir=cachedir)
+    except:
+        return None
+    return expanddir
+
+if __name__ == '__main__':
+  #pullImage(None, 'https://index.docker.io', 'redis', 'latest')
+  #pullImage(None, 'https://registry.services.nersc.gov', 'lcls_xfel_edison', '201509081609',cacert='local.crt')
+  dir=os.getcwd()
+  cdir=os.environ['TMPDIR']
+  pullImage(None, 'https://registry.services.nersc.gov', 'nersc-py', 'latest',cachedir=cdir,cacert=dir+'/local.crt')
