@@ -1,0 +1,17 @@
+#!/bin/sh
+
+cat << EOF
+STATUS:           Success (0)
+ENCODE_HOST:      4175821389c5 (172.17.1.59)
+ENCODE_TIME:      2015-10-15 14:56:43 +0000 (1444921003)
+DECODE_TIME:      2015-10-15 14:56:43 +0000 (1444921003)
+TTL:              300
+CIPHER:           aes128 (4)
+MAC:              sha1 (3)
+ZIP:              none (0)
+UID:              root (0)
+GID:              root (0)
+LENGTH:           0
+
+test
+EOF

@@ -7,6 +7,7 @@ import bson
 import celery
 import sys, os
 import logging
+import auth
 
 
 logger = logging.getLogger('imagemngr')
@@ -15,11 +16,18 @@ ch = logging.StreamHandler()
 ch.setLevel(logging.INFO)
 logger.addHandler(ch)
 
-# Image Manager class
-# This class handles most of the backend work
+
 class imagemngr:
+  """
+  This class handles most of the backend work for the image gateway.
+  It uses a Mongo Database to track state, uses celery to dispatch work,
+  and has public functions to lookup, pull and expire images.
+  """
 
   def __init__(self, CONFIGFILE, logger=None):
+      """
+      Create an instance of the image manager.
+      """
       with open(CONFIGFILE) as config_file:
           self.config = json.load(config_file)
       if 'Platforms' not in self.config:
@@ -27,6 +35,10 @@ class imagemngr:
       self.systems=[]
       self.tasks=[]
       self.task_image_id=dict()
+      if 'Authentication' not in self.config:
+          self.config['Authentication']="munge"
+      self.auth=auth.authentication(self.config)
+
       for system in self.config['Platforms']:
           self.systems.append(system)
       # Connect to database
@@ -39,25 +51,29 @@ class imagemngr:
       # Initialize data structures
 
 
-  # Check if this is a valid system
   def isasystem(self,system):
+      """Check if system is a valid platform."""
       if system in self.systems:
           return True
       else:
           return False
 
-  # ACLs
   def checkread(self,user,imageid):
+      """Checks if the user has read permissions to the image. (Not Implemented)"""
       return True
 
-  # Reset the expire time
   def resetexpire(self,imageid):
+      """Reset the expire time.  (Not Implemented)."""
       # Change expire time for image
       return True
 
 
   def lookup(self,auth,image):
-      # Do lookup
+      """
+      Lookup an image.
+      Image is dictionary with system,itype and tag defined.
+      """
+      arec=self.auth.authenticate(auth)
       q={'system':image['system'],
         'itype':image['itype'],
         'tag':image['tag']}
@@ -67,6 +83,9 @@ class imagemngr:
       return rec
 
   def isready(self,image):
+      """
+      Helper function to determine if an image is READY.
+      """
       q={'system':image['system'],'itype':image['itype'],'tag':image['tag']}
       rec=self.images.find_one(q)
       if rec is not None and 'status' in rec and rec['status']=='READY':
@@ -125,17 +144,26 @@ class imagemngr:
       return id
 
   def update_mongo_state(self,id,state):
+      """
+      Helper function to set the mongo state for an image with _id==id to state=state.
+      """
       if state=='SUCCESS':
           state='READY'
       self.images.update({'_id':id},{'$set':{'status':state}})
 
   def get_state(self,id):
+      """
+      Lookup the state of the image with _id==id in Mongo.  Returns the state."""
       self.update_states()
       return self.images.find_one({'_id':id},{'status':1})['status']
 
 
   def update_states(self):
+      """
+      Update the states of all active transactions.
+      """
       logger.debug("Update_states called")
+      # TODO: Remove tasks that are in the READY state.
       for req in self.tasks:
           state='PENDING'
           if isinstance(req,celery.result.AsyncResult):
@@ -150,11 +178,13 @@ class imagemngr:
 
 
   def expire(self,auth,system,type,tag,id):
+      """Expire an image.  (Not Implemented)"""
       # Do lookup
       resp=dict()
       return resp
 
 def usage():
+    """Print usage"""
     print "Usage: imagemngr <lookup|pull|expire>"
     sys.exit(0)
 
