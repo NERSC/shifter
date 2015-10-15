@@ -232,9 +232,11 @@ def extractDockerLayers(basePath, layer, cachedir='./'):
         return
     os.umask(022)
     devnull = open(os.devnull, 'w')
-    tarfile='%s/%s.tar'%(cachedir,layer['fsLayer']['blobSum'])
-    #ret = subprocess.call(['tar','xf', '%s.tar' % layer['fsLayer']['blobSum'], '-C', basePath, '--force-local'], stdout=devnull, stderr=devnull)
-    ret = subprocess.call(['tar','xf', tarfile, '-C', basePath], stdout=devnull, stderr=devnull)
+    tarfile=os.path.join(cachedir,'%s.tar'%(layer['fsLayer']['blobSum']))
+    command=['tar','xf', tarfile, '-C', basePath]
+    if False:
+        command.append('--force-local')
+    ret = subprocess.call(command, stdout=devnull, stderr=devnull)
     devnull.close()
     if ret>1:
         raise OSError("Extraction of layer (%s) to %s failed %d"%(tarfile,basePath,ret))

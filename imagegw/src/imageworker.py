@@ -3,6 +3,7 @@ import json
 import os
 import time
 import dockerv2
+import dockerhub
 import converters
 import transfer
 import re
@@ -55,7 +56,13 @@ def pull_image(request):
     parts=re.split('[:/]',request['tag'])
     if len(parts)==3:
         (location,repo,tag)=parts
+    elif len(parts)==2:
+        (repo,tag)=parts
+        location='index.docker.io'
+    else:
+        raise OSError('Unable to parse tag %s'%request['tag'])
     logging.debug("doing image pull for %s %s %s"%(location,repo,tag))
+    cacert=None
     if location in config['Locations']:
         params=config['Locations'][location]
         rtype=params['remotetype']
@@ -74,6 +81,17 @@ def pull_image(request):
     if rtype=='dockerv2':
         try:
             ipath=dockerv2.pullImage(None, 'https://%s'%(location),
+                repo, tag,
+                cachedir=cdir,expanddir=edir,
+                cacert=cacert)
+            return True
+        except:
+            logging.warn(sys.exc_value)
+            return False
+    elif rtype=='dockerhub':
+        logging.debug("pulling from docker hub %s %s"%(repo,tag))
+        try:
+            ipath=dockerhub.pullImage(None, None,
                 repo, tag,
                 cachedir=cdir,expanddir=edir,
                 cacert=cacert)
@@ -127,8 +145,7 @@ def dopull(self,request,TESTMODE=0):
     """
     Celery task to do the full workflow of pulling an image and transferring it
     """
-    print "TESTMODE=%d"%(TESTMODE)
-    #logging.debug("DEBUG: dopull system=%s tag=%s"%(request['system'],request['tag']))
+    logging.info("DEBUG: dopull system=%s tag=%s"%(request['system'],request['tag']))
     if TESTMODE==1:
         for state in ('PULLING','EXAMINATION','CONVERSION','TRANSFER','READY'):
             logging.info("Worker: TESTMODE Updating to %s"%(state))
@@ -158,4 +175,6 @@ def dopull(self,request,TESTMODE=0):
         # Done
         self.update_state(state='READY')
     except:
+        logging.error("ERROR: dopull failed system=%s tag=%s"%(request['system'],request['tag']))
         self.update_state(state='FAILURE')
+        raise OSError("Pull Failed")

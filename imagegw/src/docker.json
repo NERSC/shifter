@@ -13,7 +13,7 @@
 
     "Locations": {
         "index.docker.io": {
-            "remotetype": "dockerv2",
+            "remotetype": "dockerhub",
             "authentication": "http"
         },
         "registry.services.nersc.gov": {
@@ -25,7 +25,7 @@
 
     "Platforms": {
         "systema": {
-            "mungeSocketPath": "/path/to/system/munge.socket",
+            "mungeSocketPath": "/var/run/munge/systema.socket",
             "usergroupService": "ldap",
             "accesstype": "remote",
             "mountCommand": "/bin/mount",
@@ -43,11 +43,11 @@
             }
         },
         "systemb": {
-            "mungeSocketPath": "/path/to/system/munge.socket",
+            "mungeSocketPath": "/var/run/munge/systemb.socket",
             "accesstype": "local",
             "usergroupService": "local",
             "local": {
-                "imageDir": "/local/path/for/system/images"
+                "imageDir": "/data/"
             }
         }
     }

@@ -18,6 +18,7 @@ class ImageWorkerTestCase(unittest.TestCase):
         self.system='systema'
         self.itype='docker'
         self.tag='registry.services.nersc.gov/nersc-py:latest'
+        self.tag='ubuntu:latest'
         if not os.path.exists(self.config['CacheDirectory']):
             os.mkdir(self.config['CacheDirectory'])
         self.expandedpath=os.path.join(self.config['CacheDirectory'],
@@ -37,6 +38,7 @@ class ImageWorkerTestCase(unittest.TestCase):
         print status
         assert status==True
         assert os.path.exists(request['expandedpath'])
+
         return
 
     def test1_convert_image(self):
