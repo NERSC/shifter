@@ -61,14 +61,23 @@ class authentication():
                 raise OSError('Authentication Failed')
             uid=response['UID']
             gid=response['GID']
-            return (uid,gid)
+            token=response['MESSAGE']
+            return (uid,gid,token)
         elif self.type=='mock':
             if authString is None:
                 raise KeyError("No Auth String Provided")
-            elif authString.startswith('good:'):
-                (type,uid,gid)=authString.split(':')
-                return (uid,gid)
+            list=authString.split(':')
+            if len(list)==3:
+                (status,uid,gid)=list
+                token=''
+            elif len(list)==4:
+                (status,uid,gid,token)=list
             else:
-                raise OSError('Auth Failed')
+                raise OSError('Bad AuthString')
+
+            if status=='good':
+                return (uid,gid,token)
+            else:
+                raise OSError('Auth Failed st=%s'%status)
         else:
             raise OSError('Unsupported auth type')

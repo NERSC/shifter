@@ -110,14 +110,21 @@ class imagemngr:
       """
       arec=self.auth.authenticate(authString,system)
       if arec is None:
-          raise OSError("Authenication failed")
+          raise OSError("Authenication returned None")
       else:
           session=dict()
-          (uid,gid)=arec
+          if len(arec)==3:
+              (uid,gid,token)=arec
+          elif len(arec)==2:
+              (uid,gid)=arec
+              token=''
+          else:
+              raise OSError("Authentication returned invalid response")
           session['magic']=self.magic
           session['system']=system
           session['uid']=uid
           session['gid']=gid
+          session['token']=token
           return session
 
   def lookup(self,session,image):
