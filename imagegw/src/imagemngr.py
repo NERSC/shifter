@@ -225,19 +225,21 @@ class imagemngr:
       Update the states of all active transactions.
       """
       logger.debug("Update_states called")
-      # TODO: Remove tasks that are in the READY state.
-      for req in self.tasks:
+      i=0
+      tasks=self.tasks
+      for req in tasks:
           state='PENDING'
+
           if isinstance(req,celery.result.AsyncResult):
               state=req.state
-              #logger.debug(" state=%s"%state)
           elif isinstance(req,bson.objectid.ObjectId):
               print "Non-Async"
           #print self.task_image_id[req]
           self.update_mongo_state(self.task_image_id[req],state)
-          #self.images.update({'_id':self.task_image_id[req]},{'$set':{'status':req.state}})
-          #print self.images.find_one()
-
+          if state=="READY":
+              logger.debug("Cleaning up request %d"%i)
+              self.tasks.remove(req)
+          i+=1
 
   def expire(self,session,system,type,tag,id):
       """Expire an image.  (Not Implemented)"""

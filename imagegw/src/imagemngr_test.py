@@ -45,6 +45,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.itype='docker'
         self.tag='test'
         self.id='fakeid'
+        self.tag2='test2'
         self.auth='good:1:1'
         self.badauth='bad:1:1'
         self.logfile='/tmp/worker.log'
@@ -154,6 +155,51 @@ class ImageMngrTestCase(unittest.TestCase):
         #for r in self.images.find():
         #    print r
         self.stop_worker()
+
+    def test_pull2(self):
+
+        # Use defaults for format, arch, os, ostcount, replication
+        pr1={
+            'system':self.system,
+            'itype':self.itype,
+            'tag':self.tag,
+			'remotetype':'dockerv2',
+			'userAcl':[],
+			'groupAcl':[]
+        }
+        pr2={
+            'system':self.system,
+            'itype':self.itype,
+            'tag':self.tag2,
+			'remotetype':'dockerv2',
+			'userAcl':[],
+			'groupAcl':[]
+        }
+        # Do the pull
+        print "DEBUG: Starting worker"
+        self.start_worker()
+        session=self.m.new_session(self.auth,self.system)
+        id1=self.m.pull(session,pr1,TESTMODE=1)#,delay=False)
+        id2=self.m.pull(session,pr2,TESTMODE=1)#,delay=False)
+        assert id1!=None
+        # Confirm record
+        q=self.query.copy()
+        mrec=self.images.find_one(q)
+        print mrec
+        assert '_id' in mrec
+        # Track through transistions
+        TIMEOUT=0
+        state='UNKNOWN'
+        while (state!='READY' and TIMEOUT<20):
+            print "DEBUG: %s"%state
+            state=self.m.get_state(id1)
+            TIMEOUT+=1
+            time.sleep(0.5)
+        #Debug
+        assert state=='READY'
+        # Cause a failure
+        self.images.drop()
+
 
     def test_expire(self):
         pass
