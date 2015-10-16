@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import sys
 import os
-import subprocess
+from subprocess import check_output, Popen, PIPE
 
 # Helper routines for munge
 
@@ -10,8 +10,8 @@ def munge(text,socket=None):
     try:
         com=["munge", '-s', text]
         if socket is not None:
-            com.append(['-S',socket])
-        message = subprocess.check_output(com)
+            com.extend(['-S',socket])
+        message = check_output(com)
         return message.replace('\n','')
     except:
         return None
@@ -21,8 +21,15 @@ def unmunge(encoded,socket=None):
     try:
         com=["unmunge"]
         if socket is not None:
-            com.append(['-S',socket])
-        output = subprocess.check_output(com)
+            com.extend(['-S',socket])
+        p = Popen(com,stdin=PIPE,stdout=PIPE,stderr=PIPE)
+        output=p.communicate(input=encoded)[0]
+        if p.returncode==15:
+            raise OSError("Expired Credential")
+
+        if p.returncode!=0:
+            raise OSError("Unknown munge error %d %s"%(p.returncode,socket))
+
         resp=dict()
         inmessage=False
         message=''
@@ -45,6 +52,8 @@ def unmunge(encoded,socket=None):
         resp['MESSAGE']=message
         return resp
     except:
+        print sys.exc_value
+        raise
         return None
 
 
@@ -62,7 +71,8 @@ if __name__ == '__main__':
     if command=='munge':
         print munge('test');
     elif command=="unmunge":
-        r=unmunge('')
+        message=sys.stdin.read().strip()
+        r=unmunge(message,socket="/var/run/munge/munge.socket")
         print r
     else:
         usage(me)

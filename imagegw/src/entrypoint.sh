@@ -2,7 +2,9 @@
 
 Q=systema
 
-su -c "munged  -S /var/run/munge/systema.socket --key-file=/etc/munge/munge.key --force" munge
+/etc/init.d/munge start
+start-stop-daemon --chuid munge --start --exec /usr/sbin/munged  -- -S /var/run/munge/systema.socket --key-file=/etc/munge/munge.key --force
+
 if [ "$1"  == "api" ] ; then
   python ./imagegwapi.py 
 

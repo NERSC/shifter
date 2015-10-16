@@ -34,21 +34,23 @@ class authentication():
         system is required for munge.
         """
         if self.type=='munge':
+            if authString is None:
+                raise KeyError("No Auth String Provided")
             if system is None:
                 raise KeyError('System must be specified for munge')
-            try:
-                response=unmunge(authString,socket=self.sockets[system])
-                if response is None:
-                    raise AuthFailed('Authentication Failed')
-                uid=resp['UID']
-                gid=resp['GID']
-                return (uid,gid)
-            except:
-                raise OSError('Auth failed')
+            response=munge.unmunge(authString,socket=self.sockets[system])
+            if response is None:
+                raise OSError('Authentication Failed')
+            uid=response['UID']
+            gid=response['GID']
+            return (uid,gid)
         elif self.type=='mock':
-            if authString=='good':
-                return (1,1)
+            if authString is None:
+                raise KeyError("No Auth String Provided")
+            elif authString.startswith('good:'):
+                (type,uid,gid)=authString.split(':')
+                return (uid,gid)
             else:
-                OSError('Auth Failed')
+                raise OSError('Auth Failed')
         else:
-            raise KeyError('Unsupported auth type')
+            raise OSError('Unsupported auth type')

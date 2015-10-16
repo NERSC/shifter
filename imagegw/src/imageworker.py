@@ -70,14 +70,8 @@ def pull_image(request):
             cacert='%s/%s'%(dir,params['sslcacert'])
             if not os.path.exists(cacert):
                 raise OSError('%s does not exist'%(cacert))
-        #        "registry.services.nersc.gov": {
-        #            "remotetype": "dockerv2",
-        #            "sslcacert": "./cacert.pem",
-        #            "authentication": "http"
-        #        }
     else:
         raise KeyError('%s not found in configuration'%(location))
-    #registry.services.nersc.gov/nersc-py:latest'
     if rtype=='dockerv2':
         try:
             ipath=dockerv2.pullImage(None, 'https://%s'%(location),
@@ -101,7 +95,7 @@ def pull_image(request):
             return False
 
     else:
-        NotImplementedError('Unsupported remote type %s'%(rtype))
+        raise NotImplementedError('Unsupported remote type %s'%(rtype))
     return False
 
 def examine_image(request):

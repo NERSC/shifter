@@ -3,3 +3,5 @@ ssh.key
 ssh.pub
 munge.key
 test.json
+munge.test
+munge.expired

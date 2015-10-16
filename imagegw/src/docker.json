@@ -10,6 +10,7 @@
     "MongoDBURI":"mongodb://mongo/",
     "MongoDB":"ShifterTest",
     "Broker":"redis://redis/",
+    "Authentication":"munge",
 
     "Locations": {
         "index.docker.io": {
