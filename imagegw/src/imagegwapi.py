@@ -28,12 +28,12 @@ def not_found(error=None):
     imagegwapi.logger.warning("404 return")
     message = {
             'status': 404,
-            'error': error,
+            'error': str(error),
             'message': 'Not Found: ' + request.url,
     }
     resp = jsonify(message)
     resp.status_code = 404
-
+    print "ERROR: %s"%str(error)
     return resp
 
 @imagegwapi.route('/')
@@ -57,10 +57,12 @@ def lookup(system,type,tag):
     imagegwapi.logger.debug("lookup system=%s type=%s tag=%s auth=%s"%(system,type,tag,auth))
     i={'system':system,'itype':type,'tag':tag}
     try:
-        rec=mgr.lookup(auth,i)
+        session=mgr.new_session(auth,system)
+        rec=mgr.lookup(session,i)
         if rec==None:
             return not_found('image not found')
     except:
+        imagegwapi.logger.error(sys.exc_value)
         return not_found('%s'%(sys.exc_value))
     return jsonify(create_response(rec))
 # {
@@ -84,8 +86,9 @@ def pull(system,type,tag):
     imagegwapi.logger.debug("pull system=%s type=%s tag=%s"%(system,type,tag))
     i={'system':system,'itype':type,'tag':tag}
     try:
-        id=mgr.pull(auth,i)
-        rec=mgr.lookup(auth,i)
+        session=mgr.new_session(auth,system)
+        id=mgr.pull(session,i)
+        rec=mgr.lookup(session,i)
         imagegwapi.logger.debug(rec)
     except:
         return not_found(sys.exc_value)

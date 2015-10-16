@@ -25,8 +25,8 @@ class ImageMngrTestCase(unittest.TestCase):
         self.itype='docker'
         self.tag='test'
         self.id='fakeid'
-        self.auth='good'
-        self.badauth='bad'
+        self.auth='good:1:1'
+        self.badauth='bad:1:1'
         self.logfile='/tmp/worker.log'
         self.pid=0
         self.query={'system':self.system,'itype':self.itype,'tag':self.tag}
@@ -38,8 +38,16 @@ class ImageMngrTestCase(unittest.TestCase):
 
 
 
-    #def tearDown(self):
-    #  print "No teardown"
+    def tearDown(self):
+        self.stop_worker()
+
+    def test_session(self):
+        s=self.m.new_session(self.auth,self.system)
+        assert s is not None
+        try:
+            s=self.m.new_session(self.badauth,self.system)
+        except:
+            pass
 
     def test_lookup(self):
         record={'system':self.system,
@@ -55,16 +63,15 @@ class ImageMngrTestCase(unittest.TestCase):
         # Create a fake record in mongo
         self.images.insert(record)
         i=self.query.copy()
-        l=self.m.lookup(self.auth,i)
+        session=self.m.new_session(self.auth,self.system)
+        l=self.m.lookup(session,i)
         assert 'status' in l
         assert '_id' in l
         assert self.m.get_state(l['_id'])=='READY'
         i=self.query.copy()
         i['tag']='bogus'
-        l=self.m.lookup(self.auth,i)
+        l=self.m.lookup(session,i)
         assert l==None
-        # TODO: Test bad auth
-        l=self.m.lookup(self.badauth,i)
 
     def start_worker(self,TESTMODE=1,system='systema'):
         # Start a celery worker.
@@ -99,7 +106,8 @@ class ImageMngrTestCase(unittest.TestCase):
         # Do the pull
         print "DEBUG: Starting worker"
         self.start_worker()
-        id=self.m.pull(self.auth,pr,TESTMODE=1)#,delay=False)
+        session=self.m.new_session(self.auth,self.system)
+        id=self.m.pull(session,pr,TESTMODE=1)#,delay=False)
         assert id!=None
         # Confirm record
         q=self.query.copy()
@@ -117,7 +125,7 @@ class ImageMngrTestCase(unittest.TestCase):
         assert state=='READY'
         # Cause a failure
         self.images.drop()
-        id=self.m.pull(self.auth,pr,TESTMODE=2)
+        id=self.m.pull(session,pr,TESTMODE=2)
         assert id!=None
         time.sleep(1)
         state=self.m.get_state(id)
