@@ -120,10 +120,11 @@ def pull_image(request):
 
 def examine_image(request):
     """
-    examine the image - TODO
+    examine the image
 
     Returns True on success
     """
+    # TODO: Add checks to examine the image.  Should be extensible.
     return True
 
 def convert_image(request):

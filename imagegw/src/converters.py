@@ -28,10 +28,12 @@ def generateExt4Image(expandedPath, imagePath):
     """
     Creates an ext4 based image
     """
+    raise NotImplementedError('ext4 support is note implemented yet')
 
     ## create sparsefile for the image
-    # TODO: Fix
-    #ret = subprocess.call(["dd", "of=%s" % imagePath, "bs=1", "count=0", "seek=%d" % (get_size(layersPath) * 2)], stdout=fdnull, stderr=fdnull)
+    # TODO: compute size
+    size=100*1024*1024*1024
+    ret = subprocess.call(["dd", "of=%s" % imagePath, "bs=1", "count=0", "seek=%d" % (size)], stdout=fdnull, stderr=fdnull)
     if ret != 0:
         # error handling
         pass

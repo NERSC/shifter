@@ -41,6 +41,9 @@ if 'all_proxy' in os.environ:
    socket.socket = socks.socksocket  #dont add ()!!!
 
 
+# TODO: Turn this into a class like dockerhub
+#
+
 def joseDecodeBase64(input):
     """
     Helper function to Decode base64
@@ -52,26 +55,6 @@ def joseDecodeBase64(input):
         return base64.b64decode(input + '===')
     return base64.b64decode(input)
 
-#def getPubKeyJWK(jwk):
-#    if jwk['kty'] == 'EC':
-#        curve = None
-#        if jwk['crv'] == 'P-256':
-#            curve = ecdsa.NIST256p
-#        elif jwk['crv'] == 'P-384':
-#            curve = ecdsa.NIST384p
-#        elif jwk['crv'] == 'P-521':
-#            curve = ecdsa.NIST521p
-#        xCoord = joseDecodeBase64(jwk['x'])
-#        yCoord = joseDecodeBase64(jwk['y'])
-#        print struct.unpack('Q', xCoord)
-#        print yCoord
-#        pubKey = ecdsa.Public_key(curve.generator, ecdsa.ellipticcurve.Point(curve, xCoord, yCoord))
-#        return ('ec', pubKey,)
-#    elif jwkblock['kty'] == 'RSA':
-#        #TODO preently unimplemented
-#        pass
-#    return (None, None,)
-#u'jwk': {u'y': u'bXqd0VJTYsgrEXaH5e4fZuF2N4iv9Yr9eq3KPTdeasU', u'x': u'6sJpqwsUmNsNQuv-mzNT2Rq7T13yGL3EW00yE1MMyN4', u'crv': u'P-256', u'kty': u'EC', u'kid': u'CQZS:2SC5:NETK:VLRQ:UCYA:XI5R:AHBC:JQSB:SYTX:LVCW:GAKG:5FDN'}
 
 def verifyManifestDigestAndSignature(manifest, text, hashalgo, digest):
     """
