@@ -41,6 +41,21 @@ def copy_remote(filename,system):
     ret = subprocess.call(scpCmd)#, stdout=fdnull, stderr=fdnull)
     return ret == 0
 
+def copy_local(filename,system):
+    (basePath,imageFilename) = os.path.split(filename)
+    local=system['local']
+    targetFilename = os.path.join(local['imageDir'], imageFilename)
+    cpCmd = ['cp']
+    if 'cpCmdOptions' in system:
+        cpCmd.extend(system['cpCmdOptions'])
+    # TODO: Add command to pre-create the file with the right striping
+    cpCmd.extend([filename, targetFilename])
+    #print "DEBUG: %s"%(scpCmd.join(' '))
+    fdnull=open('/dev/null','w')
+
+    ret = subprocess.call(cpCmd)#, stdout=fdnull, stderr=fdnull)
+    return ret == 0
+
 
 def transfer(system,imagePath,metadataPath=None):
     atype=system['accesstype']
@@ -53,8 +68,13 @@ def transfer(system,imagePath,metadataPath=None):
             print "Copy failed"
             return False
     elif atype=='local':
-        # do something
-        print "TODO"
+        if metadataPath is not None:
+            copy_local(metadataPath, system)
+        if copy_local(imagePath,system):
+            return True
+        else:
+            print "Copy failed"
+            return False
     else:
         raise NotImplementedError('%s is not supported as a transfer type'%atype)
     return False

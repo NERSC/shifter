@@ -48,7 +48,7 @@
             "accesstype": "local",
             "usergroupService": "local",
             "local": {
-                "imageDir": "/data/"
+                "imageDir": "/data/systemb"
             }
         }
     }

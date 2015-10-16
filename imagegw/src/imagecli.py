@@ -23,20 +23,22 @@ See LICENSE for full text.
 """
 
 server=os.environ['IMAGEGW']
-system=os.environ['SYSTEM']
-munge=os.environ['MUNGE']
+mungeenv=os.environ['MUNGE']
 
-def usage():
-   print "usage:"
+def usage(me):
+   print "usage: %s <lookup|pull> system image"%(me)
    sys.exit(1)
 
 if __name__ == '__main__':
     me=sys.argv.pop(0)
     if len(sys.argv)<1:
-        usage()
+        usage(me)
     com=sys.argv.pop(0)
-    with open(munge) as m:
-        munge=m.read()
+    if os.path.exists(mungeenv):
+      with open(mungeenv) as m:
+          munge=m.read()
+    else:
+      munge=mungeenv
     url = "http://%s/api"%(server)
 
     if com=='lookup' and len(sys.argv)>=2:
@@ -53,4 +55,4 @@ if __name__ == '__main__':
          r = requests.post(uri,headers=header)
          print r.text
     else:
-        usage()
+        usage(me)
