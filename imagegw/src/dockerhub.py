@@ -342,31 +342,20 @@ def pullImage(options, baseUrl, repo, tag, cachedir='./', expanddir='./', cacert
     imageident='%s:%s'%(repo,tag)
     a=dockerhubHandle(imageident,options)
     a.pullLayers(cachedir)
-    if not os.path.exists(expanddir):
-        os.mkdir(expanddir)
-    try:
-        a.extractDockerLayers(expanddir,a.getEldest(),cachedir=cachedir)
-    except:
-        return None
-
-
-        # manifest = getImageManifest(baseUrl, repo, tag, cacert, username, password)
-        # (eldest,youngest) = constructImageMetadata(manifest)
-        # layer = eldest
-        # while layer is not None:
-        #     saveLayer(baseUrl, repo, layer['fsLayer']['blobSum'], cachedir, cacert, username, password)
-        #     layer = layer['child']
-        #
-        # layer = eldest
-        # if not os.path.exists(expanddir):
-        #     os.mkdir(expanddir)
-        #
-        # try:
-        #     extractDockerLayers(expanddir, layer, cachedir=cachedir)
-        # except:
-        #     return None
-        # return expanddir
-
+    meta=a.getYoungest()
+    resp={'id':meta['id']}
+    expandedpath=os.path.join(expanddir,str(meta['id']))
+    resp['expandedpath']=expandedpath
+    if 'config' in meta:
+        c=meta['config']
+        if 'Env' in c:
+            resp['env']=c['Env']
+        if 'Entrypoint' in c:
+            resp['entrypoint']=c['Entrypoint']
+    if not os.path.exists(expandedpath):
+        os.mkdir(expandedpath)
+    a.extractDockerLayers(expandedpath,a.getEldest(),cachedir=cachedir)
+    return resp
 
 if __name__ == '__main__':
     pullImage(None, 'https://index.docker.io', 'ubuntu','latest', cachedir='/tmp/cache/', expanddir='/tmp/ubuntu/')

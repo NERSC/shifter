@@ -6,6 +6,7 @@ import sys
 import socket
 import time
 import imagemngr
+import logging
 from flask import Flask, Blueprint, request, Response, url_for, jsonify
 
 """
@@ -29,7 +30,16 @@ See LICENSE for full text.
 """
 
 imagegwapi = Flask(__name__)
-imagegwapi.debug_log_format= '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+#imagegwapi.debug_log_format= '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+
+imagegwapi.logger.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+formatter = logging.Formatter('%(asctime)s [%(name)s] %(levelname)s : %(message)s')
+ch.setFormatter(formatter)
+ch.setLevel(logging.DEBUG)
+imagegwapi.logger.addHandler(ch)
+imagegwapi.logger.debug('Initializing image manager')
+
 
 # Default Configuration
 DEBUG_FLAG = True
@@ -59,8 +69,8 @@ def help():
     return "{lookup,pull,expire}"
 
 def create_response(rec):
-    resp={'id':'TODO'}
-    for field in ('system','itype','tag','status','userAcl','groupAcl','ENV','ENTRY'):
+    resp={}
+    for field in ('id','system','itype','tag','status','userAcl','groupAcl','ENV','ENTRY','last_pull'):
         try:
             resp[field]=rec[field]
         except KeyError,e:
@@ -129,7 +139,7 @@ def expire(system,type,tag,id):
 # Initialization
 with open(CONFIG) as config_file:
     config = json.load(config_file)
-mgr=imagemngr.imagemngr(CONFIG,logger=imagegwapi.logger)
+mgr=imagemngr.imagemngr(CONFIG,logname='imagegwapi')
 
 
 if __name__ == '__main__':

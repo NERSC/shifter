@@ -32,6 +32,8 @@ See LICENSE for full text.
 class ImageWorkerTestCase(unittest.TestCase):
 
     def setUp(self):
+        cwd=os.path.dirname(os.path.realpath(__file__))
+        os.environ['PATH']=cwd+':'+os.environ['PATH']
         self.configfile='test.json'
         with open(self.configfile) as config_file:
             self.config = json.load(config_file)
@@ -39,12 +41,17 @@ class ImageWorkerTestCase(unittest.TestCase):
         self.itype='docker'
         self.tag='registry.services.nersc.gov/nersc-py:latest'
         self.tag='ubuntu:latest'
+        self.tag='scanon/shanetest:latest'
+        self.hash='71483e58b33aac94ba640c2ba93852988b9b0f16c4daab6828feccb4d38304ca'
         if not os.path.exists(self.config['CacheDirectory']):
             os.mkdir(self.config['CacheDirectory'])
         self.expandedpath=os.path.join(self.config['CacheDirectory'],
             '%s_%s'%(self.itype,self.tag.replace('/','_')))
         self.imagefile=os.path.join(self.config['CacheDirectory'],
-            '%s_%s.%s'%(self.itype,self.tag.replace('/','_'),'squashfs'))
+            '%s.%s'%(self.hash,'squashfs'))
+        idir=self.config['Platforms']['systema']['ssh']['imageDir']
+        if not os.path.exists(idir):
+            os.makedirs(idir)
 
 
 
@@ -56,7 +63,12 @@ class ImageWorkerTestCase(unittest.TestCase):
         request={'system':self.system,'itype':self.itype,'tag':self.tag}
         status=imageworker.pull_image(request)
         print status
-        assert status==True
+        assert status is True
+        assert 'meta' in request
+        print request
+        meta=request['meta']
+        assert 'id' in meta
+        assert meta['entrypoint'][0]=="/bin/sh"
         assert os.path.exists(request['expandedpath'])
 
         return
@@ -64,7 +76,7 @@ class ImageWorkerTestCase(unittest.TestCase):
     def test1_convert_image(self):
         request={'system':self.system,'itype':self.itype,'tag':self.tag}
         status=imageworker.pull_image(request)
-        assert status==True
+        assert status is True
         status=imageworker.convert_image(request)
         assert status==True
         return

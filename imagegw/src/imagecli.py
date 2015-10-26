@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import requests, json, os, sys
+from munge import munge
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
@@ -34,7 +35,9 @@ if __name__ == '__main__':
     if len(sys.argv)<1:
         usage(me)
     com=sys.argv.pop(0)
-    if os.path.exists(mungeenv):
+    if mungeenv=="1":
+      munge=munge("test")
+    elif os.path.exists(mungeenv):
       with open(mungeenv) as m:
           munge=m.read()
     else:

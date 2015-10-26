@@ -8,6 +8,7 @@ import celery
 import sys, os
 import logging
 import auth
+from time import time
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
@@ -29,11 +30,6 @@ modification, are permitted provided that the following conditions are met:
 See LICENSE for full text.
 """
 
-logger = logging.getLogger('imagemngr')
-logger.setLevel(logging.DEBUG)
-ch = logging.StreamHandler()
-ch.setLevel(logging.INFO)
-logger.addHandler(ch)
 
 
 class imagemngr:
@@ -43,10 +39,19 @@ class imagemngr:
   and has public functions to lookup, pull and expire images.
   """
 
-  def __init__(self, CONFIGFILE, logger=None):
+  def __init__(self, CONFIGFILE, logname='imagemngr'):
       """
       Create an instance of the image manager.
       """
+      logformat='%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+      self.logger = logging.getLogger(logname)
+      #self.logger.setLevel(logging.DEBUG)
+      #ch = logging.StreamHandler()
+      #formatter = logging.Formatter('%(asctime)s [%(name)s] %(levelname)s : %(message)s')
+      #ch.setFormatter(formatter)
+      #ch.setLevel(logging.DEBUG)
+      #self.logger.addHandler(ch)
+      #self.logger.debug('Initializing image manager')
       with open(CONFIGFILE) as config_file:
           self.config = json.load(config_file)
       if 'Platforms' not in self.config:
@@ -152,6 +157,22 @@ class imagemngr:
           return True
       return False
 
+  def refreshable(self,image):
+      """
+      Is the last pull old enough that we can re-pull
+      """
+      q={'system':image['system'],'itype':image['itype'],'tag':image['tag']}
+      rec=self.images.find_one(q)
+      now=time()
+      if rec['status']!='READY':
+          return True
+      if 'last_pull' not in rec:
+          return True
+      if (now>(self.config['PullUpdateTimeout']+rec['last_pull'])):
+          return True
+      return False
+
+
   def new_image_record(self,session,image):
       """
       Creates a new image in mongo.  If the image already exist it returns the mongo record.
@@ -181,21 +202,22 @@ class imagemngr:
       Takes an auth token, a request object
       Optional: deplay=True/False
       """
-      logger.debug('pull called TM=%d'%TESTMODE) # will print a message to the console
+      self.logger.debug('Pull called Test Mode=%d'%TESTMODE) # will print a message to the console
       if not self.check_session(session,request['system']):
           raise OSError("Invalid Session")
-      if self.isready(request)==False:
+      if self.isready(request)==False or self.refreshable(request):
           rec=self.new_image_record(session,request)
           id=rec.pop('_id',None)
-          logger.debug("Setting state")
+          self.logger.debug("Setting state")
           self.update_mongo_state(id,'ENQUEUED')
           if delay:
-              logger.debug("Calling do pull with queue=%s"%(request['system']))
+              self.logger.debug("Calling do pull with queue=%s"%(request['system']))
               pullreq=dopull.apply_async([request],queue=request['system'],
                     kwargs={'TESTMODE':TESTMODE})
           else: # Fake celery
               dopull(request)
               pullreq=id
+          self.update_mongo(id,{'last_pull':time()})
           self.task_image_id[pullreq]=id
           self.tasks.append(pullreq)
           #def pullImage(options, config[''], repo, tag, cacert=None, username=None, password=None):
@@ -213,6 +235,23 @@ class imagemngr:
           state='READY'
       self.images.update({'_id':id},{'$set':{'status':state}})
 
+  def update_mongo(self,id,resp):
+      """
+      Helper function to set the mongo values for an image with _id==id.
+      """
+      setline=dict()
+      if 'id' in resp:
+          setline['id']=resp['id']
+      if 'entrypoint' in resp:
+          setline['ENTRY']=resp['entrypoint']
+      if 'env' in resp:
+          setline['ENV']=resp['env']
+      if 'last_pull' in resp:
+          setline['last_pull']=resp['last_pull']
+
+      self.images.update({'_id':id},{'$set':setline})
+
+
   def get_state(self,id):
       """
       Lookup the state of the image with _id==id in Mongo.  Returns the state."""
@@ -224,7 +263,7 @@ class imagemngr:
       """
       Update the states of all active transactions.
       """
-      logger.debug("Update_states called")
+      #logger.debug("Update_states called")
       i=0
       tasks=self.tasks
       for req in tasks:
@@ -236,8 +275,12 @@ class imagemngr:
               print "Non-Async"
           #print self.task_image_id[req]
           self.update_mongo_state(self.task_image_id[req],state)
-          if state=="READY":
-              logger.debug("Cleaning up request %d"%i)
+          if state=="READY" or state=="SUCCESS":
+              self.logger.debug("Cleaning up request %d"%i)
+              response=req.get()
+              self.update_mongo(self.task_image_id[req],response)
+              self.logger.debug('meta=%s'%(str(response)))
+              # Now save the response
               self.tasks.remove(req)
           i+=1
 

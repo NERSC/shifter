@@ -104,7 +104,7 @@ class ImageMngrTestCase(unittest.TestCase):
                 'worker','--quiet',
                 '-Q','%s'%(system),
                 '--loglevel=WARNING',
-                '-c','1',
+                '-c','2',
                 '-f',self.logfile])
         else:
             self.pid=pid
@@ -112,6 +112,56 @@ class ImageMngrTestCase(unittest.TestCase):
     def stop_worker(self):
         if self.pid>0:
             os.kill(self.pid,9)
+
+    def time_wait(self,id,TIMEOUT=30):
+        poll_interval=0.5
+        count=TIMEOUT/poll_interval
+        state='UNKNOWN'
+        while (state!='READY' and count>0):
+            print "DEBUG: id=%s state=%s"%(str(id),state)
+            state=self.m.get_state(id)
+            count-=1
+            time.sleep(poll_interval)
+        return state
+
+
+    def test_0pull(self):
+
+        # Use defaults for format, arch, os, ostcount, replication
+        pr={
+            'system':self.system,
+            'itype':self.itype,
+            'tag':'scanon/shanetest:latest',
+			'remotetype':'dockerv2',
+			'userAcl':[],
+			'groupAcl':[]
+        }
+        # Do the pull
+        self.start_worker()
+        session=self.m.new_session(self.auth,self.system)
+        id=self.m.pull(session,pr,TESTMODE=1)#,delay=False)
+        assert id is not None
+        # Confirm record
+        q={'system':self.system,'itype':self.itype,'tag':'scanon/shanetest:latest'}
+        mrec=self.images.find_one(q)
+        assert '_id' in mrec
+        # Track through transistions
+        state=self.time_wait(id)
+        # TIMEOUT=0
+        # state='UNKNOWN'
+        # while (state!='READY' and TIMEOUT<30):
+        #     print "DEBUG: %s"%state
+        #     state=self.m.get_state(id)
+        #     TIMEOUT+=1
+        #     time.sleep(0.5)
+        #Debug
+        assert state=='READY'
+        imagerec=self.m.lookup(session,pr)
+        print 'imagerec=%s'%(str(imagerec))
+        assert 'ENTRY' in imagerec
+        assert 'ENV' in imagerec
+        self.stop_worker()
+
 
     def test_pull(self):
 
@@ -129,25 +179,22 @@ class ImageMngrTestCase(unittest.TestCase):
         self.start_worker()
         session=self.m.new_session(self.auth,self.system)
         id=self.m.pull(session,pr,TESTMODE=1)#,delay=False)
-        assert id!=None
+        assert id is not None
         # Confirm record
         q=self.query.copy()
         mrec=self.images.find_one(q)
         assert '_id' in mrec
         # Track through transistions
-        TIMEOUT=0
-        state='UNKNOWN'
-        while (state!='READY' and TIMEOUT<20):
-            print "DEBUG: %s"%state
-            state=self.m.get_state(id)
-            TIMEOUT+=1
-            time.sleep(0.5)
+        state=self.time_wait(id)
         #Debug
         assert state=='READY'
+        imagerec=self.m.lookup(session,pr)
+        #print 'imagerec=%s'%(str(imagerec))
+        assert 'ENTRY' in imagerec
+        assert 'ENV' in imagerec
         # Cause a failure
         self.images.drop()
         id=self.m.pull(session,pr,TESTMODE=2)
-        assert id!=None
         time.sleep(1)
         state=self.m.get_state(id)
         print "DEBUG: %s"%state
@@ -187,15 +234,9 @@ class ImageMngrTestCase(unittest.TestCase):
         mrec=self.images.find_one(q)
         print mrec
         assert '_id' in mrec
-        # Track through transistions
-        TIMEOUT=0
-        state='UNKNOWN'
-        while (state!='READY' and TIMEOUT<20):
-            print "DEBUG: %s"%state
-            state=self.m.get_state(id1)
-            TIMEOUT+=1
-            time.sleep(0.5)
-        #Debug
+        state=self.time_wait(id1)
+        assert state=='READY'
+        state=self.time_wait(id2)
         assert state=='READY'
         # Cause a failure
         self.images.drop()
@@ -205,20 +246,6 @@ class ImageMngrTestCase(unittest.TestCase):
         pass
         #    assert rv.status_code==200
         #    assert rv.data.rfind(self.service)
-    #def test_list(self):
-    #    rv = self.app.get('/services/')
-    #    assert rv.status_code==200
-    #    assert rv.data.rfind(self.service)
-#
-#    def test_service(self):
-#        rv = self.app.delete('/kill/'+self.service)
-#        assert rv.status_code==200
-#        rv = self.app.get('/services/'+self.service+'/')
-#        assert rv.status_code==200
-#
-#    def test_delete_service(self):
-#        rv = self.app.delete('/kill/'+self.service)
-#        assert rv.status_code==200
 
 if __name__ == '__main__':
     unittest.main()

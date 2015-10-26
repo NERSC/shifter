@@ -258,14 +258,21 @@ def pullImage(options, baseUrl, repo, tag, cachedir='./', expanddir='./', cacert
         layer = layer['child']
 
     layer = eldest
-    if not os.path.exists(expanddir):
-        os.mkdir(expanddir)
+    meta=youngest()
+    resp={'id':meta['id']}
+    expandedpath=os.path.join(expanddir,str(meta['id']))
+    resp['expandedpath']=expandedpath
+    if 'config' in meta:
+        c=meta['config']
+        if 'Env' in c:
+            resp['env']=c['Env']
+        if 'Entrypoint' in c:
+            resp['entrypoint']=c['Entrypoint']
+    if not os.path.exists(expandedpath):
+        os.mkdir(expandedpath)
 
-    try:
-        extractDockerLayers(expanddir, layer, cachedir=cachedir)
-    except:
-        return None
-    return expanddir
+    extractDockerLayers(expanddir, layer, cachedir=cachedir)
+    return resp
 
 if __name__ == '__main__':
   #pullImage(None, 'https://index.docker.io', 'redis', 'latest')

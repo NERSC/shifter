@@ -62,6 +62,7 @@ def normalized_name(request):
     Helper function that returns a filename based on the request
     """
     return '%s_%s'%(request['itype'],request['tag'].replace('/','_'))
+    #return request['meta']['id']
 
 def pull_image(request):
     """
@@ -71,11 +72,13 @@ def pull_image(request):
     """
     dir=os.getcwd()
     cdir=config['CacheDirectory']
-    edir=os.path.join(cdir,normalized_name(request))
-    request['expandedpath']=edir
     parts=re.split('[:/]',request['tag'])
     if len(parts)==3:
         (location,repo,tag)=parts
+        if location.find('.')<0:
+            # This is a dockerhub repo with a username
+            repo='%s/%s'%(location,repo)
+            location='index.docker.io'
     elif len(parts)==2:
         (repo,tag)=parts
         location='index.docker.io'
@@ -94,10 +97,12 @@ def pull_image(request):
         raise KeyError('%s not found in configuration'%(location))
     if rtype=='dockerv2':
         try:
-            ipath=dockerv2.pullImage(None, 'https://%s'%(location),
+            resp=dockerv2.pullImage(None, 'https://%s'%(location),
                 repo, tag,
-                cachedir=cdir,expanddir=edir,
+                cachedir=cdir,expanddir=cdir,
                 cacert=cacert)
+            request['meta']=resp
+            request['expandedpath']=resp['expandedpath']
             return True
         except:
             logging.warn(sys.exc_value)
@@ -105,10 +110,12 @@ def pull_image(request):
     elif rtype=='dockerhub':
         logging.debug("pulling from docker hub %s %s"%(repo,tag))
         try:
-            ipath=dockerhub.pullImage(None, None,
+            resp=dockerhub.pullImage(None, None,
                 repo, tag,
-                cachedir=cdir,expanddir=edir,
+                cachedir=cdir,expanddir=cdir,
                 cacert=cacert)
+            request['meta']=resp
+            request['expandedpath']=resp['expandedpath']
             return True
         except:
             logging.warn(sys.exc_value)
@@ -138,7 +145,7 @@ def convert_image(request):
     if format in request:
         format=request['format']
     cdir=config['CacheDirectory']
-    imagefile=os.path.join(cdir,normalized_name(request)+'.'+format)
+    imagefile='%s.%s'%(request['expandedpath'],format)
     status=converters.convert(format,request['expandedpath'],imagefile)
     request['imagefile']=imagefile
     return status
@@ -166,7 +173,7 @@ def dopull(self,request,TESTMODE=0):
             logging.info("Worker: TESTMODE Updating to %s"%(state))
             self.update_state(state=state)
             time.sleep(1)
-        return
+        return {'id':'1','entrypoint':['./blah'],'env':['FOO=bar','BAZ=boz']}
     elif TESTMODE==2:
         logging.info("Worker: TESTMODE 2 setting failure")
         raise OSError('task failed')
@@ -175,6 +182,9 @@ def dopull(self,request,TESTMODE=0):
         self.update_state(state='PULLING')
         if not pull_image(request):
             raise OSError('Pull failed')
+        if 'meta' not in request:
+            raise OSError('Metadata not populated')
+        print request['meta']
         # Step 2 - Check the image
         self.update_state(state='EXAMINATION')
         if not examine_image(request):
@@ -189,7 +199,9 @@ def dopull(self,request,TESTMODE=0):
             raise OSError('Transfer failed')
         # Done
         self.update_state(state='READY')
+        return request['meta']
+
     except:
         logging.error("ERROR: dopull failed system=%s tag=%s"%(request['system'],request['tag']))
         self.update_state(state='FAILURE')
-        raise OSError("Pull Failed")
+        raise
