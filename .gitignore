@@ -3,3 +3,8 @@ ssh.key
 ssh.pub
 munge.key
 test.json
+depcomp
+install-sh
+libtool.m4
+missing
+Makefile.in

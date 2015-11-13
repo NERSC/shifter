@@ -62,6 +62,7 @@ typedef struct _ImageData {
     char *identifier;       /*!< Image identifier string */
     char *tag;              /*!< Image tag */
     char *type;             /*!< Image type */
+    char *status;           /*!< Image status from gateway */
 
     size_t env_capacity;    /*!< Current # of allocated char* in env */
     size_t volume_capacity; /*!< Current # of allocated char* in volumes */

@@ -1,0 +1,3 @@
+AUTOMAKE_OPTIONS = foreign
+ACLOCAL_AMFLAGS = -I auxdir
+SUBDIRS    = src
