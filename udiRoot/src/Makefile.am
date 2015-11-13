@@ -1,5 +1,7 @@
 AUTOMAKE_OPTIONS=foreign
 
+AM_CPPFLAGS = -DCONFIG_FILE=\"${sysconfdir}/udiRoot.conf\"
+
 sbin_PROGRAMS = setupRoot unsetupRoot
 bin_PROGRAMS = shifter
 
