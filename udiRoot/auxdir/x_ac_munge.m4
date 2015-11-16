@@ -56,9 +56,9 @@ AC_DEFUN([X_AC_MUNGE], [
     MUNGE_CPPFLAGS="-I$x_ac_cv_munge_dir/include"
     MUNGE_DIR="$x_ac_cv_munge_dir"
     if test "$ac_with_rpath" = "yes"; then
-      MUNGE_LDFLAGS="-Wl,-rpath -Wl,$x_ac_cv_munge_dir/$bit -L$x_ac_cv_munge_dir/$bit"
+      MUNGE_LDFLAGS="-Wl,-rpath -Wl,$x_ac_cv_munge_dir/$bit -L$x_ac_cv_munge_dir/$bit -lmunge"
     else
-      MUNGE_LDFLAGS="-L$x_ac_cv_munge_dir/$bit"
+      MUNGE_LDFLAGS="-L$x_ac_cv_munge_dir/$bit -lmunge"
     fi
   fi
 
