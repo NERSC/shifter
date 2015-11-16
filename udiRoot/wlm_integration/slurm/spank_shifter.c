@@ -324,7 +324,7 @@ Params:
     char **nodelist:  pointer to nodelist string (for modification here)
     size_t *tasksPerNode: pointer to integer tasksPerNode (for modification here)
 **/
-int read_data_from_job(spank_t sp, uint32_t *jobid, char **nodelist, size_t *tasksPerNode) {
+int read_data_from_job(spank_t sp, uint32_t *jobid, char **nodelist, size_t *tasksPerNode, uint16_t *shared) {
     job_info_msg_t *job_buf = NULL;
     hostlist_t hl;
     char *raw_host_string = NULL;
@@ -346,6 +346,9 @@ int read_data_from_job(spank_t sp, uint32_t *jobid, char **nodelist, size_t *tas
 
     /* get tasksPerNode */
     *tasksPerNode = job_buf->job_array->num_cpus / job_buf->job_array->num_nodes;
+
+    /* get shared-node status */
+    *shared = job_buf->job_array->shared;
 
     /* obtain the hostlist for this job */
     hl = slurm_hostlist_create_dims(job_buf->job_array->nodes, 0);
@@ -416,6 +419,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     int i,j;
     uint32_t job;
     uid_t uid = 0;
+    uint16_t shared = 0;
 
     char buffer[1024];
     char setupRootPath[PATH_MAX];
@@ -453,8 +457,6 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         return rc;
     }
 
-    slurm_error("DMJ: FOUND IMAGE ARGS, starting shifter prolog");
-
     ptr = getenv("SHIFTER_IMAGETYPE");
     if (ptr != NULL) {
         snprintf(image_type, IMAGE_MAXLEN, "%s", ptr);
@@ -462,7 +464,6 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
 
     ptr = getenv("SHIFTER_IMAGE");
     if (ptr != NULL) {
-        slurm_error("DMJ: got SHIFTER_IMAGE: %s\n", ptr);
         snprintf(image, IMAGE_MAXLEN, "%s", ptr);
     }
 
@@ -471,7 +472,6 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         snprintf(imagevolume, IMAGEVOLUME_MAXLEN, "%s", ptr);
     }
 
-    slurm_error("DMJ: SHIFTER, about to read configation");
     /* parse udi configuration */
     udiConfig = read_config(argc, argv);
     if (udiConfig == NULL) {
@@ -483,13 +483,16 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         *ptr = tolower(*ptr);
     }
 
-    slurm_error("DMJ: SHIFTER, about to read job data");
-    rc = read_data_from_job(sp, &job, &nodelist, &tasksPerNode);
+    rc = read_data_from_job(sp, &job, &nodelist, &tasksPerNode, &shared);
     if (rc != ESPANK_SUCCESS) {
         PROLOG_ERROR("FAILED to get job information.", ESPANK_ERROR);
     }
 
-    slurm_error("DMJ: SHIFTER, about to read ssh pub key");
+    /* this prolog should not be used for shared-node jobs */
+    if (shared != 0) {
+        goto _prolog_exit_unclean;
+    }
+
     /* try to recover ssh public key */
     sshPubKey = getenv("SHIFTER_SSH_PUBKEY");
     if (sshPubKey != NULL) {
@@ -803,6 +806,7 @@ _epilog_exit_unclean:
 
 int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     int rc = ESPANK_SUCCESS;
+    int i = 0, j = 0;
     UdiRootConfig *udiConfig = NULL;
     ImageData imageData;
 
@@ -815,6 +819,17 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
 
 
     if (nativeSlurm == 0) return ESPANK_SUCCESS;
+    for (i = 0; spank_option_array[i].name != NULL; ++i) {
+        char *optarg = NULL;
+        j = spank_option_getopt(sp, &spank_option_array[i], &optarg);
+        if (j != ESPANK_SUCCESS) {
+            continue;
+        }
+        (spank_option_array[i].cb)(spank_option_array[i].val, optarg, 1);
+    }
+    if (strlen(image) == 0) {
+        return rc;
+    }
     if (strlen(image) == 0 || strlen(image_type) == 0) {
         return rc;
     }
