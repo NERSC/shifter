@@ -1,3 +1,29 @@
+/**
+ *  @file ImageGWConnect.c
+ *  @brief utility to perform image lookups
+ * 
+ * @author Douglas M. Jacobsen <dmjacobsen@lbl.gov>
+ */
+
+/* Shifter, Copyright (c) 2015, The Regents of the University of California,
+ * through Lawrence Berkeley National Laboratory (subject to receipt of any
+ * required approvals from the U.S. Dept. of Energy).  All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *  1. Redistributions of source code must retain the above copyright notice,
+ *     this list of conditions and the following disclaimer.
+ *  2. Redistributions in binary form must reproduce the above copyright notice,
+ *     this list of conditions and the following disclaimer in the documentation
+ *     and/or other materials provided with the distribution.
+ *  3. Neither the name of the University of California, Lawrence Berkeley
+ *     National Laboratory, U.S. Dept. of Energy nor the names of its
+ *     contributors may be used to endorse or promote products derived from this
+ *     software without specific prior written permission.
+ * 
+ * See LICENSE for full text.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,6 +33,7 @@
 
 #include "ImageData.h"
 #include "utility.h"
+#include "UdiRootConfig.h"
 
 typedef struct _ImageGwState {
     char *message;
@@ -16,6 +43,12 @@ typedef struct _ImageGwState {
     size_t messageCurr;
     int messageComplete;
 } ImageGwState;
+
+void free_ImageGwState(ImageGwState *image) {
+    if (image == NULL) return;
+    if (image->message != NULL) free(image->message);
+    free(image);
+}
 
 size_t handleResponseHeader(char *ptr, size_t sz, size_t nmemb, void *data) {
     ImageGwState *imageGw = (ImageGwState *) data;
@@ -91,6 +124,7 @@ ImageData *parseLookupResponse(ImageGwState *imageGw) {
     */
 
     image = (ImageData *) malloc(sizeof(ImageData));
+    memset(image, 0, sizeof(ImageData));
     json_object_object_foreachC(jObj, jIt) {
         enum json_type type = json_object_get_type(jIt.val);
         if (strcmp(jIt.key, "status") == 0 && type == json_type_string) {
@@ -120,22 +154,18 @@ ImageData *parseLookupResponse(ImageGwState *imageGw) {
     return image;
 }
 
-int main(int argc, char **argv) {
-    char *cred = NULL;
+ImageGwState *queryGateway(char *baseUrl, char *tag, UdiRootConfig *config) {
+    const char *url = alloc_strgenf("%s/api/lookup/%s/docker/%s/", baseUrl, config->system, tag);
     CURL *curl = NULL;
     CURLcode err;
+    char *cred = NULL;
     struct curl_slist *headers = NULL;
-    const char *url = "http://cori18-224.nersc.gov:5000/api/lookup/cori/docker/ubuntu:14.04/";
     char *authstr = NULL;
     size_t authstr_len = 0;
-
     ImageGwState *imageGw = (ImageGwState *) malloc(sizeof(ImageGwState));
     memset(imageGw, 0, sizeof(ImageGwState));
 
-    curl_global_init(CURL_GLOBAL_ALL);
     curl = curl_easy_init();
-
-
     curl_easy_setopt(curl, CURLOPT_URL, url);
 
     munge_ctx_t ctx = munge_ctx_create();
@@ -156,6 +186,10 @@ int main(int argc, char **argv) {
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, handleResponseData);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, imageGw);
 
+    if (config->gatewayTimeout > 0) {
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, config->gatewayTimeout);
+    }
+
     err = curl_easy_perform(curl);
     if (err) {
         exit(1);
@@ -168,14 +202,71 @@ int main(int argc, char **argv) {
         if (imageGw->messageComplete) {
             ImageData *image = parseLookupResponse(imageGw);
             if (image != NULL) {
-                printf("image: %s:%s === %s\n", image->type, image->tag, image->identifier);
+                printf("%s\n", image->identifier);
             }
+            free_ImageData(image, 1);
         }
     } else {
+        free_ImageGwState(imageGw);
+        return NULL;
+    }
+
+    return imageGw;
+}
+
+int main(int argc, char **argv) {
+    UdiRootConfig udiConfig;
+    ImageGwState *imgGw = NULL;
+    char *tag = NULL;
+    CURL *curl = curl_easy_init();
+
+    memset(&udiConfig, 0, sizeof(UdiRootConfig));
+    curl_global_init(CURL_GLOBAL_ALL);
+
+    if (parse_UdiRootConfig(CONFIG_FILE, &udiConfig, UDIROOT_VAL_ALL) != 0) {
+        fprintf(stderr, "FAILED to parse udiRoot configuration.\n");
         exit(1);
     }
 
+    if (argc < 2) {
+        fprintf(stderr, "No tag supplied.\n");
+        exit(1);
+    }
+    tag = curl_easy_escape(curl, argv[1], strlen(argv[1]));
 
+    /* get local copy of gateway urls */
+    size_t nGateways = udiConfig.gwUrl_size;
+    char **gateways = (char **) malloc(sizeof(char *) * nGateways);
+    size_t idx = 0;
+    for (idx = 0 ; idx < nGateways; idx++) {
+        gateways[idx] = strdup(udiConfig.gwUrl[idx]);
+    }
+
+    /* seed our shuffle */
+    srand(getpid() ^ time(NULL));
+
+    /* shuffle the list in random order */
+    for (idx = 0; idx < nGateways && nGateways - idx - 1 > 0; idx++) {
+        size_t r = rand() % (nGateways - idx);
+        char *tmp = gateways[idx];
+        gateways[idx] = gateways[idx + r];
+        gateways[idx + r] = tmp;
+    }
+
+    for (idx = 0; idx < nGateways; idx++) {
+        imgGw = queryGateway(gateways[idx], tag, &udiConfig);
+        if (imgGw != NULL) {
+            break;
+        }
+    }
+
+    for (idx = 0; idx < nGateways; idx++) {
+        free(gateways[idx]);
+    }
+    free(gateways);
+
+    free(tag);
+    curl_easy_cleanup(curl);
     curl_global_cleanup();
-    return 0;
+    return imgGw != NULL;
 }

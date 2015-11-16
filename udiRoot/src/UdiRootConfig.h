@@ -80,8 +80,7 @@ typedef struct _UdiRootConfig {
     char *kmodPath;
     char *kmodCacheFile;
     char *rootfsType;
-    char **gwName;
-    char **gwPort;
+    char **gwUrl;
     char **siteFs;
     char **siteEnv;
     char **siteEnvAppend;
@@ -90,6 +89,7 @@ typedef struct _UdiRootConfig {
     int autoLoadKernelModule;
     int mountUdiRootWritable;
     size_t maxGroupCount;
+    size_t gatewayTimeout;
 
     char *modprobePath;
     char *insmodPath;
@@ -101,13 +101,12 @@ typedef struct _UdiRootConfig {
     size_t siteEnv_capacity;
     size_t siteEnvAppend_capacity;
     size_t siteEnvPrepend_capacity;
-    size_t gwName_capacity;
-    size_t gwPort_capacity;
+    size_t gwUrl_capacity;
+    size_t gwUrl_size;
     size_t siteFs_size;
     size_t siteEnv_size;
     size_t siteEnvAppend_size;
     size_t siteEnvPrepend_size;
-    size_t gateway_size;
 } UdiRootConfig;
 
 int parse_UdiRootConfig(const char *, UdiRootConfig *, int validateFlags);
