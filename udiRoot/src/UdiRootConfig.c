@@ -161,7 +161,7 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         config->rootfsType = NULL;
     }
 
-    char **arrays[] = {config->gwName, config->gwPort, config->siteFs, config->siteEnv, config->siteEnvAppend, config->siteEnvPrepend, NULL};
+    char **arrays[] = {config->gwUrl, config->siteFs, config->siteEnv, config->siteEnvAppend, config->siteEnvPrepend, NULL};
     char ***arrayPtr = NULL;
     for (arrayPtr = arrays; *arrayPtr != NULL; arrayPtr++) {
         char **iPtr = NULL;
@@ -228,11 +228,10 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->mvPath != NULL ? config->mvPath : ""));
     written += fprintf(fp, "chmodPath = %s\n",
         (config->chmodPath != NULL ? config->chmodPath : ""));
-    written += fprintf(fp, "Image Gateway Servers = %lu servers\n", config->gateway_size);
-    for (idx = 0; idx < config->gateway_size; idx++) {
-        char *gwName = config->gwName[idx];
-        char *gwPort = config->gwPort[idx];
-        written += fprintf(fp, "    %s:%s\n", gwName, gwPort);
+    written += fprintf(fp, "Image Gateway Servers = %lu servers\n", config->gwUrl_size);
+    for (idx = 0; idx < config->gwUrl_size; idx++) {
+        char *gwUrl = config->gwUrl[idx];
+        written += fprintf(fp, "    %s\n", gwUrl);
     }
     written += fprintf(fp, "Site FS Bind-mounts = %lu fs\n", config->siteFs_size);
     for (fsPtr = config->siteFs; *fsPtr != NULL; fsPtr++) {
@@ -365,6 +364,8 @@ static int _assign(const char *key, const char *value, void *t_config) {
         config->chmodPath = strdup(value);
     } else if (strcmp(key, "rootfsType") == 0) {
         config->rootfsType = strdup(value);
+    } else if (strcmp(key, "gatewayTimeout") == 0) {
+        config->gatewayTimeout = strtoul(value, NULL, 10);
     } else if (strcmp(key, "kmodBasePath") == 0) {
         struct utsname uts;
         memset(&uts, 0, sizeof(struct utsname));
@@ -430,31 +431,13 @@ static int _assign(const char *key, const char *value, void *t_config) {
         char *valueDup = strdup(value);
         char *search = valueDup;
         int ret = 0;
+        char *svPtr = NULL;
         char *ptr = NULL;
-        while ((ptr = strtok(search, " ")) != NULL) {
-            char *dPtr = strchr(ptr, ':');
-            const char *portStr = NULL;
-            char **gwNamePtr = config->gwName + config->gateway_size;
-            char **gwPortPtr = config->gwPort + config->gateway_size;
+        while ((ptr = strtok_r(search, " ", &svPtr)) != NULL) {
+            char **gwUrlPtr = config->gwUrl + config->gwUrl_size;
+            strncpy_StringArray(ptr, strlen(ptr), &(gwUrlPtr), &(config->gwUrl), &(config->gwUrl_capacity), SERVER_ALLOC_BLOCK);
+            config->gwUrl_size++;
             search = NULL;
-            if (dPtr == NULL) {
-                portStr = IMAGEGW_PORT_DEFAULT;
-            } else {
-                int port = 0;
-                *dPtr++ = 0;
-                port = atoi(dPtr);
-                if (port != 0) {
-                    portStr = dPtr;
-                }
-            }
-            if (ptr != NULL && portStr != NULL) {
-                strncpy_StringArray(ptr, strlen(ptr), &(gwNamePtr), &(config->gwName), &(config->gwName_capacity), SERVER_ALLOC_BLOCK);
-                strncpy_StringArray(portStr, strlen(portStr), &(gwPortPtr), &(config->gwPort), &(config->gwPort_capacity), SERVER_ALLOC_BLOCK);
-                config->gateway_size++;
-            } else {
-                fprintf(stderr, "FAILED to understand image gateway: %s, port %s\n", ptr, portStr);
-                ret = 1;
-            }
         }
         free(valueDup);
         return ret;
