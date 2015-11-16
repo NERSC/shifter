@@ -1,0 +1,40 @@
+#!/bin/sh
+#
+# Mock unmunge command - For testing purposes only
+#
+
+
+IN=$(cat)
+MT=$(cat ./test/munge.test)
+EX=$(cat ./test/munge.expired)
+if [ "$IN" == "$MT" ] ;then
+  ST="Success (0)"
+  RT=0
+elif [ "$IN" == "$EX" ] ;then
+  ST="Expired credential (15))"
+  RT=15
+
+else
+  echo "unmunge: Error: Failed to match armor prefix"
+  exit 8
+fi
+
+DS=$(TZ=GMT date +"%Y-%m-%d %H:%M:%S %z (%s)")
+
+cat << EOF
+STATUS:           $ST
+ENCODE_HOST:      4175821389c5 (172.17.1.59)
+ENCODE_TIME:      2015-10-15 14:56:43 +0000 (1444921003)
+DECODE_TIME:      $DS
+TTL:              300
+CIPHER:           aes128 (4)
+MAC:              sha1 (3)
+ZIP:              none (0)
+UID:              root (0)
+GID:              root (0)
+LENGTH:           0
+
+test
+EOF
+
+exit $RT

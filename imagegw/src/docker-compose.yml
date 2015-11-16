@@ -24,7 +24,7 @@ systema:
    - 22
   volumes:
   - /mnt/sda1/data/systema:/data
-worker:
+workera:
   image: imagegwapi
   links:
    - api
@@ -32,7 +32,15 @@ worker:
    - systema:systema
   volumes:
    - /mnt/sda1/imagegw:/data
-  command: worker
+  command: workera
+workerb:
+  image: imagegwapi
+  links:
+   - api
+   - redis
+  volumes:
+   - /mnt/sda1/imagegw:/data
+  command: workerb
 flower:
   image: imagegwapi
   links:

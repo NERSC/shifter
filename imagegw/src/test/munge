@@ -1,0 +1,11 @@
+#!/bin/sh
+#
+# Mock munge - For test purposes only
+#
+T=$(dirname $0)
+
+if [ ! -z "$IP" ] ; then
+  ssh -i test/ssh.key $IP -p $PORT -l root munge $@
+else
+  cat $T/munge.test
+fi

@@ -4,15 +4,36 @@ import os
 import subprocess
 import shutil
 
+"""
+Shifter, Copyright (c) 2015, The Regents of the University of California,
+through Lawrence Berkeley National Laboratory (subject to receipt of any
+required approvals from the U.S. Dept. of Energy).  All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+ 1. Redistributions of source code must retain the above copyright notice,
+    this list of conditions and the following disclaimer.
+ 2. Redistributions in binary form must reproduce the above copyright notice,
+    this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution.
+ 3. Neither the name of the University of California, Lawrence Berkeley
+    National Laboratory, U.S. Dept. of Energy nor the names of its
+    contributors may be used to endorse or promote products derived from this
+    software without specific prior written permission.`
+
+See LICENSE for full text.
+"""
 
 def generateExt4Image(expandedPath, imagePath):
     """
     Creates an ext4 based image
     """
+    raise NotImplementedError('ext4 support is note implemented yet')
 
     ## create sparsefile for the image
-    # TODO: Fix
-    #ret = subprocess.call(["dd", "of=%s" % imagePath, "bs=1", "count=0", "seek=%d" % (get_size(layersPath) * 2)], stdout=fdnull, stderr=fdnull)
+    # TODO: compute size
+    size=100*1024*1024*1024
+    ret = subprocess.call(["dd", "of=%s" % imagePath, "bs=1", "count=0", "seek=%d" % (size)], stdout=fdnull, stderr=fdnull)
     if ret != 0:
         # error handling
         pass
@@ -78,7 +99,7 @@ def convert(format,expandedPath,imagePath):
     if os.path.exists(imagePath):
         print "file already exist"
         return True
-        
+
     imageTempPath=imagePath+'.partial'
 
     success=False

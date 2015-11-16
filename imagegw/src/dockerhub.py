@@ -6,12 +6,36 @@ import os
 import sys
 import subprocess
 import base64
-import binascii
-import struct
 import tempfile
 import random
 
-class dockerhubHandle:
+"""
+Shifter, Copyright (c) 2015, The Regents of the University of California,
+through Lawrence Berkeley National Laboratory (subject to receipt of any
+required approvals from the U.S. Dept. of Energy).  All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+ 1. Redistributions of source code must retain the above copyright notice,
+    this list of conditions and the following disclaimer.
+ 2. Redistributions in binary form must reproduce the above copyright notice,
+    this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution.
+ 3. Neither the name of the University of California, Lawrence Berkeley
+    National Laboratory, U.S. Dept. of Energy nor the names of its
+    contributors may be used to endorse or promote products derived from this
+    software without specific prior written permission.`
+
+See LICENSE for full text.
+"""
+
+
+class dockerhubHandle():
+    """
+    A class for fetching and unpacking dockerhub images.  DockerHub images
+    are v1 like but have some special differences that require its own class.
+    """
+
     repo = None
     tag = None
     protocol = 'https'
@@ -24,6 +48,14 @@ class dockerhubHandle:
     allowAuthenticated = True
 
     def __init__(self, imageIdent, options = None):
+        """
+        Initialize an instance of the DockerHub class.
+        imageIdent is an tagged repo (e.g. ubuntu:14.04)
+        options is a dictionary.  Valid options include
+        baseUrl to specify an URL other than dockerhub.
+        cacert to specify a certificate.
+        username/password to specify a login.
+        """
 
         ## attempt to parse image identifier
         try:
@@ -43,27 +75,28 @@ class dockerhubHandle:
             baseUrlStr = options['baseUrl']
             protocol = None
             server = None
-            basePath = ''
-            matchObj = re.match(r'((https?)://)?(.*?)(/.*)', baseUrlStr)
-            if matchObj is None:
-                if baseUrlStr.find('/') >= 0:
-                    raise ValueError('unable to parse baseUrl, should be like https://server.location/optionalBasePath')
-                protocol = 'https'
-                server = baseUrlStr
-                basePath = ''
+            basePath=None
+            if baseUrlStr.find('http')>=0:
+                protocol=baseUrlStr.split(':')[0]
+                index=baseUrlStr.find(':')
+                baseUrlStr=baseUrlStr[index+3:]
+            if baseUrlStr.find('/')>=0:
+                index=baseUrlStr.find('/')
+                basePath=baseUrlStr[index:]
+                server=baseUrlStr[:index]
             else:
-                protocol = matchObj.groups()[1]
-                server = matchObj.groups()[2]
-                basePath = matchObj.groups()[3]
+                server=baseUrlStr
+
             if protocol is None or len(protocol) == 0:
                 protocol = 'https'
+            #print "protocol=%s server=%s basePath=%s"%(protocol,server,basePath)
 
             if server is None or len(server) == 0:
                 raise ValueError('unable to parse baseUrl, no server specified, should be like https://server.location/optionalBasePath')
 
             if basePath is None:
-                basePath = ''
-            
+                basePath = '/v1'
+
             self.protocol = protocol
             self.server = server
             self.basePath = basePath
@@ -101,7 +134,7 @@ class dockerhubHandle:
         self.lookupTag()
         if self.taghash is None or len(self.taghash) == 0:
             raise ValueError('failed to lookup requested image: %s:%s' % (self.repo, self.tag))
-        
+
         ## get image layers
         self.layers = self.getImageAncestry()
 
@@ -109,7 +142,25 @@ class dockerhubHandle:
         self.layerMetadata = {}
         for layer in self.layers:
             self.layerMetadata[layer] = self.getLayerMetadata(layer)
+        self.constructImageMetadata()
 
+
+    def pullLayers(self,directory='./'):
+        """
+        Pull the layers down and save them to local storage.
+        """
+
+        layer=self.taghash
+        while layer is not None:
+            fname=os.path.join(directory,"%s.tar"%layer)
+            if not os.path.exists(fname):
+                self.getLayer(layer,fname)
+            if 'parent' in self.layerMetadata[layer]:
+                child=layer
+                layer=self.layerMetadata[layer]['parent']
+                self.layerMetadata['child']=self.layerMetadata[child]
+            else:
+                layer=None
 
     def setupHttpConn(self, url, cacert=None):
         (protocol, url) = url.split('://', 1)
@@ -133,6 +184,9 @@ class dockerhubHandle:
         return conn
 
     def setupDockerHub(self):
+        """
+        Helper function to setup the DockerHub connection
+        """
         baseUrl = '%s://%s' % (self.protocol, self.server)
         conn = self.setupHttpConn(baseUrl, self.cacert)
         headers = {'X-Docker-Token': 'True'}
@@ -153,7 +207,21 @@ class dockerhubHandle:
         else:
             raise ValueError('Failed to parse repository from returned token: %s' % self.token)
 
+    def getEldest(self):
+        return self.eldest
+
+    def getYoungest(self):
+        return self.youngest
+
+    def getTag(self):
+        if self.taghash is None:
+            self.lookupTag()
+        return self.taghash
+
     def lookupTag(self):
+        """
+        Retrieve the tag of the image.
+        """
         conn = self.setupHttpConn('https://%s' % self.endpoints[0], self.cacert)
         conn.request('GET', '/v1/repositories/%s/tags/%s' % (self.repo, self.tag), None, {'Authorization': 'Token %s' % self.token})
         r1 = conn.getresponse()
@@ -176,6 +244,9 @@ class dockerhubHandle:
         return None
 
     def getLayer(self, layerHash, fname):
+        """
+        Pull down a specific layer.
+        """
         endpointIdx = random.randrange(0, len(self.endpoints)) % len(self.endpoints)
         conn = self.setupHttpConn('%s://%s' % (self.protocol, self.endpoints[endpointIdx]), self.cacert)
         conn.request('GET', '/v1/images/%s/layer' % layerHash, None, {'Authorization': 'Token %s' % self.token})
@@ -192,11 +263,14 @@ class dockerhubHandle:
             raise ValueError('Bad response from registry')
 
         contentLen = int(r1.getheader('content-length'))
-        fp = open(fname, 'w')
-        fp.write(r1.read())
-        fp.close()
+        with open(fname,'w') as fp:
+            fp.write(r1.read())
+            fp.close()
 
     def getLayerMetadata(self, layerHash):
+        """
+        Retrieve the metadata for a specific layer and unpack it.
+        """
         endpointIdx = random.randrange(0, len(self.endpoints)) % len(self.endpoints)
         conn = self.setupHttpConn('%s://%s' % (self.protocol, self.endpoints[endpointIdx]), self.cacert)
         conn.request('GET', '/v1/images/%s/json' % layerHash, None, {'Authorization': 'Token %s' % self.token})
@@ -208,220 +282,83 @@ class dockerhubHandle:
             raise ValueError('Bad reponse from registry: content not json')
         return json.loads(r1.read())
 
+    def extractDockerLayers(self,basePath, layer,cachedir="./"):
+        """
+        Extract Image Layers.
+        basePath is where the layers will be extracted to
+        layer is a linked list of layers
+        """
+        if layer is None:
+            return
+        os.umask(022)
+        devnull = open(os.devnull, 'w')
+        tarfile=os.path.join(cachedir,'%s.tar'%(layer['id']))
+        com=['tar','xf', tarfile, '-C', basePath]
+        if False:
+            command.append('--force-local')
+        ret = subprocess.call(com, stdout=devnull, stderr=devnull)
+        devnull.close()
+        if ret>1:
+            raise OSError("Extraction of layer (%s) to %s failed %d"%(tarfile,basePath,ret))
+        # ignore errors since some things like mknod are expected to fail
+        self.extractDockerLayers(basePath, layer['child'],cachedir=cachedir)
 
-def getImageManifest(url, repo, tag, cacert=None, username=None, password=None):
-    conn = setupHttpConn(url, cacert)
-    if conn is None:
-        return None
+    def constructImageMetadata(self):
+        """
+        construct additional metadata.
+        """
 
-    conn.request("GET", "/v2/%s/manifests/%s" % (repo, tag))
-    r1 = conn.getresponse()
-
-    if r1.status != 200:
-        raise ValueError("Bad response from registry")
-    expected_hash = r1.getheader('docker-content-digest')
-    content_len = r1.getheader('content-length')
-    if expected_hash is None or len(expected_hash) == 0:
-        raise ValueError("No docker-content-digest header found")
-    (digest_algo, expected_hash) = expected_hash.split(':', 1)
-    data = r1.read()
-    jdata = json.loads(data)
-    try:
-        verifyManifestDigestAndSignature(jdata, data, digest_algo, expected_hash)
-    except ValueError:
-        raise e
-    return jdata
-
-def saveLayer(url, repo, layer, cacert=None, username=None, password=None):
-    conn = setupHttpConn(url, cacert)
-    if conn is None:
-        return None
-
-    filename = '%s.tar' % layer
-    if os.path.exists(filename):
-        return True
-    conn.request("GET", "/v2/%s/blobs/%s" % (repo, layer))
-    r1 = conn.getresponse()
-    print r1.status, r1.reason
-    print r1.getheaders()
-    maxlen = int(r1.getheader('content-length'))
-    nread = 0
-    output = open(filename, "w")
-    readsz = 4 * 1024 * 1024 # read 4MB chunks
-    while nread < maxlen:
-        buff = r1.read(readsz)
-        if buff is None:
-            break
-        if type(buff) != str:
-            print buff
-            
-        output.write(buff)
-        nread += len(buff)
-    output.close()
-
-    (hashType,value) = layer.split(':', 1)
-    execName = '%s%s' % (hashType, 'sum')
-    process = subprocess.Popen([execName, filename], stdout=subprocess.PIPE)
-    (stdoutData, stderrData) = process.communicate()
-    (sum,other) = stdoutData.split(' ', 1)
-    if sum == value:
-        print "got match: %s == %s" % (sum, value)
-    else:
-        raise ValueError("checksum mismatch, failure")
-    return True
-
-def constructImageMetadata(manifest):
-    if manifest is None:
-        raise ValueError('Invalid manifest')
-    if 'schemaVersion' not in manifest or manifest['schemaVersion'] != 1:
-        raise ValueError('Incompatible manifest schema')
-    if 'fsLayers' not in manifest or 'history' not in manifest or 'signatures' not in manifest:
-        raise ValueError('Manifest in incorrect format')
-    if len(manifest['fsLayers']) != len(manifest['history']):
-        raise ValueError('Manifest layer size mismatch')
-    layers = {}
-    noParent = None
-    for idx,layer in enumerate(manifest['history']):
-        if 'v1Compatibility' not in layer:
-            raise ValueError('Unknown layer format')
-        layerData = json.loads(layer['v1Compatibility'])
-        layerData['fsLayer'] = manifest['fsLayers'][idx]
-        if 'parent' not in layerData:
-            if noParent is not None:
-                raise ValueError('Found more than one layer with no parent, cannot proceed')
-            noParent = layerData
-        else:
-            if layerData['parent'] in layers:
-                if layers[layerData['parent']]['id'] == layerData['id']:
-                    # skip already-existing image
-                    continue
-                raise ValueError('Multiple inheritance from a layer, unsure how to proceed')
-            layers[layerData['parent']] = layerData
-        if 'id' not in layerData:
-            raise ValueError('Malformed layer, missing id')
-
-    if noParent is None:
-        raise ValueError("Unable to find single layer wihtout parent, cannot identify terminal layer")
-
-    # traverse graph and construct linked-list of layers
-    curr = noParent
-    count = 1
-    while (curr is not None):
-        if curr['id'] in layers:
-            curr['child'] = layers[curr['id']]
-            del layers[curr['id']]
-            curr = curr['child']
-            count += 1
-        else:
-            curr['child'] = None
-            break
-
-    return (noParent,curr,)
-
-def setupImageBase(options):
-    return tempfile.mkdtemp()
-
-def extractDockerLayers(basePath, layer):
-    if layer is None:
-        return
-    os.umask(022)
-    devnull = open(os.devnull, 'w')
-    ret = subprocess.call(['tar','xf', '%s.tar' % layer['fsLayer']['blobSum'], '-C', basePath, '--force-local'], stdout=devnull, stderr=devnull)
-    devnull.close()
-    # ignore errors since some things like mknod are expected to fail
-    extractDockerLayers(basePath, layer['child'])
-
-def setupDockerHub(options, baseUrl, repo, cacert=None, username=None, password=None):
-    conn = setupHttpConn(baseUrl, cacert)
-    headers = {'X-Docker-Token': 'True'}
-    if username is not None and password is not None:
-        headers['Authorization'] = 'Basic %s' % base64.b64encode('%s:%s' % (username, password))
-    conn.request("GET", "/v1/repositories/%s/images" % (repo), None, headers)
-    r1 = conn.getresponse()
-
-    if r1.status != 200:
-        raise ValueError('Bad response from registry')
-
-    print r1.getheaders()
-    endpoint_string = r1.getheader('x-docker-endpoints')
-    token = r1.getheader('x-docker-token')
-    ret = {
-        'endpoints': endpoint_string.strip().split(' '),
-        'token': token,
-        'repository': re.search(r'repository="(.*?)"', token).groups()[0],
-    }
-    return ret
-
-def lookupTag(options, dhData, repo, tag, cacert=None, username=None, password=None):
-    conn = setupHttpConn('https://%s' % dhData['endpoints'][0], cacert)
-    conn.request('GET', '/v1/repositories/%s/tags/%s' % (dhData['repository'], tag), None, {'Authorization': 'Token %s' % dhData['token']})
-    r1 = conn.getresponse()
-
-    if r1.status != 200:
-        raise ValueError('Bad response from registry')
-    tag = r1.read().replace('"', '')
-    return tag
-
-def getImageAncestry(options, dhData, tagHash, cacert=None):
-    conn = setupHttpConn('https://%s' % dhData['endpoints'][0], cacert)
-    conn.request('GET', '/v1/images/%s/ancestry' % tagHash, None, {'Authorization': 'Token %s' % dhData['token']})
-    r1 = conn.getresponse()
-    if r1.status != 200:
-        raise ValueError('Bad response from registry')
-    if r1.getheader('content-type') == 'application/json':
-        data = r1.read()
-        return json.loads(data)
-    return None
-
-def getLayer(cnt, options, dhData, layerHash, cacert=None):
-    endpointIdx = cnt % len(dhData['endpoints'])
-    conn = setupHttpConn('https://%s' % dhData['endpoints'][endpointIdx], cacert)
-    conn.request('GET', '/v1/images/%s/layer' % layerHash, None, {'Authorization': 'Token %s' % dhData['token']})
-    r1 = conn.getresponse()
-
-    while r1 is not None and r1.status == 302:
-        loc = r1.getheader('location')
-        protocol,fullloc = loc.split('://', 1)
-        server,path = fullloc.split('/', 1)
-        conn = setupHttpConn('%s://%s' % (protocol, server), cacert)
-        conn.request('GET', '/' + path)
-        r1 = conn.getresponse()
-    if r1.status != 200:
-        raise ValueError('Bad response from registry')
-
-    contentLen = int(r1.getheader('content-length'))
-    print "writing %d bytes to %s.tar.gz" % (contentLen, layerHash)
-    fp = open('%s.tar.gz' % layerHash, 'w')
-    fp.write(r1.read())
-    fp.close()
-
-def getLayerMetadata(cnt, options, dhData, layerHash, cacert=None):
-    endpointIdx = cnt % len(dhData['endpoints'])
-    conn = setupHttpConn('https://%s' % dhData['endpoints'][endpointIdx], cacert)
-    conn.request('GET', '/v1/images/%s/json' % layerHash, None, {'Authorization': 'Token %s' % dhData['token']})
-    r1 = conn.getresponse()
-
-    if r1.status != 200:
-        raise ValueError('Bad response from registry')
-    if r1.getheader('content-type') != 'application/json':
-        raise ValueError('Bad reponse from registry: content not json')
-    fp = open('%s.json' % layerHash, 'w')
-    fp.write(r1.read())
-    fp.close()
+        layer=self.taghash
+        self.youngest=self.layerMetadata[layer]
+        prev=None
+        while layer is not None:
+            self.layerMetadata[layer]['child']=prev
+            if 'parent' in self.layerMetadata[layer]:
+                prev=self.layerMetadata[layer]
+                layer=self.layerMetadata[layer]['parent']
+            else:
+                self.eldest=self.layerMetadata[layer]
+                layer=None
+        layer=self.eldest
+        while layer!=None:
+            layer=layer['child']
 
 
-def pullImage(options, baseUrl, repo, tag, cacert=None, username=None, password=None):
-    print username
-    print password
-    dockerhubData = setupDockerHub(options, baseUrl, repo, cacert, username, password)
-    print dockerhubData
-    tagHash = lookupTag(options, dockerhubData, repo, tag, cacert, username, password)
-    print tagHash
-    layerIds = getImageAncestry(options, dockerhubData, tagHash, cacert)
-    for cnt,layer in enumerate(layerIds):
-        getLayer(cnt, options, dockerhubData, layer, cacert)
+def pullImage(options, baseUrl, repo, tag, cachedir='./', expanddir='./', cacert=None, username=None, password=None):
+    """
+    Macro function that pulls and extracts the image.
+    This may go away once we create a base class.
+    """
+    if options is None:
+        options=dict()
+    if username is not None:
+        options['username']=username
+    if password is not None:
+        options['password']=password
+    if cacert is not None:
+        options['cacert']=cacert
+    if baseUrl is not None:
+        options['baseUrl']=baseUrl
+    imageident='%s:%s'%(repo,tag)
+    a=dockerhubHandle(imageident,options)
+    a.pullLayers(cachedir)
+    meta=a.getYoungest()
+    resp={'id':meta['id']}
+    expandedpath=os.path.join(expanddir,str(meta['id']))
+    resp['expandedpath']=expandedpath
+    if 'config' in meta:
+        c=meta['config']
+        if 'Env' in c:
+            resp['env']=c['Env']
+        if 'Entrypoint' in c:
+            resp['entrypoint']=c['Entrypoint']
+    if not os.path.exists(expandedpath):
+        os.mkdir(expandedpath)
+    a.extractDockerLayers(expandedpath,a.getEldest(),cachedir=cachedir)
+    return resp
 
-a = dockerhubHandle('ubuntu:latest')
-print a
-#pullImage(None, 'https://registry.services.nersc.gov', 'lcls_xfel_edison', '201509081609', cacert='local.crt')
-#pullImage(None, 'https://index.docker.io', 'dmjacobsen/testrepo1', 'latest', username='dmjacobsen', password='tEul3Zib9wIgh0eK1Car')#, cacert='local.crt')
+if __name__ == '__main__':
+    pullImage(None, 'https://index.docker.io', 'ubuntu','latest', cachedir='/tmp/cache/', expanddir='/tmp/ubuntu/')
+    pullImage(None, 'index.docker.io', 'ubuntu','latest', cachedir='/tmp/cache/', expanddir='/tmp/ubuntu/')
+    pullImage(None, None, 'ubuntu','latest', cachedir='/tmp/cache/', expanddir='/tmp/ubuntu/')
+    #pullImage(None, 'https://registry.services.nersc.gov', 'lcls_xfel_edison', '201509081609', cacert='local.crt')

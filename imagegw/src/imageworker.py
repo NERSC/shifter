@@ -3,6 +3,7 @@ import json
 import os
 import time
 import dockerv2
+import dockerhub
 import converters
 import transfer
 import re
@@ -10,6 +11,26 @@ import sys
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 import logging
+
+"""
+Shifter, Copyright (c) 2015, The Regents of the University of California,
+through Lawrence Berkeley National Laboratory (subject to receipt of any
+required approvals from the U.S. Dept. of Energy).  All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+ 1. Redistributions of source code must retain the above copyright notice,
+    this list of conditions and the following disclaimer.
+ 2. Redistributions in binary form must reproduce the above copyright notice,
+    this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution.
+ 3. Neither the name of the University of California, Lawrence Berkeley
+    National Laboratory, U.S. Dept. of Energy nor the names of its
+    contributors may be used to endorse or promote products derived from this
+    software without specific prior written permission.`
+
+See LICENSE for full text.
+"""
 
 CONFIGFILE='imagemanager.json'
 DEBUG=0
@@ -41,6 +62,7 @@ def normalized_name(request):
     Helper function that returns a filename based on the request
     """
     return '%s_%s'%(request['itype'],request['tag'].replace('/','_'))
+    #return request['meta']['id']
 
 def pull_image(request):
     """
@@ -50,12 +72,20 @@ def pull_image(request):
     """
     dir=os.getcwd()
     cdir=config['CacheDirectory']
-    edir=os.path.join(cdir,normalized_name(request))
-    request['expandedpath']=edir
     parts=re.split('[:/]',request['tag'])
     if len(parts)==3:
         (location,repo,tag)=parts
+        if location.find('.')<0:
+            # This is a dockerhub repo with a username
+            repo='%s/%s'%(location,repo)
+            location='index.docker.io'
+    elif len(parts)==2:
+        (repo,tag)=parts
+        location='index.docker.io'
+    else:
+        raise OSError('Unable to parse tag %s'%request['tag'])
     logging.debug("doing image pull for %s %s %s"%(location,repo,tag))
+    cacert=None
     if location in config['Locations']:
         params=config['Locations'][location]
         rtype=params['remotetype']
@@ -63,35 +93,45 @@ def pull_image(request):
             cacert='%s/%s'%(dir,params['sslcacert'])
             if not os.path.exists(cacert):
                 raise OSError('%s does not exist'%(cacert))
-        #        "registry.services.nersc.gov": {
-        #            "remotetype": "dockerv2",
-        #            "sslcacert": "./cacert.pem",
-        #            "authentication": "http"
-        #        }
     else:
         raise KeyError('%s not found in configuration'%(location))
-    #registry.services.nersc.gov/nersc-py:latest'
     if rtype=='dockerv2':
         try:
-            ipath=dockerv2.pullImage(None, 'https://%s'%(location),
+            resp=dockerv2.pullImage(None, 'https://%s'%(location),
                 repo, tag,
-                cachedir=cdir,expanddir=edir,
+                cachedir=cdir,expanddir=cdir,
                 cacert=cacert)
+            request['meta']=resp
+            request['expandedpath']=resp['expandedpath']
+            return True
+        except:
+            logging.warn(sys.exc_value)
+            return False
+    elif rtype=='dockerhub':
+        logging.debug("pulling from docker hub %s %s"%(repo,tag))
+        try:
+            resp=dockerhub.pullImage(None, None,
+                repo, tag,
+                cachedir=cdir,expanddir=cdir,
+                cacert=cacert)
+            request['meta']=resp
+            request['expandedpath']=resp['expandedpath']
             return True
         except:
             logging.warn(sys.exc_value)
             return False
 
     else:
-        NotImplementedError('Unsupported remote type %s'%(rtype))
+        raise NotImplementedError('Unsupported remote type %s'%(rtype))
     return False
 
 def examine_image(request):
     """
-    examine the image - TODO
+    examine the image
 
     Returns True on success
     """
+    # TODO: Add checks to examine the image.  Should be extensible.
     return True
 
 def convert_image(request):
@@ -105,7 +145,7 @@ def convert_image(request):
     if format in request:
         format=request['format']
     cdir=config['CacheDirectory']
-    imagefile=os.path.join(cdir,normalized_name(request)+'.'+format)
+    imagefile='%s.%s'%(request['expandedpath'],format)
     status=converters.convert(format,request['expandedpath'],imagefile)
     request['imagefile']=imagefile
     return status
@@ -127,14 +167,13 @@ def dopull(self,request,TESTMODE=0):
     """
     Celery task to do the full workflow of pulling an image and transferring it
     """
-    print "TESTMODE=%d"%(TESTMODE)
-    #logging.debug("DEBUG: dopull system=%s tag=%s"%(request['system'],request['tag']))
+    logging.info("DEBUG: dopull system=%s tag=%s"%(request['system'],request['tag']))
     if TESTMODE==1:
         for state in ('PULLING','EXAMINATION','CONVERSION','TRANSFER','READY'):
             logging.info("Worker: TESTMODE Updating to %s"%(state))
             self.update_state(state=state)
             time.sleep(1)
-        return
+        return {'id':'1','entrypoint':['./blah'],'env':['FOO=bar','BAZ=boz']}
     elif TESTMODE==2:
         logging.info("Worker: TESTMODE 2 setting failure")
         raise OSError('task failed')
@@ -143,6 +182,9 @@ def dopull(self,request,TESTMODE=0):
         self.update_state(state='PULLING')
         if not pull_image(request):
             raise OSError('Pull failed')
+        if 'meta' not in request:
+            raise OSError('Metadata not populated')
+        print request['meta']
         # Step 2 - Check the image
         self.update_state(state='EXAMINATION')
         if not examine_image(request):
@@ -157,5 +199,9 @@ def dopull(self,request,TESTMODE=0):
             raise OSError('Transfer failed')
         # Done
         self.update_state(state='READY')
+        return request['meta']
+
     except:
+        logging.error("ERROR: dopull failed system=%s tag=%s"%(request['system'],request['tag']))
         self.update_state(state='FAILURE')
+        raise

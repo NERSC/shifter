@@ -7,6 +7,28 @@ import urllib
 import json
 from pymongo import MongoClient
 
+"""
+Shifter, Copyright (c) 2015, The Regents of the University of California,
+through Lawrence Berkeley National Laboratory (subject to receipt of any
+required approvals from the U.S. Dept. of Energy).  All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+ 1. Redistributions of source code must retain the above copyright notice,
+    this list of conditions and the following disclaimer.
+ 2. Redistributions in binary form must reproduce the above copyright notice,
+    this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution.
+ 3. Neither the name of the University of California, Lawrence Berkeley
+    National Laboratory, U.S. Dept. of Energy nor the names of its
+    contributors may be used to endorse or promote products derived from this
+    software without specific prior written permission.`
+
+See LICENSE for full text.
+"""
+
+AUTH_HEADER='authentication'
+
 class GWTestCase(unittest.TestCase):
 
     def setUp(self):
@@ -29,32 +51,37 @@ class GWTestCase(unittest.TestCase):
         self.tag=urllib.quote("test:0.1")
         self.urlreq="%s/%s/%s"%(self.system,self.type,self.tag)
         # Need to switch to real munge tokens
-        self.auth="good"
-        self.auth_bad="bad"
+        self.auth="good:1:1"
+        self.auth_bad="bad:1:1"
+        self.auth_header='authentication'
 
 
     #def tearDown(self):
     #  print "No teardown"
 
     def test_pull(self):
-        rv = self.app.post('%s/pull/%s/'%(self.url,self.urlreq))
+        uri='%s/pull/%s/'%(self.url,self.urlreq)
+        rv = self.app.post(uri,headers={AUTH_HEADER:self.auth})
         assert rv.status_code==200
         #    assert rv.status_code==200
         #    assert rv.data.rfind(self.service)
 
     def test_lookup(self):
-        uri='%s/lookup/%s/'%(self.url,self.urlreq)
-        rv = self.app.get(uri, headers={'authorization':'good'})
+        # Do a pull so we can create an image record
+        uri='%s/pull/%s/'%(self.url,self.urlreq)
+        rv = self.app.post(uri,headers={AUTH_HEADER:self.auth})
         assert rv.status_code==200
-        uri='%s/lookup/%s/%s/%s/'%(self.url,self.system,self.type,'bogus')
-        rv = self.app.get(uri, headers={'authorization':'good'})
+        uri='%s/lookup/%s/'%(self.url,self.urlreq)
+        rv = self.app.get(uri, headers={AUTH_HEADER:self.auth})
+        assert rv.status_code==200
+        uri='%s/lookup/%s/%s/'%(self.url,self.system,'bogus')
+        rv = self.app.get(uri, headers={AUTH_HEADER:self.auth})
         assert rv.status_code==404
         #    assert rv.status_code==200
         #    assert rv.data.rfind(self.service)
 
     def test_expire(self):
         rv = self.app.get('%s/expire/%s/%s/%s/%s/'%(self.url,self.system,self.type,self.tag,self.id))
-        print rv.data
         assert rv.status_code==200
         #    assert rv.status_code==200
         #    assert rv.data.rfind(self.service)

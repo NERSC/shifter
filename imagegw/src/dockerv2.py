@@ -13,6 +13,26 @@ import socket
 import socks
 import urllib2
 
+"""
+Shifter, Copyright (c) 2015, The Regents of the University of California,
+through Lawrence Berkeley National Laboratory (subject to receipt of any
+required approvals from the U.S. Dept. of Energy).  All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+ 1. Redistributions of source code must retain the above copyright notice,
+    this list of conditions and the following disclaimer.
+ 2. Redistributions in binary form must reproduce the above copyright notice,
+    this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution.
+ 3. Neither the name of the University of California, Lawrence Berkeley
+    National Laboratory, U.S. Dept. of Energy nor the names of its
+    contributors may be used to endorse or promote products derived from this
+    software without specific prior written permission.`
+
+See LICENSE for full text.
+"""
+
 # Option to use a SOCKS proxy
 if 'all_proxy' in os.environ:
    (socks_type,socks_host,socks_port)=os.environ['all_proxy'].split(':')
@@ -20,6 +40,9 @@ if 'all_proxy' in os.environ:
    socks.set_default_proxy(socks.SOCKS5, socks_host,int(socks_port))
    socket.socket = socks.socksocket  #dont add ()!!!
 
+
+# TODO: Turn this into a class like dockerhub
+#
 
 def joseDecodeBase64(input):
     """
@@ -32,26 +55,6 @@ def joseDecodeBase64(input):
         return base64.b64decode(input + '===')
     return base64.b64decode(input)
 
-#def getPubKeyJWK(jwk):
-#    if jwk['kty'] == 'EC':
-#        curve = None
-#        if jwk['crv'] == 'P-256':
-#            curve = ecdsa.NIST256p
-#        elif jwk['crv'] == 'P-384':
-#            curve = ecdsa.NIST384p
-#        elif jwk['crv'] == 'P-521':
-#            curve = ecdsa.NIST521p
-#        xCoord = joseDecodeBase64(jwk['x'])
-#        yCoord = joseDecodeBase64(jwk['y'])
-#        print struct.unpack('Q', xCoord)
-#        print yCoord
-#        pubKey = ecdsa.Public_key(curve.generator, ecdsa.ellipticcurve.Point(curve, xCoord, yCoord))
-#        return ('ec', pubKey,)
-#    elif jwkblock['kty'] == 'RSA':
-#        #TODO preently unimplemented
-#        pass
-#    return (None, None,)
-#u'jwk': {u'y': u'bXqd0VJTYsgrEXaH5e4fZuF2N4iv9Yr9eq3KPTdeasU', u'x': u'6sJpqwsUmNsNQuv-mzNT2Rq7T13yGL3EW00yE1MMyN4', u'crv': u'P-256', u'kty': u'EC', u'kid': u'CQZS:2SC5:NETK:VLRQ:UCYA:XI5R:AHBC:JQSB:SYTX:LVCW:GAKG:5FDN'}
 
 def verifyManifestDigestAndSignature(manifest, text, hashalgo, digest):
     """
@@ -232,9 +235,11 @@ def extractDockerLayers(basePath, layer, cachedir='./'):
         return
     os.umask(022)
     devnull = open(os.devnull, 'w')
-    tarfile='%s/%s.tar'%(cachedir,layer['fsLayer']['blobSum'])
-    #ret = subprocess.call(['tar','xf', '%s.tar' % layer['fsLayer']['blobSum'], '-C', basePath, '--force-local'], stdout=devnull, stderr=devnull)
-    ret = subprocess.call(['tar','xf', tarfile, '-C', basePath], stdout=devnull, stderr=devnull)
+    tarfile=os.path.join(cachedir,'%s.tar'%(layer['fsLayer']['blobSum']))
+    command=['tar','xf', tarfile, '-C', basePath]
+    if False:
+        command.append('--force-local')
+    ret = subprocess.call(command, stdout=devnull, stderr=devnull)
     devnull.close()
     if ret>1:
         raise OSError("Extraction of layer (%s) to %s failed %d"%(tarfile,basePath,ret))
@@ -253,14 +258,21 @@ def pullImage(options, baseUrl, repo, tag, cachedir='./', expanddir='./', cacert
         layer = layer['child']
 
     layer = eldest
-    if not os.path.exists(expanddir):
-        os.mkdir(expanddir)
+    meta=youngest()
+    resp={'id':meta['id']}
+    expandedpath=os.path.join(expanddir,str(meta['id']))
+    resp['expandedpath']=expandedpath
+    if 'config' in meta:
+        c=meta['config']
+        if 'Env' in c:
+            resp['env']=c['Env']
+        if 'Entrypoint' in c:
+            resp['entrypoint']=c['Entrypoint']
+    if not os.path.exists(expandedpath):
+        os.mkdir(expandedpath)
 
-    try:
-        extractDockerLayers(expanddir, layer, cachedir=cachedir)
-    except:
-        return None
-    return expanddir
+    extractDockerLayers(expanddir, layer, cachedir=cachedir)
+    return resp
 
 if __name__ == '__main__':
   #pullImage(None, 'https://index.docker.io', 'redis', 'latest')
