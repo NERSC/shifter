@@ -18,7 +18,7 @@
 
 AC_DEFUN([X_AC_JSON], [
 
-  _x_ac_json_dirs="/usr /usr/local /opt/json"
+  _x_ac_json_dirs="/usr /usr/local /opt/json /opt/slurm/json-c/default"
   _x_ac_json_libs="lib64 lib"
 
   AC_ARG_WITH(
@@ -27,7 +27,7 @@ AC_DEFUN([X_AC_JSON], [
     [_x_ac_json_dirs="$withval $_x_ac_json_dirs"])
 
   AC_CACHE_CHECK(
-    [for json installation],
+    [for json-c installation],
     [x_ac_cv_json_dir],
     [
       for d in $_x_ac_json_dirs; do
@@ -41,7 +41,7 @@ AC_DEFUN([X_AC_JSON], [
  	  _x_ac_json_libs_save="$LIBS"
           LIBS="-L$d/$bit -ljson-c $LIBS"
           AC_LINK_IFELSE(
-            [AC_LANG_CALL([], json_encode)],
+            [AC_LANG_CALL([], json_tokener_parse)],
             AS_VAR_SET(x_ac_cv_json_dir, $d))
           LIBS="$_x_ac_json_libs_save"
           test -n "$x_ac_cv_json_dir" && break
@@ -59,7 +59,7 @@ AC_DEFUN([X_AC_JSON], [
     if test "$ac_with_rpath" = "yes"; then
       JSON_LDFLAGS="-Wl,-rpath -Wl,$x_ac_cv_json_dir/$bit -L$x_ac_cv_json_dir/$bit"
     else
-      JSON_LDFLAGS="-L$x_ac_cv_json_dir/$bit"
+      JSON_LDFLAGS="-L$x_ac_cv_json_dir/$bit -ljson-c"
     fi
   fi
 
