@@ -866,6 +866,11 @@ AC_SUBST([am__tar])
 AC_SUBST([am__untar])
 ]) # _AM_PROG_TAR
 
+m4_include([auxdir/libtool.m4])
+m4_include([auxdir/ltoptions.m4])
+m4_include([auxdir/ltsugar.m4])
+m4_include([auxdir/ltversion.m4])
+m4_include([auxdir/lt~obsolete.m4])
 m4_include([auxdir/x_ac_curl.m4])
 m4_include([auxdir/x_ac_jsonc.m4])
 m4_include([auxdir/x_ac_munge.m4])

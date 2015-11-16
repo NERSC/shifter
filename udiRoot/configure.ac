@@ -15,16 +15,15 @@ AC_PROG_CC
 AC_PROG_INSTALL
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
+X_AC_MUNGE
+X_AC_SLURM
+X_AC_JSON
+AC_PROG_LIBTOOL
 
 ## get path for slurm
 #AC_ARG_WITH([slurm], AS_HELP_STRING([--with-slurm], [Path to slurm]))
 #AS_IF([test "x$with_slurm" != "xno"],
 
-X_AC_MUNGE
-
-X_AC_SLURM
-
-X_AC_JSON
 
 LIBCURL_CHECK_CONFIG
 
@@ -53,13 +52,14 @@ AC_FUNC_REALLOC
 AC_CHECK_FUNCS([getcwd memmove memset mkdir putenv realpath rmdir setenv strchr strdup strstr strtoul uname])
 
 AC_CONFIG_FILES([Makefile
-                 src/Makefile])
+                 src/Makefile
+                 wlm_integration/slurm/Makefile
+               ])
 #                 config/Makefile
 #                 dep/Makefile
 #                 kmod/Makefile
 #                 src/Makefile
 #                 src/test/Makefile
 #                 wlm_integration/cray/Makefile
-#                 wlm_integration/slurm/Makefile
 #                 wlm_integration/torque/Makefile])
 AC_OUTPUT
