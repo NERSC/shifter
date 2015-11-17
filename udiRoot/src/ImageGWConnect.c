@@ -24,6 +24,7 @@
  * See LICENSE for full text.
  */
 
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,6 +36,18 @@
 #include "utility.h"
 #include "UdiRootConfig.h"
 
+enum ImageGwAction {
+    MODE_LOOKUP = 0,
+    MODE_PULL,
+    MODE_INVALID
+};
+
+struct options {
+    int verbose;
+    enum ImageGwAction mode;
+    char *tag;
+};
+
 typedef struct _ImageGwState {
     char *message;
     int isJsonMessage;
@@ -43,6 +56,13 @@ typedef struct _ImageGwState {
     size_t messageCurr;
     int messageComplete;
 } ImageGwState;
+
+void _usage(int ret) {
+    FILE *output = stdout;
+    fprintf(output, "Usage: imageGwConnect [-h|-v] <mode> <tag>\n\n");
+    fprintf(output, "    Mode: lookup or pull\n");
+    exit(ret);
+}
 
 void free_ImageGwState(ImageGwState *image) {
     if (image == NULL) return;
@@ -154,8 +174,16 @@ ImageData *parseLookupResponse(ImageGwState *imageGw) {
     return image;
 }
 
-ImageGwState *queryGateway(char *baseUrl, char *tag, UdiRootConfig *config) {
-    const char *url = alloc_strgenf("%s/api/lookup/%s/docker/%s/", baseUrl, config->system, tag);
+ImageGwState *queryGateway(char *baseUrl, char *tag, struct options *config, UdiRootConfig *udiConfig) {
+    const char *modeStr = NULL;
+    if (config->mode == MODE_LOOKUP) {
+        modeStr = "lookup";
+    } else if (config->mode == MODE_PULL) {
+        modeStr = "pull";
+    } else {
+        modeStr = "invalid";
+    }
+    const char *url = alloc_strgenf("%s/api/%s/%s/docker/%s/", baseUrl, modeStr, udiConfig->system, tag);
     CURL *curl = NULL;
     CURLcode err;
     char *cred = NULL;
@@ -186,13 +214,18 @@ ImageGwState *queryGateway(char *baseUrl, char *tag, UdiRootConfig *config) {
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, handleResponseData);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, imageGw);
 
-    if (config->gatewayTimeout > 0) {
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, config->gatewayTimeout);
+    if (config->mode == MODE_PULL) {
+        curl_easy_setopt(curl, CURLOPT_POST, 1);
+    }
+
+    if (udiConfig->gatewayTimeout > 0) {
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, udiConfig->gatewayTimeout);
     }
 
     err = curl_easy_perform(curl);
     if (err) {
-        exit(1);
+        printf("err %d\n", err);
+        return NULL;
     }
     long http_code = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
@@ -200,13 +233,22 @@ ImageGwState *queryGateway(char *baseUrl, char *tag, UdiRootConfig *config) {
 
     if (http_code == 200) {
         if (imageGw->messageComplete) {
-            ImageData *image = parseLookupResponse(imageGw);
-            if (image != NULL) {
-                printf("%s\n", image->identifier);
+            if (config->verbose) {
+                printf("Message: %s\n", imageGw->message);
             }
-            free_ImageData(image, 1);
+            if (config->mode == MODE_LOOKUP) {
+                ImageData *image = parseLookupResponse(imageGw);
+                if (image != NULL) {
+                    printf("%s\n", image->identifier);
+                }
+                free_ImageData(image, 1);
+            } else if (config->mode == MODE_PULL) {
+            }
         }
     } else {
+        if (config->verbose) {
+            printf("Got response: %d\nMessage: %s\n", http_code, imageGw->message);
+        }
         free_ImageGwState(imageGw);
         return NULL;
     }
@@ -214,13 +256,72 @@ ImageGwState *queryGateway(char *baseUrl, char *tag, UdiRootConfig *config) {
     return imageGw;
 }
 
+int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *udiConfig) {
+    int opt = 0;
+    static struct option long_options[] = {
+        {"help", 0, 0, 'h'},
+        {"verbose", 0, 0, 'v'},
+        {0, 0, 0, 0}
+    };
+    char *ptr = NULL;
+
+    /* ensure that getopt processing stops at first non-option */
+    setenv("POSIXLY_CORRECT", "1", 1);
+
+    for ( ; ; ) {
+        int longopt_index = 0;
+        opt = getopt_long(argc, argv, "hv", long_options, &longopt_index);
+        if (opt == -1) break;
+
+        switch (opt) {
+            case 'h':
+                _usage(0);
+                break;
+            case 'v':
+                config->verbose = 1;
+                break;
+            case '?':
+                fprintf(stderr, "Missing an argument!\n");
+                _usage(1);
+                break;
+            default:
+                break;
+        }
+    }
+
+    int remaining = argc - optind;
+    if (remaining != 2) {
+        fprintf(stderr, "Must specify action (lookup or pull) and tag\n");
+        _usage(1);
+    }
+    config->mode = MODE_INVALID;
+    if (strcmp(argv[optind], "lookup") == 0) {
+        config->mode = MODE_LOOKUP;
+    } else if (strcmp(argv[optind], "pull") == 0) {
+        config->mode = MODE_PULL;
+    }
+    if (config->mode == MODE_INVALID) {
+        fprintf(stderr, "Invalid mode specified\n");
+        _usage(1);
+    }
+
+    /* can safely do this because we checked earlier that argc had sufficient
+       arguments (remaining == 2) */
+    CURL *curl = curl_easy_init();
+    optind++;
+    config->tag = curl_easy_escape(curl, argv[optind], strlen(argv[optind]));
+    printf("tag: %s\n", config->tag);
+    curl_easy_cleanup(curl);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     UdiRootConfig udiConfig;
+    struct options config;
     ImageGwState *imgGw = NULL;
-    char *tag = NULL;
-    CURL *curl = curl_easy_init();
 
     memset(&udiConfig, 0, sizeof(UdiRootConfig));
+    memset(&config, 0, sizeof(struct options));
     curl_global_init(CURL_GLOBAL_ALL);
 
     if (parse_UdiRootConfig(CONFIG_FILE, &udiConfig, UDIROOT_VAL_ALL) != 0) {
@@ -228,11 +329,10 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    if (argc < 2) {
-        fprintf(stderr, "No tag supplied.\n");
+    if (parse_options(argc, argv, &config, &udiConfig) != 0) {
+        fprintf(stderr, "FAILED to parse command line options.\n");
         exit(1);
     }
-    tag = curl_easy_escape(curl, argv[1], strlen(argv[1]));
 
     /* get local copy of gateway urls */
     size_t nGateways = udiConfig.gwUrl_size;
@@ -254,7 +354,7 @@ int main(int argc, char **argv) {
     }
 
     for (idx = 0; idx < nGateways; idx++) {
-        imgGw = queryGateway(gateways[idx], tag, &udiConfig);
+        imgGw = queryGateway(gateways[idx], config.tag, &config, &udiConfig);
         if (imgGw != NULL) {
             break;
         }
@@ -265,8 +365,6 @@ int main(int argc, char **argv) {
     }
     free(gateways);
 
-    free(tag);
-    curl_easy_cleanup(curl);
     curl_global_cleanup();
     return imgGw != NULL;
 }
