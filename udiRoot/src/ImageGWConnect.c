@@ -310,7 +310,6 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     CURL *curl = curl_easy_init();
     optind++;
     config->tag = curl_easy_escape(curl, argv[optind], strlen(argv[optind]));
-    printf("tag: %s\n", config->tag);
     curl_easy_cleanup(curl);
     return 0;
 }
@@ -366,5 +365,6 @@ int main(int argc, char **argv) {
     free(gateways);
 
     curl_global_cleanup();
-    return imgGw != NULL;
+    if (imgGw == NULL) return 1;
+    return 0;
 }
