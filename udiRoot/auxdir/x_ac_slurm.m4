@@ -35,7 +35,7 @@ AC_DEFUN([X_AC_SLURM], [
       for d in $_x_ac_slurm_dirs; do
         test -d "$d" || continue
         test -d "$d/include" || continue
-        test -f "$d/include/slurm.h" || continue
+        test -f "$d/include/slurm/slurm.h" || continue
 	for bit in $_x_ac_slurm_libs; do
           test -d "$d/$bit" || continue
 
