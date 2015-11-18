@@ -315,6 +315,9 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     config->tgtUid = getuid();
     config->tgtGid = getgid();
 
+    /* ensure that getopt processing stops at first non-option */
+    setenv("POSIXLY_CORRECT", "1", 1);
+
     optind = 1;
     for ( ; ; ) {
         int longopt_index = 0;

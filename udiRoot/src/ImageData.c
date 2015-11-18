@@ -107,9 +107,8 @@ char *lookup_ImageIdentifier(
         return strdup(imageTag);
     }
 
-    snprintf(lookupCmd, PATH_MAX, "%s%s/bin/getDockerImage.pl %slookup %s",
-            config->nodeContextPrefix, config->udiRootPath,
-            (verbose == 0 ? "-quiet " : ""), imageTag);
+    snprintf(lookupCmd, PATH_MAX, "%s%s/bin/imageGWConnect %s",
+            config->nodeContextPrefix, config->udiRootPath, imageTag);
 
     pp = popen(lookupCmd, "r");
     while (!feof(pp) && !ferror(pp)) {
@@ -117,32 +116,16 @@ char *lookup_ImageIdentifier(
         if (nread == 0 || feof(pp) || ferror(pp)) break;
         lineBuffer[nread] = 0;
         ptr = shifter_trim(lineBuffer);
-        if (verbose) {
-            char buff1[1024];
-            char buff2[1024];
-            printf("%s\n", ptr);
-            int val = sscanf(ptr, "Retrieved docker image %1024s resolving to ID %1024s", buff1, buff2);
-            if (val != 2) {
-                continue;
-            }
-            if (strcmp(buff1, imageTag) != 0) {
-                fprintf(stderr, "lookup_ImageIdentiier: Got wrong image back! %s != %s", imageTag ,buff1);
-                goto _lookupImageIdentifier_error;
-            }
-            identifier = strdup(buff2);
+        if (strncmp(ptr, "ENV:", 4) == 0) {
+            ptr += 4;
+            ptr = shifter_trim(ptr);
+        } else if (strncmp(ptr, "ENTRY:", 6) == 0) {
+            ptr += 6;
+            ptr = shifter_trim(ptr);
+        } else if (identifier == NULL && strchr(ptr, ':') == NULL) {
+            /* this is the image id */
+            identifier = strdup(ptr);
             break;
-        } else {
-            if (strncmp(ptr, "ENV:", 4) == 0) {
-                ptr += 4;
-                ptr = shifter_trim(ptr);
-            } else if (strncmp(ptr, "ENTRY:", 6) == 0) {
-                ptr += 6;
-                ptr = shifter_trim(ptr);
-            } else if (identifier == NULL && strchr(ptr, ':') == NULL) {
-                /* this is the image id */
-                identifier = strdup(ptr);
-                break;
-            }
         }
     }
     status = pclose(pp);
