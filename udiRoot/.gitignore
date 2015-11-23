@@ -7,3 +7,6 @@ unsetupRoot
 setupRoot
 shifter
 imageGWConnect
+*.swp
+.cache
+*.log
