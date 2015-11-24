@@ -66,6 +66,17 @@ class GWTestCase(unittest.TestCase):
         #    assert rv.status_code==200
         #    assert rv.data.rfind(self.service)
 
+    def test_list(self):
+        # Do a pull so we can create an image record
+        uri='%s/pull/%s/'%(self.url,self.urlreq)
+        rv = self.app.post(uri,headers={AUTH_HEADER:self.auth})
+        assert rv.status_code==200
+        uri='%s/list/%s/'%(self.url,self.system)
+        rv = self.app.get(uri, headers={AUTH_HEADER:self.auth})
+        assert rv.status_code==200
+        #    assert rv.status_code==200
+        #    assert rv.data.rfind(self.service)
+
     def test_lookup(self):
         # Do a pull so we can create an image record
         uri='%s/pull/%s/'%(self.url,self.urlreq)

@@ -310,6 +310,8 @@ def pullImage(options, baseUrl, repo, tag, cachedir='./', expanddir='./', cacert
             resp['env']=c['Env']
         if 'Entrypoint' in c:
             resp['entrypoint']=c['Entrypoint']
+        if 'WorkingDir' in c:
+            resp['workdir']=c['WorkingDir']
     if not os.path.exists(expandedpath):
         os.mkdir(expandedpath)
 

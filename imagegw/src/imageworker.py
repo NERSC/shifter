@@ -119,7 +119,7 @@ def pull_image(request):
             return True
         except:
             logging.warn(sys.exc_value)
-            return False
+            raise
 
     else:
         raise NotImplementedError('Unsupported remote type %s'%(rtype))
@@ -144,11 +144,32 @@ def convert_image(request):
     format=config['DefaultImageFormat']
     if format in request:
         format=request['format']
+    else:
+        request['format']=format
     cdir=config['CacheDirectory']
     imagefile='%s.%s'%(request['expandedpath'],format)
     status=converters.convert(format,request['expandedpath'],imagefile)
+
+    # Write Metadata file
     request['imagefile']=imagefile
     return status
+
+def write_metadata(request):
+    """
+    Write out the metadata file
+
+    Returns True on success
+    """
+    format=request['format']
+    meta=request['meta']
+    metafile='%s.meta'%(request['expandedpath'])
+    print "Metadat file: %s\n"%(metafile)
+    status=converters.writemeta(format,meta,metafile)
+
+    # Write Metadata file
+    request['metafile']=metafile
+    return status
+
 
 def transfer_image(request):
     """
@@ -160,7 +181,10 @@ def transfer_image(request):
     if system not in config['Platforms']:
         raise KeyError('%s is not in the configuration'%system)
     sys=config['Platforms'][system]
-    return transfer.transfer(sys,request['imagefile'])
+    meta=None
+    if 'metafile' in request:
+        meta=request['metafile']
+    return transfer.transfer(sys,request['imagefile'],meta)
 
 @queue.task(bind=True)
 def dopull(self,request,TESTMODE=0):
@@ -173,7 +197,7 @@ def dopull(self,request,TESTMODE=0):
             logging.info("Worker: TESTMODE Updating to %s"%(state))
             self.update_state(state=state)
             time.sleep(1)
-        return {'id':'1','entrypoint':['./blah'],'env':['FOO=bar','BAZ=boz']}
+        return {'id':'1','entrypoint':['./blah'],'workdir':'/root','env':['FOO=bar','BAZ=boz']}
     elif TESTMODE==2:
         logging.info("Worker: TESTMODE 2 setting failure")
         raise OSError('task failed')
@@ -181,6 +205,7 @@ def dopull(self,request,TESTMODE=0):
         # Step 1 - Do the pull
         self.update_state(state='PULLING')
         if not pull_image(request):
+            logging.info("Worker: Pull failed")
             raise OSError('Pull failed')
         if 'meta' not in request:
             raise OSError('Metadata not populated')
@@ -193,6 +218,8 @@ def dopull(self,request,TESTMODE=0):
         self.update_state(state='CONVERSION')
         if not convert_image(request):
             raise OSError('Conversion failed')
+        if not write_metadata(request):
+            raise OSError('Metadata creation failed')
         # Step 4 - TRANSFER
         self.update_state(state='TRANSFER')
         if not transfer_image(request):

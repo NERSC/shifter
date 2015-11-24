@@ -70,12 +70,34 @@ def help():
 
 def create_response(rec):
     resp={}
-    for field in ('id','system','itype','tag','status','userAcl','groupAcl','ENV','ENTRY','last_pull'):
+    for field in ('id','system','itype','tag','status','userAcl','groupAcl','ENV','ENTRY','WORKDIR','last_pull'):
         try:
             resp[field]=rec[field]
         except KeyError,e:
             resp[field]='MISSING'
     return resp
+
+# Lookup image
+# This will lookup the status of the requested image.
+@imagegwapi.route('/api/list/<system>/', methods=["GET"])
+def list(system):
+    auth=request.headers.get(AUTH_HEADER)
+    imagegwapi.logger.debug("list system=%s auth=%s"%(system,auth))
+    try:
+        session=mgr.new_session(auth,system)
+        records=mgr.list(session,system)
+        if records==None:
+            return not_found('image not found')
+    except:
+        imagegwapi.logger.error(sys.exc_value)
+        return not_found('%s'%(sys.exc_value))
+    li=[]
+    for rec in records:
+        li.append(create_response(rec))
+        print "record="+str(rec)
+    resp={'list':li}
+    return jsonify(resp)
+
 
 # Lookup image
 # This will lookup the status of the requested image.

@@ -48,7 +48,12 @@ if __name__ == '__main__':
          (system,image)=sys.argv
          header={'authentication':munge.strip()}
          uri="%s/lookup/%s/docker/%s/"%(url,system,image)
-         print uri
+         r = requests.get(uri,headers=header)
+         print r.text
+    elif com=='list' and len(sys.argv)>=1:
+         system=sys.argv[0]
+         header={'authentication':munge.strip()}
+         uri="%s/list/%s/"%(url,system)
          r = requests.get(uri,headers=header)
          print r.text
     elif com=='pull' and len(sys.argv)>=2:

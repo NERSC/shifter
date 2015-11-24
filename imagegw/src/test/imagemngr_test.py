@@ -94,6 +94,26 @@ class ImageMngrTestCase(unittest.TestCase):
         l=self.m.lookup(session,i)
         assert l==None
 
+    def test_list(self):
+        record={'system':self.system,
+            'itype':self.itype,
+            'id':self.id,
+            'tag':self.tag,
+            'status':'READY',
+            'userACL':[],
+            'groupACL':[],
+            'ENV':[],
+            'ENTRY':'',
+            }
+        # Create a fake record in mongo
+        self.images.insert(record)
+        session=self.m.new_session(self.auth,self.system)
+        li=self.m.list(session,self.system)
+        assert len(li)>0
+        l=li[0]
+        assert '_id' in l
+        assert self.m.get_state(l['_id'])=='READY'
+
     def start_worker(self,TESTMODE=1,system='systema'):
         # Start a celery worker.
         pid=os.fork()

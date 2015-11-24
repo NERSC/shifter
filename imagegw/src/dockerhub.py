@@ -352,13 +352,16 @@ def pullImage(options, baseUrl, repo, tag, cachedir='./', expanddir='./', cacert
             resp['env']=c['Env']
         if 'Entrypoint' in c:
             resp['entrypoint']=c['Entrypoint']
+        if 'WorkingDir' in c:
+            resp['workdir']=c['WorkingDir']
     if not os.path.exists(expandedpath):
         os.mkdir(expandedpath)
     a.extractDockerLayers(expandedpath,a.getEldest(),cachedir=cachedir)
     return resp
 
 if __name__ == '__main__':
-    pullImage(None, 'https://index.docker.io', 'ubuntu','latest', cachedir='/tmp/cache/', expanddir='/tmp/ubuntu/')
-    pullImage(None, 'index.docker.io', 'ubuntu','latest', cachedir='/tmp/cache/', expanddir='/tmp/ubuntu/')
-    pullImage(None, None, 'ubuntu','latest', cachedir='/tmp/cache/', expanddir='/tmp/ubuntu/')
+    #pullImage(None, 'https://index.docker.io', 'ubuntu','latest', cachedir='/tmp/cache/', expanddir='/tmp/ubuntu/')
+    #pullImage(None, 'index.docker.io', 'ubuntu','latest', cachedir='/tmp/cache/', expanddir='/tmp/ubuntu/')
+    #pullImage(None, None, 'ubuntu','latest', cachedir='/tmp/cache/', expanddir='/tmp/ubuntu/')
     #pullImage(None, 'https://registry.services.nersc.gov', 'lcls_xfel_edison', '201509081609', cacert='local.crt')
+    pullImage(None, None, 'busybox','latest', cachedir='/tmp/cache/', expanddir='/tmp/busybox/')

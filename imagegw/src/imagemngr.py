@@ -147,6 +147,26 @@ class imagemngr:
       # verify access
       return rec
 
+
+  def list(self,session,system):
+        """
+        list images for a system.
+        Image is dictionary with system defined.
+        """
+        if not self.check_session(session,system):
+            raise OSError("Invalid Session")
+        q={'system':system}
+        self.update_states()
+        records=self.images.find(q)
+        resp=[]
+        for record in records:
+            resp.append(record)
+        #print "list: records "+str(rec[0:100])
+        # verify access
+        return resp
+
+
+
   def isready(self,image):
       """
       Helper function to determine if an image is READY.
@@ -246,6 +266,8 @@ class imagemngr:
           setline['ENTRY']=resp['entrypoint']
       if 'env' in resp:
           setline['ENV']=resp['env']
+      if 'workdir' in resp:
+          setline['WORKDIR']=resp['workdir']
       if 'last_pull' in resp:
           setline['last_pull']=resp['last_pull']
 
@@ -307,6 +329,9 @@ if __name__ == '__main__':
     command=sys.argv.pop(0)
     if command=='lookup':
         if len(sys.argv)<3:
+            usage()
+    elif command=='list':
+        if len(sys.argv)<1:
             usage()
     elif command=='pull':
         if len(sys.argv)<3:
