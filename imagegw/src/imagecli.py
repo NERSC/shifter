@@ -55,6 +55,9 @@ if __name__ == '__main__':
          header={'authentication':munge.strip()}
          uri="%s/list/%s/"%(url,system)
          r = requests.get(uri,headers=header)
+         if r.status_code!=200:
+             print "List failed"
+             sys.exit(1)
          resp=json.loads(r.text)
          for r in resp['list']:
              tags=r['tag']
