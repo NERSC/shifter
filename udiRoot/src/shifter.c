@@ -21,28 +21,7 @@
  *     contributors may be used to endorse or promote products derived from this
  *     software without specific prior written permission.
  * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *  
- * You are under no obligation whatsoever to provide any bug fixes, patches, or
- * upgrades to the features, functionality or performance of the source code
- * ("Enhancements") to anyone; however, if you choose to make your Enhancements
- * available either publicly, or directly to Lawrence Berkeley National
- * Laboratory, without imposing a separate written license agreement for such
- * Enhancements, then you hereby grant the following license: a  non-exclusive,
- * royalty-free perpetual license to install, use, modify, prepare derivative
- * works, incorporate into other computer software, distribute, and sublicense
- * such enhancements or derivative works thereof, in binary and source code
- * form.
+ * See LICENSE for full text.
  */
 
 #ifndef _GNU_SOURCE
@@ -335,6 +314,9 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     /* set some defaults */
     config->tgtUid = getuid();
     config->tgtGid = getgid();
+
+    /* ensure that getopt processing stops at first non-option */
+    setenv("POSIXLY_CORRECT", "1", 1);
 
     optind = 1;
     for ( ; ; ) {

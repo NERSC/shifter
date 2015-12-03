@@ -38,14 +38,15 @@ UNSETUPROOT_SOURCES = \
 IMAGEGWCONNECT_SOURCES = \
     ImageGWConnect.c \
     ImageData.c \
-    utility.c
+    utility.c \
+    UdiRootConfig.c
 
 shifter_SOURCES = $(SHIFTER_SOURCES)
 setupRoot_SOURCES = $(SETUPROOT_SOURCES)
 unsetupRoot_SOURCES = $(UNSETUPROOT_SOURCES)
 imageGWConnect_SOURCES = $(IMAGEGWCONNECT_SOURCES)
 imageGWConnect_LDFLAGS = $(MUNGE_LDFLAGS) $(JSON_LDFLAGS) $(LIBCURL) $(MUNGE_LDFLAGS)
-imageGWConnect_CPPFLAGS = $(MUNGE_CPPFLAGS) $(JSON_CPPFLAGS) $(LIBCURL_CPPFLAGS) $(MUNGE_CPPFLAGS)
+imageGWConnect_CPPFLAGS = $(AM_CPPFLAGS) $(MUNGE_CPPFLAGS) $(JSON_CPPFLAGS) $(LIBCURL_CPPFLAGS) $(MUNGE_CPPFLAGS)
 
 install-data-hook:
 	/bin/chmod 4755 $(DESTDIR)/$(bindir)/shifter
