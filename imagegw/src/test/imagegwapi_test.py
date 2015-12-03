@@ -1,4 +1,5 @@
 import os
+#os.environ['CONFIG']='test.json'
 import imagegwapi
 import unittest
 import tempfile
@@ -36,14 +37,19 @@ class GWTestCase(unittest.TestCase):
         with open(self.configfile) as config_file:
             self.config = json.load(config_file)
         os.environ['GWCONFIG']=self.configfile
-        os.environ['CONFIG']=self.configfile
         mongouri=self.config['MongoDBURI']
         print "Debug: Connecting to %s"%mongouri
         client = MongoClient(mongouri)
         db=self.config['MongoDB']
+        if not os.path.exists(self.config['CacheDirectory']):
+            os.mkdir(self.config['CacheDirectory'])
+        p= self.config['Platforms']['systema']['ssh']['imageDir']
+        if not os.path.exists(p):
+            os.makedirs(p)
         self.images=client[db].images
         self.images.drop()
         imagegwapi.imagegwapi.config['TESTING'] = True
+        imagegwapi.init(self.configfile)
         self.app = imagegwapi.imagegwapi.test_client()
         self.url="/api"
         self.system="systema"
@@ -138,7 +144,8 @@ class GWTestCase(unittest.TestCase):
         #    assert rv.data.rfind(self.service)
 
     def test_expire(self):
-        rv = self.app.get('%s/expire/%s/%s/%s/%s/'%(self.url,self.system,self.type,self.tag,self.id))
+        uri='%s/expire/%s/%s/%s/%s/'%(self.url,self.system,self.type,self.tag,self.id)
+        rv = self.app.get(uri, headers={AUTH_HEADER:self.auth})
         assert rv.status_code==200
         #    assert rv.status_code==200
         #    assert rv.data.rfind(self.service)

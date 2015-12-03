@@ -2,7 +2,7 @@
 
 from pymongo import MongoClient
 import json
-from imageworker import dopull
+from imageworker import dopull,initqueue
 import bson
 import celery
 import sys, os
@@ -39,7 +39,7 @@ class imagemngr:
   and has public functions to lookup, pull and expire images.
   """
 
-  def __init__(self, CONFIGFILE, logname='imagemngr'):
+  def __init__(self, config, logname='imagemngr'):
       """
       Create an instance of the image manager.
       """
@@ -52,8 +52,7 @@ class imagemngr:
       self.logger.addHandler(ch)
 
       self.logger.debug('Initializing image manager')
-      with open(CONFIGFILE) as config_file:
-          self.config = json.load(config_file)
+      self.config=config
       if 'Platforms' not in self.config:
           raise NameError('Platforms not defined')
       self.systems=[]
@@ -75,6 +74,7 @@ class imagemngr:
           self.images=client[db].images
       else:
           raise NameError('MongoDBURI not defined')
+      initqueue(config)
       # Initialize data structures
 
   def check_session(self,session,system=None):
@@ -103,10 +103,13 @@ class imagemngr:
       """Checks if the user has read permissions to the image. (Not Implemented)"""
       return True
 
-  def resetexpire(self,imageid):
+  def resetexpire(self,id):
       """Reset the expire time.  (Not Implemented)."""
       # Change expire time for image
-      return True
+      (days,hours,minutes,secs)=self.config['ImageExpirationTimeout'].split(':')
+      expire=time()+int(secs)+60*(int(minutes)+60*(int(hours)+24*int(days)))
+      self.images.update({'_id':id},{'$set':{'expiration':expire}})
+      return expire
 
   def new_session(self,authString,system):
       """
@@ -148,6 +151,8 @@ class imagemngr:
         'tag':{'$in':[image['tag']]}}
       self.update_states()
       rec=self.images.find_one(q)
+      if rec is not None:
+          self.resetexpire(rec['_id'])
       # TODO: verify access
       return rec
 
@@ -256,7 +261,7 @@ class imagemngr:
       request={'system':image['system'],
             'itype':image['itype'],
             'pulltag':image['tag']}
-      self.logger.debug('Pull called Test Mode=%d'%TESTMODE) # will print a message to the console
+      self.logger.debug('Pull called Test Mode=%d'%TESTMODE)
       if not self.check_session(session,request['system']):
           self.logger.warn('Invalid session on system %s'%{request['system']})
           raise OSError("Invalid Session")
@@ -316,7 +321,8 @@ class imagemngr:
       self.remove_tag(tag)
       # see if tag isn't a list
       rec=self.images.find_one({'_id':id})
-      if 'tag' in rec and type(rec['tag']) is not list:
+      if rec is not None and 'tag' in rec and not isinstance(rec['tag'],(list)):
+          self.logger.info('Fixing tag for non-list %s %s'%(id,str(rec['tag'])))
           curtag=rec['tag']
           self.images.update({'_id':id},{'$set':{'tag':[curtag]}})
       self.images.update({'_id':id},{'$addToSet':{'tag':tag}})
@@ -328,9 +334,12 @@ class imagemngr:
       """
       self.images.update({ 'tag': { '$type' : 4 }},{'$pull':{'tag':tag}},multi=True)
       # for old tag format
-      self.images.update({ '$and':[ {'tag': { '$type' : 2}},{'tag':tag }]},{'$set':{'tag':[]}},multi=True)
+      for rec in self.images.find({'tag':tag }):
+          if isinstance(rec['tag'],(str)):
+              self.images.update({'_id':id},{'$set':{'tag':[]}})
+      #This didn't work
+      #self.images.update({ '$and':[ {'tag': { '$type' : 2}},{'tag':tag }]},{'$set':{'tag':[]}},multi=True)
 
-      #self.images.update({'_id':id},{'$set':})
       return True
 
   def complete_pull(self,id,response):
@@ -340,11 +349,11 @@ class imagemngr:
 
       self.logger.info("Complete called for %s %s"%(id,str(response)))
       pullrec=self.images.find_one({'_id':id})
-      #Check that this image id doesn't already exist
-      rec=self.images.find_one({'id':response['id']})
       if pullrec is None:
           self.logger.warn('Missing pull request (r=%s)'%(str(response)))
           return
+      #Check that this image id doesn't already exist
+      rec=self.images.find_one({'id':response['id']})
       tag=pullrec['pulltag']
       if rec is not None:
           # So we already had this image.
@@ -360,6 +369,7 @@ class imagemngr:
               self.add_tag(rec['_id'],tag)
           return True
       else:
+          response['last_pull']=time()
           self.update_mongo(id,response)
           self.add_tag(id,tag)
 
@@ -382,7 +392,6 @@ class imagemngr:
 
       self.images.update({'_id':id},{'$set':setline})
 
-
   def get_state(self,id):
       """
       Lookup the state of the image with _id==id in Mongo.  Returns the state."""
@@ -393,6 +402,7 @@ class imagemngr:
   def update_states(self):
       """
       Update the states of all active transactions.
+      Cleanup failed transcations after a period
       """
       #logger.debug("Update_states called")
       i=0
@@ -412,9 +422,16 @@ class imagemngr:
               self.logger.debug('meta=%s'%(str(response)))
               # Now save the response
               self.tasks.remove(req)
-          if state=="FAILED":
+          if state=="FAILURE":
               self.logger.warn("Pull failed for %s"%(req))
           i+=1
+      # Look for failed pulls
+      for rec in self.images.find({'status':'FAILURE'}):
+          nextpull=self.config['PullUpdateTimeout']+rec['last_pull']
+          # It it has been a while then let's clean up
+          if (time()>nextpull):
+              self.images.remove({'_id':rec['_id']})
+
 
   def expire(self,session,system,type,tag,id):
       """Expire an image.  (Not Implemented)"""
@@ -431,7 +448,9 @@ if __name__ == '__main__':
     configfile='test.json'
     if 'CONFIG' in os.environ:
         configfile=os.environ['CONFIG']
-    m=imagemngr(configfile)
+    with open(configfile) as cf:
+        config = json.load(cf)
+    m=imagemngr(config)
     sys.argv.pop(0)
     if len(sys.argv)<1:
         usage()
@@ -446,7 +465,6 @@ if __name__ == '__main__':
     elif command=='pull':
         if len(sys.argv)<3:
             usage()
-        print "pull"
         req=dict()
         (req['system'],req['itype'],req['tag'])=sys.argv
         m.pull('good',req)

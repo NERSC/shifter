@@ -35,13 +35,11 @@ See LICENSE for full text.
 
 CONFIGFILE='imagemanager.json'
 
-#if 'TESTMODE' in os.environ:
-#    print "Setting Testmode"
-#    TESTMODE=os.environ['TESTMODE']
+queue = None
 if 'CONFIG' in os.environ:
     CONFIGFILE=os.environ['CONFIG']
 
-logging.debug("Opening %s"%(CONFIGFILE))
+logging.info("Opening %s"%(CONFIGFILE))
 
 with open(CONFIGFILE) as configfile:
     config=json.load(configfile)
@@ -53,8 +51,19 @@ queue.conf.update(CELERY_ACCEPT_CONTENT = ['json'])
 queue.conf.update(CELERY_TASK_SERIALIZER = 'json')
 queue.conf.update(CELERY_RESULT_SERIALIZER = 'json')
 
-#status: 	"uptodate", "enqueued", "transferFromRemote", "examination",
-#"formatConversion", "transferToPlatform", "error"
+def initqueue(newconfig):
+    """
+    This is mainly used by the manager to configure the broker
+    after the module is already loaded
+    """
+    global queue, config
+    config=newconfig
+    queue = Celery('tasks', backend=config['Broker'],broker=config['Broker'])
+    queue.conf.update(CELERY_ACCEPT_CONTENT = ['json'])
+    queue.conf.update(CELERY_TASK_SERIALIZER = 'json')
+    queue.conf.update(CELERY_RESULT_SERIALIZER = 'json')
+
+
 
 def normalized_name(request):
     """
