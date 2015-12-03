@@ -11,6 +11,7 @@ import sys
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 import logging
+from random import randint
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
@@ -33,7 +34,6 @@ See LICENSE for full text.
 """
 
 CONFIGFILE='imagemanager.json'
-DEBUG=0
 
 #if 'TESTMODE' in os.environ:
 #    print "Setting Testmode"
@@ -41,8 +41,7 @@ DEBUG=0
 if 'CONFIG' in os.environ:
     CONFIGFILE=os.environ['CONFIG']
 
-if DEBUG:
-  logging.debug("Opening %s"%(CONFIGFILE))
+logging.debug("Opening %s"%(CONFIGFILE))
 
 with open(CONFIGFILE) as configfile:
     config=json.load(configfile)
@@ -163,7 +162,6 @@ def write_metadata(request):
     format=request['format']
     meta=request['meta']
     metafile='%s.meta'%(request['expandedpath'])
-    print "Metadat file: %s\n"%(metafile)
     status=converters.writemeta(format,meta,metafile)
 
     # Write Metadata file
@@ -191,13 +189,14 @@ def dopull(self,request,TESTMODE=0):
     """
     Celery task to do the full workflow of pulling an image and transferring it
     """
-    logging.info("DEBUG: dopull system=%s tag=%s"%(request['system'],request['tag']))
+    logging.debug("dopull system=%s tag=%s"%(request['system'],request['tag']))
     if TESTMODE==1:
         for state in ('PULLING','EXAMINATION','CONVERSION','TRANSFER','READY'):
             logging.info("Worker: TESTMODE Updating to %s"%(state))
             self.update_state(state=state)
             time.sleep(1)
-        return {'id':'1','entrypoint':['./blah'],'workdir':'/root','env':['FOO=bar','BAZ=boz']}
+        id='%x'%(randint(0,100000))
+        return {'id':id,'entrypoint':['./blah'],'workdir':'/root','env':['FOO=bar','BAZ=boz']}
     elif TESTMODE==2:
         logging.info("Worker: TESTMODE 2 setting failure")
         raise OSError('task failed')
@@ -209,7 +208,6 @@ def dopull(self,request,TESTMODE=0):
             raise OSError('Pull failed')
         if 'meta' not in request:
             raise OSError('Metadata not populated')
-        print request['meta']
         # Step 2 - Check the image
         self.update_state(state='EXAMINATION')
         if not examine_image(request):

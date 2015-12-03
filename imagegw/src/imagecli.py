@@ -55,7 +55,14 @@ if __name__ == '__main__':
          header={'authentication':munge.strip()}
          uri="%s/list/%s/"%(url,system)
          r = requests.get(uri,headers=header)
-         print r.text
+         resp=json.loads(r.text)
+         for r in resp['list']:
+             tags=r['tag']
+             if type(tags) is not list:
+                 tags=[tags]
+             for i in tags:
+                (image,tag)=i.split(':')
+                print '%-25.25s  %-20.10s  %-12.12s   %-10.10s'%(image,tag,r['id'],r['itype'])
     elif com=='pull' and len(sys.argv)>=2:
          (system,image)=sys.argv
          header={'authentication':munge.strip()}

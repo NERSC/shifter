@@ -32,7 +32,7 @@ See LICENSE for full text.
 imagegwapi = Flask(__name__)
 #imagegwapi.debug_log_format= '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
 
-imagegwapi.logger.setLevel(logging.DEBUG)
+imagegwapi.logger.setLevel(logging.INFO)
 ch = logging.StreamHandler()
 formatter = logging.Formatter('%(asctime)s [%(name)s] %(levelname)s : %(message)s')
 ch.setFormatter(formatter)
@@ -61,7 +61,6 @@ def not_found(error=None):
     }
     resp = jsonify(message)
     resp.status_code = 404
-    print "ERROR: %s"%str(error)
     return resp
 
 @imagegwapi.route('/')
@@ -82,19 +81,18 @@ def create_response(rec):
 @imagegwapi.route('/api/list/<system>/', methods=["GET"])
 def list(system):
     auth=request.headers.get(AUTH_HEADER)
-    imagegwapi.logger.debug("list system=%s auth=%s"%(system,auth))
+    imagegwapi.logger.debug("list system=%s"%(system))
     try:
         session=mgr.new_session(auth,system)
         records=mgr.list(session,system)
         if records==None:
             return not_found('image not found')
     except:
-        imagegwapi.logger.error(sys.exc_value)
+        imagegwapi.logger.exception('Exception in list')
         return not_found('%s'%(sys.exc_value))
     li=[]
     for rec in records:
         li.append(create_response(rec))
-        print "record="+str(rec)
     resp={'list':li}
     return jsonify(resp)
 
@@ -112,7 +110,7 @@ def lookup(system,type,tag):
         if rec==None:
             return not_found('image not found')
     except:
-        imagegwapi.logger.error(sys.exc_value)
+        imagegwapi.logger.exception('Exception in lookup')
         return not_found('%s'%(sys.exc_value))
     return jsonify(create_response(rec))
 # {
@@ -137,10 +135,10 @@ def pull(system,type,tag):
     i={'system':system,'itype':type,'tag':tag}
     try:
         session=mgr.new_session(auth,system)
-        id=mgr.pull(session,i)
-        rec=mgr.lookup(session,i)
+        rec=mgr.pull(session,i)
         imagegwapi.logger.debug(rec)
     except:
+        imagegwapi.logger.exception('Exception in pull')
         return not_found(sys.exc_value)
     return jsonify(create_response(rec))
 
@@ -153,6 +151,7 @@ def expire(system,type,tag,id):
     try:
         resp=mgr.expire(auth,system,type,tag,id)
     except:
+        imagegwapi.logger.exception('Exception in expire')
         return not_found()
     return jsonify(resp)
 
