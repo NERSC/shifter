@@ -414,11 +414,13 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     /* create all the directories needed for initial setup */
 #define _MKDIR(dir, perm) if (mkdir(dir, perm) != 0) { \
     fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", dir); \
+    perror("   --- REASON: "); \
     ret = 1; \
     goto _prepSiteMod_unclean; \
 }
 #define _BINDMOUNT(mountCache, from, to, ro, overwrite) if (_bindMount(mountCache, from, to, ro, overwrite) != 0) { \
     fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from, to); \
+    perror("   --- REASON: "); \
     ret = 1; \
     goto _prepSiteMod_unclean; \
 }

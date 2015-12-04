@@ -107,7 +107,7 @@ char *lookup_ImageIdentifier(
         return strdup(imageTag);
     }
 
-    snprintf(lookupCmd, PATH_MAX, "%s%s/bin/imageGWConnect %s",
+    snprintf(lookupCmd, PATH_MAX, "%s%s/sbin/imageGWConnect lookup %s",
             config->nodeContextPrefix, config->udiRootPath, imageTag);
 
     pp = popen(lookupCmd, "r");

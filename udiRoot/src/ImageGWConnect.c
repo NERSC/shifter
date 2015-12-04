@@ -366,5 +366,9 @@ int main(int argc, char **argv) {
     free(gateways);
 
     curl_global_cleanup();
-    return imgGw != NULL;
+    if (imgGw != NULL) {
+       return 0;
+    } else {
+       return imgGw != NULL;
+    }
 }
