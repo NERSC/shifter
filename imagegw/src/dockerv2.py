@@ -4,6 +4,7 @@ import ssl
 import json
 import os
 import sys
+import re
 import subprocess
 import base64
 import binascii
@@ -106,7 +107,7 @@ def setupHttpConn(url, cacert=None):
         raise NotImplementedError('Unsupported protocol %s' % protocol)
     return conn
 
-def getImageManifest(url, repo, tag, cacert=None, username=None, password=None):
+def getImageManifest(url, repo, tag, cacert=None, username=None, password=None, token=None):
     """
     getImageManifest - Get the image manifest
     returns a dictionary object of the manifest.
@@ -118,8 +119,31 @@ def getImageManifest(url, repo, tag, cacert=None, username=None, password=None):
     conn.request("GET", "/v2/%s/manifests/%s" % (repo, tag))
     r1 = conn.getresponse()
 
+    token = None
     if r1.status != 200:
-        raise ValueError("Bad response from registry status=%d"%(r1.status))
+        if r1.status == 401:
+            (garbage,authLocStr) = r1.getheader('WWW-Authenticate').split(' ', 2)
+            authData = {}
+            for item in authLocStr.split(','):
+                (k,v) = item.split('=', 2)
+                authData[k] = v.replace('"', '')
+            authConn = setupHttpConn(authData['realm'], cacert)
+            if authConn is None:
+                raise ValueError('Bad response from registry, failed to get auth connection')
+            matchObj = re.match(r'(https?)://(.*?)(/.*)', authData['realm'])
+            path = '%s?service=%s&scope=%s' % (matchObj.groups()[2], authData['service'], authData['scope'])
+            authConn.request("GET", path)
+            r2 = authConn.getresponse()
+            authResp = json.loads(r2.read())
+            token = authResp['token']
+            headers = {'Authorization': 'Bearer %s' % token}
+            conn = setupHttpConn(url, cacert)
+            conn.request("GET", "/v2/%s/manifests/%s" % (repo, tag), None, headers)
+            r1 = conn.getresponse()
+            if r1.status != 200:
+                raise ValueError("Bad response from registry, even after auth: %d" % (r1.status))
+        else:
+            raise ValueError("Bad response from registry status=%d"%(r1.status))
     expected_hash = r1.getheader('docker-content-digest')
     content_len = r1.getheader('content-length')
     if expected_hash is None or len(expected_hash) == 0:
@@ -131,23 +155,38 @@ def getImageManifest(url, repo, tag, cacert=None, username=None, password=None):
         verifyManifestDigestAndSignature(jdata, data, digest_algo, expected_hash)
     except ValueError:
         raise e
+    if token is not None:
+        jdata['token'] = token
     return jdata
 
-def saveLayer(url, repo, layer, cachedir='./', cacert=None, username=None, password=None):
+def saveLayer(url, repo, layer, cachedir='./', cacert=None, username=None, password=None, token=None):
     """
     saveLayer - Save a layer and verify with the digest
     """
-    conn = setupHttpConn(url, cacert)
-    if conn is None:
-        return None
+    path = "/v2/%s/blobs/%s" % (repo, layer)
+    while True:
+        conn = setupHttpConn(url, cacert)
+        if conn is None:
+            return None
 
-    filename = '%s/%s.tar' % (cachedir,layer)
-    if os.path.exists(filename):
-        return True
-    conn.request("GET", "/v2/%s/blobs/%s" % (repo, layer))
-    r1 = conn.getresponse()
-    #print r1.status, r1.reason
-    #print r1.getheaders()
+        filename = '%s/%s.tar' % (cachedir,layer)
+        if os.path.exists(filename):
+            return True
+        headers = {}
+        if token is not None:
+            headers = {'Authorization': 'Bearer %s' % token}
+        conn.request("GET", path, None, headers)
+        r1 = conn.getresponse()
+        location = r1.getheader('location')
+        if r1.status == 200:
+            break
+        elif location != None:
+            url = location
+            matchObj = re.match(r'(https?)://(.*?)(/.*)', location)
+            url = '%s://%s' % (matchObj.groups()[0], matchObj.groups()[1])
+            path = matchObj.groups()[2]
+        else:
+            return False
     maxlen = int(r1.getheader('content-length'))
     nread = 0
     output = open(filename, "w")
@@ -236,7 +275,7 @@ def extractDockerLayers(basePath, layer, cachedir='./'):
     os.umask(022)
     devnull = open(os.devnull, 'w')
     tarfile=os.path.join(cachedir,'%s.tar'%(layer['fsLayer']['blobSum']))
-    command=['tar','xf', tarfile, '-C', basePath]
+    command=['tar','xf', tarfile, '-C', basePath, '--exclude=dev/*']
     if False:
         command.append('--force-local')
     ret = subprocess.call(command, stdout=devnull, stderr=devnull)
@@ -250,15 +289,18 @@ def pullImage(options, baseUrl, repo, tag, cachedir='./', expanddir='./', cacert
     """
     pullImage - Uber function to pull the manifest, layers, and extract the layers
     """
-    manifest = getImageManifest(baseUrl, repo, tag, cacert, username, password)
+    token = None
+    manifest = getImageManifest(baseUrl, repo, tag, cacert, username, password, token)
+    if 'token' in manifest:
+        token = manifest['token']
     (eldest,youngest) = constructImageMetadata(manifest)
     layer = eldest
     while layer is not None:
-        saveLayer(baseUrl, repo, layer['fsLayer']['blobSum'], cachedir, cacert, username, password)
+        saveLayer(baseUrl, repo, layer['fsLayer']['blobSum'], cachedir, cacert, username, password, token)
         layer = layer['child']
 
     layer = eldest
-    meta=youngest()
+    meta=youngest
     resp={'id':meta['id']}
     expandedpath=os.path.join(expanddir,str(meta['id']))
     resp['expandedpath']=expandedpath
@@ -268,6 +310,8 @@ def pullImage(options, baseUrl, repo, tag, cachedir='./', expanddir='./', cacert
             resp['env']=c['Env']
         if 'Entrypoint' in c:
             resp['entrypoint']=c['Entrypoint']
+        if 'WorkingDir' in c:
+            resp['workdir']=c['WorkingDir']
     if not os.path.exists(expandedpath):
         os.mkdir(expandedpath)
 
@@ -279,4 +323,5 @@ if __name__ == '__main__':
   #pullImage(None, 'https://registry.services.nersc.gov', 'lcls_xfel_edison', '201509081609',cacert='local.crt')
   dir=os.getcwd()
   cdir=os.environ['TMPDIR']
-  pullImage(None, 'https://registry.services.nersc.gov', 'nersc-py', 'latest',cachedir=cdir,cacert=dir+'/local.crt')
+  pullImage(None, 'https://registry-1.docker.io', 'library/ubuntu', 'latest',cachedir=cdir)
+#pullImage(None, 'https://registry.services.nersc.gov', 'nersc-py', 'latest',cachedir=cdir,cacert=dir+'/local.crt')
