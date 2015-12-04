@@ -1,6 +1,6 @@
 AUTOMAKE_OPTIONS=foreign
 
-AM_CPPFLAGS = -DCONFIG_FILE=\"${sysconfdir}/udiRoot.conf\"
+AM_CPPFLAGS = -DCONFIG_FILE=\"${sysconfdir}/udiRoot.conf\" $(SLURM_CPPFLAGS) -I../../src/
 
 pkglib_LTLIBRARIES = shifter_slurm.la
 
@@ -11,7 +11,7 @@ SHIFTER_SO_SOURCES = \
     ../../src/UdiRootConfig.c \
     ../../src/utility.c \
     ../../src/shifter_core.c \
-    ../../ImageData.c
+    ../../src/ImageData.c
 
 shifter_slurm_la_SOURCES = $(SHIFTER_SO_SOURCES)
 shifter_slurm_la_LDFLAGS = $(SO_LDFLAGS) $(PLUGIN_FLAGS) $(SLURM_LDFLAGS)

@@ -959,7 +959,7 @@ int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig) {
 }
 #define LOOPMOUNT(mountExec, from, to, imgtype) { \
     char *args[] = {strdup(mountExec), \
-        strdup("-o"), strdup("loop,autoclear,ro,nosuid,nodev"), \
+        strdup("-n"), strdup("-o"), strdup("loop,autoclear,ro,nosuid,nodev"), \
         strdup(from), strdup(to), \
         NULL}; \
     char **argsPtr = NULL; \
