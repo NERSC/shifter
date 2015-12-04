@@ -1,0 +1,5 @@
+15.12.0pre0
+===========
++  Updated ImageGwConnect helper application to work with changes to imagegw
+   output and allow user to specify image type. Add image listing support.
+

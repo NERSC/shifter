@@ -107,8 +107,8 @@ char *lookup_ImageIdentifier(
         return strdup(imageTag);
     }
 
-    snprintf(lookupCmd, PATH_MAX, "%s%s/sbin/imageGWConnect lookup %s",
-            config->nodeContextPrefix, config->udiRootPath, imageTag);
+    snprintf(lookupCmd, PATH_MAX, "%s%s/sbin/imageGWConnect lookup %s:%s",
+            config->nodeContextPrefix, config->udiRootPath, imageType, imageTag);
 
     pp = popen(lookupCmd, "r");
     while (!feof(pp) && !ferror(pp)) {
@@ -125,7 +125,6 @@ char *lookup_ImageIdentifier(
         } else if (identifier == NULL && strchr(ptr, ':') == NULL) {
             /* this is the image id */
             identifier = strdup(ptr);
-printf("found ident: %s\n", identifier);
             break;
         }
     }
@@ -140,7 +139,6 @@ printf("found ident: %s\n", identifier);
     }
     return identifier;
 _lookupImageIdentifier_error:
-printf("hit an error! %d\n", WEXITSTATUS(status));
     if (pp != NULL) {
         pclose(pp);
     }
