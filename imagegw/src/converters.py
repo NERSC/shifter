@@ -120,3 +120,19 @@ def convert(format,expandedPath,imagePath):
 
     # Some error must have occurred
     return True
+
+def writemeta(format,meta,metafile):
+
+    with open(metafile, 'w') as mf:
+        # write out ENV, ENTRYPOINT, WORKDIR and format
+        mf.write("FORMAT: %s\n"%(format))
+        if 'entrypoint' in meta and meta['entrypoint'] is not None:
+            mf.write("ENTRYPOINT: %s\n"%(meta['entrypoint']))
+        if 'workdir' in meta and meta['workdir'] is not None:
+            mf.write("WORKDIR: %s\n"%(meta['workdir']))
+        if 'env' in meta and meta['env'] is not None:
+            for kv in meta['env']:
+                mf.write("ENV: %s\n"%(kv))
+        mf.close()
+    # Some error must have occurred
+    return True
