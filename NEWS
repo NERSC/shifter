@@ -1,0 +1,7 @@
+This file describes changes in recent versions of Slurm. It primarily
+documents those changes that are of interest to users and administrators.
+
+* Changes in Slurm 15.12.0pre1
+==============================
+ -- Created iniital README
+ -- Created initial NEWS file
