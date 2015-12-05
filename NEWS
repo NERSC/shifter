@@ -1,7 +1,6 @@
-This file describes changes in recent versions of Slurm. It primarily
-documents those changes that are of interest to users and administrators.
+15.12.0pre0
+===========
++  Updated ImageGwConnect helper application to work with changes to imagegw
+   output and allow user to specify image type. Add image listing support.
++  Created iniital README
 
-* Changes in Slurm 15.12.0pre1
-==============================
- -- Created iniital README
- -- Created initial NEWS file

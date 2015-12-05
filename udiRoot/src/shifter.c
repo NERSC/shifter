@@ -333,13 +333,11 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                             fprintf(stderr, "Must specify user with --user flag.\n");
                             _usage(1);
                         }
-                        printf("lookup user: %s\n", optarg);
                         pwd = getpwnam(optarg);
                         if (pwd != NULL) {
                             config->tgtUid = pwd->pw_uid;
                             config->tgtGid = pwd->pw_gid;
                             config->username = strdup(pwd->pw_name);
-                            printf("got user: %s, %d\n", config->username, config->tgtUid);
                         } else {
                             uid_t uid = atoi(optarg);
                             if (uid != 0) {
