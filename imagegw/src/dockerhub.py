@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import httplib
 import re
 import ssl
@@ -294,6 +296,9 @@ class dockerhubHandle():
         devnull = open(os.devnull, 'w')
         tarfile=os.path.join(cachedir,'%s.tar'%(layer['id']))
         com=['tar','xf', tarfile, '-C', basePath]
+        # TODO: Add a mechanism to scan the tar for non-writable directories (Issue #6)
+        #
+        # TODO: Handle this better. Some version of tar don't support this option
         if False:
             command.append('--force-local')
         ret = subprocess.call(com, stdout=devnull, stderr=devnull)
@@ -352,13 +357,22 @@ def pullImage(options, baseUrl, repo, tag, cachedir='./', expanddir='./', cacert
             resp['env']=c['Env']
         if 'Entrypoint' in c:
             resp['entrypoint']=c['Entrypoint']
+        if 'WorkingDir' in c:
+            resp['workdir']=c['WorkingDir']
     if not os.path.exists(expandedpath):
         os.mkdir(expandedpath)
     a.extractDockerLayers(expandedpath,a.getEldest(),cachedir=cachedir)
     return resp
 
 if __name__ == '__main__':
-    pullImage(None, 'https://index.docker.io', 'ubuntu','latest', cachedir='/tmp/cache/', expanddir='/tmp/ubuntu/')
-    pullImage(None, 'index.docker.io', 'ubuntu','latest', cachedir='/tmp/cache/', expanddir='/tmp/ubuntu/')
-    pullImage(None, None, 'ubuntu','latest', cachedir='/tmp/cache/', expanddir='/tmp/ubuntu/')
+    #pullImage(None, 'https://index.docker.io', 'ubuntu','latest', cachedir='/tmp/cache/', expanddir='/tmp/ubuntu/')
+    #pullImage(None, 'index.docker.io', 'ubuntu','latest', cachedir='/tmp/cache/', expanddir='/tmp/ubuntu/')
+    #pullImage(None, None, 'ubuntu','latest', cachedir='/tmp/cache/', expanddir='/tmp/ubuntu/')
     #pullImage(None, 'https://registry.services.nersc.gov', 'lcls_xfel_edison', '201509081609', cacert='local.crt')
+    (image,tag)=sys.argv[1].split(':')
+    cdir='/tmp/cache'
+    edir='/tmp/%s:%s'%(image,tag)
+    for p in (cdir,edir):
+      if not os.path.exists(p):
+        os.makedirs(p)
+    pullImage(None, None,image,tag, cachedir='/tmp/cache/', expanddir='/tmp/%s:%s'%(image,tag))

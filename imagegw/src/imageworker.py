@@ -11,6 +11,7 @@ import sys
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 import logging
+from random import randint
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
@@ -33,16 +34,12 @@ See LICENSE for full text.
 """
 
 CONFIGFILE='imagemanager.json'
-DEBUG=0
 
-#if 'TESTMODE' in os.environ:
-#    print "Setting Testmode"
-#    TESTMODE=os.environ['TESTMODE']
+queue = None
 if 'CONFIG' in os.environ:
     CONFIGFILE=os.environ['CONFIG']
 
-if DEBUG:
-  logging.debug("Opening %s"%(CONFIGFILE))
+logging.info("Opening %s"%(CONFIGFILE))
 
 with open(CONFIGFILE) as configfile:
     config=json.load(configfile)
@@ -54,8 +51,19 @@ queue.conf.update(CELERY_ACCEPT_CONTENT = ['json'])
 queue.conf.update(CELERY_TASK_SERIALIZER = 'json')
 queue.conf.update(CELERY_RESULT_SERIALIZER = 'json')
 
-#status: 	"uptodate", "enqueued", "transferFromRemote", "examination",
-#"formatConversion", "transferToPlatform", "error"
+def initqueue(newconfig):
+    """
+    This is mainly used by the manager to configure the broker
+    after the module is already loaded
+    """
+    global queue, config
+    config=newconfig
+    queue = Celery('tasks', backend=config['Broker'],broker=config['Broker'])
+    queue.conf.update(CELERY_ACCEPT_CONTENT = ['json'])
+    queue.conf.update(CELERY_TASK_SERIALIZER = 'json')
+    queue.conf.update(CELERY_RESULT_SERIALIZER = 'json')
+
+
 
 def normalized_name(request):
     """
@@ -119,7 +127,7 @@ def pull_image(request):
             return True
         except:
             logging.warn(sys.exc_value)
-            return False
+            raise
 
     else:
         raise NotImplementedError('Unsupported remote type %s'%(rtype))
@@ -144,11 +152,31 @@ def convert_image(request):
     format=config['DefaultImageFormat']
     if format in request:
         format=request['format']
+    else:
+        request['format']=format
     cdir=config['CacheDirectory']
     imagefile='%s.%s'%(request['expandedpath'],format)
     status=converters.convert(format,request['expandedpath'],imagefile)
+
+    # Write Metadata file
     request['imagefile']=imagefile
     return status
+
+def write_metadata(request):
+    """
+    Write out the metadata file
+
+    Returns True on success
+    """
+    format=request['format']
+    meta=request['meta']
+    metafile='%s.meta'%(request['expandedpath'])
+    status=converters.writemeta(format,meta,metafile)
+
+    # Write Metadata file
+    request['metafile']=metafile
+    return status
+
 
 def transfer_image(request):
     """
@@ -160,20 +188,24 @@ def transfer_image(request):
     if system not in config['Platforms']:
         raise KeyError('%s is not in the configuration'%system)
     sys=config['Platforms'][system]
-    return transfer.transfer(sys,request['imagefile'])
+    meta=None
+    if 'metafile' in request:
+        meta=request['metafile']
+    return transfer.transfer(sys,request['imagefile'],meta)
 
 @queue.task(bind=True)
 def dopull(self,request,TESTMODE=0):
     """
     Celery task to do the full workflow of pulling an image and transferring it
     """
-    logging.info("DEBUG: dopull system=%s tag=%s"%(request['system'],request['tag']))
+    logging.debug("dopull system=%s tag=%s"%(request['system'],request['tag']))
     if TESTMODE==1:
         for state in ('PULLING','EXAMINATION','CONVERSION','TRANSFER','READY'):
             logging.info("Worker: TESTMODE Updating to %s"%(state))
             self.update_state(state=state)
             time.sleep(1)
-        return {'id':'1','entrypoint':['./blah'],'env':['FOO=bar','BAZ=boz']}
+        id='%x'%(randint(0,100000))
+        return {'id':id,'entrypoint':['./blah'],'workdir':'/root','env':['FOO=bar','BAZ=boz']}
     elif TESTMODE==2:
         logging.info("Worker: TESTMODE 2 setting failure")
         raise OSError('task failed')
@@ -181,10 +213,10 @@ def dopull(self,request,TESTMODE=0):
         # Step 1 - Do the pull
         self.update_state(state='PULLING')
         if not pull_image(request):
+            logging.info("Worker: Pull failed")
             raise OSError('Pull failed')
         if 'meta' not in request:
             raise OSError('Metadata not populated')
-        print request['meta']
         # Step 2 - Check the image
         self.update_state(state='EXAMINATION')
         if not examine_image(request):
@@ -193,6 +225,8 @@ def dopull(self,request,TESTMODE=0):
         self.update_state(state='CONVERSION')
         if not convert_image(request):
             raise OSError('Conversion failed')
+        if not write_metadata(request):
+            raise OSError('Metadata creation failed')
         # Step 4 - TRANSFER
         self.update_state(state='TRANSFER')
         if not transfer_image(request):
