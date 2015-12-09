@@ -7,7 +7,9 @@ import dockerhub
 import converters
 import transfer
 import re
+import shutil
 import sys
+import subprocess
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 import logging
@@ -80,16 +82,17 @@ def pull_image(request):
     """
     dir=os.getcwd()
     cdir=config['CacheDirectory']
+    edir=config['ExpandDirectory']
     parts=re.split('[:/]',request['tag'])
     if len(parts)==3:
         (location,repo,tag)=parts
         if location.find('.')<0:
             # This is a dockerhub repo with a username
             repo='%s/%s'%(location,repo)
-            location='index.docker.io'
+            location=config['DefaultImageLocation']
     elif len(parts)==2:
         (repo,tag)=parts
-        location='index.docker.io'
+        location=config['DefaultImageLocation']
     else:
         raise OSError('Unable to parse tag %s'%request['tag'])
     logging.debug("doing image pull for %s %s %s"%(location,repo,tag))
@@ -107,7 +110,7 @@ def pull_image(request):
         try:
             resp=dockerv2.pullImage(None, 'https://%s'%(location),
                 repo, tag,
-                cachedir=cdir,expanddir=cdir,
+                cachedir=cdir,expanddir=edir,
                 cacert=cacert)
             request['meta']=resp
             request['expandedpath']=resp['expandedpath']
@@ -120,7 +123,7 @@ def pull_image(request):
         try:
             resp=dockerhub.pullImage(None, None,
                 repo, tag,
-                cachedir=cdir,expanddir=cdir,
+                cachedir=cdir,expanddir=edir,
                 cacert=cacert)
             request['meta']=resp
             request['expandedpath']=resp['expandedpath']
@@ -193,6 +196,29 @@ def transfer_image(request):
         meta=request['metafile']
     return transfer.transfer(sys,request['imagefile'],meta)
 
+def cleanup_temporary(request):
+    items = ('expandedpath', 'imagefile', 'metafile')
+    for item in items:
+        if item not in request or request[item] is None:
+            continue
+        cleanitem = request[item]
+        if type(cleanitem) is unicode:
+            cleanitem = str(cleanitem)
+
+        if type(cleanitem) is not str:
+            raise ValueError('Invalid type for %s, %s' % (item, type(cleanitem)))
+        if cleanitem == '' or cleanitem == '/':
+            raise ValueError('Invalid value for %s: %s' % (item, cleanitem))
+        if not cleanitem.startswith(config['ExpandDirectory']):
+            raise ValueError('Invalid location for %s: %s' % (item, cleanitem))
+        if os.path.exists(cleanitem):
+            logging.info("Worker: removing %s" % cleanitem)
+            subprocess.call(['chmod', '-R', 'u+w', cleanitem])
+            if os.path.isdir(cleanitem):
+                shutil.rmtree(cleanitem)
+            else:
+                os.unlink(cleanitem)
+
 @queue.task(bind=True)
 def dopull(self,request,TESTMODE=0):
     """
@@ -233,9 +259,11 @@ def dopull(self,request,TESTMODE=0):
             raise OSError('Transfer failed')
         # Done
         self.update_state(state='READY')
+        cleanup_temporary(request)
         return request['meta']
 
     except:
         logging.error("ERROR: dopull failed system=%s tag=%s"%(request['system'],request['tag']))
         self.update_state(state='FAILURE')
+        cleanup_temporary(request)
         raise
