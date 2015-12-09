@@ -87,9 +87,6 @@ class dockerv2Handle():
             else:
                 raise ValueError('Invalid type for docker image identifier')
 
-        if self.repo.find('/') == -1:
-            self.repo = 'library/%s' % self.repo
-
         if options is None:
             options = {}
         if type(options) is not dict:
@@ -128,6 +125,9 @@ class dockerv2Handle():
             self.allowAuthenticated = False
 
         self.url = '%s://%s' % (self.protocol, self.server)
+
+        if self.repo.find('/') == -1 and self.server.endswith('docker.io'):
+            self.repo = 'library/%s' % self.repo
 
         if 'cacert' in options:
             if not os.path.exists(options['cacert']):
@@ -463,5 +463,6 @@ if __name__ == '__main__':
   #pullImage(None, 'https://registry.services.nersc.gov', 'lcls_xfel_edison', '201509081609',cacert='local.crt')
   dir=os.getcwd()
   cdir=os.environ['TMPDIR']
-  pullImage(None, 'https://registry-1.docker.io', 'library/ubuntu', 'latest', cachedir=cdir, expanddir=cdir)
+  pullImage(None, 'https://registry-1.docker.io', 'ubuntu', 'latest', cachedir=cdir, expanddir=cdir)
 #pullImage(None, 'https://registry.services.nersc.gov', 'nersc-py', 'latest',cachedir=cdir,cacert=dir+'/local.crt')
+#pullImage(None, 'https://registry.services.nersc.gov', 'psana', 'latest',cachedir=cdir,expanddir=cdir,cacert=dir+'/local.crt')
