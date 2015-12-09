@@ -9,10 +9,10 @@ api:
    - /mnt/sda1/imagegw:/data
   command: api
 mongo:
-  image: mongo:2.4
+  image: mongo:2.6
   volumes:
     - /mnt/sda1/data/mongo:/data/db
-  command: mongod --smallfiles --quiet
+  command: mongod --smallfiles
 redis:
    image: redis
 systema:

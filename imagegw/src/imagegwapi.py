@@ -32,7 +32,7 @@ See LICENSE for full text.
 imagegwapi = Flask(__name__)
 #imagegwapi.debug_log_format= '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
 
-imagegwapi.logger.setLevel(logging.DEBUG)
+imagegwapi.logger.setLevel(logging.INFO)
 ch = logging.StreamHandler()
 formatter = logging.Formatter('%(asctime)s [%(name)s] %(levelname)s : %(message)s')
 ch.setFormatter(formatter)
@@ -46,9 +46,24 @@ DEBUG_FLAG = True
 LISTEN_PORT = 5000
 AUTH_HEADER='authentication'
 
-CONFIG='imagemanager.json'
-if 'GWCONFIG' in os.environ:
-    CONFIG=os.environ['GWCONFIG']
+
+#
+# Initialization
+mgr=None
+config={}
+#with open(CONFIG) as config_file:
+#    config = json.load(config_file)
+#gr=imagemngr.imagemngr(config,logname='imagegwapi')
+
+def init(configfile):
+    imagegwapi.logger.info("initializing with %s"%(configfile))
+    global mgr
+    global config
+    with open(configfile) as config_file:
+        config = json.load(config_file)
+    mgr=imagemngr.imagemngr(config,logname='imagegwapi')
+    print mgr
+
 
 # For RESTful Service
 @imagegwapi.errorhandler(404)
@@ -61,7 +76,6 @@ def not_found(error=None):
     }
     resp = jsonify(message)
     resp.status_code = 404
-    print "ERROR: %s"%str(error)
     return resp
 
 @imagegwapi.route('/')
@@ -70,12 +84,33 @@ def help():
 
 def create_response(rec):
     resp={}
-    for field in ('id','system','itype','tag','status','userAcl','groupAcl','ENV','ENTRY','last_pull'):
+    for field in ('id','system','itype','tag','status','userAcl','groupAcl','ENV','ENTRY','WORKDIR','last_pull'):
         try:
             resp[field]=rec[field]
         except KeyError,e:
             resp[field]='MISSING'
     return resp
+
+# Lookup image
+# This will lookup the status of the requested image.
+@imagegwapi.route('/api/list/<system>/', methods=["GET"])
+def list(system):
+    auth=request.headers.get(AUTH_HEADER)
+    imagegwapi.logger.debug("list system=%s"%(system))
+    try:
+        session=mgr.new_session(auth,system)
+        records=mgr.list(session,system)
+        if records==None:
+            return not_found('image not found')
+    except:
+        imagegwapi.logger.exception('Exception in list')
+        return not_found('%s'%(sys.exc_value))
+    li=[]
+    for rec in records:
+        li.append(create_response(rec))
+    resp={'list':li}
+    return jsonify(resp)
+
 
 # Lookup image
 # This will lookup the status of the requested image.
@@ -90,8 +125,8 @@ def lookup(system,type,tag):
         if rec==None:
             return not_found('image not found')
     except:
-        imagegwapi.logger.error(sys.exc_value)
-        return not_found('%s'%(sys.exc_value))
+        imagegwapi.logger.exception('Exception in lookup')
+        return not_found('%s %s'%(sys.exc_type,sys.exc_value))
     return jsonify(create_response(rec))
 # {
 # 	"tag": "ubuntu:15.04",
@@ -115,11 +150,11 @@ def pull(system,type,tag):
     i={'system':system,'itype':type,'tag':tag}
     try:
         session=mgr.new_session(auth,system)
-        id=mgr.pull(session,i)
-        rec=mgr.lookup(session,i)
+        rec=mgr.pull(session,i)
         imagegwapi.logger.debug(rec)
     except:
-        return not_found(sys.exc_value)
+        imagegwapi.logger.exception('Exception in pull')
+        return not_found('%s %s'%(sys.exc_type,sys.exc_value))
     return jsonify(create_response(rec))
 
 # expire image
@@ -129,18 +164,19 @@ def expire(system,type,tag,id):
     auth=request.headers.get(AUTH_HEADER)
     imagegwapi.logger.debug("expire system=%s type=%s tag=%s"%(system,type,tag))
     try:
-        resp=mgr.expire(auth,system,type,tag,id)
+        session=mgr.new_session(auth,system)
+        resp=mgr.expire(session,system,type,tag,id)
     except:
+        imagegwapi.logger.exception('Exception in expire')
         return not_found()
     return jsonify(resp)
 
 
-#
-# Initialization
-with open(CONFIG) as config_file:
-    config = json.load(config_file)
-mgr=imagemngr.imagemngr(CONFIG,logname='imagegwapi')
-
 
 if __name__ == '__main__':
+    CONFIG='imagemanager.json'
+    if 'GWCONFIG' in os.environ:
+        CONFIG=os.environ['GWCONFIG']
+    init(CONFIG)
+
     imagegwapi.run(debug=DEBUG_FLAG, host='0.0.0.0', port=LISTEN_PORT, threaded=True)
