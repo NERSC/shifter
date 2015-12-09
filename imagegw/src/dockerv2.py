@@ -315,7 +315,7 @@ def pullImage(options, baseUrl, repo, tag, cachedir='./', expanddir='./', cacert
     if not os.path.exists(expandedpath):
         os.mkdir(expandedpath)
 
-    extractDockerLayers(expanddir, layer, cachedir=cachedir)
+    extractDockerLayers(expandedpath, layer, cachedir=cachedir)
     return resp
 
 if __name__ == '__main__':
