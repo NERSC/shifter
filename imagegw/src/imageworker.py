@@ -205,19 +205,19 @@ def cleanup_temporary(request):
         if type(cleanitem) is unicode:
             cleanitem = str(cleanitem)
 
-    if type(cleanitem) is not str:
-        raise ValueError('Invalid type for %s, %s' % (item, type(cleanitem)))
-    if cleanitem == '' or cleanitem == '/':
-        raise ValueError('Invalid value for %s: %s' % (item, cleanitem))
-    if not cleanitem.startswith(config['ExpandDirectory']):
-        raise ValueError('Invalid location for %s: %s' % (item, cleanitem))
-    if os.path.exists(cleanitem):
-        logging.info("Worker: removing %s" % cleanitem)
-        subprocess.call(['chmod', '-R', 'u+w', cleanitem])
-        if os.path.isdir(cleanitem):
-            shutil.rmtree(cleanitem)
-        else:
-            os.unlink(cleanitem)
+        if type(cleanitem) is not str:
+            raise ValueError('Invalid type for %s, %s' % (item, type(cleanitem)))
+        if cleanitem == '' or cleanitem == '/':
+            raise ValueError('Invalid value for %s: %s' % (item, cleanitem))
+        if not cleanitem.startswith(config['ExpandDirectory']):
+            raise ValueError('Invalid location for %s: %s' % (item, cleanitem))
+        if os.path.exists(cleanitem):
+            logging.info("Worker: removing %s" % cleanitem)
+            subprocess.call(['chmod', '-R', 'u+w', cleanitem])
+            if os.path.isdir(cleanitem):
+                shutil.rmtree(cleanitem)
+            else:
+                os.unlink(cleanitem)
 
 @queue.task(bind=True)
 def dopull(self,request,TESTMODE=0):
