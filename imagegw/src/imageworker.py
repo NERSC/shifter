@@ -7,7 +7,9 @@ import dockerhub
 import converters
 import transfer
 import re
+import shutil
 import sys
+import subprocess
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 import logging
@@ -194,20 +196,28 @@ def transfer_image(request):
         meta=request['metafile']
     return transfer.transfer(sys,request['imagefile'],meta)
 
-def clean_expandedpath(request):
-    if 'expandedpath' not in request or request['expandedpath'] is None:
-        return True
-    cleandir = request['expandedpath']
+def cleanup_temporary(request):
+    items = ('expandedpath', 'imagefile', 'metafile')
+    for item in items:
+        if item not in request or request[item] is None:
+            continue
+        cleanitem = request[item]
+        if type(cleanitem) is unicode:
+            cleanitem = str(cleanitem)
 
-    if type(cleandir) is not str:
-        raise ValueError('Invalid type for expandedpath')
-    if cleandir == '' or cleandir == '/':
-        raise ValueError('Invalid value for expandedpath: %s' % cleandir)
-    if not cleandir.startswith(config['ExpandDirectory']):
-        raise ValueError('Invalid location for expandedpath: %s' % cleandir)
-    logging.info("Worker: removing %s" % cleandir)
-    subprocess.call(['chmod', '-R', 'u+w', cleandir])
-    shutil.rmtree(cleandir)
+    if type(cleanitem) is not str:
+        raise ValueError('Invalid type for %s, %s' % (item, type(cleanitem)))
+    if cleanitem == '' or cleanitem == '/':
+        raise ValueError('Invalid value for %s: %s' % (item, cleanitem))
+    if not cleanitem.startswith(config['ExpandDirectory']):
+        raise ValueError('Invalid location for %s: %s' % (item, cleanitem))
+    if os.path.exists(cleanitem):
+        logging.info("Worker: removing %s" % cleanitem)
+        subprocess.call(['chmod', '-R', 'u+w', cleanitem])
+        if os.path.isdir(cleanitem):
+            shutil.rmtree(cleanitem)
+        else:
+            os.unlink(cleanitem)
 
 @queue.task(bind=True)
 def dopull(self,request,TESTMODE=0):
@@ -249,11 +259,11 @@ def dopull(self,request,TESTMODE=0):
             raise OSError('Transfer failed')
         # Done
         self.update_state(state='READY')
-        clean_expandedpath(request)
+        cleanup_temporary(request)
         return request['meta']
 
     except:
         logging.error("ERROR: dopull failed system=%s tag=%s"%(request['system'],request['tag']))
         self.update_state(state='FAILURE')
-        clean_expandedpath(request)
+        cleanup_temporary(request)
         raise
