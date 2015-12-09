@@ -7,6 +7,7 @@
     "PullUpdateTimeout": 300,
     "ImageExpirationTimeout": "90:00:00:00",
     "CacheDirectory": "/data/",
+    "ExpandDirectory": "/dev/shm/",
     "MongoDBURI":"mongodb://mongo/",
     "MongoDB":"ShifterTest",
     "Broker":"redis://redis/",

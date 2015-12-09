@@ -80,16 +80,17 @@ def pull_image(request):
     """
     dir=os.getcwd()
     cdir=config['CacheDirectory']
+    edir=config['ExpandDirectory']
     parts=re.split('[:/]',request['tag'])
     if len(parts)==3:
         (location,repo,tag)=parts
         if location.find('.')<0:
             # This is a dockerhub repo with a username
             repo='%s/%s'%(location,repo)
-            location='index.docker.io'
+            location=config['DefaultImageLocation']
     elif len(parts)==2:
         (repo,tag)=parts
-        location='index.docker.io'
+        location=config['DefaultImageLocation']
     else:
         raise OSError('Unable to parse tag %s'%request['tag'])
     logging.debug("doing image pull for %s %s %s"%(location,repo,tag))
@@ -107,7 +108,7 @@ def pull_image(request):
         try:
             resp=dockerv2.pullImage(None, 'https://%s'%(location),
                 repo, tag,
-                cachedir=cdir,expanddir=cdir,
+                cachedir=cdir,expanddir=edir,
                 cacert=cacert)
             request['meta']=resp
             request['expandedpath']=resp['expandedpath']
@@ -120,7 +121,7 @@ def pull_image(request):
         try:
             resp=dockerhub.pullImage(None, None,
                 repo, tag,
-                cachedir=cdir,expanddir=cdir,
+                cachedir=cdir,expanddir=edir,
                 cacert=cacert)
             request['meta']=resp
             request['expandedpath']=resp['expandedpath']
@@ -193,6 +194,21 @@ def transfer_image(request):
         meta=request['metafile']
     return transfer.transfer(sys,request['imagefile'],meta)
 
+def clean_expandedpath(request):
+    if 'expandedpath' not in request or request['expandedpath'] is None:
+        return True
+    cleandir = request['expandedpath']
+
+    if type(cleandir) is not str:
+        raise ValueError('Invalid type for expandedpath')
+    if cleandir == '' or cleandir == '/':
+        raise ValueError('Invalid value for expandedpath: %s' % cleandir)
+    if not cleandir.startswith(config['ExpandDirectory']):
+        raise ValueError('Invalid location for expandedpath: %s' % cleandir)
+    logging.info("Worker: removing %s" % cleandir)
+    subprocess.call(['chmod', '-R', 'u+w', cleandir])
+    shutil.rmtree(cleandir)
+
 @queue.task(bind=True)
 def dopull(self,request,TESTMODE=0):
     """
@@ -233,9 +249,11 @@ def dopull(self,request,TESTMODE=0):
             raise OSError('Transfer failed')
         # Done
         self.update_state(state='READY')
+        clean_expandedpath(request)
         return request['meta']
 
     except:
         logging.error("ERROR: dopull failed system=%s tag=%s"%(request['system'],request['tag']))
         self.update_state(state='FAILURE')
+        clean_expandedpath(request)
         raise
