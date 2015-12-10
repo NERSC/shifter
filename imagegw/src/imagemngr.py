@@ -352,8 +352,8 @@ class imagemngr:
       if pullrec is None:
           self.logger.warn('Missing pull request (r=%s)'%(str(response)))
           return
-      #Check that this image id doesn't already exist
-      rec=self.images.find_one({'id':response['id']})
+      #Check that this image id doesn't already exist for this system
+      rec=self.images.find_one({'id':response['id'], 'system': pullrec['system']})
       tag=pullrec['pulltag']
       if rec is not None:
           # So we already had this image.
