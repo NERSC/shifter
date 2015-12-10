@@ -332,7 +332,7 @@ class imagemngr:
       """
       Helper function to remove a tag to an image.
       """
-      self.images.update({ 'tag': { '$type' : 4 }},{'$pull':{'tag':tag}},multi=True)
+      self.images.update({ 'tag': { '$in':[tag]}},{'$pull':{'tag':tag}},multi=True)
       # for old tag format
       for rec in self.images.find({'tag':tag }):
           if isinstance(rec['tag'],(str)):
