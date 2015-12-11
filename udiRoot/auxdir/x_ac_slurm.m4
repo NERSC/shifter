@@ -26,7 +26,11 @@ AC_DEFUN([X_AC_SLURM], [
   AC_ARG_WITH(
     [slurm],
     AS_HELP_STRING(--with-slurm=PATH,Specify path to slurm installation),
-    [_x_ac_munge_dirs="$withval $_x_ac_slurm"])
+    [_x_ac_slurm_dirs="$withval $_x_ac_slurm"])
+
+  AC_ARG_ENABLE(
+    [nativeSlurm], AS_HELP_STRING([--disable-nativeSlurm], [Disable if slurm is working with alps])
+  )
 
   AC_CACHE_CHECK(
     [for slurm installation],
@@ -64,10 +68,16 @@ AC_DEFUN([X_AC_SLURM], [
     fi
   fi
 
+  SLURM_NATIVE_SLURM=0
+  AS_IF([test "x$enable_nativeSlurm" != "xno"], [
+    SLURM_NATIVE_SLURM=1
+  ])
+
   AC_SUBST(SLURM_LIBS)
   AC_SUBST(SLURM_CPPFLAGS)
   AC_SUBST(SLURM_LDFLAGS)
   AC_SUBST(SLURM_DIR)
+  AC_SUBST(SLURM_NATIVE_SLURM)
 
   AM_CONDITIONAL(WITH_SLURM, test -n "$x_ac_cv_slurm_dir")
 ])
