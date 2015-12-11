@@ -2,8 +2,8 @@ AUTOMAKE_OPTIONS=foreign
 
 AM_CPPFLAGS = -DCONFIG_FILE=\"${sysconfdir}/udiRoot.conf\"
 
-sbin_PROGRAMS = setupRoot unsetupRoot imageGWConnect
-bin_PROGRAMS = shifter
+sbin_PROGRAMS = setupRoot unsetupRoot
+bin_PROGRAMS = shifter shifterimg
 
 SHIFTER_SOURCES = \
     shifter.c \
@@ -35,8 +35,8 @@ UNSETUPROOT_SOURCES = \
     VolumeMap.c \
     MountList.c
 
-IMAGEGWCONNECT_SOURCES = \
-    ImageGWConnect.c \
+SHIFTERIMG_SOURCES = \
+    shifterimg.c \
     ImageData.c \
     utility.c \
     UdiRootConfig.c
@@ -44,9 +44,9 @@ IMAGEGWCONNECT_SOURCES = \
 shifter_SOURCES = $(SHIFTER_SOURCES)
 setupRoot_SOURCES = $(SETUPROOT_SOURCES)
 unsetupRoot_SOURCES = $(UNSETUPROOT_SOURCES)
-imageGWConnect_SOURCES = $(IMAGEGWCONNECT_SOURCES)
-imageGWConnect_LDFLAGS = $(MUNGE_LDFLAGS) $(JSON_LDFLAGS) $(LIBCURL) $(MUNGE_LDFLAGS)
-imageGWConnect_CPPFLAGS = $(AM_CPPFLAGS) $(MUNGE_CPPFLAGS) $(JSON_CPPFLAGS) $(LIBCURL_CPPFLAGS) $(MUNGE_CPPFLAGS)
+shifterimg_SOURCES = $(SHIFTERIMG_SOURCES)
+shifterimg_LDFLAGS = $(MUNGE_LDFLAGS) $(JSON_LDFLAGS) $(LIBCURL) $(MUNGE_LDFLAGS)
+shifterimg_CPPFLAGS = $(AM_CPPFLAGS) $(MUNGE_CPPFLAGS) $(JSON_CPPFLAGS) $(LIBCURL_CPPFLAGS) $(MUNGE_CPPFLAGS)
 
 install-data-hook:
 	/bin/chmod 4755 $(DESTDIR)/$(bindir)/shifter
