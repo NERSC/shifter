@@ -107,7 +107,7 @@ char *lookup_ImageIdentifier(
         return strdup(imageTag);
     }
 
-    snprintf(lookupCmd, PATH_MAX, "%s%s/sbin/imageGWConnect lookup %s:%s",
+    snprintf(lookupCmd, PATH_MAX, "%s%s/bin/shiftermgr lookup %s:%s",
             config->nodeContextPrefix, config->udiRootPath, imageType, imageTag);
 
     pp = popen(lookupCmd, "r");
