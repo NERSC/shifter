@@ -433,6 +433,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     _MKDIR("var", 0755);
     _MKDIR("var/spool", 0755);
     _MKDIR("var/run", 0755);
+    _MKDIR("var/empty", 0700);
     _MKDIR("proc", 0755);
     _MKDIR("sys", 0755);
     _MKDIR("dev", 0755);
@@ -1393,12 +1394,7 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
                 goto _setupImageSsh_unclean;
             }
         }
-
-        snprintf(to, PATH_MAX, "%s%s/var/empty", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
-        if (mkdir(to, 0700) != 0) {
-            fprintf(stderr, "FAILED to create /var/empty\n");
-            goto _setupImageSsh_unclean;
-        }
+        /* rely on var/empty created earlier in the setup process */
     }
 #undef _BINDMOUNT
     return 0;
