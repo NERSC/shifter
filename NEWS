@@ -1,4 +1,4 @@
-15.12.0pre0
+15.12.0
 ===========
 +  Integrate external deps (util-linux/mount, openssh, libressl) into automake
    build
