@@ -32,7 +32,7 @@ if [[ ! -e "openssh-${OPENSSH_VERSION}.tar.gz" ]]; then
     curl -o "openssh-${OPENSSH_VERSION}.tar.gz" "http://mirrors.sonic.net/pub/OpenBSD/OpenSSH/portable/openssh-${OPENSSH_VERSION}.tar.gz"
 fi
 if [[ ! -e "util-linux-2.26.2.tar.gz" ]]; then
-    curl -o "util-linux-2.26.2.tar.gz" "https://www.kernel.org/pub/linux/utils/util-linux/v2.26/util-linux-2.26.2.tar.gz"
+    curl -k -o "util-linux-2.26.2.tar.gz" "https://www.kernel.org/pub/linux/utils/util-linux/v2.26/util-linux-2.26.2.tar.gz"
 fi
 
 mkdir -p musl
