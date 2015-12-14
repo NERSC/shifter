@@ -1,0 +1,90 @@
+#!/bin/sh
+#
+# Author:
+#    Miguel Gila <miguel.gila@cscs.ch>
+#
+#
+
+#
+# shifter-imagegw This starts and stops shifter-imagegw
+#
+# chkconfig: 2345 11 88
+# description: todo
+#
+# config: /etc/sysconfig/shifter-imagegw
+# pidfile: /var/run/shifter-imagegw.pid
+#
+#
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+PATH=/usr/bin:/sbin:/bin:/usr/sbin
+export PATH
+
+[ -f /etc/sysconfig/shifter-imagegw ] && . /etc/sysconfig/shifter-imagegw
+lockfile=${LOCKFILE-/var/lock/subsys/shifter-imagegw}
+pidfile=${PIDFILE-/var/run/shifter-imagegw.pid}
+command=${PUPPETD-/opt/shifter/default/shifter-imagegw}
+RETVAL=0
+util='shifter-imagegw'
+
+start() {
+    echo -n "Starting ${util}: "
+    if [ -s ${pidfile} ]; then
+      RETVAL=1
+      echo -n "Already running!" && warning
+      echo
+    else
+      nohup ${command} 2>&1 > /var/log/${util}.log &
+      RETVAL=$?
+      PID=$!
+      [ $RETVAL = 0 ] && touch ${lockfile} && success || failure
+      echo
+      echo $PID > ${pidfile}
+  fi
+}
+
+stop() {
+    echo -n $"Stopping ${util}: "
+    killproc $pidopts $command
+    killall /opt/shifter/15.12.0/imagegw_venv/bin/python
+    RETVAL=$?
+    echo
+    [ $RETVAL = 0 ] && rm -f ${lockfile} ${pidfile}
+}
+
+restart() {
+    stop
+    start
+}
+
+rh_status() {
+    status $pidopts $command
+    RETVAL=$?
+    return $RETVAL
+}
+
+rh_status_q() {
+    rh_status >/dev/null 2>&1
+}
+
+case "$1" in
+    start)
+        start
+    ;;
+    stop)
+        stop
+    ;;
+    restart)
+        restart
+    ;;
+    status)
+        rh_status
+    ;;
+    *)
+        echo $"Usage: $0 {start|stop|status|restart}"
+        exit 1
+esac
+
+exit $RETVAL
