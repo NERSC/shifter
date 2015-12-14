@@ -8,7 +8,7 @@ mkdir -p cpputest
 cd cpputest
 
 if [[ ! -e "cpputest-${CPPUTEST_VERSION}.tar.gz" ]]; then
-    curl -L -o "cpputest-${CPPUTEST_VERSION}.tar.gz" "https://github.com/cpputest/cpputest.github.io/blob/master/releases/cpputest-3.7dev.tar.gz?raw=true"
+    curl -L -o "cpputest-${CPPUTEST_VERSION}.tar.gz" "https://github.com/cpputest/cpputest.github.io/blob/master/releases/cpputest-${CPPUTEST_VERSION}.tar.gz?raw=true"
 fi
 
 mkdir -p cpputest_src
