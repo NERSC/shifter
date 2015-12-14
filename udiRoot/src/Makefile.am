@@ -8,8 +8,7 @@ TEST_LDFLAGS = $(CPPUTEST_LDFLAGS)
 
 sbin_PROGRAMS = setupRoot unsetupRoot
 bin_PROGRAMS = shifter shifterimg
-#noinst_PROGRAMS = test_shifter test_shifter_core test_ImageData
-noinst_PROGRAMS = test_utility test_VolumeMap test_UdiRootConfig test_MountList test_shifter_core
+noinst_PROGRAMS = test_utility test_VolumeMap test_UdiRootConfig test_MountList test_shifter_core test_ImageData test_shifter
 
 SHIFTER_SOURCES = \
     shifter.c \
@@ -79,8 +78,8 @@ test_shifter_SOURCES = \
     ImageData.c \
     VolumeMap.c \
     MountList.c
-test_shifter_CXXFLAGS = $(TEST_CFLAGS)
-test_shifter_CFLAGS = $(TEST_CFLAGS)
+test_shifter_CXXFLAGS = $(TEST_CFLAGS) -D_TESTHARNESS_SHIFTER
+test_shifter_CFLAGS = $(TEST_CFLAGS) -D_TESTHARNESS_SHIFTER
 test_shifter_LDFLAGS = $(TEST_LDFLAGS)
 
 test_ImageData_SOURCES = \

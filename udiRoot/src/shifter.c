@@ -78,7 +78,7 @@ struct options {
 
 
 static void _usage(int);
-static char *_filterString(const char *input, int allowSlash);
+char *_shifter_filterString(const char *input, int allowSlash);
 char **copyenv(void);
 int parse_options(int argc, char **argv, struct options *opts, UdiRootConfig *);
 int parse_environment(struct options *opts);
@@ -396,13 +396,13 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                         break;
                     }
                     *ptr++ = 0;
-                    tmp = _filterString(optarg, 0);
+                    tmp = _shifter_filterString(optarg, 0);
                     if (config->imageType != NULL) free(config->imageType);
                     config->imageType = tmp;
                     if (strcmp(config->imageType, "local") == 0 || strcmp(config->imageType, "docker") == 0) {
                         isLocalOrDocker = 1;
                     }
-                    tmp = _filterString(ptr, isLocalOrDocker);
+                    tmp = _shifter_filterString(ptr, isLocalOrDocker);
                     if (config->imageTag != NULL) free(config->imageTag);
                     config->imageTag = tmp;
                     if (config->imageIdentifier != NULL) {
@@ -609,7 +609,7 @@ char **copyenv(void) {
     return outenv;
 }
 
-static char *_filterString(const char *input, int allowSlash) {
+char *_shifter_filterString(const char *input, int allowSlash) {
     ssize_t len = 0;
     char *ret = NULL;
     const char *rptr = NULL;
