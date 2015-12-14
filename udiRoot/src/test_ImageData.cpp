@@ -38,90 +38,36 @@
 ## form.
 */
 
-#ifndef __UDIROOTCONFIG_INCLUDE
-#define __UDIROOTCONFIG_INCLUDE
+#include "ImageData.h"
+#include "UdiRootConfig.h"
+#include "utility.h"
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
+#include <CppUTest/CommandLineTestRunner.h>
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-
-#ifdef __cplusplus
 extern "C" {
-#endif
-
-#define UDIROOT_VAL_CFGFILE 0x01
-#define UDIROOT_VAL_PARSE   0x02
-#define UDIROOT_VAL_SSH     0x04 
-#define UDIROOT_VAL_KMOD    0x08
-#define UDIROOT_VAL_FILEVAL 0x10
-#define UDIROOT_VAL_ALL 0xffffffff
-
-#ifndef IMAGEGW_PORT_DEFAULT
-#define IMAGEGW_PORT_DEFAULT "7777"
-#endif
-
-typedef struct _ImageGwServer {
-    char *server;
-    int port;
-} ImageGwServer;
-
-typedef struct _UdiRootConfig {
-    char *nodeContextPrefix;
-    char *udiMountPoint;
-    char *loopMountPoint;
-    char *batchType;
-    char *system;
-    char *imageBasePath;
-    char *udiRootPath;
-    char *sitePreMountHook;
-    char *sitePostMountHook;
-    char *optUdiImage;
-    char *etcPath;
-    char *kmodBasePath;
-    char *kmodPath;
-    char *kmodCacheFile;
-    char *rootfsType;
-    char **gwUrl;
-    char **siteFs;
-    char **siteEnv;
-    char **siteEnvAppend;
-    char **siteEnvPrepend;
-    int allowLocalChroot;
-    int autoLoadKernelModule;
-    int mountUdiRootWritable;
-    size_t maxGroupCount;
-    size_t gatewayTimeout;
-
-    char *modprobePath;
-    char *insmodPath;
-    char *cpPath;
-    char *mvPath;
-    char *chmodPath;
-
-    size_t siteFs_capacity;
-    size_t siteEnv_capacity;
-    size_t siteEnvAppend_capacity;
-    size_t siteEnvPrepend_capacity;
-    size_t gwUrl_capacity;
-    size_t gwUrl_size;
-    size_t siteFs_size;
-    size_t siteEnv_size;
-    size_t siteEnvAppend_size;
-    size_t siteEnvPrepend_size;
-} UdiRootConfig;
-
-int parse_UdiRootConfig(const char *, UdiRootConfig *, int validateFlags);
-void free_UdiRootConfig(UdiRootConfig *, int freeStruct);
-size_t fprint_UdiRootConfig(FILE *, UdiRootConfig *);
-int validate_UdiRootConfig(UdiRootConfig *, int validateFlags);
-
-#ifdef __cplusplus
+extern int _ImageData_assign(const char *key, const char *value, void *t_image);
+extern char *_ImageData_filterString(const char *input, int allowSlash);
 }
-#endif
 
-#endif
+TEST_GROUP(ImageDataTestGroup) {
+};
+
+TEST(ImageDataTestGroup, ConfigAssign_basic) {
+    int ret = 0;
+    ImageData image;
+    memset(&image, 0, sizeof(ImageData));
+
+    ret = _ImageData_assign(NULL, NULL, NULL);
+    CHECK(ret == 1);
+
+    ret = _ImageData_assign("FakeKey", "FakeValue", &image);
+    CHECK(ret == 2);
+
+    ret = _ImageData_assign("ENV", "PATH=/bin:/usr/bin", &image);
+    CHECK(ret == 0);
+
+}
+
+int main(int argc, char** argv) {
+    return CommandLineTestRunner::RunAllTests(argc, argv);
+}

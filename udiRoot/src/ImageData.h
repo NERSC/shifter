@@ -43,6 +43,10 @@
 
 #include "UdiRootConfig.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum _ImageFormat {
     FORMAT_VFS = 0,
     FORMAT_EXT4,
@@ -74,5 +78,9 @@ char *lookup_ImageIdentifier(const char *imageType, const char *imageTag, int ve
 int parse_ImageData(char *type, char *identifier, UdiRootConfig *, ImageData *);
 void free_ImageData(ImageData *, int);
 size_t fprint_ImageData(FILE *, ImageData *);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
