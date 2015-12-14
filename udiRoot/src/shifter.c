@@ -64,11 +64,13 @@ struct options {
     char *imageTag;
     char *imageIdentifier;
     char *rawVolumes;
+    char *entrypoint;
     uid_t tgtUid;
     gid_t tgtGid;
     char *username;
     char *workdir;
     char **args;
+    char **env;
     VolumeMap volumeMap;
     int verbose;
     int useEntryPoint;
@@ -134,13 +136,21 @@ int main(int argc, char **argv) {
 
     /* check if entrypoint is defined and desired */
     if (opts.useEntryPoint == 1) {
-        if (imageData.entryPoint != NULL) {
-            opts.args[0] = strdup(imageData.entryPoint);
+        char *entry = NULL;
+
+        if (opts.entrypoint != NULL) {
+            entry = opts.entrypoint;
+        } else if (imageData.entryPoint != NULL) {
+            entry = imageData.entryPoint;
+        } else {
+            fprintf(stderr, "Image does not have a defined entrypoint.\n");
+        }
+
+        if (entry != NULL) {
+            opts.args[0] = strdup(entry);
             if (imageData.workdir != NULL) {
                 opts.workdir = strdup(imageData.workdir);
             }
-        } else {
-            fprintf(stderr, "Image does not have a defined entrypoint.\n");
         }
     }
 
@@ -302,7 +312,8 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         {"verbose", 0, 0, 'v'},
         {"user", 1, 0, 0},
         {"image", 1, 0, 'i'},
-        {"entry", 0, 0, 'e'},
+        {"entrypoint", 2, 0, 0},
+        {"env", 0, 0, 'e'},
         {0, 0, 0, 0}
     };
     char *ptr = NULL;
@@ -321,7 +332,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     optind = 1;
     for ( ; ; ) {
         int longopt_index = 0;
-        opt = getopt_long(argc, argv, "hvV:i:e", long_options, &longopt_index);
+        opt = getopt_long(argc, argv, "hnvV:i:e:", long_options, &longopt_index);
         if (opt == -1) break;
 
         switch (opt) {
@@ -350,10 +361,17 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                                 _usage(1);
                             }
                         }
+                    } else if (strcmp(long_options[longopt_index].name, "entrypoint") == 0) {
+                        config->useEntryPoint = 1;
+                        if (optarg != NULL) {
+                            config->entrypoint = strdup(optarg);
+                        }
                     }
                 }
                 break;
-            case 'v': config->verbose = 1; break;
+            case 'v':
+                config->verbose = 1;
+                break;
             case 'V':
                 {
                     if (optarg == NULL) break;
@@ -394,7 +412,9 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                 }
                 break;
             case 'e':
-                config->useEntryPoint = 1;
+                /* TODO - add support for explicitly overriding environment 
+                 * variables
+                 */
                 break;
             case 'h':
                 _usage(0);
@@ -642,12 +662,23 @@ void free_options(struct options *opts, int freeStruct) {
         free(opts->rawVolumes);
         opts->rawVolumes = NULL;
     }
+    if (opts->entrypoint) {
+        free(opts->entrypoint);
+        opts->entrypoint = NULL;
+    }
     if (opts->args != NULL) {
         for (ptr = opts->args; *ptr != NULL; ptr++) {
             if (*ptr != (char *) 0x1) free(*ptr);
         }
         free(opts->args);
         opts->args = NULL;
+    }
+    if (opts->env != NULL) {
+        for (ptr = opts->env; *ptr != NULL; ptr++) {
+            free(*ptr);
+        }
+        free(opts->env);
+        opts->env = NULL;
     }
     free_VolumeMap(&(opts->volumeMap), 0);
     if (freeStruct != 0) {

@@ -46,7 +46,6 @@ struct spank_option spank_option_array[] = {
     { "image", "image", "shifter image to use", 1, 0, (spank_opt_cb_f) _opt_image},
     { "imagevolume", "imagevolume", "shifter image bindings", 1, 0, (spank_opt_cb_f) _opt_imagevolume },
     { "ccm", "ccm", "ccm emulation mode", 0, 0, (spank_opt_cb_f) _opt_ccm},
-    { "autoshift", "autoshift", "automatically enter shifter image", 0, 0, (spank_opt_cb_f) _opt_autoshift},
     SPANK_OPTIONS_TABLE_END
 };
 
@@ -816,7 +815,6 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     slurm_error(message); \
     rc = errCode; \
     goto _taskInitPriv_exit_unclean;
-
 
     if (nativeSlurm == 0) return ESPANK_SUCCESS;
     for (i = 0; spank_option_array[i].name != NULL; ++i) {

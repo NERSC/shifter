@@ -1,5 +1,9 @@
-15.12.0pre0
+15.12.0
 ===========
++  Integrate external deps (util-linux/mount, openssh, libressl) into automake
+   build
++  Create /var/empty earlier in case an image already provides it (need it no matter what)
++  Renamed ImageGwConnect to shifterimg
 +  Updated ImageGwConnect helper application to work with changes to imagegw
    output and allow user to specify image type. Add image listing support.
 +  Created iniital README

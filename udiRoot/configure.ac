@@ -53,6 +53,7 @@ AC_CHECK_FUNCS([getcwd memmove memset mkdir putenv realpath rmdir setenv strchr 
 
 AC_CONFIG_FILES([Makefile
                  src/Makefile
+                 dep/Makefile
                  wlm_integration/slurm/Makefile
                ])
 #                 config/Makefile

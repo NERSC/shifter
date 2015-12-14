@@ -76,11 +76,16 @@ class ImageMngrTestCase(unittest.TestCase):
                 '-c','2',
                 '-f',self.logfile])
         else:
+            time.sleep(1)
             self.pid=pid
 
     def stop_worker(self):
         if self.pid>0:
-            os.kill(self.pid,9)
+            try:
+                os.kill(self.pid,2)
+                self.pid=0
+            except:
+                pass
 
     def time_wait(self,id,TIMEOUT=30):
         poll_interval=0.5
@@ -114,26 +119,22 @@ class ImageMngrTestCase(unittest.TestCase):
         # Create a fake record in mongo
         id=self.images.insert(record)
 
-        session=self.m.new_session(self.auth,self.system)
         assert id is not None
-        before=self.m.lookup(session,self.query.copy())
+        before=self.images.find_one({'_id':id})
         assert before is not None
+        # Add a tag a make sure it worked
         status=self.m.add_tag(id,'testtag')
         assert status is True
-        after=self.m.lookup(session,self.query.copy())
+        after=self.images.find_one({'_id':id})
         assert after is not None
-        assert after['tag'].index('testtag')>=0
-        assert after['tag'].index(self.tag)>=0
+        assert after['tag'].count('testtag')==1
+        assert after['tag'].count(self.tag)==1
+        # Remove a tag and make sure it worked
         status=self.m.remove_tag('testtag')
         assert status is True
-        i=self.query.copy()
-        l=self.m.lookup(session,i)
-        assert l is not None
-        try:
-            index=l['tag'].index('testtag')
-            assert index<0
-        except:
-            pass
+        after=self.images.find_one({'_id':id})
+        assert after is not None
+        assert after['tag'].count('testtag')==0
 
     # Test if tag isn't a list
     def test_0add_remove_tagitem(self):
@@ -150,14 +151,12 @@ class ImageMngrTestCase(unittest.TestCase):
         # Create a fake record in mongo
         id=self.images.insert(record)
 
-        session=self.m.new_session(self.auth,self.system)
-        i=self.query.copy()
         status=self.m.add_tag(id,'testtag')
         assert status is True
-        rec=self.m.lookup(session,i)
+        rec=self.images.find_one({'_id':id})
         assert rec is not None
-        assert rec['tag'].index(self.tag)>=0
-        assert rec['tag'].index('testtag')>=0
+        assert rec['tag'].count(self.tag)==1
+        assert rec['tag'].count('testtag')==1
 
     # Test if tag isn't a list
     def test_0add_remove_withtag(self):
@@ -180,8 +179,36 @@ class ImageMngrTestCase(unittest.TestCase):
         assert status is True
         rec=self.m.lookup(session,i)
         assert rec is not None
-        assert rec['tag'].index(self.tag)>=0
-        assert rec['tag'].index('testtag')>=0
+        assert rec['tag'].count(self.tag)==1
+        assert rec['tag'].count('testtag')==1
+
+    # Test if tag isn't a list
+    def test_0add_remove_two(self):
+        record={'system':self.system,
+            'itype':self.itype,
+            'id':self.id,
+            'tag':[self.tag],
+            'status':'READY',
+            'userACL':[],
+            'groupACL':[],
+            'ENV':[],
+            'ENTRY':'',
+            }
+        # Create a fake record in mongo
+        id1=self.images.insert(record.copy())
+        record['id']='fakeid2'
+        record['tag']=[]
+        id2=self.images.insert(record.copy())
+
+
+        session=self.m.new_session(self.auth,self.system)
+        i=self.query.copy()
+        status=self.m.add_tag(id2,self.tag)
+        assert status is True
+        rec1=self.images.find_one({'_id':id1})
+        rec2=self.images.find_one({'_id':id2})
+        assert rec1['tag'].count(self.tag)==0
+        assert rec2['tag'].count(self.tag)==1
 
     def test_0isasystem(self):
         assert self.m.isasystem(self.system) is True
@@ -460,7 +487,6 @@ class ImageMngrTestCase(unittest.TestCase):
 			'groupAcl':[]
         }
         # Do the pull
-        print "DEBUG: Starting worker"
         self.start_worker()
         session=self.m.new_session(self.auth,self.system)
         rec1=self.m.pull(session,pr1,TESTMODE=1)#,delay=False)
@@ -472,7 +498,6 @@ class ImageMngrTestCase(unittest.TestCase):
         # Confirm record
         q={'system':self.system,'itype':self.itype,'pulltag':self.tag}
         mrec=self.images.find_one(q)
-        print mrec
         assert '_id' in mrec
         state=self.time_wait(id1)
         assert state=='READY'
@@ -481,6 +506,7 @@ class ImageMngrTestCase(unittest.TestCase):
         # Cause a failure
         mrec=self.images.find_one(q)
         self.images.drop()
+        self.stop_worker()
 
 
     def test_expire(self):

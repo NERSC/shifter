@@ -59,9 +59,7 @@ tar xf "util-linux-2.26.2.tar.gz" -C util-linux --strip-components=1
 cd util-linux
 CC=gcc ./configure "--prefix=${INST_PREFIX}" --enable-static --disable-shared
 CC=gcc make mount
-CC=gcc make losetup
 cp -p mount "${origdir}/mount"
-cp -p losetup "${origdir}/losetup"
 
 cd "${builddir}"
 mkdir -p libressl
