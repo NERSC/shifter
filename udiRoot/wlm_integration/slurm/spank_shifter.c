@@ -42,6 +42,11 @@ static int _opt_imagevolume(int val, const char *optarg, int remote);
 static int _opt_ccm(int val, const char *optarg, int remote);
 static int _opt_autoshift(int val, const char *optarg, int remote);
 
+/* using a couple functions from libslurm that aren't prototyped in any
+   accessible header file */
+extern hostlist_t slurm_hostlist_create_dims(const char *hostlist, int dims);
+extern char *slurm_hostlist_deranged_string_malloc(hostlist_t hl);
+
 struct spank_option spank_option_array[] = {
     { "image", "image", "shifter image to use", 1, 0, (spank_opt_cb_f) _opt_image},
     { "imagevolume", "imagevolume", "shifter image bindings", 1, 0, (spank_opt_cb_f) _opt_imagevolume },
@@ -432,7 +437,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     char *username = NULL;
     char *uid_str = NULL;
     char *sshPubKey = NULL;
-    char *memory_cgroup_base = NULL;
+    const char *memory_cgroup_base = NULL;
     size_t tasksPerNode = 0;
     UdiRootConfig *udiConfig = NULL;
     pid_t pid = 0;
@@ -681,7 +686,7 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     char *lineBuffer = NULL;
     size_t lineBuffer_sz = 0;
     char *cgroup_path = NULL;
-    char *memory_cgroup_base = NULL;
+    const char *memory_cgroup_base = NULL;
     uid_t uid = 0;
     int job = 0;
     int retry = 0;
