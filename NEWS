@@ -7,4 +7,6 @@
 +  Updated ImageGwConnect helper application to work with changes to imagegw
    output and allow user to specify image type. Add image listing support.
 +  Created iniital README
++  Fixed bug preventing autoshift/ccm in slurm/udiRoot integration from 
+   chdir'ing to permission restricted paths on root-squashed filesystems
 
