@@ -49,6 +49,10 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define VOLUME_ALLOC_BLOCK 10
 
 typedef struct _VolumeMap {
@@ -69,5 +73,9 @@ char *getVolMapSignature(VolumeMap *volMap);
 size_t fprint_VolumeMap(FILE *fp, VolumeMap *volMap);
 void free_VolumeMap(VolumeMap *volMap, int freeStruct);
 int validateVolumeMap(const char *from, const char *to, const char *flags);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

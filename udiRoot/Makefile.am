@@ -1,6 +1,6 @@
 AUTOMAKE_OPTIONS = foreign
 ACLOCAL_AMFLAGS = -I auxdir
-SUBDIRS    = src dep
+SUBDIRS    = dep src
 
 if WITH_SLURM
     SUBDIRS += wlm_integration/slurm

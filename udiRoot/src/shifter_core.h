@@ -44,6 +44,8 @@
  * form.
  */
 
+#ifndef __SHFTR_CORE_INCLUDE
+#define __SHFTR_CORE_INCLUDE
 
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
@@ -61,10 +63,15 @@
 #include <sys/wait.h>
 #include <sys/mount.h>
 
+
 #include "ImageData.h"
 #include "UdiRootConfig.h"
 #include "VolumeMap.h"
 #include "MountList.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define INVALID_USER UINT_MAX
 #define INVALID_GROUP UINT_MAX
@@ -99,3 +106,9 @@ int shifter_putenv(char ***env, char *var);
 int shifter_appendenv(char ***env, char *var);
 int shifter_prependenv(char ***env, char *var);
 int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

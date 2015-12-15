@@ -1,5 +1,7 @@
 AUTOMAKE_OPTIONS=foreign
 
+SUBDIRS = test
+
 AM_CPPFLAGS = -DCONFIG_FILE=\"${sysconfdir}/udiRoot.conf\"
 
 sbin_PROGRAMS = setupRoot unsetupRoot
@@ -40,6 +42,7 @@ SHIFTERIMG_SOURCES = \
     ImageData.c \
     utility.c \
     UdiRootConfig.c
+
 
 shifter_SOURCES = $(SHIFTER_SOURCES)
 setupRoot_SOURCES = $(SETUPROOT_SOURCES)
