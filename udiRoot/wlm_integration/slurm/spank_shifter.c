@@ -809,6 +809,9 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     UdiRootConfig *udiConfig = NULL;
     ImageData imageData;
 
+    uid_t job_uid = 0;
+    uid_t curr_uid = geteuid();
+
     memset(&imageData, 0, sizeof(ImageData));
 
 #define TASKINITPRIV_ERROR(message, errCode) \
@@ -838,6 +841,10 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     }
     parse_ImageData(image_type, image, udiConfig, &imageData);
 
+    if (spank_get_item(sp, S_JOB_UID, &job_uid) != ESPANK_SUCCESS) {
+        TASKINITPRIV_ERROR("FAILED to get job uid!", ESPANK_ERROR);
+    }
+
     if (strlen(udiConfig->udiMountPoint) > 0) {
         char currcwd[PATH_MAX];
         char newcwd[PATH_MAX];
@@ -847,9 +854,11 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
         }
 
         // check to see if newcwd exists, if not, just chdir to the new chroot base
-        snprintf(newcwd, PATH_MAX, "%s/%s", udiConfig->udiMountPoint, currcwd);
+        snprintf(newcwd, PATH_MAX, "%s", udiConfig->udiMountPoint);
         if (stat(newcwd, &st_data) != 0) {
-            snprintf(newcwd, PATH_MAX, "%s", udiConfig->udiMountPoint);
+            char error[PATH_MAX];
+            snprintf(error, PATH_MAX, "FAILED to stat UDI directory: %s", newcwd);
+            TASKINITPRIV_ERROR(error, ESPANK_ERROR);
         }
         if (chdir(newcwd) != 0) {
             char error[PATH_MAX];
@@ -860,6 +869,29 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
         if (chroot(udiConfig->udiMountPoint) != 0) {
             TASKINITPRIV_ERROR("FAILED to chroot to designated image", ESPANK_ERROR);
         }
+
+        /* briefly assume job uid prior to chdir into target path
+           this is necessary in the case that we are chdir'ing into a privilege
+           restricted path on a root-squashed filesystem */
+        if (seteuid(job_uid) < 0) {
+            char error[1024];
+            snprintf(error, 1024, "FAILED to set effective uid to %d", job_uid);
+            TASKINITPRIV_ERROR(error, ESPANK_ERROR);
+        }
+
+        if (chdir(currcwd) != 0) {
+            char error[PATH_MAX];
+            snprintf(error, PATH_MAX, "FAILED to change directory to: %s", newcwd);
+            TASKINITPRIV_ERROR(error, ESPANK_ERROR);
+        }
+
+        /* go back to our original effective uid */
+        if (seteuid(curr_uid) < 0) {
+            char error[1024];
+            snprintf(error, 1024, "FAILED to return effective uid to %d", curr_uid);
+            TASKINITPRIV_ERROR(error, ESPANK_ERROR);
+        }
+
         if (shifter_setupenv(&environ, &imageData, udiConfig) != 0) {
             TASKINITPRIV_ERROR("FAILED to setup shifter environment", ESPANK_ERROR);
         }
