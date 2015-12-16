@@ -73,7 +73,7 @@ using namespace std;
 
 TEST_GROUP(ShifterCoreTestGroup) {
     bool isRoot;
-    char *tmpDir = NULL;
+    char *tmpDir;
     char cwd[PATH_MAX];
     vector<string> tmpFiles;
     vector<string> tmpDirs;
