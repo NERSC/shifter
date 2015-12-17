@@ -38,90 +38,82 @@
 ## form.
 */
 
-#ifndef __UDIROOTCONFIG_INCLUDE
-#define __UDIROOTCONFIG_INCLUDE
-
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-
+#include <CppUTest/CommandLineTestRunner.h>
+#include "VolumeMap.h"
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+TEST_GROUP(VolumeMapTestGroup) {
+};
 
-#define UDIROOT_VAL_CFGFILE 0x01
-#define UDIROOT_VAL_PARSE   0x02
-#define UDIROOT_VAL_SSH     0x04 
-#define UDIROOT_VAL_KMOD    0x08
-#define UDIROOT_VAL_FILEVAL 0x10
-#define UDIROOT_VAL_ALL 0xffffffff
+TEST(VolumeMapTestGroup, VolumeMapParse_basic) {
+    VolumeMap volMap;
+    memset(&volMap, 0, sizeof(VolumeMap));
 
-#ifndef IMAGEGW_PORT_DEFAULT
-#define IMAGEGW_PORT_DEFAULT "7777"
-#endif
+    int ret = parseVolumeMap("/path1/is/here:/target1", &volMap);
+    CHECK(ret == 0);
+    CHECK(volMap.n == 1);
 
-typedef struct _ImageGwServer {
-    char *server;
-    int port;
-} ImageGwServer;
+    ret = parseVolumeMap("/evilPath:/etc", &volMap);
+    CHECK(ret != 0);
+    CHECK(volMap.n == 1);
 
-typedef struct _UdiRootConfig {
-    char *nodeContextPrefix;
-    char *udiMountPoint;
-    char *loopMountPoint;
-    char *batchType;
-    char *system;
-    char *imageBasePath;
-    char *udiRootPath;
-    char *sitePreMountHook;
-    char *sitePostMountHook;
-    char *optUdiImage;
-    char *etcPath;
-    char *kmodBasePath;
-    char *kmodPath;
-    char *kmodCacheFile;
-    char *rootfsType;
-    char **gwUrl;
-    char **siteFs;
-    char **siteEnv;
-    char **siteEnvAppend;
-    char **siteEnvPrepend;
-    int allowLocalChroot;
-    int autoLoadKernelModule;
-    int mountUdiRootWritable;
-    size_t maxGroupCount;
-    size_t gatewayTimeout;
+    ret = parseVolumeMap("/scratch1/test:/input:ro", &volMap);
+    CHECK(ret == 0);
+    CHECK(volMap.n == 2);
 
-    char *modprobePath;
-    char *insmodPath;
-    char *cpPath;
-    char *mvPath;
-    char *chmodPath;
+    ret = parseVolumeMap("/scratch1/output:/output", &volMap);
+    CHECK(ret == 0);
+    CHECK(volMap.n == 3);
 
-    size_t siteFs_capacity;
-    size_t siteEnv_capacity;
-    size_t siteEnvAppend_capacity;
-    size_t siteEnvPrepend_capacity;
-    size_t gwUrl_capacity;
-    size_t gwUrl_size;
-    size_t siteFs_size;
-    size_t siteEnv_size;
-    size_t siteEnvAppend_size;
-    size_t siteEnvPrepend_size;
-} UdiRootConfig;
-
-int parse_UdiRootConfig(const char *, UdiRootConfig *, int validateFlags);
-void free_UdiRootConfig(UdiRootConfig *, int freeStruct);
-size_t fprint_UdiRootConfig(FILE *, UdiRootConfig *);
-int validate_UdiRootConfig(UdiRootConfig *, int validateFlags);
-
-#ifdef __cplusplus
+    free_VolumeMap(&volMap, 0);
 }
-#endif
 
-#endif
+TEST(VolumeMapTestGroup, ValidateVolumeMap_basic) {
+    int ret = 0;
+
+    ret = validateVolumeMap("/test1Loc", "/etc/passwd", NULL);
+    CHECK(ret != 0);
+
+    ret = validateVolumeMap("/test1Loc", "/var/log", NULL);
+    CHECK(ret != 0);
+
+    ret = validateVolumeMap("/test1Loc", "/opt", NULL);
+    CHECK(ret != 0);
+
+    ret = validateVolumeMap("/test1Loc", "opt", NULL);
+    CHECK(ret != 0);
+
+    ret = validateVolumeMap("/test1Loc", "etc", NULL);
+    CHECK(ret != 0);
+
+    ret = validateVolumeMap("/testLoc", "mnt", NULL);
+    CHECK(ret == 0);
+
+    ret = validateVolumeMap("/test1Loc", "/opt/myStuff", NULL);
+    CHECK(ret == 0);
+
+    ret = validateVolumeMap("/scratch1/data", "/input", NULL);
+    CHECK(ret == 0);
+}
+
+TEST(VolumeMapTestGroup, GetVolumeMapSignature_basic) {
+    int ret = 0;
+    VolumeMap volMap;
+
+    memset(&volMap, 0, sizeof(VolumeMap));
+    ret = parseVolumeMap("/d:/c,/a:/b,/q:/r,/a:/c", &volMap);
+    CHECK(ret == 0);
+    CHECK(volMap.n == 4);
+
+    char *sig = getVolMapSignature(&volMap);
+    fprintf(stderr, "%s\n", sig);
+
+    free(sig);
+
+
+    free_VolumeMap(&volMap, 0);
+}
+
+int main(int argc, char** argv) {
+        return CommandLineTestRunner::RunAllTests(argc, argv);
+}

@@ -1,9 +1,13 @@
 AUTOMAKE_OPTIONS=foreign
 
 sbin_PROGRAMS = mount
+noinst_PROGRAMS = cpputest
 
 mount:
 	./build.sh
+
+cpputest:
+	./cpputest.sh
 
 .PHONY: clean-local-check 
 
@@ -14,6 +18,7 @@ install-data-hook:
 clean-local: clean-local-check
 clean-local-check:
 	-rm -rf build
+	-rm -rf cpputest
 	-rm udiRoot_dep.tar
 	-rm mount
 

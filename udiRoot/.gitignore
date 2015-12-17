@@ -6,6 +6,7 @@ Makefile
 unsetupRoot
 setupRoot
 shifter
+shifterimg
 imageGWConnect
 *.swp
 .cache
@@ -26,3 +27,14 @@ config.status
 configure
 libtool
 stamp-h1
+test_ImageData
+test_MountList
+test_UdiRootConfig
+test_VolumeMap
+test_shifter
+test_shifter_core
+test_shifter_core_AsRoot
+test_shifter_core_AsRootDangerous
+test_utility
+*.gcno
+*.gcda

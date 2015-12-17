@@ -58,8 +58,8 @@
 #define ENV_ALLOC_SIZE 512
 #define VOL_ALLOC_SIZE 256
 
-static int _assign(const char *key, const char *value, void *t_imageData);
-static char *_filterString(const char *input, int allowSlash);
+int _ImageData_assign(const char *key, const char *value, void *t_imageData);
+char *_ImageData_filterString(const char *input, int allowSlash);
 
 /*! Contact image gateway to lookup mapping between tag/type and identifier */
 /*!
@@ -175,7 +175,7 @@ int parse_ImageData(char *type, char *identifier, UdiRootConfig *config, ImageDa
     }
     snprintf(fname, fname_len, "%s/%s.meta", config->imageBasePath, identifier);
 
-    ret = shifter_parseConfig(fname, ':', image, _assign);
+    ret = shifter_parseConfig(fname, ':', image, _ImageData_assign);
     free(fname);
 
     if (ret != 0) {
@@ -301,7 +301,7 @@ size_t fprint_ImageData(FILE *fp, ImageData *image) {
 }
 
 /**
- * _assign - utility function to write data into ImageData structure when
+ * _ImageData_assign - utility function to write data into ImageData structure when
  * parsing configuration file.
  *
  * Parameters:
@@ -314,7 +314,7 @@ size_t fprint_ImageData(FILE *fp, ImageData *image) {
  * 1 if invalid input
  * 2 invalid key
  */
-static int _assign(const char *key, const char *value, void *t_image) {
+int _ImageData_assign(const char *key, const char *value, void *t_image) {
     ImageData *image = (ImageData *) t_image;
 
     if (image == NULL || key == NULL || value == NULL) {
@@ -350,7 +350,7 @@ static int _assign(const char *key, const char *value, void *t_image) {
         }
     } else if (strcmp(key, "VOLUME") == 0) {
         char **tmp = image->volume + image->volume_size;
-        char *tvalue = _filterString(value, 1);
+        char *tvalue = _ImageData_filterString(value, 1);
         strncpy_StringArray(tvalue, strlen(tvalue), &tmp, &(image->volume), &(image->volume_capacity), VOL_ALLOC_SIZE);
         image->volume_size++;
         free(tvalue);
@@ -361,7 +361,7 @@ static int _assign(const char *key, const char *value, void *t_image) {
     return 0; 
 }
 
-static char *_filterString(const char *input, int allowSlash) {
+char *_ImageData_filterString(const char *input, int allowSlash) {
     ssize_t len = 0;
     char *ret = NULL;
     const char *rptr = NULL;
@@ -386,32 +386,3 @@ static char *_filterString(const char *input, int allowSlash) {
     *wptr = 0;
     return ret;
 }
-
-#ifdef _TESTHARNESS_IMAGEDATA
-#include <CppUTest/CommandLineTestRunner.h>
-
-TEST_GROUP(ImageDataTestGroup) {
-};
-
-TEST(ImageDataTestGroup, ConfigAssign_basic) {
-    int ret = 0;
-    ImageData image;
-    memset(&image, 0, sizeof(ImageData));
-
-    ret = _assign(NULL, NULL, NULL);
-    CHECK(ret == 1);
-
-    ret = _assign("FakeKey", "FakeValue", &image);
-    CHECK(ret == 2);
-
-    ret = _assign("ENV", "PATH=/bin:/usr/bin", &image);
-    CHECK(ret == 0);
-
-}
-
-int main(int argc, char** argv) {
-    return CommandLineTestRunner::RunAllTests(argc, argv);
-}
-
-
-#endif
