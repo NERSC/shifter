@@ -65,6 +65,10 @@ TEST(VolumeMapTestGroup, VolumeMapParse_basic) {
     CHECK(ret == 0);
     CHECK(volMap.n == 3);
 
+    ret = parseVolumeMap("/no/to/specified", &volMap);
+    CHECK(ret == 0);
+    CHECK(volMap.n == 4);
+
     free_VolumeMap(&volMap, 0);
 }
 

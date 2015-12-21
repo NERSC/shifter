@@ -94,7 +94,6 @@ int forkAndExecv(char *const *argvs);
 pid_t findSshd(void);
 int killSshd(void);
 char **parseMounts(size_t *n_mounts);
-char *userInputPathFilter(const char *input, int allowSlash);
 char *generateShifterConfigString(const char *, ImageData *, VolumeMap *);
 int saveShifterConfig(const char *, ImageData *, VolumeMap *, UdiRootConfig *);
 int compareShifterConfig(const char *, ImageData*, VolumeMap *, UdiRootConfig *);

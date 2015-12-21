@@ -60,6 +60,8 @@ int strncpy_StringArray(const char *str, size_t n, char ***wptr, char ***array, 
 char *alloc_strgenf(const char *format, ...);
 char *alloc_strcatf(char *string, size_t *currLen, size_t *capacity, const char *format, ...);
 
+char *userInputPathFilter(const char *input, int allowSlash);
+
 #ifdef __cplusplus
 }
 #endif

@@ -1594,31 +1594,6 @@ _bindMount_unclean:
     return 1;
 }
 
-char *userInputPathFilter(const char *input, int allowSlash) {
-    ssize_t len = 0;
-    char *ret = NULL;
-    const char *rptr = NULL;
-    char *wptr = NULL;
-    if (input == NULL) return NULL;
-
-    len = strlen(input) + 1;
-    ret = (char *) malloc(sizeof(char) * len);
-    if (ret == NULL) return NULL;
-
-    rptr = input;
-    wptr = ret;
-    while (wptr - ret < len && *rptr != 0) {
-        if (isalnum(*rptr) || *rptr == '_' || *rptr == ':' || *rptr == '.' || *rptr == '+' || *rptr == '-') {
-            *wptr++ = *rptr;
-        }
-        if (allowSlash && *rptr == '/') {
-            *wptr++ = *rptr;
-        }
-        rptr++;
-    }
-    *wptr = 0;
-    return ret;
-}
 
 /**
  * isSharedMount

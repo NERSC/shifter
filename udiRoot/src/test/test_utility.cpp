@@ -275,6 +275,24 @@ TEST(UtilityTestGroup, allocStrcatf_basic) {
     free(string);
 }
 
+TEST(UtilityTestGroup, userInputPathFilter_basic) {
+    char *filtered = userInputPathFilter("benign", 0);
+    CHECK(strcmp(filtered, "benign") == 0);
+    free(filtered);
+    
+    filtered = userInputPathFilter("benign; rm -rf *", 0);
+    CHECK(strcmp(filtered, "benignrm-rf") == 0);
+    free(filtered);
+
+    filtered = userInputPathFilter("/path/to/something/great", 0);
+    CHECK(strcmp(filtered, "pathtosomethinggreat") == 0);
+    free(filtered);
+
+    filtered = userInputPathFilter("/path/to/something/great", 1);
+    CHECK(strcmp(filtered, "/path/to/something/great") == 0);
+    free(filtered);
+}
+
 TEST(UtilityTestGroup, allocStrgenf_basic) {
     char *myString = alloc_strgenf("This is a test: %d\n", 37*73);
     CHECK(myString != NULL)

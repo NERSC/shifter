@@ -252,24 +252,6 @@ TEST(ShifterCoreTestGroup, validatePrivateNamespace) {
     }
 }
 
-TEST(ShifterCoreTestGroup, userInputPathFilter_basic) {
-    char *filtered = userInputPathFilter("benign", 0);
-    CHECK(strcmp(filtered, "benign") == 0);
-    free(filtered);
-    
-    filtered = userInputPathFilter("benign; rm -rf *", 0);
-    CHECK(strcmp(filtered, "benignrm-rf") == 0);
-    free(filtered);
-
-    filtered = userInputPathFilter("/path/to/something/great", 0);
-    CHECK(strcmp(filtered, "pathtosomethinggreat") == 0);
-    free(filtered);
-
-    filtered = userInputPathFilter("/path/to/something/great", 1);
-    CHECK(strcmp(filtered, "/path/to/something/great") == 0);
-    free(filtered);
-}
-
 TEST(ShifterCoreTestGroup, writeHostFile_basic) { 
    char tmpDirVar[] = "/tmp/shifter.XXXXXX/var";
    char hostsFilename[] = "/tmp/shifter.XXXXXX/var/hostsfile";
