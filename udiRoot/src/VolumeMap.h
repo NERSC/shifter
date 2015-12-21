@@ -69,10 +69,12 @@ typedef struct _VolumeMap {
 } VolumeMap;
 
 int parseVolumeMap(const char *input, VolumeMap *volMap);
+int parseVolumeMapSiteFs(const char *input, VolumeMap *volMap);
 char *getVolMapSignature(VolumeMap *volMap);
 size_t fprint_VolumeMap(FILE *fp, VolumeMap *volMap);
 void free_VolumeMap(VolumeMap *volMap, int freeStruct);
-int validateVolumeMap(const char *from, const char *to, const char *flags);
+int validateVolumeMap_userRequest(const char *from, const char *to, const char *flags);
+int validateVolumeMap_siteRequest(const char *from, const char *to, const char *flags);
 
 #ifdef __cplusplus
 }

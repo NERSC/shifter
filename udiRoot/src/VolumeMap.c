@@ -50,7 +50,72 @@
 #include "utility.h"
 #include "shifter_core.h"
 
+int __validateVolumeMap(
+        const char *from,
+        const char *to,
+        const char *flags,
+        const char **toStartsWithDisallowed, 
+        const char **toExactDisallowed,
+        const char **fromStartsWithDisallowed,
+        const char **fromExactDisallowed,
+        const char **allowedFlags);
+
+int __parseVolumeMap(const char *input, VolumeMap *volMap,
+        int (*_validate_fp)(const char *, const char *, const char *));
+
 int parseVolumeMap(const char *input, VolumeMap *volMap) {
+    return __parseVolumeMap(input, volMap, validateVolumeMap_userRequest);
+}
+
+int parseVolumeMapSiteFs(const char *input, VolumeMap *volMap) {
+    return __parseVolumeMap(input, volMap, validateVolumeMap_siteRequest);
+}
+
+int validateVolumeMap_userRequest(
+        const char *from,
+        const char *to,
+        const char *flags)
+{
+    const char *toStartsWithDisallowed[] = {
+        "/etc", "/var", "etc", "var", "/opt/udiImage", "opt/udiImage", NULL
+    };
+    const char *toExactDisallowed[] = {"/opt", "opt", NULL};
+    const char *fromStartsWithDisallowed[] = { NULL };
+    const char *fromExactDisallowed[] = { NULL };
+    const char *allowedFlags[] = { "ro", "", NULL };
+
+    return __validateVolumeMap(
+            from, to, flags, toStartsWithDisallowed, toExactDisallowed,
+            fromStartsWithDisallowed, fromExactDisallowed, allowedFlags
+    );
+}
+
+int validateVolumeMap_siteRequest(
+        const char *from,
+        const char *to,
+        const char *flags)
+{
+    const char *toStartsWithDisallowed[] = { NULL };
+    const char *toExactDisallowed[] = {
+        "/opt", "opt",
+        "/etc", "etc",
+        "/var", "var",
+        "/etc/passwd", "etc/passwd",
+        "/etc/group", "etc/group",
+        "/etc/nsswitch.conf", "etc/nsswitch.conf",
+        NULL
+    };
+    const char *fromStartsWithDisallowed[] = { NULL };
+    const char *fromExactDisallowed[] = { NULL };
+    const char *allowedFlags[] = { "ro", "rec", "", NULL };
+
+    return __validateVolumeMap(
+            from, to, flags, toStartsWithDisallowed, toExactDisallowed,
+            fromStartsWithDisallowed, fromExactDisallowed, allowedFlags
+    );
+}
+
+int __parseVolumeMap(const char *input, VolumeMap *volMap, int (*_validate_fp)(const char *, const char *, const char *)) {
     if (input == NULL || volMap == NULL) return 1;
     char **rawPtr = volMap->raw + volMap->n;
     char **toPtr = volMap->to + volMap->n;
@@ -85,7 +150,7 @@ int parseVolumeMap(const char *input, VolumeMap *volMap) {
         flags = userInputPathFilter(strtok_r(NULL, ":", &svptr), 0);
 
         /* ensure the user is asking for a legal mapping */
-        if (validateVolumeMap(from, to, flags) != 0) {
+        if (_validate_fp(from, to, flags) != 0) {
             fprintf(stderr, "Invalid Volume Map: %*s, aborting!\n",
                 (int) (eptr - ptr),
                 ptr
@@ -160,12 +225,17 @@ _parseVolumeMap_unclean:
     return 1;
 }
 
-int validateVolumeMap(const char *from, const char *to, const char *flags) {
-    const char *toStartsWithDisallowed[] = {"/etc", "/var", "etc", "var", "/opt/udiImage", "opt/udiImage", NULL};
-    const char *toExactDisallowed[] = {"/opt", "opt", NULL};
-    const char *fromStartsWithDisallowed[] = { NULL };
-    const char *fromExactDisallowed[] = { NULL };
-    const char *allowedFlags[] = { "ro", "", NULL };
+
+int __validateVolumeMap(
+        const char *from,
+        const char *to,
+        const char *flags,
+        const char **toStartsWithDisallowed, 
+        const char **toExactDisallowed,
+        const char **fromStartsWithDisallowed,
+        const char **fromExactDisallowed,
+        const char **allowedFlags)
+{
     const char **ptr = NULL;
 
     if (from == NULL || to == NULL) return 1;

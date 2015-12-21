@@ -71,28 +71,28 @@ TEST(VolumeMapTestGroup, VolumeMapParse_basic) {
 TEST(VolumeMapTestGroup, ValidateVolumeMap_basic) {
     int ret = 0;
 
-    ret = validateVolumeMap("/test1Loc", "/etc/passwd", NULL);
+    ret = validateVolumeMap_userRequest("/test1Loc", "/etc/passwd", NULL);
     CHECK(ret != 0);
 
-    ret = validateVolumeMap("/test1Loc", "/var/log", NULL);
+    ret = validateVolumeMap_userRequest("/test1Loc", "/var/log", NULL);
     CHECK(ret != 0);
 
-    ret = validateVolumeMap("/test1Loc", "/opt", NULL);
+    ret = validateVolumeMap_userRequest("/test1Loc", "/opt", NULL);
     CHECK(ret != 0);
 
-    ret = validateVolumeMap("/test1Loc", "opt", NULL);
+    ret = validateVolumeMap_userRequest("/test1Loc", "opt", NULL);
     CHECK(ret != 0);
 
-    ret = validateVolumeMap("/test1Loc", "etc", NULL);
+    ret = validateVolumeMap_userRequest("/test1Loc", "etc", NULL);
     CHECK(ret != 0);
 
-    ret = validateVolumeMap("/testLoc", "mnt", NULL);
+    ret = validateVolumeMap_userRequest("/testLoc", "mnt", NULL);
     CHECK(ret == 0);
 
-    ret = validateVolumeMap("/test1Loc", "/opt/myStuff", NULL);
+    ret = validateVolumeMap_userRequest("/test1Loc", "/opt/myStuff", NULL);
     CHECK(ret == 0);
 
-    ret = validateVolumeMap("/scratch1/data", "/input", NULL);
+    ret = validateVolumeMap_userRequest("/scratch1/data", "/input", NULL);
     CHECK(ret == 0);
 }
 
