@@ -11,6 +11,7 @@ noinst_PROGRAMS = test_utility test_VolumeMap test_UdiRootConfig test_MountList 
 
 test_udiRoot.conf: test_udiRoot.conf.in
 	cat test_udiRoot.conf.in | sed "s|@@@PREFIX@@@|./|g" | sed "s|@@@CONFIG_DIR@@@|./|g" > test_udiRoot.conf
+	chmod 644 test_udiRoot.conf
 
 
 test_utility_SOURCES = \
