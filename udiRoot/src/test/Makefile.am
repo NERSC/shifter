@@ -1,12 +1,17 @@
 AUTOMAKE_OPTIONS=foreign
 
-AM_CPPFLAGS = -DCONFIG_FILE=\"${sysconfdir}/udiRoot.conf\"
+AM_CPPFLAGS = -DCONFIG_FILE=\"test_udiRoot.conf\"
 CPPUTEST_CFLAGS = -I../../dep/cpputest/include
 CPPUTEST_LDFLAGS = ../../dep/cpputest/lib/libCppUTest.a
 TEST_CFLAGS = -fprofile-arcs -ftest-coverage -O0 -ggdb -I.. $(AM_CPPFLAGS) $(CPPUTEST_CFLAGS) -DNO_ROOT_OWN_CHECK=1
 TEST_LDFLAGS = $(CPPUTEST_LDFLAGS)
 
+noinst_DATA     = test_udiRoot.conf
 noinst_PROGRAMS = test_utility test_VolumeMap test_UdiRootConfig test_MountList test_shifter_core test_shifter_core_AsRoot test_shifter_core_AsRootDangerous test_ImageData test_shifter
+
+test_udiRoot.conf: test_udiRoot.conf.in
+	cat test_udiRoot.conf.in | sed "s|@@@PREFIX@@@|./|g" | sed "s|@@@CONFIG_DIR@@@|./|g" > test_udiRoot.conf
+
 
 test_utility_SOURCES = \
     test_utility.cpp \
