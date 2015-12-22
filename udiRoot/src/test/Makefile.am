@@ -73,12 +73,12 @@ test_shifter_core_CFLAGS = $(TEST_CFLAGS)
 test_shifter_core_LDFLAGS = $(TEST_LDFLAGS)
 
 test_shifter_core_AsRoot_SOURCES = $(test_shifter_core_SOURCES)
-test_shifter_core_AsRoot_CXXFLAGS = $(TEST_CFLAGS) -DNOTROOT
+test_shifter_core_AsRoot_CXXFLAGS = $(TEST_CFLAGS)
 test_shifter_core_AsRoot_CFLAGS = $(TEST_CFLAGS)
 test_shifter_core_AsRoot_LDFLAGS = $(TEST_LDFLAGS)
 
 test_shifter_core_AsRootDangerous_SOURCES = $(test_shifter_core_SOURCES)
-test_shifter_core_AsRootDangerous_CXXFLAGS = $(TEST_CFLAGS) -DNOTROOT -DDANGEROUSTESTS=1
+test_shifter_core_AsRootDangerous_CXXFLAGS = $(TEST_CFLAGS) -DDANGEROUSTESTS=1
 test_shifter_core_AsRootDangerous_CFLAGS = $(TEST_CFLAGS)
 test_shifter_core_AsRootDangerous_LDFLAGS = $(TEST_LDFLAGS)
 
