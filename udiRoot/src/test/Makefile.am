@@ -10,7 +10,7 @@ noinst_DATA     = test_udiRoot.conf
 noinst_PROGRAMS = test_utility test_VolumeMap test_UdiRootConfig test_MountList test_shifter_core test_shifter_core_AsRoot test_shifter_core_AsRootDangerous test_ImageData test_shifter
 
 test_udiRoot.conf: test_udiRoot.conf.in
-	cat test_udiRoot.conf.in | sed "s|@@@PREFIX@@@|./|g" | sed "s|@@@CONFIG_DIR@@@|./|g" > test_udiRoot.conf
+	cat test_udiRoot.conf.in | sed "s|@@@PREFIX@@@|./|g" | sed "s|@@@CONFIG_DIR@@@|./|g" | sed "s|@@@ROOTFSTYPE@@@|$(ROOTFS_TYPE)|g"  > test_udiRoot.conf
 	chmod 644 test_udiRoot.conf
 
 
@@ -96,3 +96,4 @@ clean-local: clean-local-check
 clean-local-check:
 	-rm -rf *.gcda
 	-rm -rf *.gcno
+	-rm -f test_udiRoot.conf 
