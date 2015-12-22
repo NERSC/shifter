@@ -379,6 +379,7 @@ int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const cha
     (*image)->type = strdup("local");
     (*image)->identifier = strdup("/");
     (*config)->udiMountPoint = strdup(tmpDir);
+    (*config)->rootfsType = strdup(ROOTFS_TYPE);
     (*config)->nodeContextPrefix = strdup("");
     (*config)->etcPath = alloc_strgenf("%s/%s", cwd, "etc");
     (*config)->allowLocalChroot = 1;

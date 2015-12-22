@@ -3,7 +3,7 @@ AUTOMAKE_OPTIONS=foreign
 AM_CPPFLAGS = -DCONFIG_FILE=\"test_udiRoot.conf\"
 CPPUTEST_CFLAGS = -I../../dep/cpputest/include
 CPPUTEST_LDFLAGS = ../../dep/cpputest/lib/libCppUTest.a
-TEST_CFLAGS = -fprofile-arcs -ftest-coverage -O0 -ggdb -I.. $(AM_CPPFLAGS) $(CPPUTEST_CFLAGS) -DNO_ROOT_OWN_CHECK=1
+TEST_CFLAGS = -fprofile-arcs -ftest-coverage -O0 -ggdb -I.. $(AM_CPPFLAGS) $(CPPUTEST_CFLAGS) -DNO_ROOT_OWN_CHECK=1 -DROOTFS_TYPE="\"$(ROOTFS_TYPE)\""
 TEST_LDFLAGS = $(CPPUTEST_LDFLAGS)
 
 noinst_DATA     = test_udiRoot.conf
