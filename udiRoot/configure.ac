@@ -18,6 +18,17 @@ AC_PROG_MAKE_SET
 X_AC_MUNGE
 X_AC_SLURM
 X_AC_JSON
+
+AC_ARG_ENABLE([cray], AS_HELP_STRING([--enable-cray], [Turn on cray support and testing options]))
+ROOTFS_TYPE=tmpfs
+USE_GETPWUID=1
+AS_IF([test "x$enable_cray" == "xyes"], [
+        ROOTFS_TYPE=rootfs
+        USE_GETPWUID=0
+])
+AC_SUBST(ROOTFS_TYPE)
+AC_SUBST(USE_GETPWUID)
+
 AC_PROG_LIBTOOL
 
 ## get path for slurm
