@@ -382,6 +382,9 @@ int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const cha
     (*config)->rootfsType = strdup(ROOTFS_TYPE);
     (*config)->nodeContextPrefix = strdup("");
     (*config)->etcPath = alloc_strgenf("%s/%s", cwd, "etc");
+    (*config)->cpPath = strdup("/bin/cp");
+    (*config)->mvPath = strdup("/bin/mv");
+    (*config)->chmodPath = strdup("/bin/chmod");
     (*config)->allowLocalChroot = 1;
     return 0;
 }
