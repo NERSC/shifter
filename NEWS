@@ -2,13 +2,18 @@
 ===========
 +  Integrate external deps (util-linux/mount, openssh, libressl) into automake
    build
-+  Create /var/empty earlier in case an image already provides it (need it no matter what)
++  Create /var/empty earlier in case an image already provides it (need it no
+   matter what)
 +  Renamed ImageGwConnect to shifterimg
 +  Updated ImageGwConnect helper application to work with changes to imagegw
    output and allow user to specify image type. Add image listing support.
 +  Created iniital README
+
+15.12.1
+===========
 +  Fixed bug preventing autoshift/ccm in slurm/udiRoot integration from 
    chdir'ing to permission restricted paths on root-squashed filesystems
-+  Fix bug on some systems where the udiRoot would get recursively mounted in
++  Fixed bug on some systems where the udiRoot would get recursively mounted in
    the odd situation that the udiMount point overlapped the VFS being mounted
++  Corrected udiRoot testsuite to run in automated test framework
 
