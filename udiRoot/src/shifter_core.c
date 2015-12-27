@@ -172,6 +172,14 @@ int bindImageIntoUDI(
             continue;
         }
 
+        /* prevent the udiRoot from getting recursively mounted */
+        snprintf(mntBuffer, PATH_MAX, "/%s/%s", relpath, itemname);
+        mntBuffer[PATH_MAX-1] = 0;
+        if (strcmp(mntBuffer, udiConfig->udiMountPoint) == 0) {
+            free(itemname);
+            continue;
+        }
+
         /* check to see if UDI version already exists */
         snprintf(mntBuffer, PATH_MAX, "%s/%s/%s", udiRoot, relpath, itemname);
         mntBuffer[PATH_MAX-1] = 0;
