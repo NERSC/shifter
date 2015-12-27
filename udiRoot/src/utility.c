@@ -404,3 +404,49 @@ char *userInputPathFilter(const char *input, int allowSlash) {
     *wptr = 0;
     return ret;
 }
+
+char *cleanPath(const char *path) {
+    if (!path) return NULL;
+
+    char *ret = (char *) malloc(sizeof(char) * strlen(path));
+    char *wPtr = ret;
+    char *rPtr = path;
+    char lastWrite = 0;
+    memset(ret, 0, sizeof(char) * strlen(path));
+
+    while (rPtr && *rPtr) {
+        /* prevent repeated '/' */
+        if (*rPtr == '/' && lastWrite == '/') {
+            rPtr++;
+            continue;
+        }
+
+        *wPtr = *rPtr;
+        lastWrite = *wPtr;
+        wPtr++;
+        rPtr++;
+    }
+
+    /* remove trailing '/' if path is longer than '/' */
+    if (wPtr - ret > 1 && *(wPtr - 1) == '/') {
+        *(wPtr - 1) = 0;
+    }
+
+    /* terminate string */
+    *wPtr = 0;
+
+    return ret;
+}
+
+int pathcmp(const char *a, const char *b) {
+    if (a && !b) return 1;
+    if (!a && b) return -1;
+    if (!a && !b) return 0;
+
+    char *myA = cleanPath(a);
+    char *myB = cleanPath(b);
+    int ret = strcmp(myA, myB);
+    free(myA);
+    free(myB);
+    return ret;
+}

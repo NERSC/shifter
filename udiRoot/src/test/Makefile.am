@@ -1,12 +1,18 @@
 AUTOMAKE_OPTIONS=foreign
 
-AM_CPPFLAGS = -DCONFIG_FILE=\"${sysconfdir}/udiRoot.conf\"
+AM_CPPFLAGS = -DCONFIG_FILE=\"test_udiRoot.conf\"
 CPPUTEST_CFLAGS = -I../../dep/cpputest/include
 CPPUTEST_LDFLAGS = ../../dep/cpputest/lib/libCppUTest.a
-TEST_CFLAGS = -fprofile-arcs -ftest-coverage -O0 -ggdb -I.. $(AM_CPPFLAGS) $(CPPUTEST_CFLAGS) -DNO_ROOT_OWN_CHECK=1
+TEST_CFLAGS = -fprofile-arcs -ftest-coverage -O0 -ggdb -I.. $(AM_CPPFLAGS) $(CPPUTEST_CFLAGS) -DNO_ROOT_OWN_CHECK=1 -DROOTFS_TYPE="\"$(ROOTFS_TYPE)\""
 TEST_LDFLAGS = $(CPPUTEST_LDFLAGS)
 
+noinst_DATA     = test_udiRoot.conf
 noinst_PROGRAMS = test_utility test_VolumeMap test_UdiRootConfig test_MountList test_shifter_core test_shifter_core_AsRoot test_shifter_core_AsRootDangerous test_ImageData test_shifter
+
+test_udiRoot.conf: test_udiRoot.conf.in
+	cat test_udiRoot.conf.in | sed "s|@@@PREFIX@@@|./|g" | sed "s|@@@CONFIG_DIR@@@|./|g" | sed "s|@@@ROOTFSTYPE@@@|$(ROOTFS_TYPE)|g"  > test_udiRoot.conf
+	chmod 644 test_udiRoot.conf
+
 
 test_utility_SOURCES = \
     test_utility.cpp \
@@ -65,12 +71,12 @@ test_shifter_core_CFLAGS = $(TEST_CFLAGS)
 test_shifter_core_LDFLAGS = $(TEST_LDFLAGS)
 
 test_shifter_core_AsRoot_SOURCES = $(test_shifter_core_SOURCES)
-test_shifter_core_AsRoot_CXXFLAGS = $(TEST_CFLAGS) -DNOTROOT
+test_shifter_core_AsRoot_CXXFLAGS = $(TEST_CFLAGS)
 test_shifter_core_AsRoot_CFLAGS = $(TEST_CFLAGS)
 test_shifter_core_AsRoot_LDFLAGS = $(TEST_LDFLAGS)
 
 test_shifter_core_AsRootDangerous_SOURCES = $(test_shifter_core_SOURCES)
-test_shifter_core_AsRootDangerous_CXXFLAGS = $(TEST_CFLAGS) -DNOTROOT -DDANGEROUSTESTS=1
+test_shifter_core_AsRootDangerous_CXXFLAGS = $(TEST_CFLAGS) -DDANGEROUSTESTS=1
 test_shifter_core_AsRootDangerous_CFLAGS = $(TEST_CFLAGS)
 test_shifter_core_AsRootDangerous_LDFLAGS = $(TEST_LDFLAGS)
 
@@ -88,3 +94,4 @@ clean-local: clean-local-check
 clean-local-check:
 	-rm -rf *.gcda
 	-rm -rf *.gcno
+	-rm -f test_udiRoot.conf 

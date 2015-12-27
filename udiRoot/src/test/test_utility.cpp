@@ -258,7 +258,6 @@ TEST(UtilityTestGroup, allocStrcatf_basic) {
     /* extend string */
     tmp = alloc_strcatf(string, &len, &capacity, ", %s. %d.", "world", 42);
     CHECK(tmp != NULL);
-    printf("%s\n", tmp);
     CHECK(strcmp(tmp, "hello, world. 42.") == 0)
     CHECK(capacity == 128)
     CHECK(*(tmp + len) == 0)
@@ -299,6 +298,63 @@ TEST(UtilityTestGroup, allocStrgenf_basic) {
     CHECK(strcmp(myString, "This is a test: 2701\n") == 0)
 
     free(myString);
+}
+
+TEST(UtilityTestGroup, cleanPath_basic) {
+    char *myString = cleanPath(NULL);
+    CHECK(myString == NULL);
+
+    myString = cleanPath("/a/b/c/d/e////f");
+    CHECK(myString != NULL);
+    CHECK(strcmp(myString, "/a/b/c/d/e/f") == 0);
+    free(myString);
+
+    myString = cleanPath("/////////a");
+    CHECK(myString != NULL);
+    CHECK(strcmp(myString, "/a") == 0);
+    free(myString);
+
+    myString = cleanPath("a");
+    CHECK(myString != NULL);
+    CHECK(strcmp(myString, "a") == 0);
+    free(myString);
+
+    myString = cleanPath("");
+    CHECK(myString != NULL);
+    CHECK(strlen(myString) == 0);
+    free(myString);
+
+    myString = cleanPath("a/");
+    CHECK(myString != NULL);
+    CHECK(strcmp(myString, "a") == 0);
+    free(myString);
+
+    myString = cleanPath("/");
+    CHECK(myString != NULL);
+    CHECK(strcmp(myString, "/") == 0);
+    free(myString);
+
+    myString = cleanPath("/usr/lib64/libtest.so");
+    CHECK(myString != NULL);
+    CHECK(strcmp(myString, "/usr/lib64/libtest.so") == 0);
+    free(myString);
+
+    myString = cleanPath("////usr/lib64///");
+    CHECK(myString != NULL);
+    CHECK(strcmp(myString, "/usr/lib64") == 0);
+    free(myString);
+}
+
+TEST(UtilityTestGroup, pathcmp_basic) {
+    CHECK(pathcmp(NULL, NULL) == 0);
+    CHECK(pathcmp(NULL, "abcd") == -1);
+    CHECK(pathcmp("abcd", NULL) == 1);
+
+    CHECK(pathcmp("////a/b/cd", "/a/b/cd///") == 0);
+    CHECK(pathcmp("a/b/cd//", "/a/b/cd") != 0);
+    CHECK(pathcmp("/a/b/c", "/a/b/c") == 0);
+    CHECK(pathcmp("a/b/c", "") != 0);
+    CHECK(pathcmp("", "a/b/c") != 0);
 }
 
 int main(int argc, char** argv) {

@@ -2,16 +2,23 @@ nodeContextPrefix=
 udiMount=/var/udiMount
 loopMount=/var/loopUdiMount
 imagePath=/usr/syscom/shifter
+modprobePath=/sbin/modprobe
+insmodPath=/sbin/insmod
+cpPath=/bin/cp
+mvPath=/bin/mv
+chmodPath=/bin/chmod
+rootfsType=@@@ROOTFSTYPE@@@
+allowLocalChroot=1
+autoLoadKernelModule=1
 udiRootPath=@@@PREFIX@@@
 sitePreMountHook=@@@CONFIG_DIR@@@/premount.sh
 sitePostMountHook=@@@CONFIG_DIR@@@/postmount.sh
 siteFs=/home \
-        /var/spool/slurm \
-        /shared
+       /mnt
 optUdiImage=@@@PREFIX@@@/deps/udiImage
 etcPath=@@@PREFIX@@@/etc_files
 kmodBasePath=@@@PREFIX@@@/kmod
 kmodCacheFile=/tmp/udiRootLoadedModules.txt
 batchType=slurm
-imageGateway=127.0.0.1:7777
+imageGateway=http://localhost:5000
 system=testSystem
