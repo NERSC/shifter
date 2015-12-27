@@ -9,4 +9,6 @@
 +  Created iniital README
 +  Fixed bug preventing autoshift/ccm in slurm/udiRoot integration from 
    chdir'ing to permission restricted paths on root-squashed filesystems
++  Fix bug on some systems where the udiRoot would get recursively mounted in
+   the odd situation that the udiMount point overlapped the VFS being mounted
 
