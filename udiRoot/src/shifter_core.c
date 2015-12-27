@@ -175,7 +175,7 @@ int bindImageIntoUDI(
         /* prevent the udiRoot from getting recursively mounted */
         snprintf(mntBuffer, PATH_MAX, "/%s/%s", relpath, itemname);
         mntBuffer[PATH_MAX-1] = 0;
-        if (strcmp(mntBuffer, udiConfig->udiMountPoint) == 0) {
+        if (pathcmp(mntBuffer, udiConfig->udiMountPoint) == 0) {
             free(itemname);
             continue;
         }
