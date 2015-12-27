@@ -370,14 +370,16 @@ char *alloc_strgenf(const char *format, ...) {
 
 char *cleanPath(const char *path) {
     if (!path) return NULL;
+    size_t len = strlen(path) + 1;
 
-    char *ret = (char *) malloc(sizeof(char) * strlen(path));
+    char *ret = (char *) malloc(sizeof(char) * len);
+    memset(ret, 0, sizeof(char) * len);
+
     char *wPtr = ret;
-    char *rPtr = path;
+    const char *rPtr = path;
     char lastWrite = 0;
-    memset(ret, 0, sizeof(char) * strlen(path));
 
-    while (rPtr && *rPtr) {
+    while (rPtr && *rPtr && (wPtr - ret) < len) {
         /* prevent repeated '/' */
         if (*rPtr == '/' && lastWrite == '/') {
             rPtr++;
