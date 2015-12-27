@@ -59,6 +59,8 @@ int shifter_parseConfig(const char *fname, char delim, void *obj, int (*assign_f
 int strncpy_StringArray(const char *str, size_t n, char ***wptr, char ***array, size_t *capacity, size_t allocBlock);
 char *alloc_strgenf(const char *format, ...);
 char *alloc_strcatf(char *string, size_t *currLen, size_t *capacity, const char *format, ...);
+int pathcmp(const char *a, const char *b);
+char *cleanPath(const char *path);
 
 #ifdef __cplusplus
 }
