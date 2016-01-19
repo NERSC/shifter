@@ -61,13 +61,44 @@ TEST(VolumeMapTestGroup, VolumeMapParse_basic) {
     CHECK(ret == 0);
     CHECK(volMap.n == 2);
 
+    ret = parseVolumeMap("/scratch1/test:/input:rec", &volMap);
+    CHECK(ret != 0);
+    CHECK(volMap.n == 2);
+
     ret = parseVolumeMap("/scratch1/output:/output", &volMap);
     CHECK(ret == 0);
     CHECK(volMap.n == 3);
 
     ret = parseVolumeMap("/no/to/specified", &volMap);
+    CHECK(ret != 0);
+    CHECK(volMap.n == 3);
+
+    char tempfname[] = "checkprint.XXXXXX";
+    int tempfd = mkstemp(tempfname);
+    FILE *tempfp = fdopen(tempfd, "w");
+    size_t nbytes = fprint_VolumeMap(tempfp, &volMap);
+    CHECK(nbytes == 152);
+
+    free_VolumeMap(&volMap, 0);
+}
+
+TEST(VolumeMapTestGroup, VolumeMapParse_site) {
+    VolumeMap volMap;
+    memset(&volMap, 0, sizeof(VolumeMap));
+
+    int ret = parseVolumeMapSiteFs("/global/cscratch1", &volMap);
+    CHECK(ret != 0);
+    CHECK(volMap.n == 0);
+
+    ret = parseVolumeMapSiteFs("/global/cscratch1:/global/cscratch1:ro", &volMap);
     CHECK(ret == 0);
-    CHECK(volMap.n == 4);
+    CHECK(volMap.n == 1);
+
+    ret = parseVolumeMapSiteFs("/global/cscratch1:/global/cscratch1:rec", &volMap);
+    CHECK(ret == 0);
+    CHECK(volMap.n == 2);
+
+    fprint_VolumeMap(stderr, &volMap);
 
     free_VolumeMap(&volMap, 0);
 }
