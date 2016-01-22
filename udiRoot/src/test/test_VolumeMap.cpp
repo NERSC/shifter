@@ -45,6 +45,96 @@
 TEST_GROUP(VolumeMapTestGroup) {
 };
 
+extern char **__tokenizeVolumeMapInput(char *input);
+extern const char *__findEndVolumeMapString(const char *basePtr);
+
+void freeTokens(char **tokens) {
+    char **tk_ptr = NULL;
+    for (tk_ptr = tokens; tk_ptr && *tk_ptr; tk_ptr++) {
+        free(*tk_ptr);
+    }
+    free(tokens);
+}
+
+TEST(VolumeMapTestGroup, FindEndOfVolumeMapInString) {
+    const char *input1 = "/volume:/map:test";
+    const char *ptr = __findEndVolumeMapString(input1);
+    CHECK(ptr != NULL && *ptr == 0);
+    CHECK(strncmp(input1, input1, ptr-input1) == 0);
+
+    const char *input2 = "/volume:/map,/input:output";
+    ptr = __findEndVolumeMapString(input2);
+    CHECK(ptr != NULL && *ptr == ',');
+    CHECK(strncmp(input2, "/volume:/map", ptr-input2) == 0);
+
+    const char *sptr = input2;
+    const char *limit = input2 + strlen(input2);
+    int idx = 0;
+    for (sptr = input2, ptr = __findEndVolumeMapString(input2); sptr < limit; ptr = __findEndVolumeMapString(sptr)) {
+        switch (idx) {
+            case 0:     CHECK(strncmp(sptr, "/volume:/map", ptr - sptr) == 0);
+                        break;
+            case 1:     CHECK(strncmp(sptr, "/input:output", ptr - sptr) == 0);
+                        break;
+        }
+        sptr = ptr + 1;
+        idx++;
+    }
+
+    const char *input3 = "\"/volume:/map:ro,rec\"";
+    ptr = __findEndVolumeMapString(input3);
+    CHECK(ptr && (*ptr == 0));
+    CHECK(strlen(input3) == ptr - input3);
+}
+
+TEST(VolumeMapTestGroup, VolumeMapTokenize) {
+
+    char *input = strdup("abcd:efgh");
+    char **tokens = __tokenizeVolumeMapInput(input);
+    size_t ntokens = 0;
+    for ( ; tokens && tokens[ntokens]; ntokens++) { }
+
+    CHECK(tokens != NULL && ntokens == 2);
+    CHECK(strcmp(tokens[0], "abcd") == 0);
+    CHECK(strcmp(tokens[1], "efgh") == 0);
+
+    freeTokens(tokens);
+    free(input);
+
+    input = strdup("abcd:efgh:flag");
+    tokens = __tokenizeVolumeMapInput(input);
+    for (ntokens = 0 ; tokens && tokens[ntokens]; ntokens++) { }
+    CHECK(tokens != NULL && ntokens == 3);
+    CHECK(strcmp(tokens[0], "abcd") == 0);
+    CHECK(strcmp(tokens[1], "efgh") == 0);
+    CHECK(strcmp(tokens[2], "flag") == 0);
+
+    freeTokens(tokens);
+    free(input);
+
+    input = strdup("abcd:efgh:flag:extra");
+    tokens = __tokenizeVolumeMapInput(input);
+    for (ntokens = 0 ; tokens && tokens[ntokens]; ntokens++) { }
+    CHECK(tokens != NULL && ntokens == 3);
+    CHECK(strcmp(tokens[0], "abcd") == 0);
+    CHECK(strcmp(tokens[1], "efgh") == 0);
+    CHECK(strcmp(tokens[2], "flag:extra") == 0);
+
+    freeTokens(tokens);
+    free(input);
+
+    input = strdup("no delim test");
+    tokens = __tokenizeVolumeMapInput(input);
+    for (ntokens = 0 ; tokens && tokens[ntokens]; ntokens++) { }
+    //fprintf(stderr," got %lu tokens\n0: %s\n1: %s\n2: %s\n", ntokens, tokens[0], tokens[1], tokens[2]);
+    CHECK(tokens != NULL && ntokens == 1);
+    CHECK(strcmp(tokens[0], "no delim test") == 0);
+
+    freeTokens(tokens);
+    free(input);
+
+}
+
 TEST(VolumeMapTestGroup, VolumeMapParse_basic) {
     VolumeMap volMap;
     memset(&volMap, 0, sizeof(VolumeMap));
@@ -87,16 +177,16 @@ TEST(VolumeMapTestGroup, VolumeMapParse_site) {
     memset(&volMap, 0, sizeof(VolumeMap));
 
     int ret = parseVolumeMapSiteFs("/global/cscratch1", &volMap);
-    CHECK(ret != 0);
-    CHECK(volMap.n == 0);
-
-    ret = parseVolumeMapSiteFs("/global/cscratch1:/global/cscratch1:ro", &volMap);
     CHECK(ret == 0);
     CHECK(volMap.n == 1);
 
-    ret = parseVolumeMapSiteFs("/global/cscratch1:/global/cscratch1:rec", &volMap);
+    ret = parseVolumeMapSiteFs("/global/cscratch1:/global/cscratch1:ro", &volMap);
     CHECK(ret == 0);
     CHECK(volMap.n == 2);
+
+    ret = parseVolumeMapSiteFs("/global/cscratch1:/global/cscratch1:rec", &volMap);
+    CHECK(ret == 0);
+    CHECK(volMap.n == 3);
 
     fprint_VolumeMap(stderr, &volMap);
 

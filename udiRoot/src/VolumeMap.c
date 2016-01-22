@@ -61,14 +61,15 @@ int __validateVolumeMap(
         const char **allowedFlags);
 
 int __parseVolumeMap(const char *input, VolumeMap *volMap,
-        int (*_validate_fp)(const char *, const char *, const char *));
+        int (*_validate_fp)(const char *, const char *, const char *),
+        short requireTo);
 
 int parseVolumeMap(const char *input, VolumeMap *volMap) {
-    return __parseVolumeMap(input, volMap, validateVolumeMap_userRequest);
+    return __parseVolumeMap(input, volMap, validateVolumeMap_userRequest, 1);
 }
 
 int parseVolumeMapSiteFs(const char *input, VolumeMap *volMap) {
-    return __parseVolumeMap(input, volMap, validateVolumeMap_siteRequest);
+    return __parseVolumeMap(input, volMap, validateVolumeMap_siteRequest, 0);
 }
 
 int validateVolumeMap_userRequest(
@@ -115,7 +116,75 @@ int validateVolumeMap_siteRequest(
     );
 }
 
-int __parseVolumeMap(const char *input, VolumeMap *volMap, int (*_validate_fp)(const char *, const char *, const char *)) {
+const char *__findEndVolumeMapString(const char *basePtr) {
+    const char *ptr = basePtr;
+    int inQuote = 0;
+    for ( ; ptr && *ptr; ptr++) {
+        if (*ptr == '"') {
+            if (inQuote) inQuote = 0;
+            else inQuote = 1;
+            continue;
+        }
+        if (*ptr == ',' && !inQuote) {
+            return ptr;
+        }
+    }
+    return ptr;
+}
+
+char **__tokenizeVolumeMapInput(char *input) {
+    if (input == NULL) return NULL;
+
+    char **tokens = (char **) malloc(sizeof(char *) * 4);
+    char **tk_ptr = NULL;
+    char **tk_end = tokens + 3;
+    char *ptr = NULL;
+    char *sptr = NULL;
+    if (tokens == NULL) return NULL;
+
+    /* set all tokens to NULL */
+    memset(tokens, 0, sizeof(char *) * 4);
+
+    /* parse the tokens */
+    tk_ptr = tokens;
+    sptr = input;
+    for (ptr = input; ptr && *ptr && tk_ptr < tk_end - 1; ptr++) {
+        if (*ptr == '\\') {
+            ptr++;
+            continue;
+        }
+        /* delimiter */
+        if (*ptr == ':') {
+
+            /* extract the token */
+            *ptr = 0;
+            *tk_ptr = strdup(sptr);
+
+            /* advance to the next token */
+            sptr = ptr + 1;
+            tk_ptr++;
+        }
+    }
+
+    /* get the trailing token */
+    if (tk_ptr < tk_end && sptr) {
+        /* if there are quotes exactly around the token, strip them */
+        if (sptr < ptr && *sptr == '"' && *(ptr - 1) == '"') {
+            sptr++;
+            *(ptr - 1) = 0;
+        }
+        *tk_ptr = strdup(sptr);
+    }
+
+    return tokens;
+}
+
+int __parseVolumeMap(
+        const char *input,
+        VolumeMap *volMap,
+        int (*_validate_fp)(const char *, const char *, const char *),
+        short requireTo
+) {
     if (input == NULL || volMap == NULL) return 1;
     char **rawPtr = volMap->raw + volMap->n;
     char **toPtr = volMap->to + volMap->n;
@@ -131,23 +200,60 @@ int __parseVolumeMap(const char *input, VolumeMap *volMap, int (*_validate_fp)(c
     char *from = NULL;
     char *flags = NULL;
     char *raw = NULL;
+    char **tokens = NULL;
+    char **tk_ptr = NULL;
     size_t rawLen = 0;
 
     while (ptr < input + len) {
         const char *cflags;
-        char *svptr = NULL;
-        eptr = strchr(ptr, ',');
-        if (eptr == NULL) eptr = input + len;
+        size_t ntokens = 0;
+        eptr = __findEndVolumeMapString(ptr);
+        if (eptr == ptr && eptr != NULL) {
+            ptr++;
+            continue;
+        }
+        if (eptr == NULL) {
+            break;
+        }
 
         /* make copy for parsing */
         tmp = (char *) malloc(sizeof(char) * (eptr - ptr + 1));
+        if (tmp == NULL) {
+            fprintf(stderr, "Failed to allocate memory for tmp string\n");
+            goto _parseVolumeMap_unclean;
+        }
         strncpy(tmp, ptr, eptr - ptr);
         tmp[eptr - ptr] = 0;
 
-        /* tokenize and filter the input string */
-        from = userInputPathFilter(strtok_r(tmp, ":", &svptr), 1);
-        to = userInputPathFilter(strtok_r(NULL, ":", &svptr), 1);
-        flags = userInputPathFilter(strtok_r(NULL, ":", &svptr), 0);
+        char *volMapStr = tmp;
+        if (*volMapStr == '"' && *(volMapStr + (eptr - ptr) - 1) == '"') {
+            *(volMapStr + (eptr - ptr) - 1) = 0;
+            volMapStr++;
+        }
+
+        /* tokenize the the input string */
+        tokens = __tokenizeVolumeMapInput(volMapStr);
+
+        /* count how many non-NULL tokens there are */
+        for (ntokens = 0; tokens && tokens[ntokens]; ntokens++) {
+        }
+
+        if (tokens == NULL || ntokens == 0) {
+            fprintf(stderr, "Failed to parse VolumeMap tokens from \"%s\","
+                    " aborting!\n", tmp);
+            goto _parseVolumeMap_unclean;
+        }
+
+        from = userInputPathFilter(tokens[0], 1);
+        to = userInputPathFilter(tokens[1], 1);
+        flags = userInputPathFilter(tokens[2], 0);
+
+        /* if we only got a from and to is not required 
+           assume we are binding a path from outside the container
+           and to can be set to from */
+        if (from && ntokens == 1 && !requireTo) {
+            to = strdup(from);
+        }
 
         /* ensure the user is asking for a legal mapping */
         if (_validate_fp(from, to, flags) != 0) {
@@ -197,10 +303,10 @@ int __parseVolumeMap(const char *input, VolumeMap *volMap, int (*_validate_fp)(c
                 &(volMap->flagsCapacity), VOLUME_ALLOC_BLOCK);
         if (ret != 0) goto _parseVolumeMap_unclean;
 
-        free(from);
-        free(to);
-        free(flags);
-        free(raw);
+        if (from != NULL) free(from);
+        if (to != NULL) free(to);
+        if (flags != NULL) free(flags);
+        if (raw != NULL) free(raw);
         from = NULL;
         to = NULL;
         flags = NULL;
@@ -208,8 +314,14 @@ int __parseVolumeMap(const char *input, VolumeMap *volMap, int (*_validate_fp)(c
 
         ptr = eptr + 1;
         volMap->n += 1;
-        free(tmp);
+        if (tmp != NULL) free(tmp);
         tmp = NULL;
+
+        for (tk_ptr = tokens; tk_ptr && *tk_ptr; tk_ptr++) {
+            free(*tk_ptr);
+        }
+        if (tokens != NULL) free(tokens);
+        tokens = NULL;
     }
     return 0;
 _parseVolumeMap_unclean:
@@ -221,6 +333,12 @@ _parseVolumeMap_unclean:
                 free(*freePtr);
             }
         }
+
+        for (tk_ptr = tokens; tk_ptr && *tk_ptr; tk_ptr++) {
+            free(*tk_ptr);
+        }
+        if (tokens != NULL) free(tokens);
+        tokens = NULL;
     }
     return 1;
 }
