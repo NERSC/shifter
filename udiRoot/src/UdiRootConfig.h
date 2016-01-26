@@ -50,6 +50,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "VolumeMap.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -87,7 +89,7 @@ typedef struct _UdiRootConfig {
     char *kmodCacheFile;
     char *rootfsType;
     char **gwUrl;
-    char **siteFs;
+    VolumeMap *siteFs;
     char **siteEnv;
     char **siteEnvAppend;
     char **siteEnvPrepend;
@@ -103,13 +105,11 @@ typedef struct _UdiRootConfig {
     char *mvPath;
     char *chmodPath;
 
-    size_t siteFs_capacity;
     size_t siteEnv_capacity;
     size_t siteEnvAppend_capacity;
     size_t siteEnvPrepend_capacity;
     size_t gwUrl_capacity;
     size_t gwUrl_size;
-    size_t siteFs_size;
     size_t siteEnv_size;
     size_t siteEnvAppend_size;
     size_t siteEnvPrepend_size;
