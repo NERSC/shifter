@@ -55,11 +55,20 @@ extern "C" {
 
 #define VOLUME_ALLOC_BLOCK 10
 
+#define VOLMAP_FLAG_READONLY 1
+#define VOLMAP_FLAG_RECURSIVE 2
+#define VOLMAP_FLAG_PERNODECACHE 4
+
+typedef struct {
+    int type;
+    void *value;
+} VolumeMapFlag;
+
 typedef struct _VolumeMap {
     char **raw;
     char **to;
     char **from;
-    char **flags;
+    VolumeMapFlag **flags;
     size_t n;
 
     size_t rawCapacity;
@@ -68,13 +77,23 @@ typedef struct _VolumeMap {
     size_t flagsCapacity;
 } VolumeMap;
 
+typedef struct {
+    ssize_t cacheSize;
+    ssize_t blockSize;
+    char *method;
+    char *fstype;
+} VolMapPerNodeCacheConfig;
+
+
 int parseVolumeMap(const char *input, VolumeMap *volMap);
 int parseVolumeMapSiteFs(const char *input, VolumeMap *volMap);
 char *getVolMapSignature(VolumeMap *volMap);
 size_t fprint_VolumeMap(FILE *fp, VolumeMap *volMap);
 void free_VolumeMap(VolumeMap *volMap, int freeStruct);
-int validateVolumeMap_userRequest(const char *from, const char *to, const char *flags);
-int validateVolumeMap_siteRequest(const char *from, const char *to, const char *flags);
+int validateVolumeMap_userRequest(const char *from, const char *to, VolumeMapFlag *flags);
+int validateVolumeMap_siteRequest(const char *from, const char *to, VolumeMapFlag *flags);
+
+void free_VolMapPerNodeCacheConfig(VolMapPerNodeCacheConfig *cacheConfig);
 
 #ifdef __cplusplus
 }

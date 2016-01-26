@@ -53,15 +53,15 @@
 int __validateVolumeMap(
         const char *from,
         const char *to,
-        const char *flags,
+        VolumeMapFlag *flags,
         const char **toStartsWithDisallowed, 
         const char **toExactDisallowed,
         const char **fromStartsWithDisallowed,
         const char **fromExactDisallowed,
-        const char **allowedFlags);
+        size_t allowedFlags);
 
 int __parseVolumeMap(const char *input, VolumeMap *volMap,
-        int (*_validate_fp)(const char *, const char *, const char *),
+        int (*_validate_fp)(const char *, const char *, VolumeMapFlag *),
         short requireTo);
 
 int parseVolumeMap(const char *input, VolumeMap *volMap) {
@@ -75,7 +75,7 @@ int parseVolumeMapSiteFs(const char *input, VolumeMap *volMap) {
 int validateVolumeMap_userRequest(
         const char *from,
         const char *to,
-        const char *flags)
+        VolumeMapFlag *flags)
 {
     const char *toStartsWithDisallowed[] = {
         "/etc", "/var", "etc", "var", "/opt/udiImage", "opt/udiImage", NULL
@@ -83,7 +83,7 @@ int validateVolumeMap_userRequest(
     const char *toExactDisallowed[] = {"/opt", "opt", NULL};
     const char *fromStartsWithDisallowed[] = { NULL };
     const char *fromExactDisallowed[] = { NULL };
-    const char *allowedFlags[] = { "ro", "", NULL };
+    size_t allowedFlags = VOLMAP_FLAG_READONLY;
 
     return __validateVolumeMap(
             from, to, flags, toStartsWithDisallowed, toExactDisallowed,
@@ -94,7 +94,7 @@ int validateVolumeMap_userRequest(
 int validateVolumeMap_siteRequest(
         const char *from,
         const char *to,
-        const char *flags)
+        VolumeMapFlag *flags)
 {
     const char *toStartsWithDisallowed[] = { NULL };
     const char *toExactDisallowed[] = {
@@ -108,7 +108,7 @@ int validateVolumeMap_siteRequest(
     };
     const char *fromStartsWithDisallowed[] = { NULL };
     const char *fromExactDisallowed[] = { NULL };
-    const char *allowedFlags[] = { "ro", "rec", "", NULL };
+    size_t allowedFlags = VOLMAP_FLAG_READONLY | VOLMAP_FLAG_RECURSIVE;
 
     return __validateVolumeMap(
             from, to, flags, toStartsWithDisallowed, toExactDisallowed,
@@ -118,14 +118,8 @@ int validateVolumeMap_siteRequest(
 
 const char *__findEndVolumeMapString(const char *basePtr) {
     const char *ptr = basePtr;
-    int inQuote = 0;
     for ( ; ptr && *ptr; ptr++) {
-        if (*ptr == '"') {
-            if (inQuote) inQuote = 0;
-            else inQuote = 1;
-            continue;
-        }
-        if (*ptr == ',' && !inQuote) {
+        if (*ptr == ';') {
             return ptr;
         }
     }
@@ -140,7 +134,11 @@ char **__tokenizeVolumeMapInput(char *input) {
     char **tk_end = tokens + 3;
     char *ptr = NULL;
     char *sptr = NULL;
-    if (tokens == NULL) return NULL;
+    char *limit = input + strlen(input);
+    if (tokens == NULL) {
+        fprintf(stderr, "FAILED to allocate memory\n");
+        goto ___tokenizeVolumeMapInput_unclean_exit;
+    }
 
     /* set all tokens to NULL */
     memset(tokens, 0, sizeof(char *) * 4);
@@ -148,13 +146,9 @@ char **__tokenizeVolumeMapInput(char *input) {
     /* parse the tokens */
     tk_ptr = tokens;
     sptr = input;
-    for (ptr = input; ptr && *ptr && tk_ptr < tk_end - 1; ptr++) {
-        if (*ptr == '\\') {
-            ptr++;
-            continue;
-        }
+    for (ptr = input, sptr = input; sptr < limit; ptr++) {
         /* delimiter */
-        if (*ptr == ':') {
+        if (*ptr == ':' || *ptr == '\0') {
 
             /* extract the token */
             *ptr = 0;
@@ -163,33 +157,209 @@ char **__tokenizeVolumeMapInput(char *input) {
             /* advance to the next token */
             sptr = ptr + 1;
             tk_ptr++;
-        }
-    }
 
-    /* get the trailing token */
-    if (tk_ptr < tk_end && sptr) {
-        /* if there are quotes exactly around the token, strip them */
-        if (sptr < ptr && *sptr == '"' && *(ptr - 1) == '"') {
-            sptr++;
-            *(ptr - 1) = 0;
+            /* allocate and move memory if need be */
+            if (tk_ptr >= tk_end) {
+                char **tmp = (char **) realloc(tokens, sizeof(char *) * ((tk_ptr - tokens) + 4));
+                if (tmp == NULL) {
+                    fprintf(stderr, "FAILED to allocate memory\n");
+                    goto ___tokenizeVolumeMapInput_unclean_exit;
+                }
+                tk_ptr = tmp + (tk_ptr - tokens);
+                tokens = tmp;
+                tk_end = tk_ptr + 3;
+                memset(tk_ptr, 0, sizeof(char *) * 4);
+            }
         }
-        *tk_ptr = strdup(sptr);
     }
 
     return tokens;
+___tokenizeVolumeMapInput_unclean_exit:
+    return NULL;
+}
+
+ssize_t __parseBytes(const char *input) {
+    const char *scale = "bkmgtpe";
+    char *ptr = NULL;
+    const char *sptr = NULL;
+    double a = strtod(input, &ptr);
+    char expLetter = 0;
+    if (ptr == NULL || *ptr == 0) {
+        expLetter = 'b';
+    } else {
+        expLetter = tolower(*ptr);
+    }
+    int found = 0;
+    for (sptr = scale; *sptr != 0; sptr++) {
+        if (expLetter == *sptr) {
+            found = 1;
+            break;
+        }
+    }
+    if (!found) {
+        return -1;
+    }
+    for ( ; sptr != scale; sptr--) {
+        a *= 1024;
+    }
+    return (ssize_t) a;
+}
+
+int __parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
+    if (flagStr == NULL) return 0;
+    if (flags == NULL) return 1;
+
+    size_t flagIdx = 0;
+    char *ptr = flagStr;
+    char *sptr = flagStr;
+    char *limit = flagStr + strlen(flagStr);
+    char *flagName = NULL;
+    char **kvArray = NULL;
+    size_t kvCount = 0;
+
+    VolumeMapFlag flag;
+
+    memset(&flag, 0, sizeof(VolumeMapFlag));
+
+    if (sptr == limit) return 0;
+
+    /* advance flagPtr to end of list */
+    for (flagIdx = 0; flagIdx < *flagCapacity; flagIdx++) {
+        if ((*flags)[flagIdx].type == 0) break;
+    }
+
+    ptr = strchr(sptr, '=');
+    if (ptr == NULL) ptr = limit;
+    *ptr = 0;
+
+    /* now sptr is pointing to the name of the flag;
+       ptr is either pointing to the end of the string (equal to limit) or
+       is pointing to the character before the first key in a comma
+       delimited list of key/value pairs */
+    flagName = strdup(sptr);
+    sptr = ptr + 1;
+    while (sptr < limit) {
+        char *vptr = strchr(sptr, '=');
+        ptr = strchr(sptr, ',');
+        if (ptr == NULL) ptr = limit;
+        *ptr = 0;
+        if (vptr != NULL) {
+            *vptr++ = 0;
+        }
+        kvArray = (char **) realloc(kvArray, sizeof(char *) * (kvCount + 2));
+        if (kvArray == NULL) {
+            fprintf(stderr, "Unknown flag: couldn't parse flag name\n");
+            goto ___parseFlags_exit_unclean;
+        }
+        kvArray[kvCount++] = sptr;
+        kvArray[kvCount++] = vptr;
+        sptr = ptr + 1;
+    }
+    if (flagName == NULL) {
+        fprintf(stderr, "Unknown flag: couldn't parse flag name\n");
+        goto ___parseFlags_exit_unclean;
+    }
+
+    /* parse flag */
+    if (strcasecmp(flagName, "ro") == 0) {
+        flag.type = VOLMAP_FLAG_READONLY;
+    } else if (strcasecmp(flagName, "rec") == 0) {
+        flag.type = VOLMAP_FLAG_RECURSIVE;
+    } else if (strcasecmp(flagName, "perNodeCache") == 0) {
+        size_t kvIdx = 0;
+        flag.type = VOLMAP_FLAG_PERNODECACHE;
+        VolMapPerNodeCacheConfig *cache = (VolMapPerNodeCacheConfig *) malloc(sizeof(VolMapPerNodeCacheConfig));
+        memset(cache, 0, sizeof(VolMapPerNodeCacheConfig));
+
+        /* TODO move these configs into udiRoot.conf */
+        cache->cacheSize = 0;
+        cache->blockSize = 1024 * 1024; /* default 1MB */
+        cache->fstype = strdup("ext4");
+        cache->method = strdup("loop");
+        flag.value = cache;
+
+        for (kvIdx = 0; kvIdx < kvCount; kvCount += 2) {
+            char *key = kvArray[kvIdx];
+            char *value = kvArray[kvIdx + 1];
+
+            if (key == NULL) {
+                fprintf(stderr, "Failed to parse volmap flag value\n");
+                goto ___parseFlags_exit_unclean;
+            }
+            if (strcasecmp(key, "size") == 0) {
+                cache->cacheSize = __parseBytes(value);
+                if (cache->cacheSize <= 0) {
+                    fprintf(stderr, "Invalid size for perNodeCache: %s\n", value);
+                    goto ___parseFlags_exit_unclean;
+                }
+            } else if (strcasecmp(key, "fs") == 0) {
+                if (cache->fstype != NULL) {
+                    free(cache->fstype);
+                    cache->fstype = NULL;
+                }
+                if (value != NULL) {
+                    if (strcasecmp(value, "ext4") == 0) {
+                        cache->fstype = strdup("ext4");
+                    }
+                }
+                if (cache->fstype == NULL) {
+                    fprintf(stderr, "Invalid fstype for perNodeCache: %s\n", value);
+                    goto ___parseFlags_exit_unclean;
+                }
+            } else if (strcasecmp(key, "bs") == 0) {
+                cache->blockSize = __parseBytes(value);
+                if (cache->blockSize <= 0) {
+                    fprintf(stderr, "Invalid blocksize for perNodeCache: %s\n", value);
+                    goto ___parseFlags_exit_unclean;
+                }
+            } else if (strcasecmp(key, "method") == 0) {
+                if (cache->method != NULL) {
+                    free(cache->method);
+                    cache->method = NULL;
+                }
+                if (value != NULL) {
+                    if (strcasecmp(value, "loop") == 0) {
+                        cache->method = strdup("loop");
+                    }
+                }
+                if (cache->method == NULL) {
+                    fprintf(stderr, "Invalid method for perNodeCache: %s\n", value);
+                    goto ___parseFlags_exit_unclean;
+                }
+            }
+        }
+    } else {
+        fprintf(stderr, "Unknown flag: %s\n", sptr);
+        goto ___parseFlags_exit_unclean;
+    }
+
+    if (flagIdx >= *flagCapacity) {
+        VolumeMapFlag *tmp = (VolumeMapFlag *) realloc(flags, sizeof(VolumeMapFlag) * *flagCapacity + 2);
+        if (tmp == NULL) {
+            fprintf(stderr, "Failed to allocate memory!\n");
+            goto ___parseFlags_exit_unclean;
+        }
+        *flags = tmp;
+        *flagCapacity += 1;
+    }
+    memcpy(&(*flags[flagIdx++]), &flag, sizeof(VolumeMapFlag));
+    memset(&(*flags[flagIdx]), 0, sizeof(VolumeMapFlag));
+
+    return 0;
+___parseFlags_exit_unclean:
+    return 1;
 }
 
 int __parseVolumeMap(
         const char *input,
         VolumeMap *volMap,
-        int (*_validate_fp)(const char *, const char *, const char *),
+        int (*_validate_fp)(const char *, const char *, VolumeMapFlag *),
         short requireTo
 ) {
     if (input == NULL || volMap == NULL) return 1;
     char **rawPtr = volMap->raw + volMap->n;
     char **toPtr = volMap->to + volMap->n;
     char **fromPtr = volMap->from + volMap->n;
-    char **flagsPtr = volMap->flags + volMap->n;
 
     const char *ptr = input;
     const char *eptr = NULL;
@@ -198,14 +368,15 @@ int __parseVolumeMap(
     int ret = 0;
     char *to = NULL;
     char *from = NULL;
-    char *flags = NULL;
+    VolumeMapFlag *flags = NULL;
+    size_t flagsCapacity = 0;
     char *raw = NULL;
     char **tokens = NULL;
     char **tk_ptr = NULL;
+    size_t tokenIdx = 0;
     size_t rawLen = 0;
 
     while (ptr < input + len) {
-        const char *cflags;
         size_t ntokens = 0;
         eptr = __findEndVolumeMapString(ptr);
         if (eptr == ptr && eptr != NULL) {
@@ -246,7 +417,13 @@ int __parseVolumeMap(
 
         from = userInputPathFilter(tokens[0], 1);
         to = userInputPathFilter(tokens[1], 1);
-        flags = userInputPathFilter(tokens[2], 0);
+
+        for (tokenIdx = 2; tokenIdx < ntokens; tokenIdx++) {
+            if (__parseFlag(tokens[tokenIdx], &flags, &flagsCapacity) != 0) {
+                fprintf(stderr, "Invalid mount flags specified: %s\n", tokens[tokenIdx]);
+                goto _parseVolumeMap_unclean;
+            }
+        }
 
         /* if we only got a from and to is not required 
            assume we are binding a path from outside the container
@@ -257,7 +434,7 @@ int __parseVolumeMap(
 
         /* ensure the user is asking for a legal mapping */
         if (_validate_fp(from, to, flags) != 0) {
-            fprintf(stderr, "Invalid Volume Map: %*s, aborting!\n",
+            fprintf(stderr, "Invalid Volume Map: %.*s, aborting!\n",
                 (int) (eptr - ptr),
                 ptr
             );
@@ -265,25 +442,22 @@ int __parseVolumeMap(
         }
 
         if (to == NULL || from == NULL) {
-            fprintf(stderr, "INVALID format for volume map %*s\n", 
+            fprintf(stderr, "INVALID format for volume map %.*s\n", 
                 (int) (eptr - ptr),
                 ptr
             );
             goto _parseVolumeMap_unclean;
         }
-        if (flags == NULL) cflags = "";
-        else cflags = flags;
 
         /* generate a new "raw" string from the filtered values */
         rawLen = 2 + strlen(from) + strlen(to);
+#if 0
         if (flags != NULL) {
             rawLen += 1 + strlen(flags);
         }
+#endif
         raw = (char *) malloc(sizeof(char) * rawLen);
-        snprintf(raw, rawLen, "%s:%s%c%s", from, to,
-                (flags && strlen(flags) > 0 ? ':' : '\0'),
-                (flags && strlen(flags) > 0 ? flags : "")
-        );
+        snprintf(raw, rawLen, "%s:%s", from, to);
 
 
         /* append to raw array */
@@ -299,8 +473,7 @@ int __parseVolumeMap(
                 &(volMap->fromCapacity), VOLUME_ALLOC_BLOCK);
         if (ret != 0) goto _parseVolumeMap_unclean;
 
-        ret = strncpy_StringArray(cflags, strlen(cflags), &flagsPtr, &(volMap->flags),
-                &(volMap->flagsCapacity), VOLUME_ALLOC_BLOCK);
+
         if (ret != 0) goto _parseVolumeMap_unclean;
 
         if (from != NULL) free(from);
@@ -326,7 +499,7 @@ int __parseVolumeMap(
     return 0;
 _parseVolumeMap_unclean:
     {
-        char *freeArray[] = {tmp, from, to, flags, raw, NULL};
+        char *freeArray[] = {tmp, from, to, raw, NULL};
         char **freePtr = NULL;
         for (freePtr = freeArray; *freePtr != NULL; freePtr++) {
             if (*freePtr != NULL) {
@@ -347,18 +520,19 @@ _parseVolumeMap_unclean:
 int __validateVolumeMap(
         const char *from,
         const char *to,
-        const char *flags,
+        VolumeMapFlag *flags,
         const char **toStartsWithDisallowed, 
         const char **toExactDisallowed,
         const char **fromStartsWithDisallowed,
         const char **fromExactDisallowed,
-        const char **allowedFlags)
+        size_t allowedFlags)
 {
     const char **ptr = NULL;
 
     if (from == NULL || to == NULL) return 1;
 
     /* verify that the specified flags are acceptable */
+#if 0
     if (flags != NULL) {
         int found = 0;
         for (ptr = allowedFlags; *ptr != NULL; ptr++) {
@@ -371,6 +545,7 @@ int __validateVolumeMap(
             return 2;
         }
     }
+#endif
 
     for (ptr = toStartsWithDisallowed; *ptr != NULL; ptr++) {
         size_t len = strlen(*ptr);
@@ -411,11 +586,22 @@ size_t fprint_VolumeMap(FILE *fp, VolumeMap *volMap) {
     for (count = 0; count < volMap->n; count++) {
         char *from = volMap->from[count];
         char *to = volMap->to[count];
-        char *flags = volMap->flags[count];
-        const char *cflags = (flags == NULL ? "None" : flags);
+        VolumeMapFlag *flags = volMap->flags[count];
         if (from == NULL || to == NULL) continue;
 
-        nBytes += fprintf(fp, "FROM: %s, TO: %s, FLAGS: %s\n", from, to, cflags);
+        nBytes += fprintf(fp, "FROM: %s, TO: %s, FLAGS: ", from, to);
+        if (flags == NULL) nBytes += fprintf(fp, "None");
+        else {
+        }
+#if 0
+        if (flags & VOLMAP_FLAG_READONLY) 
+            nBytes += fprintf(fp, "%sread-ony", (flagDisplay++ > 0 ? ", " : ""));
+        if (flags & VOLMAP_FLAG_RECURSIVE)
+            nBytes += fprintf(fp, "%srecursive", (flagDisplay++ > 0 ? ", " : ""));
+        if (flags & VOLMAP_FLAG_EXT4PERNODECACHE)
+            nBytes += fprintf(fp, "%sext4PerNodeCache", (flagDisplay++ > 0 ? ", " : ""));
+#endif
+        nBytes += fprintf(fp, "\n");
     }
     return nBytes;
 }
@@ -438,12 +624,18 @@ char *getVolMapSignature(VolumeMap *volMap) {
         return NULL;
     }
 
+    /* sort the volmaps to ensure different invocations of the same
+       request are seen as identical */
     qsort(volMap->raw, volMap->n, sizeof(char *), _vstrcmp);
+
+    /* sum strlens to get full summary string capacity
+       add volMap->n characters to cover commas and final null byte */
     for (ptr = volMap->raw; *ptr != NULL; ptr++) {
         len += strlen(*ptr);
     }
-
     ret = (char *) malloc(sizeof(char) * (len + volMap->n));
+
+    /* construct summary sig string */
     wptr = ret;
     limit = ret + (len + volMap->n);
     for (ptr = volMap->raw; *ptr != NULL; ptr++) {
@@ -467,7 +659,6 @@ void free_VolumeMap(VolumeMap *volMap, int freeStruct) {
         volMap->raw,
         volMap->to,
         volMap->from,
-        volMap->flags,
         NULL
     };
 
@@ -480,7 +671,33 @@ void free_VolumeMap(VolumeMap *volMap, int freeStruct) {
         free(*ptr);
         *ptr = NULL;
     }
+    if (volMap->flags != NULL) {
+        VolumeMapFlag **flagListPtr = volMap->flags;
+        for ( ; flagListPtr && *flagListPtr; flagListPtr++) {
+            VolumeMapFlag *flagArr = *flagListPtr;
+            size_t idx = 0;
+            for (idx = 0; ; idx++) {
+                if (flagArr[idx].type == 0) break;
+                if (flagArr[idx].type == VOLMAP_FLAG_PERNODECACHE
+                        && flagArr[idx].value != NULL) {
+                    VolMapPerNodeCacheConfig *cconfig = (VolMapPerNodeCacheConfig *) flagArr[idx].value;
+                    free_VolMapPerNodeCacheConfig(cconfig);
+                    flagArr[idx].value = NULL;
+                }
+            }
+            free(*flagListPtr);
+        }
+        free(volMap->flags);
+        volMap->flags = NULL;
+    }
     if (freeStruct == 1) {
         free(volMap);
     }
+}
+
+void free_VolMapPerNodeCacheConfig(VolMapPerNodeCacheConfig *cacheConfig) {
+    if (cacheConfig == NULL) return;
+    if (cacheConfig->method != NULL) free(cacheConfig->method);
+    if (cacheConfig->fstype != NULL) free(cacheConfig->fstype);
+    free(cacheConfig);
 }
