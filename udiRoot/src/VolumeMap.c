@@ -263,8 +263,16 @@ int __parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
     /* parse flag */
     if (strcasecmp(flagName, "ro") == 0) {
         flag.type = VOLMAP_FLAG_READONLY;
+        if (kvCount > 0) {
+            fprintf(stderr, "Flag ro takes no arguments, failed to parse.\n");
+            goto ___parseFlags_exit_unclean;
+        }
     } else if (strcasecmp(flagName, "rec") == 0) {
         flag.type = VOLMAP_FLAG_RECURSIVE;
+        if (kvCount > 0) {
+            fprintf(stderr, "Flag ro takes no arguments, failed to parse.\n");
+            goto ___parseFlags_exit_unclean;
+        }
     } else if (strcasecmp(flagName, "perNodeCache") == 0) {
         size_t kvIdx = 0;
         flag.type = VOLMAP_FLAG_PERNODECACHE;
@@ -278,7 +286,7 @@ int __parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
         cache->method = strdup("loop");
         flag.value = cache;
 
-        for (kvIdx = 0; kvIdx < kvCount; kvCount += 2) {
+        for (kvIdx = 0; kvIdx < kvCount; kvIdx += 2) {
             char *key = kvArray[kvIdx];
             char *value = kvArray[kvIdx + 1];
 
@@ -328,13 +336,17 @@ int __parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
                 }
             }
         }
+        if (validate_VolMapPerNodeCacheConfig(cache) != 0) {
+            fprintf(stderr, "Invalid configuration for perNodeCache %d\n", validate_VolMapPerNodeCacheConfig(cache));
+            goto ___parseFlags_exit_unclean;
+        }
     } else {
         fprintf(stderr, "Unknown flag: %s\n", sptr);
         goto ___parseFlags_exit_unclean;
     }
 
     if (flagIdx >= *flagCapacity) {
-        VolumeMapFlag *tmp = (VolumeMapFlag *) realloc(flags, sizeof(VolumeMapFlag) * *flagCapacity + 2);
+        VolumeMapFlag *tmp = (VolumeMapFlag *) realloc(*flags, sizeof(VolumeMapFlag) * (*flagCapacity + 2));
         if (tmp == NULL) {
             fprintf(stderr, "Failed to allocate memory!\n");
             goto ___parseFlags_exit_unclean;
@@ -342,8 +354,8 @@ int __parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
         *flags = tmp;
         *flagCapacity += 1;
     }
-    memcpy(&(*flags[flagIdx++]), &flag, sizeof(VolumeMapFlag));
-    memset(&(*flags[flagIdx]), 0, sizeof(VolumeMapFlag));
+    memcpy(&((*flags)[flagIdx++]), &flag, sizeof(VolumeMapFlag));
+    memset(&((*flags)[flagIdx]), 0, sizeof(VolumeMapFlag));
 
     return 0;
 ___parseFlags_exit_unclean:
@@ -360,6 +372,7 @@ int __parseVolumeMap(
     char **rawPtr = volMap->raw + volMap->n;
     char **toPtr = volMap->to + volMap->n;
     char **fromPtr = volMap->from + volMap->n;
+    VolumeMapFlag **flagPtr = volMap->flags + volMap->n;
 
     const char *ptr = input;
     const char *eptr = NULL;
@@ -424,6 +437,10 @@ int __parseVolumeMap(
                 goto _parseVolumeMap_unclean;
             }
         }
+        fprintf(stderr, "flag capacity: %lu\n", flagsCapacity);
+        if (flagsCapacity > 0) {
+            fprintf(stderr, "flag val: %lu, %d, %lu\n", flags, flags[0].type, flags[0]);
+        }
 
         /* if we only got a from and to is not required 
            assume we are binding a path from outside the container
@@ -473,6 +490,22 @@ int __parseVolumeMap(
                 &(volMap->fromCapacity), VOLUME_ALLOC_BLOCK);
         if (ret != 0) goto _parseVolumeMap_unclean;
 
+        if (volMap->n >= volMap->flagsCapacity) {
+            fprintf(stderr, "about to allocate flag pointer memory\n");
+            VolumeMapFlag **tmp = (VolumeMapFlag **) realloc(volMap->flags, sizeof(VolumeMapFlag *) * (volMap->flagsCapacity + VOLUME_ALLOC_BLOCK));
+            if (tmp == NULL) {
+                fprintf(stderr, "Failed to allocate memory!\n");
+                goto _parseVolumeMap_unclean;
+            }
+            volMap->flags = tmp;
+            flagPtr = volMap->flags + volMap->n;
+            volMap->flagsCapacity += VOLUME_ALLOC_BLOCK;
+        }
+        
+        *flagPtr = flags;
+        *(flagPtr + 1) = NULL;
+
+        fprintf(stderr, "flags value: %lu, flagptr value: %lu, volMap->flags: %lu, %lu, %lu, %d\n", flags, *flagPtr, *(volMap->flags), volMap->flags, flagPtr, flagPtr - volMap->flags);
 
         if (ret != 0) goto _parseVolumeMap_unclean;
 
@@ -532,20 +565,13 @@ int __validateVolumeMap(
     if (from == NULL || to == NULL) return 1;
 
     /* verify that the specified flags are acceptable */
-#if 0
     if (flags != NULL) {
-        int found = 0;
-        for (ptr = allowedFlags; *ptr != NULL; ptr++) {
-            if (strcmp(*ptr, flags) == 0) {
-                found = 1;
-                break;
-            }
-        }
-        if (found == 0) {
-            return 2;
+        size_t idx = 0;
+        while (flags[idx].type != 0) {
+            if ((flags[idx].type & allowedFlags) == 0) return 2;
+            idx++;
         }
     }
-#endif
 
     for (ptr = toStartsWithDisallowed; *ptr != NULL; ptr++) {
         size_t len = strlen(*ptr);
@@ -592,8 +618,27 @@ size_t fprint_VolumeMap(FILE *fp, VolumeMap *volMap) {
         nBytes += fprintf(fp, "FROM: %s, TO: %s, FLAGS: ", from, to);
         if (flags == NULL) nBytes += fprintf(fp, "None");
         else {
+            size_t flagIdx = 0;
+            fprintf(fp, "pointer: %lu, %d, %lu,", flags, flags[0].type, flags[0]);
+            for (flagIdx = 0; flagIdx < 2; flagIdx++) {
+                fprintf(fp, "type: %d, ", flags[flagIdx].type);
+                if (flags[flagIdx].type == VOLMAP_FLAG_READONLY) {
+                    nBytes += fprintf(fp, "%sread-only", (flagIdx > 0 ? ", " : ""));
+                } else if (flags[flagIdx].type == VOLMAP_FLAG_RECURSIVE) {
+                    nBytes += fprintf(fp, "%srecursive", (flagIdx > 0 ? ", " : ""));
+                } else if (flags[flagIdx].type == VOLMAP_FLAG_PERNODECACHE) {
+                    VolMapPerNodeCacheConfig *cache = (VolMapPerNodeCacheConfig *) flags[flagIdx].value;
+                    nBytes += fprintf(fp,
+                            "%sperNodeCache (size=%ld, blocksize=%ld, method=%s, fstype=%s)",
+                            (flagIdx > 0 ? ", " : ""),
+                            cache->cacheSize, cache->blockSize, cache->method, cache->fstype);
+                }
+                //flagIdx++;
+            }
         }
 #if 0
+        else {
+        }
         if (flags & VOLMAP_FLAG_READONLY) 
             nBytes += fprintf(fp, "%sread-ony", (flagDisplay++ > 0 ? ", " : ""));
         if (flags & VOLMAP_FLAG_RECURSIVE)
@@ -700,4 +745,16 @@ void free_VolMapPerNodeCacheConfig(VolMapPerNodeCacheConfig *cacheConfig) {
     if (cacheConfig->method != NULL) free(cacheConfig->method);
     if (cacheConfig->fstype != NULL) free(cacheConfig->fstype);
     free(cacheConfig);
+}
+
+int validate_VolMapPerNodeCacheConfig(VolMapPerNodeCacheConfig *cacheConfig) {
+    if (cacheConfig == NULL) return 1;
+    if (cacheConfig->cacheSize <= 0) return 2;
+    if (cacheConfig->blockSize <= 0) return 3;
+    if (cacheConfig->method == NULL) return 4;
+    if (strcmp(cacheConfig->method, "loop") != 0) return 5;
+    if (cacheConfig->fstype == NULL) return 6;
+    if (strcmp(cacheConfig->fstype, "ext4") != 0) return 7;
+
+    return 0;
 }

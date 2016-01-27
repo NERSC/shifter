@@ -94,6 +94,7 @@ int validateVolumeMap_userRequest(const char *from, const char *to, VolumeMapFla
 int validateVolumeMap_siteRequest(const char *from, const char *to, VolumeMapFlag *flags);
 
 void free_VolMapPerNodeCacheConfig(VolMapPerNodeCacheConfig *cacheConfig);
+int validate_VolMapPerNodeCacheConfig(VolMapPerNodeCacheConfig *cacheConfig);
 
 #ifdef __cplusplus
 }

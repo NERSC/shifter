@@ -47,6 +47,8 @@ TEST_GROUP(VolumeMapTestGroup) {
 
 extern char **__tokenizeVolumeMapInput(char *input);
 extern const char *__findEndVolumeMapString(const char *basePtr);
+extern ssize_t __parseBytes(const char *input);
+extern int __parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity);
 
 void freeTokens(char **tokens) {
     char **tk_ptr = NULL;
@@ -62,9 +64,9 @@ TEST(VolumeMapTestGroup, FindEndOfVolumeMapInString) {
     CHECK(ptr != NULL && *ptr == 0);
     CHECK(strncmp(input1, input1, ptr-input1) == 0);
 
-    const char *input2 = "/volume:/map,/input:output";
+    const char *input2 = "/volume:/map;/input:output";
     ptr = __findEndVolumeMapString(input2);
-    CHECK(ptr != NULL && *ptr == ',');
+    CHECK(ptr != NULL && *ptr == ';');
     CHECK(strncmp(input2, "/volume:/map", ptr-input2) == 0);
 
     const char *sptr = input2;
@@ -115,10 +117,11 @@ TEST(VolumeMapTestGroup, VolumeMapTokenize) {
     input = strdup("abcd:efgh:flag:extra");
     tokens = __tokenizeVolumeMapInput(input);
     for (ntokens = 0 ; tokens && tokens[ntokens]; ntokens++) { }
-    CHECK(tokens != NULL && ntokens == 3);
+    CHECK(tokens != NULL && ntokens == 4);
     CHECK(strcmp(tokens[0], "abcd") == 0);
     CHECK(strcmp(tokens[1], "efgh") == 0);
-    CHECK(strcmp(tokens[2], "flag:extra") == 0);
+    CHECK(strcmp(tokens[2], "flag") == 0);
+    CHECK(strcmp(tokens[3], "extra") == 0);
 
     freeTokens(tokens);
     free(input);
@@ -132,6 +135,67 @@ TEST(VolumeMapTestGroup, VolumeMapTokenize) {
 
     freeTokens(tokens);
     free(input);
+
+}
+
+TEST(VolumeMapTestGroup, VolumeMapParseBytes) {
+    ssize_t parsedVal = __parseBytes("5");
+    CHECK(parsedVal == 5);
+
+    parsedVal = __parseBytes("5k");
+    CHECK(parsedVal = 5 * 1024);
+
+    parsedVal = __parseBytes("500K");
+    CHECK(parsedVal == 500 * 1024);
+
+    parsedVal = __parseBytes("500KB");
+    CHECK(parsedVal == 500 * 1024);
+}
+
+TEST(VolumeMapTestGroup, VolumeMapParseFlag) {
+    char *flag = strdup("ro");
+    VolumeMapFlag *flags = NULL;
+    size_t flagsCapacity = 0;
+
+    int ret = __parseFlag(flag, &flags, &flagsCapacity);
+    CHECK(ret == 0);
+    CHECK(flagsCapacity == 1);
+    CHECK(flags[0].type == VOLMAP_FLAG_READONLY);
+    free(flag);
+
+    flag = strdup("rec");
+    ret = __parseFlag(flag, &flags, &flagsCapacity);
+    CHECK(ret == 0);
+    CHECK(flagsCapacity == 2);
+    CHECK(flags[0].type == VOLMAP_FLAG_READONLY);
+    CHECK(flags[1].type == VOLMAP_FLAG_RECURSIVE);
+    free(flag);
+
+    flag = strdup("rec=key1=value1,key2=value2");
+    ret = __parseFlag(flag, &flags, &flagsCapacity);
+    CHECK(ret != 0);
+    CHECK(flagsCapacity == 2);
+    CHECK(flags[0].type == VOLMAP_FLAG_READONLY);
+    CHECK(flags[1].type == VOLMAP_FLAG_RECURSIVE);
+    free(flag);
+
+    flag = strdup("perNodeCache");
+    ret = __parseFlag(flag, &flags, &flagsCapacity);
+    CHECK(ret != 0); /* no default size */
+
+    flag = strdup("perNodeCache=size=4T,bs=4M");
+    ret = __parseFlag(flag, &flags, &flagsCapacity);
+    CHECK(ret == 0);
+    CHECK(flagsCapacity == 3);
+    CHECK(flags[0].type == VOLMAP_FLAG_READONLY);
+    CHECK(flags[1].type == VOLMAP_FLAG_RECURSIVE);
+    CHECK(flags[2].type == VOLMAP_FLAG_PERNODECACHE);
+    free(flag);
+
+    fprintf(stderr, "\nflagCapacity: %lu\n", flagsCapacity);
+    for (size_t idx = 0; idx <= flagsCapacity; idx++) {
+        fprintf(stderr, "flag: %d\n", flags[idx].type);
+    }
 
 }
 
