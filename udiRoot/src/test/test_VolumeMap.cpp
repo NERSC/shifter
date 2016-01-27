@@ -289,12 +289,14 @@ TEST(VolumeMapTestGroup, GetVolumeMapSignature_basic) {
     VolumeMap volMap;
 
     memset(&volMap, 0, sizeof(VolumeMap));
-    ret = parseVolumeMap("/d:/c;/a:/b;/q:/r;/a:/c", &volMap);
+    ret = parseVolumeMapSiteFs("/d:/c;/a:/b;/q:/r;/a:/c:rec:perNodeCache=size=100M:ro", &volMap);
     CHECK(ret == 0);
     CHECK(volMap.n == 4);
 
     char *sig = getVolMapSignature(&volMap);
     fprintf(stderr, "%s\n", sig);
+
+    CHECK(strcmp(sig, "/a:/b;/a:/c:ro:rec:perNodeCache=size=104857600,bs=1048576,method=loop,fstype=ext4;/d:/c;/q:/r") == 0);
 
     free(sig);
 

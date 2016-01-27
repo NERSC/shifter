@@ -64,6 +64,8 @@ int __parseVolumeMap(const char *input, VolumeMap *volMap,
         int (*_validate_fp)(const char *, const char *, VolumeMapFlag *),
         short requireTo);
 
+static int _cmpFlags(const void *va, const void *vb);
+
 int parseVolumeMap(const char *input, VolumeMap *volMap) {
     return __parseVolumeMap(input, volMap, validateVolumeMap_userRequest, 1);
 }
@@ -108,7 +110,7 @@ int validateVolumeMap_siteRequest(
     };
     const char *fromStartsWithDisallowed[] = { NULL };
     const char *fromExactDisallowed[] = { NULL };
-    size_t allowedFlags = VOLMAP_FLAG_READONLY | VOLMAP_FLAG_RECURSIVE;
+    size_t allowedFlags = VOLMAP_FLAG_READONLY | VOLMAP_FLAG_RECURSIVE | VOLMAP_FLAG_PERNODECACHE;
 
     return __validateVolumeMap(
             from, to, flags, toStartsWithDisallowed, toExactDisallowed,
@@ -411,6 +413,9 @@ int __parseVolumeMap(
     char **tk_ptr = NULL;
     size_t tokenIdx = 0;
     size_t rawLen = 0;
+    size_t rawCapacity = 0;
+    size_t flagIdx = 0;
+    size_t flagCnt = 0;
 
     while (ptr < input + len) {
         size_t ntokens = 0;
@@ -469,10 +474,10 @@ int __parseVolumeMap(
         }
 
         /* ensure the user is asking for a legal mapping */
-        if (_validate_fp(from, to, flags) != 0) {
-            fprintf(stderr, "Invalid Volume Map: %.*s, aborting!\n",
+        if ((ret = _validate_fp(from, to, flags)) != 0) {
+            fprintf(stderr, "Invalid Volume Map: %.*s, aborting! %d\n",
                 (int) (eptr - ptr),
-                ptr
+                ptr, ret
             );
             goto _parseVolumeMap_unclean;
         }
@@ -485,16 +490,31 @@ int __parseVolumeMap(
             goto _parseVolumeMap_unclean;
         }
 
+        for (flagCnt = 0; flags && flags[flagCnt].type != 0; flagCnt++) { }
+        if (flagCnt > 0) {
+            qsort(flags, flagCnt, sizeof(VolumeMapFlag), _cmpFlags);
+        }
+
         /* generate a new "raw" string from the filtered values */
         rawLen = 2 + strlen(from) + strlen(to);
-#if 0
-        if (flags != NULL) {
-            rawLen += 1 + strlen(flags);
-        }
-#endif
         raw = (char *) malloc(sizeof(char) * rawLen);
-        snprintf(raw, rawLen, "%s:%s", from, to);
+        rawCapacity = sizeof(char) * rawLen;
+        rawLen = snprintf(raw, rawLen, "%s:%s", from, to);
 
+        for (flagIdx = 0; flagIdx < flagCnt; flagIdx++) {
+            if (flags[flagIdx].type == VOLMAP_FLAG_READONLY) {
+                raw = alloc_strcatf(raw, &rawLen, &rawCapacity, ":ro");
+            } else if (flags[flagIdx].type == VOLMAP_FLAG_RECURSIVE) {
+                raw = alloc_strcatf(raw, &rawLen, &rawCapacity, ":rec");
+            } else if (flags[flagIdx].type == VOLMAP_FLAG_PERNODECACHE) {
+                VolMapPerNodeCacheConfig *cache = (VolMapPerNodeCacheConfig *) flags[flagIdx].value;
+                if (cache == NULL) {
+                    fprintf(stderr, "FAILED to read perNodeCache config from memory\n");
+                    goto _parseVolumeMap_unclean;
+                }
+                raw = alloc_strcatf(raw, &rawLen, &rawCapacity, ":perNodeCache=size=%lu,bs=%lu,method=%s,fstype=%s", cache->cacheSize, cache->blockSize, cache->method, cache->fstype);
+            }
+        }
 
         /* append to raw array */
         ret = strncpy_StringArray(raw, rawLen, &rawPtr, &(volMap->raw),
@@ -518,6 +538,7 @@ int __parseVolumeMap(
             volMap->flags = tmp;
             flagPtr = volMap->flags + volMap->n;
             volMap->flagsCapacity += VOLUME_ALLOC_BLOCK;
+            memset(flagPtr, 0, sizeof(VolumeMapFlag *) * (volMap->flagsCapacity - volMap->n));
         }
         
         *flagPtr = flags;
@@ -584,10 +605,13 @@ int __validateVolumeMap(
     if (from == NULL || to == NULL) return 1;
 
     /* verify that the specified flags are acceptable */
+    size_t alreadySeenFlags = 0;
     if (flags != NULL) {
         size_t idx = 0;
         while (flags[idx].type != 0) {
             if ((flags[idx].type & allowedFlags) == 0) return 2;
+            if ((flags[idx].type & alreadySeenFlags) != 0) return 3;
+            alreadySeenFlags |= flags[idx].type;
             idx++;
         }
     }
@@ -665,6 +689,16 @@ static int _vstrcmp(const void *a, const void *b) {
     return strcmp(*((const char **) a), *((const char **) b));
 }
 
+static int _cmpFlags(const void *va, const void *vb) {
+    VolumeMapFlag *a = (VolumeMapFlag *) va;
+    VolumeMapFlag *b = (VolumeMapFlag *) vb;
+
+    if (a == NULL && b != NULL) return -1;
+    if (a != NULL && b == NULL) return 1;
+    if (a == NULL && b == NULL) return 0;
+    return a->type - b->type;
+}
+
 char *getVolMapSignature(VolumeMap *volMap) {
     char **ptr = NULL;
     size_t len = 0;
@@ -691,7 +725,7 @@ char *getVolMapSignature(VolumeMap *volMap) {
     wptr = ret;
     limit = ret + (len + volMap->n);
     for (ptr = volMap->raw; *ptr != NULL; ptr++) {
-        wptr += snprintf(wptr, (limit - wptr), "%s,", *ptr);
+        wptr += snprintf(wptr, (limit - wptr), "%s;", *ptr);
     }
     wptr--;
     *wptr = 0;
