@@ -182,6 +182,7 @@ TEST(VolumeMapTestGroup, VolumeMapParseFlag) {
     flag = strdup("perNodeCache");
     ret = __parseFlag(flag, &flags, &flagsCapacity);
     CHECK(ret != 0); /* no default size */
+    free(flag);
 
     flag = strdup("perNodeCache=size=4T,bs=4M");
     ret = __parseFlag(flag, &flags, &flagsCapacity);
@@ -192,10 +193,7 @@ TEST(VolumeMapTestGroup, VolumeMapParseFlag) {
     CHECK(flags[2].type == VOLMAP_FLAG_PERNODECACHE);
     free(flag);
 
-    fprintf(stderr, "\nflagCapacity: %lu\n", flagsCapacity);
-    for (size_t idx = 0; idx <= flagsCapacity; idx++) {
-        fprintf(stderr, "flag: %d\n", flags[idx].type);
-    }
+    free_VolumeMapFlag(flags, 1);
 
 }
 
@@ -231,7 +229,8 @@ TEST(VolumeMapTestGroup, VolumeMapParse_basic) {
     int tempfd = mkstemp(tempfname);
     FILE *tempfp = fdopen(tempfd, "w");
     size_t nbytes = fprint_VolumeMap(tempfp, &volMap);
-    CHECK(nbytes == 152);
+    CHECK(nbytes == 167);
+    fclose(tempfp);
 
     free_VolumeMap(&volMap, 0);
 }
@@ -290,7 +289,7 @@ TEST(VolumeMapTestGroup, GetVolumeMapSignature_basic) {
     VolumeMap volMap;
 
     memset(&volMap, 0, sizeof(VolumeMap));
-    ret = parseVolumeMap("/d:/c,/a:/b,/q:/r,/a:/c", &volMap);
+    ret = parseVolumeMap("/d:/c;/a:/b;/q:/r;/a:/c", &volMap);
     CHECK(ret == 0);
     CHECK(volMap.n == 4);
 
