@@ -148,7 +148,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (setupUserMounts(&image, &(config.volumeMap), &udiConfig) != 0) {
+    if (setupUserMounts(&(config.volumeMap), &udiConfig) != 0) {
         fprintf(stderr, "FAILED to setup user-requested mounts.\n");
         exit(1);
     }

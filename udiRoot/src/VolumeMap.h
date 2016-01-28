@@ -97,6 +97,25 @@ void free_VolumeMapFlag(VolumeMapFlag *flag, int freeStruct);
 void free_VolMapPerNodeCacheConfig(VolMapPerNodeCacheConfig *cacheConfig);
 int validate_VolMapPerNodeCacheConfig(VolMapPerNodeCacheConfig *cacheConfig);
 
+/* semi-private methods */
+int _validateVolumeMap(
+        const char *from,
+        const char *to,
+        VolumeMapFlag *flags,
+        const char **toStartsWithDisallowed, 
+        const char **toExactDisallowed,
+        const char **fromStartsWithDisallowed,
+        const char **fromExactDisallowed,
+        size_t allowedFlags);
+
+int _parseVolumeMap(const char *input, VolumeMap *volMap,
+        int (*_validate_fp)(const char *, const char *, VolumeMapFlag *),
+        short requireTo);
+ssize_t _parseBytes(const char *input);
+const char *_findEndVolumeMapString(const char *basePtr);
+char **_tokenizeVolumeMapInput(char *input);
+int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity);
+
 #ifdef __cplusplus
 }
 #endif

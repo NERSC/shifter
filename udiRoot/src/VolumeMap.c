@@ -50,28 +50,15 @@
 #include "utility.h"
 #include "shifter_core.h"
 
-int __validateVolumeMap(
-        const char *from,
-        const char *to,
-        VolumeMapFlag *flags,
-        const char **toStartsWithDisallowed, 
-        const char **toExactDisallowed,
-        const char **fromStartsWithDisallowed,
-        const char **fromExactDisallowed,
-        size_t allowedFlags);
-
-int __parseVolumeMap(const char *input, VolumeMap *volMap,
-        int (*_validate_fp)(const char *, const char *, VolumeMapFlag *),
-        short requireTo);
 
 static int _cmpFlags(const void *va, const void *vb);
 
 int parseVolumeMap(const char *input, VolumeMap *volMap) {
-    return __parseVolumeMap(input, volMap, validateVolumeMap_userRequest, 1);
+    return _parseVolumeMap(input, volMap, validateVolumeMap_userRequest, 1);
 }
 
 int parseVolumeMapSiteFs(const char *input, VolumeMap *volMap) {
-    return __parseVolumeMap(input, volMap, validateVolumeMap_siteRequest, 0);
+    return _parseVolumeMap(input, volMap, validateVolumeMap_siteRequest, 0);
 }
 
 int validateVolumeMap_userRequest(
@@ -87,7 +74,7 @@ int validateVolumeMap_userRequest(
     const char *fromExactDisallowed[] = { NULL };
     size_t allowedFlags = VOLMAP_FLAG_READONLY;
 
-    return __validateVolumeMap(
+    return _validateVolumeMap(
             from, to, flags, toStartsWithDisallowed, toExactDisallowed,
             fromStartsWithDisallowed, fromExactDisallowed, allowedFlags
     );
@@ -112,13 +99,13 @@ int validateVolumeMap_siteRequest(
     const char *fromExactDisallowed[] = { NULL };
     size_t allowedFlags = VOLMAP_FLAG_READONLY | VOLMAP_FLAG_RECURSIVE | VOLMAP_FLAG_PERNODECACHE;
 
-    return __validateVolumeMap(
+    return _validateVolumeMap(
             from, to, flags, toStartsWithDisallowed, toExactDisallowed,
             fromStartsWithDisallowed, fromExactDisallowed, allowedFlags
     );
 }
 
-const char *__findEndVolumeMapString(const char *basePtr) {
+const char *_findEndVolumeMapString(const char *basePtr) {
     const char *ptr = basePtr;
     for ( ; ptr && *ptr; ptr++) {
         if (*ptr == ';') {
@@ -128,7 +115,7 @@ const char *__findEndVolumeMapString(const char *basePtr) {
     return ptr;
 }
 
-char **__tokenizeVolumeMapInput(char *input) {
+char **_tokenizeVolumeMapInput(char *input) {
     if (input == NULL) return NULL;
 
     char **tokens = (char **) malloc(sizeof(char *) * 4);
@@ -139,7 +126,7 @@ char **__tokenizeVolumeMapInput(char *input) {
     char *limit = input + strlen(input);
     if (tokens == NULL) {
         fprintf(stderr, "FAILED to allocate memory\n");
-        goto ___tokenizeVolumeMapInput_unclean_exit;
+        goto __tokenizeVolumeMapInput_unclean_exit;
     }
 
     /* set all tokens to NULL */
@@ -165,7 +152,7 @@ char **__tokenizeVolumeMapInput(char *input) {
                 char **tmp = (char **) realloc(tokens, sizeof(char *) * ((tk_ptr - tokens) + 4));
                 if (tmp == NULL) {
                     fprintf(stderr, "FAILED to allocate memory\n");
-                    goto ___tokenizeVolumeMapInput_unclean_exit;
+                    goto __tokenizeVolumeMapInput_unclean_exit;
                 }
                 tk_ptr = tmp + (tk_ptr - tokens);
                 tokens = tmp;
@@ -176,11 +163,11 @@ char **__tokenizeVolumeMapInput(char *input) {
     }
 
     return tokens;
-___tokenizeVolumeMapInput_unclean_exit:
+__tokenizeVolumeMapInput_unclean_exit:
     return NULL;
 }
 
-ssize_t __parseBytes(const char *input) {
+ssize_t _parseBytes(const char *input) {
     const char *scale = "bkmgtpe";
     char *ptr = NULL;
     const char *sptr = NULL;
@@ -207,7 +194,7 @@ ssize_t __parseBytes(const char *input) {
     return (ssize_t) a;
 }
 
-int __parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
+int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
     if (flagStr == NULL) return 0;
     if (flags == NULL) return 1;
 
@@ -252,7 +239,7 @@ int __parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
         kvArray = (char **) realloc(kvArray, sizeof(char *) * (kvCount + 2));
         if (kvArray == NULL) {
             fprintf(stderr, "Unknown flag: couldn't parse flag name\n");
-            goto ___parseFlags_exit_unclean;
+            goto __parseFlags_exit_unclean;
         }
         kvArray[kvCount++] = sptr;
         kvArray[kvCount++] = vptr;
@@ -260,7 +247,7 @@ int __parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
     }
     if (flagName == NULL) {
         fprintf(stderr, "Unknown flag: couldn't parse flag name\n");
-        goto ___parseFlags_exit_unclean;
+        goto __parseFlags_exit_unclean;
     }
 
     /* parse flag */
@@ -268,13 +255,13 @@ int __parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
         flag.type = VOLMAP_FLAG_READONLY;
         if (kvCount > 0) {
             fprintf(stderr, "Flag ro takes no arguments, failed to parse.\n");
-            goto ___parseFlags_exit_unclean;
+            goto __parseFlags_exit_unclean;
         }
     } else if (strcasecmp(flagName, "rec") == 0) {
         flag.type = VOLMAP_FLAG_RECURSIVE;
         if (kvCount > 0) {
             fprintf(stderr, "Flag ro takes no arguments, failed to parse.\n");
-            goto ___parseFlags_exit_unclean;
+            goto __parseFlags_exit_unclean;
         }
     } else if (strcasecmp(flagName, "perNodeCache") == 0) {
         size_t kvIdx = 0;
@@ -295,13 +282,13 @@ int __parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
 
             if (key == NULL) {
                 fprintf(stderr, "Failed to parse volmap flag value\n");
-                goto ___parseFlags_exit_unclean;
+                goto __parseFlags_exit_unclean;
             }
             if (strcasecmp(key, "size") == 0) {
-                cache->cacheSize = __parseBytes(value);
+                cache->cacheSize = _parseBytes(value);
                 if (cache->cacheSize <= 0) {
                     fprintf(stderr, "Invalid size for perNodeCache: %s\n", value);
-                    goto ___parseFlags_exit_unclean;
+                    goto __parseFlags_exit_unclean;
                 }
             } else if (strcasecmp(key, "fs") == 0) {
                 if (cache->fstype != NULL) {
@@ -315,13 +302,13 @@ int __parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
                 }
                 if (cache->fstype == NULL) {
                     fprintf(stderr, "Invalid fstype for perNodeCache: %s\n", value);
-                    goto ___parseFlags_exit_unclean;
+                    goto __parseFlags_exit_unclean;
                 }
             } else if (strcasecmp(key, "bs") == 0) {
-                cache->blockSize = __parseBytes(value);
+                cache->blockSize = _parseBytes(value);
                 if (cache->blockSize <= 0) {
                     fprintf(stderr, "Invalid blocksize for perNodeCache: %s\n", value);
-                    goto ___parseFlags_exit_unclean;
+                    goto __parseFlags_exit_unclean;
                 }
             } else if (strcasecmp(key, "method") == 0) {
                 if (cache->method != NULL) {
@@ -335,25 +322,25 @@ int __parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
                 }
                 if (cache->method == NULL) {
                     fprintf(stderr, "Invalid method for perNodeCache: %s\n", value);
-                    goto ___parseFlags_exit_unclean;
+                    goto __parseFlags_exit_unclean;
                 }
             }
         }
         if (validate_VolMapPerNodeCacheConfig(cache) != 0) {
             fprintf(stderr, "Invalid configuration for perNodeCache %d\n", validate_VolMapPerNodeCacheConfig(cache));
-            goto ___parseFlags_exit_unclean;
+            goto __parseFlags_exit_unclean;
         }
         cache = NULL;
     } else {
         fprintf(stderr, "Unknown flag: %s\n", sptr);
-        goto ___parseFlags_exit_unclean;
+        goto __parseFlags_exit_unclean;
     }
 
     if (flagIdx >= *flagCapacity) {
         VolumeMapFlag *tmp = (VolumeMapFlag *) realloc(*flags, sizeof(VolumeMapFlag) * (*flagCapacity + 2));
         if (tmp == NULL) {
             fprintf(stderr, "Failed to allocate memory!\n");
-            goto ___parseFlags_exit_unclean;
+            goto __parseFlags_exit_unclean;
         }
         *flags = tmp;
         *flagCapacity += 1;
@@ -371,7 +358,7 @@ int __parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
     }
 
     return 0;
-___parseFlags_exit_unclean:
+__parseFlags_exit_unclean:
     if (flagName != NULL) {
         free(flagName);
         flagName = NULL;
@@ -387,7 +374,7 @@ ___parseFlags_exit_unclean:
     return 1;
 }
 
-int __parseVolumeMap(
+int _parseVolumeMap(
         const char *input,
         VolumeMap *volMap,
         int (*_validate_fp)(const char *, const char *, VolumeMapFlag *),
@@ -419,7 +406,7 @@ int __parseVolumeMap(
 
     while (ptr < input + len) {
         size_t ntokens = 0;
-        eptr = __findEndVolumeMapString(ptr);
+        eptr = _findEndVolumeMapString(ptr);
         if (eptr == ptr && eptr != NULL) {
             ptr++;
             continue;
@@ -444,7 +431,7 @@ int __parseVolumeMap(
         }
 
         /* tokenize the the input string */
-        tokens = __tokenizeVolumeMapInput(volMapStr);
+        tokens = _tokenizeVolumeMapInput(volMapStr);
 
         /* count how many non-NULL tokens there are */
         for (ntokens = 0; tokens && tokens[ntokens]; ntokens++) {
@@ -460,7 +447,7 @@ int __parseVolumeMap(
         to = userInputPathFilter(tokens[1], 1);
 
         for (tokenIdx = 2; tokenIdx < ntokens; tokenIdx++) {
-            if (__parseFlag(tokens[tokenIdx], &flags, &flagsCapacity) != 0) {
+            if (_parseFlag(tokens[tokenIdx], &flags, &flagsCapacity) != 0) {
                 fprintf(stderr, "Invalid mount flags specified: %s\n", tokens[tokenIdx]);
                 goto _parseVolumeMap_unclean;
             }
@@ -590,7 +577,7 @@ _parseVolumeMap_unclean:
 }
 
 
-int __validateVolumeMap(
+int _validateVolumeMap(
         const char *from,
         const char *to,
         VolumeMapFlag *flags,

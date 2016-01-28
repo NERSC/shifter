@@ -45,11 +45,6 @@
 TEST_GROUP(VolumeMapTestGroup) {
 };
 
-extern char **__tokenizeVolumeMapInput(char *input);
-extern const char *__findEndVolumeMapString(const char *basePtr);
-extern ssize_t __parseBytes(const char *input);
-extern int __parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity);
-
 void freeTokens(char **tokens) {
     char **tk_ptr = NULL;
     for (tk_ptr = tokens; tk_ptr && *tk_ptr; tk_ptr++) {
@@ -60,19 +55,19 @@ void freeTokens(char **tokens) {
 
 TEST(VolumeMapTestGroup, FindEndOfVolumeMapInString) {
     const char *input1 = "/volume:/map:test";
-    const char *ptr = __findEndVolumeMapString(input1);
+    const char *ptr = _findEndVolumeMapString(input1);
     CHECK(ptr != NULL && *ptr == 0);
     CHECK(strncmp(input1, input1, ptr-input1) == 0);
 
     const char *input2 = "/volume:/map;/input:output";
-    ptr = __findEndVolumeMapString(input2);
+    ptr = _findEndVolumeMapString(input2);
     CHECK(ptr != NULL && *ptr == ';');
     CHECK(strncmp(input2, "/volume:/map", ptr-input2) == 0);
 
     const char *sptr = input2;
     const char *limit = input2 + strlen(input2);
     int idx = 0;
-    for (sptr = input2, ptr = __findEndVolumeMapString(input2); sptr < limit; ptr = __findEndVolumeMapString(sptr)) {
+    for (sptr = input2, ptr = _findEndVolumeMapString(input2); sptr < limit; ptr = _findEndVolumeMapString(sptr)) {
         switch (idx) {
             case 0:     CHECK(strncmp(sptr, "/volume:/map", ptr - sptr) == 0);
                         break;
@@ -84,7 +79,7 @@ TEST(VolumeMapTestGroup, FindEndOfVolumeMapInString) {
     }
 
     const char *input3 = "\"/volume:/map:ro,rec\"";
-    ptr = __findEndVolumeMapString(input3);
+    ptr = _findEndVolumeMapString(input3);
     CHECK(ptr && (*ptr == 0));
     CHECK(strlen(input3) == ptr - input3);
 }
@@ -92,7 +87,7 @@ TEST(VolumeMapTestGroup, FindEndOfVolumeMapInString) {
 TEST(VolumeMapTestGroup, VolumeMapTokenize) {
 
     char *input = strdup("abcd:efgh");
-    char **tokens = __tokenizeVolumeMapInput(input);
+    char **tokens = _tokenizeVolumeMapInput(input);
     size_t ntokens = 0;
     for ( ; tokens && tokens[ntokens]; ntokens++) { }
 
@@ -104,7 +99,7 @@ TEST(VolumeMapTestGroup, VolumeMapTokenize) {
     free(input);
 
     input = strdup("abcd:efgh:flag");
-    tokens = __tokenizeVolumeMapInput(input);
+    tokens = _tokenizeVolumeMapInput(input);
     for (ntokens = 0 ; tokens && tokens[ntokens]; ntokens++) { }
     CHECK(tokens != NULL && ntokens == 3);
     CHECK(strcmp(tokens[0], "abcd") == 0);
@@ -115,7 +110,7 @@ TEST(VolumeMapTestGroup, VolumeMapTokenize) {
     free(input);
 
     input = strdup("abcd:efgh:flag:extra");
-    tokens = __tokenizeVolumeMapInput(input);
+    tokens = _tokenizeVolumeMapInput(input);
     for (ntokens = 0 ; tokens && tokens[ntokens]; ntokens++) { }
     CHECK(tokens != NULL && ntokens == 4);
     CHECK(strcmp(tokens[0], "abcd") == 0);
@@ -127,7 +122,7 @@ TEST(VolumeMapTestGroup, VolumeMapTokenize) {
     free(input);
 
     input = strdup("no delim test");
-    tokens = __tokenizeVolumeMapInput(input);
+    tokens = _tokenizeVolumeMapInput(input);
     for (ntokens = 0 ; tokens && tokens[ntokens]; ntokens++) { }
     //fprintf(stderr," got %lu tokens\n0: %s\n1: %s\n2: %s\n", ntokens, tokens[0], tokens[1], tokens[2]);
     CHECK(tokens != NULL && ntokens == 1);
@@ -139,16 +134,16 @@ TEST(VolumeMapTestGroup, VolumeMapTokenize) {
 }
 
 TEST(VolumeMapTestGroup, VolumeMapParseBytes) {
-    ssize_t parsedVal = __parseBytes("5");
+    ssize_t parsedVal = _parseBytes("5");
     CHECK(parsedVal == 5);
 
-    parsedVal = __parseBytes("5k");
+    parsedVal = _parseBytes("5k");
     CHECK(parsedVal = 5 * 1024);
 
-    parsedVal = __parseBytes("500K");
+    parsedVal = _parseBytes("500K");
     CHECK(parsedVal == 500 * 1024);
 
-    parsedVal = __parseBytes("500KB");
+    parsedVal = _parseBytes("500KB");
     CHECK(parsedVal == 500 * 1024);
 }
 
@@ -157,14 +152,14 @@ TEST(VolumeMapTestGroup, VolumeMapParseFlag) {
     VolumeMapFlag *flags = NULL;
     size_t flagsCapacity = 0;
 
-    int ret = __parseFlag(flag, &flags, &flagsCapacity);
+    int ret = _parseFlag(flag, &flags, &flagsCapacity);
     CHECK(ret == 0);
     CHECK(flagsCapacity == 1);
     CHECK(flags[0].type == VOLMAP_FLAG_READONLY);
     free(flag);
 
     flag = strdup("rec");
-    ret = __parseFlag(flag, &flags, &flagsCapacity);
+    ret = _parseFlag(flag, &flags, &flagsCapacity);
     CHECK(ret == 0);
     CHECK(flagsCapacity == 2);
     CHECK(flags[0].type == VOLMAP_FLAG_READONLY);
@@ -172,7 +167,7 @@ TEST(VolumeMapTestGroup, VolumeMapParseFlag) {
     free(flag);
 
     flag = strdup("rec=key1=value1,key2=value2");
-    ret = __parseFlag(flag, &flags, &flagsCapacity);
+    ret = _parseFlag(flag, &flags, &flagsCapacity);
     CHECK(ret != 0);
     CHECK(flagsCapacity == 2);
     CHECK(flags[0].type == VOLMAP_FLAG_READONLY);
@@ -180,12 +175,12 @@ TEST(VolumeMapTestGroup, VolumeMapParseFlag) {
     free(flag);
 
     flag = strdup("perNodeCache");
-    ret = __parseFlag(flag, &flags, &flagsCapacity);
+    ret = _parseFlag(flag, &flags, &flagsCapacity);
     CHECK(ret != 0); /* no default size */
     free(flag);
 
     flag = strdup("perNodeCache=size=4T,bs=4M");
-    ret = __parseFlag(flag, &flags, &flagsCapacity);
+    ret = _parseFlag(flag, &flags, &flagsCapacity);
     CHECK(ret == 0);
     CHECK(flagsCapacity == 3);
     CHECK(flags[0].type == VOLMAP_FLAG_READONLY);
