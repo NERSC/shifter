@@ -159,6 +159,47 @@ TEST(ShifterCoreTestGroup, CopyFile_basic) {
     free(toFile);
 }
 
+TEST(ShifterCoreTestGroup, setupPerNodeCacheFilename_tests) {
+    int ret = 0;
+    char buffer[PATH_MAX];
+    VolMapPerNodeCacheConfig *cache = (VolMapPerNodeCacheConfig *) malloc(sizeof(VolMapPerNodeCacheConfig));
+
+    memset(cache, 0, sizeof(VolMapPerNodeCacheConfig));
+
+    /* should fail because cache is NULL */
+    ret = setupPerNodeCacheFilename(NULL, buffer, 10);
+    CHECK(ret != 0);
+
+    /* should fail because buffer is NULL */
+    ret = setupPerNodeCacheFilename(cache, NULL, 10);
+    CHECK(ret != 0);
+
+    /* should fail because buffer len is 0 */
+    ret = setupPerNodeCacheFilename(cache, buffer, 0);
+    CHECK(ret != 0);
+
+
+    /* should successfully work */
+    char hostname[128];
+    char result[1024];
+    gethostname(hostname, 128);
+    snprintf(result, 1024, "/tmp/file_%s.ext4", hostname);
+    cache->fstype = strdup("ext4");
+    snprintf(buffer, PATH_MAX, "/tmp/file");
+    ret = setupPerNodeCacheFilename(cache, buffer, PATH_MAX);
+    CHECK(ret == 0);
+    CHECK(strcmp(buffer, result) == 0);
+
+    /* should fail because fstype is NULL */
+    free(cache->fstype);
+    cache->fstype = NULL;
+    ret = setupPerNodeCacheFilename(cache, buffer, PATH_MAX);
+    CHECK(ret != 0);
+
+
+    free_VolMapPerNodeCacheConfig(cache);
+}
+
 #ifdef NOTROOT
 IGNORE_TEST(ShifterCoreTestGroup, CopyFile_chown) {
 #else

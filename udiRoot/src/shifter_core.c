@@ -1044,11 +1044,33 @@ int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig) {
     return ret;
 }
 
-int setupPerNodeCacheFilename(VolMapPerNodeCacheConfig *cache, char *from_buffer, size_t from_len) {
+int setupPerNodeCacheFilename(
+        VolMapPerNodeCacheConfig *cache,
+        char *buffer,
+        size_t buffer_len)
+{
+    char hostname_buf[128];
+    size_t pos = 0;
+
+    if (    cache == NULL ||
+            cache->fstype == NULL  ||
+            buffer == NULL ||
+            buffer_len == 0)
+    {
+        return 1;
+    }
+    pos = strlen(buffer);
+    if (pos > buffer_len) {
+        return 1;
+    }
+    if (gethostname(hostname_buf, 128) != 0) {
+        return 1;
+    }
+    snprintf(&(buffer[pos]), buffer_len - pos, "_%s.%s", hostname_buf, cache->fstype);
     return 0;
 }
 
-int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, char *from_buffer, UdiRootConfig *udiConfig) {
+int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *buffer, UdiRootConfig *udiConfig) {
     return 0;
 }
 

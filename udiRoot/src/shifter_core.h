@@ -107,6 +107,9 @@ int shifter_appendenv(char ***env, char *var);
 int shifter_prependenv(char ***env, char *var);
 int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig);
 
+int setupPerNodeCacheFilename(VolMapPerNodeCacheConfig *, char *, size_t);
+int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *from_buffer, UdiRootConfig *udiConfig);
+
 #ifdef __cplusplus
 }
 #endif
