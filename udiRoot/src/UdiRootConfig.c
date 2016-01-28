@@ -386,7 +386,7 @@ static int _assign(const char *key, const char *value, void *t_config) {
     } else if (strcmp(key, "siteFs") == 0) {
         if (config->siteFs == NULL) {
             config->siteFs = (VolumeMap *) malloc(sizeof(VolumeMap));
-            memset(&(config->siteFs), 0, sizeof(VolumeMap));
+            memset(config->siteFs, 0, sizeof(VolumeMap));
         }
         if (parseVolumeMapSiteFs(value, config->siteFs) != 0) {
             fprintf(stderr, "FAILED to parse siteFs volumeMap\n");
