@@ -41,7 +41,8 @@ SHIFTERIMG_SOURCES = \
     shifterimg.c \
     ImageData.c \
     utility.c \
-    UdiRootConfig.c
+    UdiRootConfig.c \
+	VolumeMap.c
 
 
 shifter_SOURCES = $(SHIFTER_SOURCES)
