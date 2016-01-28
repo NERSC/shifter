@@ -1108,7 +1108,7 @@ int setupVolumeMapMounts(
 
         /* check if this is a per-volume cache, and if so mangle the from name
          * and then create the volume backing store */
-        for (flagIdx = 0; flags[flagIdx].type != 0; flagIdx++) {
+        for (flagIdx = 0; flags && flags[flagIdx].type != 0; flagIdx++) {
             flagsInEffect |= flags[flagIdx].type;
             if (flags[flagIdx].type == VOLMAP_FLAG_PERNODECACHE) {
                 int ret = 0;
