@@ -13,8 +13,7 @@ autoLoadKernelModule=1
 udiRootPath=@@@PREFIX@@@
 sitePreMountHook=@@@CONFIG_DIR@@@/premount.sh
 sitePostMountHook=@@@CONFIG_DIR@@@/postmount.sh
-siteFs=/home \
-       /mnt
+siteFs=/home;/mnt
 optUdiImage=@@@PREFIX@@@/deps/udiImage
 etcPath=@@@PREFIX@@@/etc_files
 kmodBasePath=@@@PREFIX@@@/kmod

@@ -1039,9 +1039,17 @@ int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig) {
         return 1;
     }
 
-    ret = setupVolumeMapMounts(mountCache, map, udiRoot, udiRoot, 1, udiConfig);
+    ret = setupVolumeMapMounts(&mountCache, map, udiRoot, udiRoot, 1, udiConfig);
     free_MountList(&mountCache, 0);
     return ret;
+}
+
+int setupPerNodeCacheFilename(VolMapPerNodeCacheConfig *cache, char *from_buffer, size_t from_len) {
+    return 0;
+}
+
+int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, char *from_buffer, UdiRootConfig *udiConfig) {
+    return 0;
 }
 
 int setupVolumeMapMounts(
@@ -1054,7 +1062,7 @@ int setupVolumeMapMounts(
 ) {
     char *filtered_from = NULL;
     char *filtered_to = NULL;
-    VolumeMapFlag *flag = NULL;
+    VolumeMapFlag *flags = NULL;
 
     size_t mapIdx = 0;
 
@@ -1062,7 +1070,7 @@ int setupVolumeMapMounts(
     char to_buffer[PATH_MAX];
     struct stat statData;
 
-    if (udiConfig == NULL)
+    if (udiConfig == NULL) {
         return 1;
     }
 
@@ -1077,6 +1085,7 @@ int setupVolumeMapMounts(
 
     for (mapIdx = 0; mapIdx < map->n; mapIdx++) {
         size_t flagsInEffect = 0;
+        size_t flagIdx = 0;
         filtered_from = userInputPathFilter(map->from[mapIdx], 1);
         filtered_to = userInputPathFilter(map->to[mapIdx], 1);
         flags = map->flags[mapIdx];
@@ -1102,6 +1111,8 @@ int setupVolumeMapMounts(
         for (flagIdx = 0; flags[flagIdx].type != 0; flagIdx++) {
             flagsInEffect |= flags[flagIdx].type;
             if (flags[flagIdx].type == VOLMAP_FLAG_PERNODECACHE) {
+                int ret = 0;
+
                 VolMapPerNodeCacheConfig *cache = (VolMapPerNodeCacheConfig *) flags[flagIdx].value;
                 ret = setupPerNodeCacheFilename(cache, from_buffer, PATH_MAX);
                 if (ret != 0) {
@@ -1142,12 +1153,11 @@ int setupVolumeMapMounts(
         if (flagsInEffect & VOLMAP_FLAG_PERNODECACHE) {
             /* do something to mount backing store */
         } else {
-            _BINDMOUNT(&mountCache, from_buffer, to_buffer, flagsInEffect, 1);
+            _BINDMOUNT(mountCache, from_buffer, to_buffer, flagsInEffect, 1);
         }
     }
 
 #undef _BINDMOUNT
-    free_MountList(&mountCache, 0);
     return 0;
 
 _setupVolumeMapMounts_unclean:
@@ -1156,9 +1166,6 @@ _setupVolumeMapMounts_unclean:
     }
     if (filtered_to != NULL) {
         free(filtered_to);
-    }
-    if (filtered_flags != NULL) {
-        free(filtered_flags);
     }
     return 1;
 }
