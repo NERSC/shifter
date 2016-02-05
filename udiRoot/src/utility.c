@@ -367,3 +367,51 @@ char *alloc_strgenf(const char *format, ...) {
     }
     return NULL;
 }
+
+char *cleanPath(const char *path) {
+    if (!path) return NULL;
+    size_t len = strlen(path) + 1;
+
+    char *ret = (char *) malloc(sizeof(char) * len);
+    memset(ret, 0, sizeof(char) * len);
+
+    char *wPtr = ret;
+    const char *rPtr = path;
+    char lastWrite = 0;
+
+    while (rPtr && *rPtr && (wPtr - ret) < len) {
+        /* prevent repeated '/' */
+        if (*rPtr == '/' && lastWrite == '/') {
+            rPtr++;
+            continue;
+        }
+
+        *wPtr = *rPtr;
+        lastWrite = *wPtr;
+        wPtr++;
+        rPtr++;
+    }
+
+    /* remove trailing '/' if path is longer than '/' */
+    if (wPtr - ret > 1 && *(wPtr - 1) == '/') {
+        *(wPtr - 1) = 0;
+    }
+
+    /* terminate string */
+    *wPtr = 0;
+
+    return ret;
+}
+
+int pathcmp(const char *a, const char *b) {
+    if (a && !b) return 1;
+    if (!a && b) return -1;
+    if (!a && !b) return 0;
+
+    char *myA = cleanPath(a);
+    char *myB = cleanPath(b);
+    int ret = strcmp(myA, myB);
+    free(myA);
+    free(myB);
+    return ret;
+}
