@@ -52,6 +52,7 @@ typedef enum _ImageFormat {
     FORMAT_EXT4,
     FORMAT_SQUASHFS,
     FORMAT_CRAMFS,
+    FORMAT_XFS,
     FORMAT_INVALID
 } ImageFormat;
 

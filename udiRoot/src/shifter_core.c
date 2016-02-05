@@ -945,10 +945,13 @@ _remountUdiRootReadonly_unclean:
 }
 
 int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig) {
-    char loopMount[PATH_MAX];
+    char loopMountPath[PATH_MAX];
     char imagePath[PATH_MAX];
-    char mountExec[PATH_MAX];
     struct stat statData;
+#define MKDIR(dir, perm) if (mkdir(dir, perm) != 0) { \
+    fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", dir); \
+    goto _mountImageLoop_unclean; \
+}
     if (imageData == NULL || udiConfig == NULL) {
         return 1;
     }
@@ -958,13 +961,26 @@ int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig) {
     if (udiConfig->loopMountPoint == NULL || strlen(udiConfig->loopMountPoint) == 0) {
         return 1;
     }
-#define MKDIR(dir, perm) if (mkdir(dir, perm) != 0) { \
-    fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", dir); \
-    goto _mntImgLoop_unclean; \
+    if (stat(udiConfig->loopMountPoint, &statData) != 0) {
+        MKDIR(udiConfig->loopMountPoint, 0755);
+    }
+    snprintf(loopMountPath, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->loopMountPoint);
+    loopMountPath[PATH_MAX-1] = 0;
+    snprintf(imagePath, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, imageData->filename);
+    imagePath[PATH_MAX-1] = 0;
+    loopMount(imagePath, loopMountPath, imageData->format, udiConfig);
+#undef MKDIR
+    return 0;
+_mountImageLoop_unclean:
+    return 1;
 }
+
+int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat format, UdiRootConfig *udiConfig) {
+    char mountExec[PATH_MAX];
+    struct stat statData;
 #define LOADKMOD(name, path) if (loadKernelModule(name, path, udiConfig) != 0) { \
     fprintf(stderr, "FAILED to load %s kernel module.\n", name); \
-    goto _mntImgLoop_unclean; \
+    goto _loopMount_unclean; \
 }
 #define LOOPMOUNT(mountExec, from, to, imgtype) { \
     char *args[] = {strdup(mountExec), \
@@ -978,51 +994,46 @@ int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig) {
     } \
     if (ret != 0) { \
         fprintf(stderr, "FAILED to mount image %s (%s) on %s\n", from, imgtype, to); \
-        goto _mntImgLoop_unclean; \
+        goto _loopMount_unclean; \
     } \
 }
 
-    if (stat(udiConfig->loopMountPoint, &statData) != 0) {
-        MKDIR(udiConfig->loopMountPoint, 0755);
-    }
-    snprintf(loopMount, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->loopMountPoint);
-    loopMount[PATH_MAX-1] = 0;
-    snprintf(imagePath, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, imageData->filename);
-    imagePath[PATH_MAX-1] = 0;
     snprintf(mountExec, PATH_MAX, "%s%s/sbin/mount", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
 
     if (stat(mountExec, &statData) != 0) {
         fprintf(stderr, "udiRoot mount executable missing: %s\n", mountExec);
-        goto _mntImgLoop_unclean;
+        goto _loopMount_unclean;
     } else if (statData.st_uid != 0 || statData.st_mode & S_IWGRP || statData.st_mode & S_IWOTH || !(statData.st_mode & S_IXUSR)) {
         fprintf(stderr, "udiRoot mount has incorrect ownership or permissions: %s\n", mountExec);
-        goto _mntImgLoop_unclean;
+        goto _loopMount_unclean;
     }
 
     if (stat("/dev/loop0", &statData) != 0) {
         LOADKMOD("loop", "drivers/block/loop.ko");
     }
-    if (imageData->format == FORMAT_EXT4) {
+    if (format == FORMAT_EXT4) {
         LOADKMOD("mbcache", "fs/mbcache.ko");
         LOADKMOD("jbd2", "fs/jbd2/jbd2.ko");
         LOADKMOD("ext4", "fs/ext4/ext4.ko");
-        LOOPMOUNT(mountExec, imagePath, loopMount, "ext4");
-    } else if (imageData->format == FORMAT_SQUASHFS) {
+        LOOPMOUNT(mountExec, imagePath, loopMountPath, "ext4");
+    } else if (format == FORMAT_SQUASHFS) {
         LOADKMOD("squashfs", "fs/squashfs/squashfs.ko");
-        LOOPMOUNT(mountExec, imagePath, loopMount, "squashfs");
-    } else if (imageData->format == FORMAT_CRAMFS) {
+        LOOPMOUNT(mountExec, imagePath, loopMountPath, "squashfs");
+    } else if (format == FORMAT_CRAMFS) {
         LOADKMOD("cramfs", "fs/cramfs/cramfs.ko");
-        LOOPMOUNT(mountExec,imagePath, loopMount, "cramfs");
+        LOOPMOUNT(mountExec,imagePath, loopMountPath, "cramfs");
+    } else if (format == FORMAT_XFS) {
+        LOADKMOD("xfs", "fs/xfs/xfs.ko");
+        LOOPMOUNT(mountExec,imagePath, loopMountPath, "xfs");
     } else {
         fprintf(stderr, "ERROR: unknown image format.\n");
-        goto _mntImgLoop_unclean;
+        goto _loopMount_unclean;
     }
 
 #undef LOADKMOD
-#undef MKDIR
 #undef LOOPMOUNT
     return 0;
-_mntImgLoop_unclean:
+_loopMount_unclean:
     return 1;
 } 
 
@@ -1260,6 +1271,8 @@ int setupVolumeMapMounts(
                     fprintf(stderr, "FAILED to set perNodeCache name\n");
                     goto _setupVolumeMapMounts_unclean;
                 }
+
+                /* intialize the backing store */
                 ret = setupPerNodeCacheBackingStore(cache, from_buffer, udiConfig);
                 if (ret != 0) {
                     fprintf(stderr, "FAILED to setup perNodeCache\n");
@@ -1292,7 +1305,28 @@ int setupVolumeMapMounts(
             goto _setupVolumeMapMounts_unclean;
         }
         if (flagsInEffect & VOLMAP_FLAG_PERNODECACHE) {
+            VolMapPerNodeCacheConfig *cacheConfig = NULL;
             /* do something to mount backing store */
+            for (flagIdx = 0; flags && flags[flagIdx].type != 0; flagIdx++) {
+                if (flags[flagIdx].type == VOLMAP_FLAG_PERNODECACHE) {
+                    cacheConfig = (VolMapPerNodeCacheConfig *) flags[flagIdx].value;
+                    break;
+                }
+            }
+            if (cacheConfig == NULL) {
+                fprintf(stderr, "FAILED to find per-node cache config, exiting.\n");
+                goto _setupVolumeMapMounts_unclean;
+            }
+            ImageFormat format = FORMAT_INVALID;
+            if (strcmp(cacheConfig->fstype, "xfs") == 0) {
+                format = FORMAT_XFS;
+            }
+            if (strcmp(cacheConfig->method, "loop") == 0) {
+                loopMount(from_buffer, to_buffer, format, udiConfig);
+            } else {
+                fprintf(stderr, "FAILED to understand per-node cache mounting method, exiting.\n");
+                goto _setupVolumeMapMounts_unclean;
+            }
         } else {
             _BINDMOUNT(mountCache, from_buffer, to_buffer, flagsInEffect, 1);
         }
