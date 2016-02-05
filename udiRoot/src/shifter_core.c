@@ -1077,7 +1077,7 @@ int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *b
         fprintf(stderr, "configuration is invalid (null), cannot setup per-node cache\n");
         return 1;
     }
-    if (udiConfig->target_uid == 0 || udiConfig->target_gid) {
+    if (udiConfig->target_uid == 0 || udiConfig->target_gid == 0) {
         fprintf(stderr, "will not setup per-node cache with target uid or gid of 0\n");
         return 1;
     }
@@ -1090,17 +1090,19 @@ int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *b
 
         chdir("/");
         /* drop privileges */
-        if (setgroups(1, &(udiConfig->target_gid)) != 0) {
-            fprintf(stderr, "Failed to setgroups\n");
-            exit(1);
-        }
-        if (setresgid(udiConfig->target_gid, udiConfig->target_gid, udiConfig->target_gid) != 0) {
-            fprintf(stderr, "Failed to setgid to %d\n", udiConfig->target_gid);
-            exit(1);
-        }
-        if (setresuid(udiConfig->target_uid, udiConfig->target_uid, udiConfig->target_uid) != 0) {
-            fprintf(stderr, "Failed to setuid to %d\n", udiConfig->target_uid);
-            exit(1);
+        if (getuid() != udiConfig->target_uid) {
+            if (setgroups(1, &(udiConfig->target_gid)) != 0) {
+                fprintf(stderr, "Failed to setgroups\n");
+                exit(1);
+            }
+            if (setresgid(udiConfig->target_gid, udiConfig->target_gid, udiConfig->target_gid) != 0) {
+                fprintf(stderr, "Failed to setgid to %d\n", udiConfig->target_gid);
+                exit(1);
+            }
+            if (setresuid(udiConfig->target_uid, udiConfig->target_uid, udiConfig->target_uid) != 0) {
+                fprintf(stderr, "Failed to setuid to %d\n", udiConfig->target_uid);
+                exit(1);
+            }
         }
 
         if (stat(buffer, &statData) == 0) {
