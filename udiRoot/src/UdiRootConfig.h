@@ -73,6 +73,7 @@ typedef struct _ImageGwServer {
 } ImageGwServer;
 
 typedef struct _UdiRootConfig {
+    /* long term configurations coming from configuration file */
     char *nodeContextPrefix;
     char *udiMountPoint;
     char *loopMountPoint;
@@ -104,7 +105,10 @@ typedef struct _UdiRootConfig {
     char *cpPath;
     char *mvPath;
     char *chmodPath;
+    char *ddPath;
+    char *mkfsXfsPath;
 
+    /* support variables for above */
     size_t siteEnv_capacity;
     size_t siteEnvAppend_capacity;
     size_t siteEnvPrepend_capacity;
@@ -113,6 +117,14 @@ typedef struct _UdiRootConfig {
     size_t siteEnv_size;
     size_t siteEnvAppend_size;
     size_t siteEnvPrepend_size;
+
+    /* current execution context */
+    uid_t target_uid;
+    gid_t target_gid;
+    char *username;
+    char *sshPubKey;
+    char *nodeIdentifier;
+    char *jobIdentifier;
 } UdiRootConfig;
 
 int parse_UdiRootConfig(const char *, UdiRootConfig *, int validateFlags);

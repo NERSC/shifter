@@ -272,7 +272,7 @@ int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
         /* TODO move these configs into udiRoot.conf */
         cache->cacheSize = 0;
         cache->blockSize = 1024 * 1024; /* default 1MB */
-        cache->fstype = strdup("ext4");
+        cache->fstype = strdup("xfs");
         cache->method = strdup("loop");
         flag.value = cache;
 
@@ -296,8 +296,8 @@ int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
                     cache->fstype = NULL;
                 }
                 if (value != NULL) {
-                    if (strcasecmp(value, "ext4") == 0) {
-                        cache->fstype = strdup("ext4");
+                    if (strcasecmp(value, "xfs") == 0) {
+                        cache->fstype = strdup("xfs");
                     }
                 }
                 if (cache->fstype == NULL) {
@@ -790,7 +790,7 @@ int validate_VolMapPerNodeCacheConfig(VolMapPerNodeCacheConfig *cacheConfig) {
     if (cacheConfig->method == NULL) return 4;
     if (strcmp(cacheConfig->method, "loop") != 0) return 5;
     if (cacheConfig->fstype == NULL) return 6;
-    if (strcmp(cacheConfig->fstype, "ext4") != 0) return 7;
+    if (strcmp(cacheConfig->fstype, "xfs") != 0) return 7;
 
     return 0;
 }

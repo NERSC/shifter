@@ -57,6 +57,9 @@
 #include <limits.h>
 #include <dirent.h>
 #include <signal.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <grp.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -392,7 +395,6 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     char udiRoot[PATH_MAX];
     char mntBuffer[PATH_MAX];
     char srcBuffer[PATH_MAX];
-    char **volPtr = NULL;
     const char **fnamePtr = NULL;
     int ret = 0;
     struct stat statData;
@@ -1071,6 +1073,121 @@ int setupPerNodeCacheFilename(
 }
 
 int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *buffer, UdiRootConfig *udiConfig) {
+    if (udiConfig == NULL || cache == NULL || cache->fstype == NULL) {
+        fprintf(stderr, "configuration is invalid (null), cannot setup per-node cache\n");
+        return 1;
+    }
+    if (udiConfig->target_uid == 0 || udiConfig->target_gid) {
+        fprintf(stderr, "will not setup per-node cache with target uid or gid of 0\n");
+        return 1;
+    }
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        struct stat statData;
+        int fd = 0;
+        memset(&statData, 0, sizeof(struct stat));
+
+        chdir("/");
+        /* drop privileges */
+        if (setgroups(1, &(udiConfig->target_gid)) != 0) {
+            fprintf(stderr, "Failed to setgroups\n");
+            exit(1);
+        }
+        if (setresgid(udiConfig->target_gid, udiConfig->target_gid, udiConfig->target_gid) != 0) {
+            fprintf(stderr, "Failed to setgid to %d\n", udiConfig->target_gid);
+            exit(1);
+        }
+        if (setresuid(udiConfig->target_uid, udiConfig->target_uid, udiConfig->target_uid) != 0) {
+            fprintf(stderr, "Failed to setuid to %d\n", udiConfig->target_uid);
+            exit(1);
+        }
+
+        if (stat(buffer, &statData) == 0) {
+            fprintf(stderr, "Backing file %s already exists, failing\n", buffer);
+            exit(1);
+        }
+        fd = open(buffer, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+        if (fd < 0) {
+            fprintf(stderr, "Failed to open file %s for writing, failing\n", buffer);
+            exit(1);
+        }
+        if (fallocate(fd, 0, 0, cache->cacheSize) < 0) {
+            /* only some filesystems support this mode of fallocate, if
+             * unsupported use dd to generate the backing file */
+            if (errno == EOPNOTSUPP) {
+                char *args[7];
+                char **arg = NULL;
+                int ret = 0;
+                if (udiConfig->ddPath == NULL) {
+                    fprintf(stderr, "Must define ddPath in udiRoot configuration to use this feature\n");
+                    exit(1);
+                }
+                args[0] = strdup(udiConfig->ddPath);
+                args[1] = strdup("if=/dev/zero");
+                args[2] = alloc_strgenf("of=%s", buffer);
+                args[3] = strdup("bs=1");
+                args[4] = strdup("count=0");
+                args[5] = alloc_strgenf("seek=%lu", cache->cacheSize);
+                args[6] = NULL;
+                ret = forkAndExecv(args);
+                for (arg = args; *arg; arg++) {
+                    free(*arg);
+                }
+
+                if (ret != 0) {
+                    fprintf(stderr, "FAILED to dd backing store for cache on %s\n", buffer);
+                    exit(1);
+                }
+            } else {
+                perror("FAILED to fallocate() cache backing store");
+                exit(1);
+            }
+        }
+
+        if (strcmp(cache->fstype, "xfs") == 0) {
+            char **args = NULL;
+            char **argPtr = NULL;
+            int ret = 0;
+            if (udiConfig->mkfsXfsPath == NULL) {
+                fprintf(stderr, "Must define mkfsXfsPath in udiRoot configuration to use this feature\n");
+                exit(1);
+            }
+            args = (char **) malloc(sizeof(char *) * 4);
+            args[0] = strdup(udiConfig->mkfsXfsPath);
+            args[1] = strdup("-d");
+            args[2] = alloc_strgenf("name=%s,file=1,size=%lu", buffer, cache->cacheSize);
+            args[3] = NULL;
+            ret = forkAndExecv(args);
+            for (argPtr = args; argPtr && *argPtr; argPtr++) {
+                free(*argPtr);
+            }
+            free(args);
+            if (ret != 0) {
+                fprintf(stderr, "FAILED to create the XFS cache filesystem on %s\n", buffer);
+                exit(1);
+            }
+        }
+        exit(0);
+    } else if (pid > 0) {
+        int status = 0;
+        do {
+            pid_t ret = waitpid(pid, &status, 0);
+            if (ret != pid) {
+                fprintf(stderr, "waited for wrong pid: %d != %d\n", pid, ret);
+                return 1;
+            }
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+        if (WIFEXITED(status)) {
+            status = WEXITSTATUS(status);
+        } else {
+            status = 1;
+        }
+        return status;
+    } else {
+        fprintf(stderr, "FAILED to fork to create backing store!\n");
+        return 1;
+    }
     return 0;
 }
 
