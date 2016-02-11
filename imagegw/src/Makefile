@@ -5,6 +5,7 @@ all:
 
 test/config/redis.conf: Makefile
 	echo "requirepass $(REDIS_PASSWORD)" > test/config/redis.conf
+	echo 'rename-command CONFIG ""' >> test/config/redis.conf
 	sed -i -e 's/redis:\/\/:.*@/redis:\/\/:$(REDIS_PASSWORD)@/' ./test/config/imagemanager.json
 
 test/config/ssh.key:
