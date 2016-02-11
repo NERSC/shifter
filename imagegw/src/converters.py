@@ -127,7 +127,7 @@ def writemeta(format,meta,metafile):
         # write out ENV, ENTRYPOINT, WORKDIR and format
         mf.write("FORMAT: %s\n"%(format))
         if 'entrypoint' in meta and meta['entrypoint'] is not None:
-            mf.write("ENTRYPOINT: %s\n"%(meta['entrypoint']))
+            mf.write("ENTRY: %s\n"%(meta['entrypoint']))
         if 'workdir' in meta and meta['workdir'] is not None:
             mf.write("WORKDIR: %s\n"%(meta['workdir']))
         if 'env' in meta and meta['env'] is not None:

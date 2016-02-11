@@ -7,23 +7,28 @@ api:
    - redis
   volumes:
    - /mnt/sda1/imagegw:/data
-  command: api
+   - ./test/config:/config
+  command: munge:systema:munge munge:systemb:munge api
 mongo:
   image: mongo:2.6
   volumes:
-    - /mnt/sda1/data/mongo:/data/db
-  command: mongod --smallfiles
+    - /data/db
+  command: --smallfiles
 redis:
    image: redis
 systema:
   container_name: systema
-  build: test
+  image: shifter-test
   links:
    - api
   ports:
    - 22
   volumes:
-  - /mnt/sda1/data/systema:/data
+  - /images
+  - ./test/config/:/config
+  privileged: true
+  environment:
+  - ADDUSER=canon
 workera:
   image: imagegwapi
   links:
@@ -32,19 +37,21 @@ workera:
    - systema:systema
   volumes:
    - /mnt/sda1/imagegw:/data
-  command: workera
-workerb:
-  image: imagegwapi
-  links:
-   - api
-   - redis
-  volumes:
-   - /mnt/sda1/imagegw:/data
-  command: workerb
-flower:
-  image: imagegwapi
-  links:
-   - redis
-  ports:
-   - 5556:5555
-  command: flower
+   - ./test/config/:/config
+  command: worker:systema
+#workerb:
+#  image: imagegwapi
+#  links:
+#   - api
+#   - redis
+#  volumes:
+#   - /mnt/sda1/imagegw:/data
+#   - ./test/config/:/config
+#  command: worker:systemb
+#flower:
+#  image: imagegwapi
+#  links:
+#   - redis
+#  ports:
+#   - 5556:5555
+#  command: flower
