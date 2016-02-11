@@ -10,7 +10,7 @@
     "ExpandDirectory": "/data/",
     "MongoDBURI":"mongodb://mongo/",
     "MongoDB":"ShifterTest",
-    "Broker":"redis://redis/",
+    "Broker":"redis://:password@redis/",
     "Authentication":"munge",
 
     "Locations": {

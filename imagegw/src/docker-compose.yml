@@ -15,7 +15,10 @@ mongo:
     - /data/db
   command: --smallfiles
 redis:
-   image: redis
+  image: redis
+  volumes:
+   - ./test/config:/config
+  command: redis-server /config/redis.conf
 systema:
   container_name: systema
   image: shifter-test

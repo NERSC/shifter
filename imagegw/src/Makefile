@@ -1,11 +1,21 @@
 
+REDIS_PASSWORD=mypassword
 
 all:
 
+test/config/redis.conf: Makefile
+	echo "requirepass $(REDIS_PASSWORD)" > test/config/redis.conf
+	sed -i -e 's/redis:\/\/:.*@/redis:\/\/:$(REDIS_PASSWORD)@/' ./test/config/imagemanager.json
 
-testprep:
-	@[ -e "test/config/munge.key" ] || dd if=/dev/urandom bs=1 count=1024 > test/config/munge.key 
-	@[ -e "test/config/ssh.key" ] || (ssh-keygen -t rsa -f test/config/ssh -N '' -C 'Test key' && mv test/config/ssh test/config/ssh.key)
+test/config/ssh.key:
+	ssh-keygen -t rsa -f test/config/ssh -N '' -C 'Test key'
+	mv test/config/ssh test/config/ssh.key
+
+
+test/config/munge.key:
+	dd if=/dev/urandom bs=1 count=1024 > test/config/munge.key 
+
+testprep: test/config/redis.conf test/config/ssh.key test/config/munge.key
 
 
 starttest: testprep
@@ -19,3 +29,7 @@ getssh:
 	$(eval PORT=$(shell docker-compose ps systema|grep systema|sed 's/.*://'|sed 's/-.*//'))
 	@echo "To connect, do:"
 	@echo "ssh -i test/config/ssh.key $(IP) -p $(PORT)"
+
+cleanup:
+	docker-compose stop
+	docker images -f dangling=true -q|xargs docker rmi
