@@ -1023,7 +1023,10 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
         LOADKMOD("cramfs", "fs/cramfs/cramfs.ko");
         LOOPMOUNT(mountExec,imagePath, loopMountPath, "cramfs");
     } else if (format == FORMAT_XFS) {
-        LOADKMOD("xfs", "fs/xfs/xfs.ko");
+        if (loadKernelModule("xfs", "fs/xfs/xfs.ko", udiConfig) != 0) {
+            LOADKMOD("exportfs", "fs/exportfs/exportfs.ko");
+            LOADKMOD("xfs", "fs/xfs/xfs.ko");
+        }
         LOOPMOUNT(mountExec,imagePath, loopMountPath, "xfs");
     } else {
         fprintf(stderr, "ERROR: unknown image format.\n");
