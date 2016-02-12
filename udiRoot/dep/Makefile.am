@@ -1,6 +1,6 @@
 AUTOMAKE_OPTIONS=foreign
 
-sbin_PROGRAMS = mount
+sbin_PROGRAMS = mount mkfs.xfs
 noinst_PROGRAMS = cpputest
 
 mount:
