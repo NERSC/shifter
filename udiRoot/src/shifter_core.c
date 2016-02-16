@@ -1299,9 +1299,10 @@ int setupVolumeMapMounts(
                     fprintf(stderr, "FAILED to find volume \"to\": %s\n", to_buffer);
                     goto _setupVolumeMapMounts_unclean;
                 }
+            } else {
+                fprintf(stderr, "FAILED to find volume \"to\": %s\n", to_buffer);
+                goto _setupVolumeMapMounts_unclean;
             }
-            fprintf(stderr, "FAILED to find volume \"to\": %s\n", to_buffer);
-            goto _setupVolumeMapMounts_unclean;
         }
         if (!S_ISDIR(statData.st_mode)) {
             fprintf(stderr, "FAILED \"to\" location is not directory: %s\n", to_buffer);
