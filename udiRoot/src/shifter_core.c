@@ -1784,7 +1784,7 @@ int _shifterCore_bindMount(MountList *mountCache, const char *from, const char *
         }
     }
 
-    if (strcmp(from, "/dev") == 0) {
+    if (strcmp(from, "/dev") == 0 || (flags & VOLMAP_FLAG_READONLY)) {
         mountFlags |= MS_REC;
         remountFlags |= MS_REC;
     }
@@ -1804,9 +1804,6 @@ int _shifterCore_bindMount(MountList *mountCache, const char *from, const char *
 
     if (flags & VOLMAP_FLAG_READONLY) {
         remountFlags |= MS_RDONLY;
-    }
-    if (flags & VOLMAP_FLAG_RECURSIVE) {
-        remountFlags |= MS_REC;
     }
 
     /* remount the bind-mount to get the needed mount flags */

@@ -260,7 +260,7 @@ int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
     } else if (strcasecmp(flagName, "rec") == 0) {
         flag.type = VOLMAP_FLAG_RECURSIVE;
         if (kvCount > 0) {
-            fprintf(stderr, "Flag ro takes no arguments, failed to parse.\n");
+            fprintf(stderr, "Flag rec takes no arguments, failed to parse.\n");
             goto __parseFlags_exit_unclean;
         }
     } else if (strcasecmp(flagName, "perNodeCache") == 0) {
@@ -528,8 +528,8 @@ int _parseVolumeMap(
             memset(flagPtr, 0, sizeof(VolumeMapFlag *) * (volMap->flagsCapacity - volMap->n));
         }
         
-        *flagPtr = flags;
-        *(flagPtr + 1) = NULL;
+        *flagPtr++ = flags;
+        *flagPtr = NULL;
 
         if (ret != 0) goto _parseVolumeMap_unclean;
 
