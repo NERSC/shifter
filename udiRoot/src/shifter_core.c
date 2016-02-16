@@ -1784,7 +1784,7 @@ int _shifterCore_bindMount(MountList *mountCache, const char *from, const char *
         }
     }
 
-    if (strcmp(from, "/dev") == 0 || (flags & VOLMAP_FLAG_READONLY)) {
+    if (strcmp(from, "/dev") == 0 || (flags & VOLMAP_FLAG_RECURSIVE)) {
         mountFlags |= MS_REC;
         remountFlags |= MS_REC;
     }
