@@ -72,7 +72,7 @@ int validateVolumeMap_userRequest(
     const char *toExactDisallowed[] = {"/opt", "opt", NULL};
     const char *fromStartsWithDisallowed[] = { NULL };
     const char *fromExactDisallowed[] = { NULL };
-    size_t allowedFlags = VOLMAP_FLAG_READONLY;
+    size_t allowedFlags = VOLMAP_FLAG_READONLY | VOLMAP_FLAG_PERNODECACHE;
 
     return _validateVolumeMap(
             from, to, flags, toStartsWithDisallowed, toExactDisallowed,
