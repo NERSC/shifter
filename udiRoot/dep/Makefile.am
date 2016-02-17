@@ -9,7 +9,8 @@ mount:
 cpputest:
 	./cpputest.sh
 
-.PHONY: clean-local-check 
+.PHONY: clean-local-check mkfs.phony
+mkfs.xfs: mkfs.phony
 
 install-data-hook:
 	mkdir -p $(DESTDIR)$(exec_prefix)/opt
