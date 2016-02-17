@@ -1,12 +1,12 @@
 AUTOMAKE_OPTIONS=foreign
 
 sbin_PROGRAMS = mount mkfs.xfs
-noinst_PROGRAMS = cpputest
+noinst_PROGRAMS = cpputest/include
 
 mount:
 	./build.sh
 
-cpputest:
+cpputest/include:
 	./cpputest.sh
 
 .PHONY: clean-local-check mkfs.phony
