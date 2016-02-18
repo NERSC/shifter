@@ -968,34 +968,22 @@ int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig) {
     loopMountPath[PATH_MAX-1] = 0;
     snprintf(imagePath, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, imageData->filename);
     imagePath[PATH_MAX-1] = 0;
-    loopMount(imagePath, loopMountPath, imageData->format, udiConfig);
+    loopMount(imagePath, loopMountPath, imageData->format, udiConfig, 1);
 #undef MKDIR
     return 0;
 _mountImageLoop_unclean:
     return 1;
 }
 
-int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat format, UdiRootConfig *udiConfig) {
+int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat format, UdiRootConfig *udiConfig, int readOnly) {
     char mountExec[PATH_MAX];
     struct stat statData;
+    int ready = 0;
+    int useAutoclear = 0;
+    const char *imgType = NULL;
 #define LOADKMOD(name, path) if (loadKernelModule(name, path, udiConfig) != 0) { \
     fprintf(stderr, "FAILED to load %s kernel module.\n", name); \
     goto _loopMount_unclean; \
-}
-#define LOOPMOUNT(mountExec, from, to, imgtype) { \
-    char *args[] = {strdup(mountExec), \
-        strdup("-n"), strdup("-o"), strdup("loop,autoclear,ro,nosuid,nodev"), \
-        strdup(from), strdup(to), \
-        NULL}; \
-    char **argsPtr = NULL; \
-    int ret = forkAndExecv(args); \
-    for (argsPtr = args; *argsPtr != NULL; argsPtr++) { \
-        free(*argsPtr); \
-    } \
-    if (ret != 0) { \
-        fprintf(stderr, "FAILED to mount image %s (%s) on %s\n", from, imgtype, to); \
-        goto _loopMount_unclean; \
-    } \
 }
 
     snprintf(mountExec, PATH_MAX, "%s%s/sbin/mount", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
@@ -1015,26 +1003,56 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
         LOADKMOD("mbcache", "fs/mbcache.ko");
         LOADKMOD("jbd2", "fs/jbd2/jbd2.ko");
         LOADKMOD("ext4", "fs/ext4/ext4.ko");
-        LOOPMOUNT(mountExec, imagePath, loopMountPath, "ext4");
+        useAutoclear = 1;
+        ready = 1;
+        imgType = "ext4";
     } else if (format == FORMAT_SQUASHFS) {
         LOADKMOD("squashfs", "fs/squashfs/squashfs.ko");
-        LOOPMOUNT(mountExec, imagePath, loopMountPath, "squashfs");
+        useAutoclear = 1;
+        ready = 1;
+        imgType = "squashfs";
     } else if (format == FORMAT_CRAMFS) {
         LOADKMOD("cramfs", "fs/cramfs/cramfs.ko");
-        LOOPMOUNT(mountExec,imagePath, loopMountPath, "cramfs");
+        useAutoclear = 1;
+        ready = 1;
+        imgType = "cramfs";
     } else if (format == FORMAT_XFS) {
         if (loadKernelModule("xfs", "fs/xfs/xfs.ko", udiConfig) != 0) {
             LOADKMOD("exportfs", "fs/exportfs/exportfs.ko");
             LOADKMOD("xfs", "fs/xfs/xfs.ko");
         }
-        LOOPMOUNT(mountExec,imagePath, loopMountPath, "xfs");
+        useAutoclear = 0;
+        ready = 1;
+        imgType = "xfs";
     } else {
         fprintf(stderr, "ERROR: unknown image format.\n");
         goto _loopMount_unclean;
     }
+    if (ready) {
+        char *args[] = {
+            strdup(mountExec),
+            strdup("-n"),
+            strdup("-o"),
+            alloc_strgenf("loop,nosuid,nodev%s%s",
+                    (readOnly ? ",ro" : ""),
+                    (useAutoclear ? ",autoclear" : "")
+            ),
+            strdup(imagePath),
+            strdup(loopMountPath),
+            NULL
+        };
+        char **argsPtr = NULL;
+        int ret = forkAndExecv(args);
+        for (argsPtr = args; argsPtr && *argsPtr; argsPtr++) {
+            free(*argsPtr);
+        }
+        if (ret != 0) {
+            fprintf(stderr, "FAILED to mount image %s (%s) on %s\n", imagePath, imgType, loopMountPath);
+            goto _loopMount_unclean;
+        }
+    }
 
 #undef LOADKMOD
-#undef LOOPMOUNT
     return 0;
 _loopMount_unclean:
     return 1;
@@ -1326,7 +1344,7 @@ int setupVolumeMapMounts(
                 format = FORMAT_XFS;
             }
             if (strcmp(cacheConfig->method, "loop") == 0) {
-                loopMount(from_buffer, to_buffer, format, udiConfig);
+                loopMount(from_buffer, to_buffer, format, udiConfig, 0);
             } else {
                 fprintf(stderr, "FAILED to understand per-node cache mounting method, exiting.\n");
                 goto _setupVolumeMapMounts_unclean;
