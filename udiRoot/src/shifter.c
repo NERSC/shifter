@@ -493,6 +493,9 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         }
     }
 
+    udiConfig->target_uid = config->tgtUid;
+    udiConfig->target_gid = config->tgtGid;
+
     return 0;
 }
 
