@@ -60,7 +60,7 @@ class dockerv2Handle():
     repo = None
     tag = None
     protocol = 'https'
-    server = 'registry-1.index.io'
+    server = 'registry-1.docker.io'
     basePath = '/v2'
     cacert = None
     username = None

@@ -9,7 +9,8 @@ function refreshmunge {
 function update {
   IP=$(docker-machine ip $(docker-machine active))
   PORT=$(docker-compose ps systema|grep systema|sed 's/.*://'|sed 's/-.*//')
-  alias systema="ssh -i test/ssh.key $IP -p $PORT -l root"
-  echo y|ssh -i test/ssh.key $IP -p $PORT -l root date
+  alias systemaroot="ssh -i test/config/ssh.key $IP -p $PORT -l root"
+  alias systema="ssh -i test/config/ssh.key $IP -p $PORT"
+  echo y|ssh -i test/config/ssh.key $IP -p $PORT -l root date
   export IMAGEGW="$IP:5555"
 }

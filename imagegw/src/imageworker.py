@@ -101,7 +101,10 @@ def pull_image(request):
         params=config['Locations'][location]
         rtype=params['remotetype']
         if 'sslcacert' in params:
-            cacert='%s/%s'%(dir,params['sslcacert'])
+            if params['sslcacert'].startswith('/'):
+              cacert=params['sslcacert']
+            else:
+              cacert='%s/%s'%(dir,params['sslcacert'])
             if not os.path.exists(cacert):
                 raise OSError('%s does not exist'%(cacert))
     else:
