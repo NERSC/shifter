@@ -34,6 +34,9 @@ fi
 if [[ ! -e "util-linux-2.26.2.tar.gz" ]]; then
     curl -k -o "util-linux-2.26.2.tar.gz" "https://www.kernel.org/pub/linux/utils/util-linux/v2.26/util-linux-2.26.2.tar.gz"
 fi
+if [[ ! -e "xfsprogs-4.3.0.tar.gz" ]]; then
+    curl -o "xfsprogs-4.3.0.tar.gz" "ftp://oss.sgi.com/projects/xfs/cmd_tars/xfsprogs-4.3.0.tar.gz"
+fi
 
 mkdir -p musl
 tar xf "musl-${MUSL_VERSION}.tar.gz" -C musl --strip-components=1
@@ -60,6 +63,14 @@ cd util-linux
 CC=gcc ./configure "--prefix=${INST_PREFIX}" --enable-static --disable-shared
 CC=gcc make mount
 cp -p mount "${origdir}/mount"
+
+cd "${builddir}"
+mkdir -p xfsprogs
+tar xf "xfsprogs-4.3.0.tar.gz" -C xfsprogs --strip-components=1
+cd xfsprogs
+CC=gcc ./configure "--prefix=${INST_PREFIX}" --enable-static --disable-shared
+CC=gcc make
+cp -p mkfs/mkfs.xfs "${origdir}/mkfs.xfs"
 
 cd "${builddir}"
 mkdir -p libressl

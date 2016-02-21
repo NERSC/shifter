@@ -199,6 +199,10 @@ int parse_ImageData(char *type, char *identifier, UdiRootConfig *config, ImageDa
             extension = "cramfs";
             image->useLoopMount = 1;
             break;
+        case FORMAT_XFS:
+            extension = "xfs";
+            image->useLoopMount = 1;
+            break;
         case FORMAT_INVALID:
             extension = "invalid";
             image->useLoopMount = 0;
@@ -283,6 +287,7 @@ size_t fprint_ImageData(FILE *fp, ImageData *image) {
         case FORMAT_EXT4: cptr = "EXT4"; break;
         case FORMAT_SQUASHFS: cptr = "SQUASHFS"; break;
         case FORMAT_CRAMFS: cptr = "CRAMFS"; break;
+        case FORMAT_XFS: cptr = "XFS"; break;
         case FORMAT_INVALID: cptr = "INVALID"; break;
     }
     nWrite += fprintf(fp, "Image Format: %s\n", cptr);

@@ -77,12 +77,14 @@ extern "C" {
 #define INVALID_GROUP UINT_MAX
 #define FILE_SIZE_LIMIT 5242880
 
-int setupUserMounts(ImageData *imageData, VolumeMap *map, UdiRootConfig *udiConfig);
+int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig);
+int setupVolumeMapMounts(MountList *mountCache, VolumeMap *map, const char *fromPrefix, const char *toPrefix, int createTo, UdiRootConfig *udiConfig);
 int userMountFilter(char *udiRoot, char *filtered_from, char *filtered_to, char *flags);
 int isKernelModuleLoaded(const char *name);
 int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig);
 int mountImageVFS(ImageData *imageData, const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig);
 int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig);
+int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat format, UdiRootConfig *udiConfig, int readonly);
 int destructUDI(UdiRootConfig *udiConfig, int killSshd);
 int bindImageIntoUDI(const char *relpath, ImageData *imageData, UdiRootConfig *udiConfig, int copyFlag);
 int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig);
@@ -94,7 +96,6 @@ int forkAndExecv(char *const *argvs);
 pid_t findSshd(void);
 int killSshd(void);
 char **parseMounts(size_t *n_mounts);
-char *userInputPathFilter(const char *input, int allowSlash);
 char *generateShifterConfigString(const char *, ImageData *, VolumeMap *);
 int saveShifterConfig(const char *, ImageData *, VolumeMap *, UdiRootConfig *);
 int compareShifterConfig(const char *, ImageData*, VolumeMap *, UdiRootConfig *);
@@ -106,6 +107,9 @@ int shifter_putenv(char ***env, char *var);
 int shifter_appendenv(char ***env, char *var);
 int shifter_prependenv(char ***env, char *var);
 int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig);
+
+int setupPerNodeCacheFilename(VolMapPerNodeCacheConfig *, char *, size_t);
+int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *from_buffer, UdiRootConfig *udiConfig);
 
 #ifdef __cplusplus
 }

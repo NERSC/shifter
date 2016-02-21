@@ -1,15 +1,16 @@
 AUTOMAKE_OPTIONS=foreign
 
-sbin_PROGRAMS = mount
-noinst_PROGRAMS = cpputest
+sbin_PROGRAMS = mount mkfs.xfs
+noinst_PROGRAMS = cpputest/include
 
 mount:
 	./build.sh
 
-cpputest:
+cpputest/include:
 	./cpputest.sh
 
-.PHONY: clean-local-check 
+.PHONY: clean-local-check mkfs.phony
+mkfs.xfs: mkfs.phony
 
 install-data-hook:
 	mkdir -p $(DESTDIR)$(exec_prefix)/opt

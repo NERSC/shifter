@@ -71,6 +71,27 @@ int _shifterCore_copyFile(const char *cpPath, const char *source, const char *de
 
 using namespace std;
 
+int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const char *tmpDir, const char *cwd) {
+    *config = (UdiRootConfig *) malloc(sizeof(UdiRootConfig));
+    *image = (ImageData *) malloc(sizeof(ImageData));
+
+    memset(*config, 0, sizeof(UdiRootConfig));
+    memset(*image, 0, sizeof(ImageData));
+
+    (*image)->type = strdup("local");
+    (*image)->identifier = strdup("/");
+    (*config)->udiMountPoint = strdup(tmpDir);
+    (*config)->rootfsType = strdup(ROOTFS_TYPE);
+    (*config)->nodeContextPrefix = strdup("");
+    (*config)->etcPath = alloc_strgenf("%s/%s", cwd, "etc");
+    (*config)->cpPath = strdup("/bin/cp");
+    (*config)->mvPath = strdup("/bin/mv");
+    (*config)->chmodPath = strdup("/bin/chmod");
+    (*config)->allowLocalChroot = 1;
+    return 0;
+}
+
+
 TEST_GROUP(ShifterCoreTestGroup) {
     bool isRoot;
     char *tmpDir;
@@ -157,6 +178,79 @@ TEST(ShifterCoreTestGroup, CopyFile_basic) {
     ret = unlink(toFile);
     CHECK(ret == 0);
     free(toFile);
+}
+
+TEST(ShifterCoreTestGroup, setupPerNodeCacheFilename_tests) {
+    int ret = 0;
+    char buffer[PATH_MAX];
+    VolMapPerNodeCacheConfig *cache = (VolMapPerNodeCacheConfig *) malloc(sizeof(VolMapPerNodeCacheConfig));
+
+    memset(cache, 0, sizeof(VolMapPerNodeCacheConfig));
+
+    /* should fail because cache is NULL */
+    ret = setupPerNodeCacheFilename(NULL, buffer, 10);
+    CHECK(ret != 0);
+
+    /* should fail because buffer is NULL */
+    ret = setupPerNodeCacheFilename(cache, NULL, 10);
+    CHECK(ret != 0);
+
+    /* should fail because buffer len is 0 */
+    ret = setupPerNodeCacheFilename(cache, buffer, 0);
+    CHECK(ret != 0);
+
+
+    /* should successfully work */
+    char hostname[128];
+    char result[1024];
+    gethostname(hostname, 128);
+    snprintf(result, 1024, "/tmp/file_%s.ext4", hostname);
+    cache->fstype = strdup("ext4");
+    snprintf(buffer, PATH_MAX, "/tmp/file");
+    ret = setupPerNodeCacheFilename(cache, buffer, PATH_MAX);
+    CHECK(ret == 0);
+    CHECK(strcmp(buffer, result) == 0);
+
+    /* should fail because fstype is NULL */
+    free(cache->fstype);
+    cache->fstype = NULL;
+    ret = setupPerNodeCacheFilename(cache, buffer, PATH_MAX);
+    CHECK(ret != 0);
+
+
+    free_VolMapPerNodeCacheConfig(cache);
+}
+
+#ifdef NOTROOT
+TEST(ShifterCoreTestGroup, setupPerNodeCacheBackingStore_tests) {
+#else
+IGNORE_TEST(ShifterCoreTestGroup, setupPerNodeCacheBackingStore_tests) {
+#endif
+    int ret = 0;
+    VolMapPerNodeCacheConfig *cache = (VolMapPerNodeCacheConfig *) malloc(sizeof(VolMapPerNodeCacheConfig));
+    UdiRootConfig *config = NULL;
+    ImageData *image = NULL;
+    char backingStorePath[PATH_MAX];
+    char *ptr = NULL;
+
+    CHECK(setupLocalRootVFSConfig(&config, &image, tmpDir, cwd) == 0);
+    memset(cache, 0, sizeof(VolMapPerNodeCacheConfig));
+
+    cache->fstype = strdup("xfs");
+    cache->cacheSize = 200 * 1024 * 1024; // 200mb
+
+    config->target_uid = getuid();
+    config->target_gid = getgid();
+    config->mkfsXfsPath = strdup("/sbin/mkfs.xfs");
+
+    getcwd(backingStorePath, PATH_MAX);
+    ptr = backingStorePath + strlen(backingStorePath);
+    snprintf(ptr, PATH_MAX - strlen(backingStorePath), "/testBackingStore.xfs");
+
+    ret = setupPerNodeCacheBackingStore(cache, backingStorePath, config);
+    CHECK(ret == 0);
+
+    free(cache);
 }
 
 #ifdef NOTROOT
@@ -250,24 +344,6 @@ TEST(ShifterCoreTestGroup, validatePrivateNamespace) {
 
         CHECK(stat("/tmp/test_shifter_core", &statInfo) != 0);
     }
-}
-
-TEST(ShifterCoreTestGroup, userInputPathFilter_basic) {
-    char *filtered = userInputPathFilter("benign", 0);
-    CHECK(strcmp(filtered, "benign") == 0);
-    free(filtered);
-    
-    filtered = userInputPathFilter("benign; rm -rf *", 0);
-    CHECK(strcmp(filtered, "benignrm-rf") == 0);
-    free(filtered);
-
-    filtered = userInputPathFilter("/path/to/something/great", 0);
-    CHECK(strcmp(filtered, "pathtosomethinggreat") == 0);
-    free(filtered);
-
-    filtered = userInputPathFilter("/path/to/something/great", 1);
-    CHECK(strcmp(filtered, "/path/to/something/great") == 0);
-    free(filtered);
 }
 
 TEST(ShifterCoreTestGroup, writeHostFile_basic) { 
@@ -367,26 +443,6 @@ TEST(ShifterCoreTestGroup, validateUnmounted_Basic) {
     CHECK(rc == 0);
 
     free_MountList(&mounts, 0);
-}
-
-int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const char *tmpDir, const char *cwd) {
-    *config = (UdiRootConfig *) malloc(sizeof(UdiRootConfig));
-    *image = (ImageData *) malloc(sizeof(ImageData));
-
-    memset(*config, 0, sizeof(UdiRootConfig));
-    memset(*image, 0, sizeof(ImageData));
-
-    (*image)->type = strdup("local");
-    (*image)->identifier = strdup("/");
-    (*config)->udiMountPoint = strdup(tmpDir);
-    (*config)->rootfsType = strdup(ROOTFS_TYPE);
-    (*config)->nodeContextPrefix = strdup("");
-    (*config)->etcPath = alloc_strgenf("%s/%s", cwd, "etc");
-    (*config)->cpPath = strdup("/bin/cp");
-    (*config)->mvPath = strdup("/bin/mv");
-    (*config)->chmodPath = strdup("/bin/chmod");
-    (*config)->allowLocalChroot = 1;
-    return 0;
 }
 
 #ifdef NOTROOT

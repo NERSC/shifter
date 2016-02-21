@@ -368,6 +368,43 @@ char *alloc_strgenf(const char *format, ...) {
     return NULL;
 }
 
+/**
+ * userInputPathFilter screens out certain characters from user-provided strings
+   
+ * Parameters:
+ *      input - the user provided string
+ *      allowSlash - flag to allow a '/' in the string (1 for yes, 0 for no)
+ *
+ *
+ * Returns pointer to newly allocated string.
+ * Returns NULL if input is NULL or there is a memory allocation error
+ */
+char *userInputPathFilter(const char *input, int allowSlash) {
+    ssize_t len = 0;
+    char *ret = NULL;
+    const char *rptr = NULL;
+    char *wptr = NULL;
+    if (input == NULL) return NULL;
+
+    len = strlen(input) + 1;
+    ret = (char *) malloc(sizeof(char) * len);
+    if (ret == NULL) return NULL;
+
+    rptr = input;
+    wptr = ret;
+    while (wptr - ret < len && *rptr != 0) {
+        if (isalnum(*rptr) || *rptr == '_' || *rptr == ':' || *rptr == '.' || *rptr == '+' || *rptr == '-') {
+            *wptr++ = *rptr;
+        }
+        if (allowSlash && *rptr == '/') {
+            *wptr++ = *rptr;
+        }
+        rptr++;
+    }
+    *wptr = 0;
+    return ret;
+}
+
 char *cleanPath(const char *path) {
     if (!path) return NULL;
     size_t len = strlen(path) + 1;

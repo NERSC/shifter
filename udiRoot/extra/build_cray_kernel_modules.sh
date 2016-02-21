@@ -35,6 +35,12 @@ echo "CONFIG_CRAMFS=m" >> $TGT_CONFIG_FILE
 echo "CONFIG_SQUASHFS=m" >> $TGT_CONFIG_FILE
 echo "CONFIG_JBD2=m" >> $TGT_CONFIG_FILE
 echo "CONFIG_FS_MBCACHE=m" >> $TGT_CONFIG_FILE
+echo "CONFIG_XFS_FS=m" >> $TGT_CONFIG_FILE
+echo "CONFIG_XFS_QUOTA=y" >> $TGT_CONFIG_FILE
+echo "CONFIG_XFS_DMAPI=m" >> $TGT_CONFIG_FILE
+echo "CONFIG_XFS_POSIX_ACL=y" >> $TGT_CONFIG_FILE
+echo "CONFIG_XFS_RT=y" >> $TGT_CONFIG_FILE
+
 cd $BDIR/linux-$KVER
 yes "" | make oldconfig ## reconfigure kernel accepting defaults
 make modules

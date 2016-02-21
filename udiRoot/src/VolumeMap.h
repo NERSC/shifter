@@ -55,11 +55,20 @@ extern "C" {
 
 #define VOLUME_ALLOC_BLOCK 10
 
+#define VOLMAP_FLAG_READONLY 1
+#define VOLMAP_FLAG_RECURSIVE 2
+#define VOLMAP_FLAG_PERNODECACHE 4
+
+typedef struct {
+    int type;
+    void *value;
+} VolumeMapFlag;
+
 typedef struct _VolumeMap {
     char **raw;
     char **to;
     char **from;
-    char **flags;
+    VolumeMapFlag **flags;
     size_t n;
 
     size_t rawCapacity;
@@ -68,11 +77,44 @@ typedef struct _VolumeMap {
     size_t flagsCapacity;
 } VolumeMap;
 
+typedef struct {
+    ssize_t cacheSize;
+    ssize_t blockSize;
+    char *method;
+    char *fstype;
+} VolMapPerNodeCacheConfig;
+
+
 int parseVolumeMap(const char *input, VolumeMap *volMap);
+int parseVolumeMapSiteFs(const char *input, VolumeMap *volMap);
 char *getVolMapSignature(VolumeMap *volMap);
 size_t fprint_VolumeMap(FILE *fp, VolumeMap *volMap);
 void free_VolumeMap(VolumeMap *volMap, int freeStruct);
-int validateVolumeMap(const char *from, const char *to, const char *flags);
+int validateVolumeMap_userRequest(const char *from, const char *to, VolumeMapFlag *flags);
+int validateVolumeMap_siteRequest(const char *from, const char *to, VolumeMapFlag *flags);
+
+void free_VolumeMapFlag(VolumeMapFlag *flag, int freeStruct);
+void free_VolMapPerNodeCacheConfig(VolMapPerNodeCacheConfig *cacheConfig);
+int validate_VolMapPerNodeCacheConfig(VolMapPerNodeCacheConfig *cacheConfig);
+
+/* semi-private methods */
+int _validateVolumeMap(
+        const char *from,
+        const char *to,
+        VolumeMapFlag *flags,
+        const char **toStartsWithDisallowed, 
+        const char **toExactDisallowed,
+        const char **fromStartsWithDisallowed,
+        const char **fromExactDisallowed,
+        size_t allowedFlags);
+
+int _parseVolumeMap(const char *input, VolumeMap *volMap,
+        int (*_validate_fp)(const char *, const char *, VolumeMapFlag *),
+        short requireTo);
+ssize_t _parseBytes(const char *input);
+const char *_findEndVolumeMapString(const char *basePtr);
+char **_tokenizeVolumeMapInput(char *input);
+int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity);
 
 #ifdef __cplusplus
 }

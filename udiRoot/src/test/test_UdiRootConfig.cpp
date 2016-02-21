@@ -65,6 +65,7 @@ TEST(UdiRootConfigTestGroup, ParseUdiRootConfig_display) {
     FILE *output = fopen("ParseUdiRootConfig_display.out", "w");
     CHECK(output != NULL);
     size_t nwrite = fprint_UdiRootConfig(output, &config);
+    CHECK(nwrite > 0);
     fclose(output);
     free_UdiRootConfig(&config, 0);
 }

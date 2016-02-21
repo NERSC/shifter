@@ -24,9 +24,7 @@ test_utility_LDFLAGS = $(TEST_LDFLAGS)
 test_VolumeMap_SOURCES = \
     test_VolumeMap.cpp \
     ../VolumeMap.c \
-    ../utility.c \
-    ../shifter_core.c \
-    ../MountList.c
+    ../utility.c
 test_VolumeMap_CXXFLAGS = $(TEST_CFLAGS)
 test_VolumeMap_CFLAGS = $(TEST_CFLAGS)
 test_VolumeMap_LDFLAGS = $(TEST_LDFLAGS)
@@ -34,7 +32,8 @@ test_VolumeMap_LDFLAGS = $(TEST_LDFLAGS)
 test_UdiRootConfig_SOURCES = \
     test_UdiRootConfig.cpp \
     ../UdiRootConfig.c \
-    ../utility.c
+    ../utility.c \
+	../VolumeMap.c
 test_UdiRootConfig_CXXFLAGS = $(TEST_CFLAGS)
 test_UdiRootConfig_CFLAGS = $(TEST_CFLAGS)
 test_UdiRootConfig_LDFLAGS = $(TEST_LDFLAGS)

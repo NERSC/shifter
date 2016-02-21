@@ -45,6 +45,153 @@
 TEST_GROUP(VolumeMapTestGroup) {
 };
 
+void freeTokens(char **tokens) {
+    char **tk_ptr = NULL;
+    for (tk_ptr = tokens; tk_ptr && *tk_ptr; tk_ptr++) {
+        free(*tk_ptr);
+    }
+    free(tokens);
+}
+
+TEST(VolumeMapTestGroup, FindEndOfVolumeMapInString) {
+    const char *input1 = "/volume:/map:test";
+    const char *ptr = _findEndVolumeMapString(input1);
+    CHECK(ptr != NULL && *ptr == 0);
+    CHECK(strncmp(input1, input1, ptr-input1) == 0);
+
+    const char *input2 = "/volume:/map;/input:output";
+    ptr = _findEndVolumeMapString(input2);
+    CHECK(ptr != NULL && *ptr == ';');
+    CHECK(strncmp(input2, "/volume:/map", ptr-input2) == 0);
+
+    const char *sptr = input2;
+    const char *limit = input2 + strlen(input2);
+    int idx = 0;
+    for (sptr = input2, ptr = _findEndVolumeMapString(input2); sptr < limit; ptr = _findEndVolumeMapString(sptr)) {
+        switch (idx) {
+            case 0:     CHECK(strncmp(sptr, "/volume:/map", ptr - sptr) == 0);
+                        break;
+            case 1:     CHECK(strncmp(sptr, "/input:output", ptr - sptr) == 0);
+                        break;
+        }
+        sptr = ptr + 1;
+        idx++;
+    }
+
+    const char *input3 = "\"/volume:/map:ro,rec\"";
+    ptr = _findEndVolumeMapString(input3);
+    CHECK(ptr && (*ptr == 0));
+    CHECK(strlen(input3) == ptr - input3);
+}
+
+TEST(VolumeMapTestGroup, VolumeMapTokenize) {
+
+    char *input = strdup("abcd:efgh");
+    char **tokens = _tokenizeVolumeMapInput(input);
+    size_t ntokens = 0;
+    for ( ; tokens && tokens[ntokens]; ntokens++) { }
+
+    CHECK(tokens != NULL && ntokens == 2);
+    CHECK(strcmp(tokens[0], "abcd") == 0);
+    CHECK(strcmp(tokens[1], "efgh") == 0);
+
+    freeTokens(tokens);
+    free(input);
+
+    input = strdup("abcd:efgh:flag");
+    tokens = _tokenizeVolumeMapInput(input);
+    for (ntokens = 0 ; tokens && tokens[ntokens]; ntokens++) { }
+    CHECK(tokens != NULL && ntokens == 3);
+    CHECK(strcmp(tokens[0], "abcd") == 0);
+    CHECK(strcmp(tokens[1], "efgh") == 0);
+    CHECK(strcmp(tokens[2], "flag") == 0);
+
+    freeTokens(tokens);
+    free(input);
+
+    input = strdup("abcd:efgh:flag:extra");
+    tokens = _tokenizeVolumeMapInput(input);
+    for (ntokens = 0 ; tokens && tokens[ntokens]; ntokens++) { }
+    CHECK(tokens != NULL && ntokens == 4);
+    CHECK(strcmp(tokens[0], "abcd") == 0);
+    CHECK(strcmp(tokens[1], "efgh") == 0);
+    CHECK(strcmp(tokens[2], "flag") == 0);
+    CHECK(strcmp(tokens[3], "extra") == 0);
+
+    freeTokens(tokens);
+    free(input);
+
+    input = strdup("no delim test");
+    tokens = _tokenizeVolumeMapInput(input);
+    for (ntokens = 0 ; tokens && tokens[ntokens]; ntokens++) { }
+    //fprintf(stderr," got %lu tokens\n0: %s\n1: %s\n2: %s\n", ntokens, tokens[0], tokens[1], tokens[2]);
+    CHECK(tokens != NULL && ntokens == 1);
+    CHECK(strcmp(tokens[0], "no delim test") == 0);
+
+    freeTokens(tokens);
+    free(input);
+
+}
+
+TEST(VolumeMapTestGroup, VolumeMapParseBytes) {
+    ssize_t parsedVal = _parseBytes("5");
+    CHECK(parsedVal == 5);
+
+    parsedVal = _parseBytes("5k");
+    CHECK(parsedVal = 5 * 1024);
+
+    parsedVal = _parseBytes("500K");
+    CHECK(parsedVal == 500 * 1024);
+
+    parsedVal = _parseBytes("500KB");
+    CHECK(parsedVal == 500 * 1024);
+}
+
+TEST(VolumeMapTestGroup, VolumeMapParseFlag) {
+    char *flag = strdup("ro");
+    VolumeMapFlag *flags = NULL;
+    size_t flagsCapacity = 0;
+
+    int ret = _parseFlag(flag, &flags, &flagsCapacity);
+    CHECK(ret == 0);
+    CHECK(flagsCapacity == 1);
+    CHECK(flags[0].type == VOLMAP_FLAG_READONLY);
+    free(flag);
+
+    flag = strdup("rec");
+    ret = _parseFlag(flag, &flags, &flagsCapacity);
+    CHECK(ret == 0);
+    CHECK(flagsCapacity == 2);
+    CHECK(flags[0].type == VOLMAP_FLAG_READONLY);
+    CHECK(flags[1].type == VOLMAP_FLAG_RECURSIVE);
+    free(flag);
+
+    flag = strdup("rec=key1=value1,key2=value2");
+    ret = _parseFlag(flag, &flags, &flagsCapacity);
+    CHECK(ret != 0);
+    CHECK(flagsCapacity == 2);
+    CHECK(flags[0].type == VOLMAP_FLAG_READONLY);
+    CHECK(flags[1].type == VOLMAP_FLAG_RECURSIVE);
+    free(flag);
+
+    flag = strdup("perNodeCache");
+    ret = _parseFlag(flag, &flags, &flagsCapacity);
+    CHECK(ret != 0); /* no default size */
+    free(flag);
+
+    flag = strdup("perNodeCache=size=4T,bs=4M");
+    ret = _parseFlag(flag, &flags, &flagsCapacity);
+    CHECK(ret == 0);
+    CHECK(flagsCapacity == 3);
+    CHECK(flags[0].type == VOLMAP_FLAG_READONLY);
+    CHECK(flags[1].type == VOLMAP_FLAG_RECURSIVE);
+    CHECK(flags[2].type == VOLMAP_FLAG_PERNODECACHE);
+    free(flag);
+
+    free_VolumeMapFlag(flags, 1);
+
+}
+
 TEST(VolumeMapTestGroup, VolumeMapParse_basic) {
     VolumeMap volMap;
     memset(&volMap, 0, sizeof(VolumeMap));
@@ -61,9 +208,45 @@ TEST(VolumeMapTestGroup, VolumeMapParse_basic) {
     CHECK(ret == 0);
     CHECK(volMap.n == 2);
 
+    ret = parseVolumeMap("/scratch1/test:/input:rec", &volMap);
+    CHECK(ret != 0);
+    CHECK(volMap.n == 2);
+
     ret = parseVolumeMap("/scratch1/output:/output", &volMap);
     CHECK(ret == 0);
     CHECK(volMap.n == 3);
+
+    ret = parseVolumeMap("/no/to/specified", &volMap);
+    CHECK(ret != 0);
+    CHECK(volMap.n == 3);
+
+    char tempfname[] = "checkprint.XXXXXX";
+    int tempfd = mkstemp(tempfname);
+    FILE *tempfp = fdopen(tempfd, "w");
+    size_t nbytes = fprint_VolumeMap(tempfp, &volMap);
+    CHECK(nbytes == 167);
+    fclose(tempfp);
+
+    free_VolumeMap(&volMap, 0);
+}
+
+TEST(VolumeMapTestGroup, VolumeMapParse_site) {
+    VolumeMap volMap;
+    memset(&volMap, 0, sizeof(VolumeMap));
+
+    int ret = parseVolumeMapSiteFs("/global/cscratch1", &volMap);
+    CHECK(ret == 0);
+    CHECK(volMap.n == 1);
+
+    ret = parseVolumeMapSiteFs("/global/cscratch1:/global/cscratch1:ro", &volMap);
+    CHECK(ret == 0);
+    CHECK(volMap.n == 2);
+
+    ret = parseVolumeMapSiteFs("/global/cscratch1:/global/cscratch1:rec", &volMap);
+    CHECK(ret == 0);
+    CHECK(volMap.n == 3);
+
+    fprint_VolumeMap(stderr, &volMap);
 
     free_VolumeMap(&volMap, 0);
 }
@@ -71,28 +254,28 @@ TEST(VolumeMapTestGroup, VolumeMapParse_basic) {
 TEST(VolumeMapTestGroup, ValidateVolumeMap_basic) {
     int ret = 0;
 
-    ret = validateVolumeMap("/test1Loc", "/etc/passwd", NULL);
+    ret = validateVolumeMap_userRequest("/test1Loc", "/etc/passwd", NULL);
     CHECK(ret != 0);
 
-    ret = validateVolumeMap("/test1Loc", "/var/log", NULL);
+    ret = validateVolumeMap_userRequest("/test1Loc", "/var/log", NULL);
     CHECK(ret != 0);
 
-    ret = validateVolumeMap("/test1Loc", "/opt", NULL);
+    ret = validateVolumeMap_userRequest("/test1Loc", "/opt", NULL);
     CHECK(ret != 0);
 
-    ret = validateVolumeMap("/test1Loc", "opt", NULL);
+    ret = validateVolumeMap_userRequest("/test1Loc", "opt", NULL);
     CHECK(ret != 0);
 
-    ret = validateVolumeMap("/test1Loc", "etc", NULL);
+    ret = validateVolumeMap_userRequest("/test1Loc", "etc", NULL);
     CHECK(ret != 0);
 
-    ret = validateVolumeMap("/testLoc", "mnt", NULL);
+    ret = validateVolumeMap_userRequest("/testLoc", "mnt", NULL);
     CHECK(ret == 0);
 
-    ret = validateVolumeMap("/test1Loc", "/opt/myStuff", NULL);
+    ret = validateVolumeMap_userRequest("/test1Loc", "/opt/myStuff", NULL);
     CHECK(ret == 0);
 
-    ret = validateVolumeMap("/scratch1/data", "/input", NULL);
+    ret = validateVolumeMap_userRequest("/scratch1/data", "/input", NULL);
     CHECK(ret == 0);
 }
 
@@ -101,12 +284,14 @@ TEST(VolumeMapTestGroup, GetVolumeMapSignature_basic) {
     VolumeMap volMap;
 
     memset(&volMap, 0, sizeof(VolumeMap));
-    ret = parseVolumeMap("/d:/c,/a:/b,/q:/r,/a:/c", &volMap);
+    ret = parseVolumeMapSiteFs("/d:/c;/a:/b;/q:/r;/a:/c:rec:perNodeCache=size=100M:ro", &volMap);
     CHECK(ret == 0);
     CHECK(volMap.n == 4);
 
     char *sig = getVolMapSignature(&volMap);
     fprintf(stderr, "%s\n", sig);
+
+    CHECK(strcmp(sig, "/a:/b;/a:/c:ro:rec:perNodeCache=size=104857600,bs=1048576,method=loop,fstype=ext4;/d:/c;/q:/r") == 0);
 
     free(sig);
 

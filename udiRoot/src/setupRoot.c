@@ -78,6 +78,7 @@ typedef struct _SetupRootConfig {
     char *imageType;
     char *imageIdentifier;
     uid_t uid;
+    gid_t gid;
     char *minNodeSpec;
     VolumeMap volumeMap;
 
@@ -112,6 +113,8 @@ int main(int argc, char **argv) {
         fprintf(stderr, "FAILED to parse udiRoot configuration. Exiting.\n");
         exit(1);
     }
+    udiConfig.target_uid = config.uid;
+    udiConfig.target_gid = config.gid;
     if (config.verbose) {
         fprint_SetupRootConfig(stdout, &config);
         fprint_UdiRootConfig(stdout, &udiConfig);
@@ -148,7 +151,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (setupUserMounts(&image, &(config.volumeMap), &udiConfig) != 0) {
+    if (setupUserMounts(&(config.volumeMap), &udiConfig) != 0) {
         fprintf(stderr, "FAILED to setup user-requested mounts.\n");
         exit(1);
     }
@@ -177,7 +180,7 @@ int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
     int isLocal = 0;
     optind = 1;
 
-    while ((opt = getopt(argc, argv, "v:s:u:U:N:V")) != -1) {
+    while ((opt = getopt(argc, argv, "v:s:u:U:G:N:V")) != -1) {
         switch (opt) {
             case 'V': config->verbose = 1; break;
             case 'v':
@@ -195,6 +198,9 @@ int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
                 break;
             case 'U':
                 config->uid = strtoul(optarg, NULL, 10);
+                break;
+            case 'G':
+                config->gid = strtoul(optarg, NULL, 10);
                 break;
             case 'N':
                 config->minNodeSpec = strdup(optarg);

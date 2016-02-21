@@ -156,12 +156,41 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         config->chmodPath = NULL;
         config->chmodPath = NULL;
     }
+    if (config->ddPath != NULL) {
+        free(config->ddPath);
+        config->ddPath = NULL;
+    }
+    if (config->mkfsXfsPath != NULL) {
+        free(config->mkfsXfsPath);
+        config->mkfsXfsPath = NULL;
+    }
     if (config->rootfsType != NULL) {
         free(config->rootfsType);
         config->rootfsType = NULL;
     }
+    if (config->siteFs != NULL) {
+        free_VolumeMap(config->siteFs, 1);
+        config->siteFs = NULL;
+    }
 
-    char **arrays[] = {config->gwUrl, config->siteFs, config->siteEnv, config->siteEnvAppend, config->siteEnvPrepend, NULL};
+    if (config->username != NULL) {
+        free(config->username);
+        config->username = NULL;
+    }
+    if (config->sshPubKey != NULL) {
+        free(config->sshPubKey);
+        config->sshPubKey = NULL;
+    }
+    if (config->nodeIdentifier != NULL) {
+        free(config->nodeIdentifier);
+        config->nodeIdentifier = NULL;
+    }
+    if (config->jobIdentifier != NULL) {
+        free(config->jobIdentifier);
+        config->jobIdentifier = NULL;
+    }
+
+    char **arrays[] = {config->gwUrl, config->siteEnv, config->siteEnvAppend, config->siteEnvPrepend, NULL};
     char ***arrayPtr = NULL;
     for (arrayPtr = arrays; *arrayPtr != NULL; arrayPtr++) {
         char **iPtr = NULL;
@@ -177,7 +206,6 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
 }
 
 size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
-    char **fsPtr = NULL;
     size_t idx = 0;
     size_t written = 0;
 
@@ -228,15 +256,31 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->mvPath != NULL ? config->mvPath : ""));
     written += fprintf(fp, "chmodPath = %s\n",
         (config->chmodPath != NULL ? config->chmodPath : ""));
+    written += fprintf(fp, "ddPath = %s\n",
+        (config->ddPath != NULL ? config->ddPath : ""));
+    written += fprintf(fp, "mkfsXfsPath = %s\n",
+        (config->mkfsXfsPath != NULL ? config->mkfsXfsPath : ""));
     written += fprintf(fp, "Image Gateway Servers = %lu servers\n", config->gwUrl_size);
     for (idx = 0; idx < config->gwUrl_size; idx++) {
         char *gwUrl = config->gwUrl[idx];
         written += fprintf(fp, "    %s\n", gwUrl);
     }
-    written += fprintf(fp, "Site FS Bind-mounts = %lu fs\n", config->siteFs_size);
-    for (fsPtr = config->siteFs; *fsPtr != NULL; fsPtr++) {
-        written += fprintf(fp, "    %s\n", *fsPtr);
+    if (config->siteFs != NULL) {
+        written += fprintf(fp, "Site FS Bind-mounts = %lu fs\n", config->siteFs->n);
+        written += fprint_VolumeMap(fp, config->siteFs);
     }
+    written += fprintf(fp, "\nRUNTIME Options:\n");
+    written += fprintf(fp, "username: %s\n",
+        (config->username != NULL ? config->username : ""));
+    written += fprintf(fp, "target_uid: %d\n", config->target_uid);
+    written += fprintf(fp, "target_gid: %d\n", config->target_gid);
+    written += fprintf(fp, "sshPubKey: %s\n",
+        (config->sshPubKey != NULL ? config->sshPubKey : ""));
+    written += fprintf(fp, "nodeIdentifier: %s\n",
+        (config->nodeIdentifier != NULL ? config->nodeIdentifier : ""));
+    written += fprintf(fp, "jobIdentifier: %s\n",
+        (config->jobIdentifier != NULL ? config->jobIdentifier : ""));
+
     written += fprintf(fp, "***** END UdiRootConfig *****\n");
     return written;
 }
@@ -283,6 +327,12 @@ int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
         if (config->chmodPath == NULL || strlen(config->chmodPath) == 0) {
             VAL_ERROR("\"chmodPath\" is not defined", UDIROOT_VAL_PARSE);
         }
+        if (config->ddPath == NULL || strlen(config->ddPath) == 0) {
+            VAL_ERROR("\"ddPath\" is not defined", UDIROOT_VAL_PARSE);
+        }
+        if (config->mkfsXfsPath == NULL || strlen(config->mkfsXfsPath) == 0) {
+            VAL_ERROR("\"mkfsXfsPath\" is not defined", UDIROOT_VAL_PARSE);
+        }
         if (config->rootfsType == NULL || strlen(config->rootfsType) == 0) {
             VAL_ERROR("\"rootfsType\" is not defined", UDIROOT_VAL_PARSE);
         }
@@ -313,6 +363,16 @@ int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
             VAL_ERROR("Specified \"chmodPath\" doesn't appear to exist.", UDIROOT_VAL_FILEVAL);
         } else if (!(statData.st_mode & S_IXUSR)) {
             VAL_ERROR("Specified \"chmodPath\" is not executable.", UDIROOT_VAL_FILEVAL);
+        }
+        if (stat(config->ddPath, &statData) != 0) {
+            VAL_ERROR("Specified \"ddPath\" doesn't appear to exist.", UDIROOT_VAL_FILEVAL);
+        } else if (!(statData.st_mode & S_IXUSR)) {
+            VAL_ERROR("Specified \"ddPath\" is not executable.", UDIROOT_VAL_FILEVAL);
+        }
+        if (stat(config->mkfsXfsPath, &statData) != 0) {
+            VAL_ERROR("Specified \"mkfsXfsPath\" doesn't appear to exist.", UDIROOT_VAL_FILEVAL);
+        } else if (!(statData.st_mode & S_IXUSR)) {
+            VAL_ERROR("Specified \"mkfsXfsPath\" is not executable.", UDIROOT_VAL_FILEVAL);
         }
     }
     return 0;
@@ -362,6 +422,10 @@ static int _assign(const char *key, const char *value, void *t_config) {
         config->mvPath = strdup(value);
     } else if (strcmp(key, "chmodPath") == 0) {
         config->chmodPath = strdup(value);
+    } else if (strcmp(key, "ddPath") == 0) {
+        config->ddPath = strdup(value);
+    } else if (strcmp(key, "mkfsXfsPath") == 0) {
+        config->mkfsXfsPath = strdup(value);
     } else if (strcmp(key, "rootfsType") == 0) {
         config->rootfsType = strdup(value);
     } else if (strcmp(key, "gatewayTimeout") == 0) {
@@ -380,17 +444,14 @@ static int _assign(const char *key, const char *value, void *t_config) {
         config->kmodCacheFile = strdup(value);
         if (config->kmodCacheFile == NULL) return 1;
     } else if (strcmp(key, "siteFs") == 0) {
-        char *valueDup = strdup(value);
-        char *search = valueDup;
-        char *svPtr = NULL;
-        char *ptr = NULL;
-        while ((ptr = strtok_r(search, " ", &svPtr)) != NULL) {
-            char **siteFsPtr = config->siteFs + config->siteFs_size;
-            strncpy_StringArray(ptr, strlen(ptr), &siteFsPtr, &(config->siteFs), &(config->siteFs_capacity), SITEFS_ALLOC_BLOCK);
-            config->siteFs_size++;
-            search = NULL;
+        if (config->siteFs == NULL) {
+            config->siteFs = (VolumeMap *) malloc(sizeof(VolumeMap));
+            memset(config->siteFs, 0, sizeof(VolumeMap));
         }
-        free(valueDup);
+        if (parseVolumeMapSiteFs(value, config->siteFs) != 0) {
+            fprintf(stderr, "FAILED to parse siteFs volumeMap\n");
+            return 1;
+        }
     } else if (strcmp(key, "siteEnv") == 0) {
         char *valueDup = strdup(value);
         char *search = valueDup;

@@ -493,6 +493,9 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         }
     }
 
+    udiConfig->target_uid = config->tgtUid;
+    udiConfig->target_gid = config->tgtGid;
+
     return 0;
 }
 
@@ -758,7 +761,7 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
         goto _loadImage_error;
     }
 
-    if (setupUserMounts(image, &(opts->volumeMap), udiConfig) != 0) {
+    if (setupUserMounts(&(opts->volumeMap), udiConfig) != 0) {
         fprintf(stderr, "FAILED to setup user-requested mounts.\n");
         goto _loadImage_error;
     }
