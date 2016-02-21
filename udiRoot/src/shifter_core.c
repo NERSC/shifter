@@ -1042,7 +1042,7 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
             NULL
         };
         char **argsPtr = NULL;
-        int ret = forkAndExecv(args);
+        int ret = forkAndExecvSilent(args);
         for (argsPtr = args; argsPtr && *argsPtr; argsPtr++) {
             free(*argsPtr);
         }
@@ -1164,7 +1164,7 @@ int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *b
                 args[4] = strdup("count=0");
                 args[5] = alloc_strgenf("seek=%lu", cache->cacheSize);
                 args[6] = NULL;
-                ret = forkAndExecv(args);
+                ret = forkAndExecvSilent(args);
                 for (arg = args; *arg; arg++) {
                     free(*arg);
                 }
@@ -1729,7 +1729,7 @@ _startSshd_unclean:
     return 1;
 }
 
-int forkAndExecv(char *const *args) {
+int _forkAndExecv(char *const *args, int silent) {
     pid_t pid = 0;
 
     pid = fork();
@@ -1755,9 +1755,21 @@ int forkAndExecv(char *const *args) {
         return status;
     }
     /* this is the child */
+    if (silent) {
+        close(STDOUT_FILENO);
+        close(STDERR_FILENO);
+    }
     execv(args[0], args);
     fprintf(stderr, "FAILED to execvp! Exiting.\n");
     exit(127);
+}
+
+int forkAndExecv(char *const *args) {
+    return _forkAndExecv(args, 0);
+}
+
+int forkAndExecvSilent(char *const *args) {
+    return _forkAndExecv(args, 1);
 }
 
 int _shifterCore_bindMount(MountList *mountCache, const char *from, const char *to, size_t flags, int overwriteMounts) {
@@ -1978,7 +1990,7 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
             NULL
         };
         char **argPtr = NULL;
-        ret = forkAndExecv(args);
+        ret = forkAndExecvSilent(args);
         for (argPtr = args; argPtr && *argPtr; argPtr++) {
             free(*argPtr);
         }
@@ -2008,7 +2020,7 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
         char **argPtr = NULL;
 
         /* run insmod and clean up */
-        ret = forkAndExecv(insmodArgs);
+        ret = forkAndExecvSilent(insmodArgs);
         for (argPtr = insmodArgs; *argPtr != NULL; argPtr++) {
             free(*argPtr);
         }
