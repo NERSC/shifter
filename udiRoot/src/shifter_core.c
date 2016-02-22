@@ -2027,6 +2027,23 @@ _loadKrnlMod_unclean:
     return ret;
 }
 
+/** shifter_getpwuid
+ *  Lookup user information based on information in shifter passwd cache.
+ *  This is useful to avoid making remote getpwuid() calls on Cray systems
+ *  or other systems where access to LDAP may be slow, difficult, or impossible
+ *  on compute nodes.
+ *
+ */
+int shifter_getpwuid(uid_t uid, struct passwd *result,
+        char **stringData, size_t stringData_Len,
+        UdiRootConfig *config)
+{
+    FILE *input = NULL;
+    char pathbuf[PATH_MAX];
+
+    return 0;
+}
+
 /** filterEtcGroup
  *  many implementations of initgroups() do not deal with huge /etc/group 
  *  files due to a variety of limitations (like per-line limits).  this 
