@@ -60,6 +60,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <grp.h>
+#include <pwd.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -2040,18 +2041,15 @@ struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config) {
     struct passwd *pw = NULL;
     int found = 0;
 
-    if (result == NULL ||
-        stringData == NULL || stringData_len == 0 ||
-        config == NULL)
-    {
-        return -1;
+    if (config == NULL) {
+        return NULL;
     }
 
-    snprintf(buffer, "%s%s/passwd", config->nodeContextPrefix, config->etcPath);
+    snprintf(buffer, PATH_MAX, "%s%s/passwd", config->nodeContextPrefix, config->etcPath);
     input = fopen(buffer, "r");
 
     if (input == NULL) {
-        fprintf(stderr, "FAILED to find shifter passwd file at %s", pathbuf);
+        fprintf(stderr, "FAILED to find shifter passwd file at %s", buffer);
         goto _shifter_getpwuid_unclean;
     }
     while ((pw = fgetpwent(input)) != NULL) {
@@ -2080,18 +2078,15 @@ struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config) {
     struct passwd *pw = NULL;
     int found = 0;
 
-    if (result == NULL ||
-        stringData == NULL || stringData_len == 0 ||
-        config == NULL)
-    {
-        return -1;
+    if (config == NULL) {
+        return NULL;
     }
 
-    snprintf(buffer, "%s%s/passwd", config->nodeContextPrefix, config->etcPath);
+    snprintf(buffer, PATH_MAX, "%s%s/passwd", config->nodeContextPrefix, config->etcPath);
     input = fopen(buffer, "r");
 
     if (input == NULL) {
-        fprintf(stderr, "FAILED to find shifter passwd file at %s", pathbuf);
+        fprintf(stderr, "FAILED to find shifter passwd file at %s", buffer);
         goto _shifter_getpwnam_unclean;
     }
     while ((pw = fgetpwent(input)) != NULL) {
