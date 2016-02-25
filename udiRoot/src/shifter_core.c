@@ -1349,6 +1349,10 @@ int setupVolumeMapMounts(
                 fprintf(stderr, "FAILED to understand per-node cache mounting method, exiting.\n");
                 goto _setupVolumeMapMounts_unclean;
             }
+            if (chown(to_buffer, udiConfig->target_uid, udiConfig->target_gid) != 0) {
+                fprintf(stderr, "FAILED to chown per-node cache to user.\n");
+                goto _setupVolumeMapMounts_unclean;
+            }
         } else {
             _BINDMOUNT(mountCache, from_buffer, to_buffer, flagsInEffect, 1);
         }
