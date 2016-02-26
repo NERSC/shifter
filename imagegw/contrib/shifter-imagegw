@@ -1,0 +1,25 @@
+#!/bin/bash
+# 
+# Author:
+#    Miguel Gila <miguel.gila@cscs.ch>
+#
+#
+if [ -z ${ROOT_TREE} ]; then
+  ROOT_TREE='/opt/shifter/15.12.0'
+fi
+
+if [ -z ${PYTHON_VENV} ]; then
+  PYTHON_VENV='imagegw_venv'
+fi
+
+if [ -z ${SHIFTER_SYSTEM_NAME} ]; then
+  SHIFTER_SYSTEM_NAME='system_name'
+fi
+QA="${SHIFTER_SYSTEM_NAME}"
+
+cd ${ROOT_TREE}
+source ${PYTHON_VENV}/bin/activate
+echo "Starting Celery Queue $QA"
+celery -A imageworker worker -Q $QA --loglevel=DEBUG -n worker.queue.$QA &
+echo "Starting imagegw API"
+python ./imagegwapi.py

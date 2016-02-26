@@ -1,14 +1,14 @@
 /**
  *  @file shifter.c
  *  @brief setuid utility to setup and interactively enter a shifter env
- * 
+ *
  * @author Douglas M. Jacobsen <dmjacobsen@lbl.gov>
  */
 
 /* Shifter, Copyright (c) 2015, The Regents of the University of California,
  * through Lawrence Berkeley National Laboratory (subject to receipt of any
  * required approvals from the U.S. Dept. of Energy).  All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *  1. Redistributions of source code must retain the above copyright notice,
@@ -20,7 +20,7 @@
  *     National Laboratory, U.S. Dept. of Energy nor the names of its
  *     contributors may be used to endorse or promote products derived from this
  *     software without specific prior written permission.
- * 
+ *
  * See LICENSE for full text.
  */
 
@@ -344,7 +344,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                             fprintf(stderr, "Must specify user with --user flag.\n");
                             _usage(1);
                         }
-                        pwd = getpwnam(optarg);
+                        pwd = shifter_getpwnam(optarg, udiConfig);
                         if (pwd != NULL) {
                             config->tgtUid = pwd->pw_uid;
                             config->tgtGid = pwd->pw_gid;
@@ -352,7 +352,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                         } else {
                             uid_t uid = atoi(optarg);
                             if (uid != 0) {
-                                pwd = getpwuid(uid);
+                                pwd = shifter_getpwuid(uid, udiConfig);
                                 config->tgtUid = pwd->pw_uid;
                                 config->tgtGid = pwd->pw_gid;
                                 config->username = strdup(pwd->pw_name);
@@ -412,7 +412,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                 }
                 break;
             case 'e':
-                /* TODO - add support for explicitly overriding environment 
+                /* TODO - add support for explicitly overriding environment
                  * variables
                  */
                 break;
@@ -487,7 +487,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     }
 
     if (config->username == NULL) {
-        struct passwd *pwd = getpwuid(config->tgtUid);
+        struct passwd *pwd = shifter_getpwuid(config->tgtUid, udiConfig);
         if (pwd != NULL) {
             config->username = strdup(pwd->pw_name);
         }
@@ -563,7 +563,7 @@ static void _usage(int status) {
 "    export SHIFTER_IMAGETYPE=docker\n"
 "    export SHIFTER_IMAGE=ubuntu/15.04\n"
 "Or if an image is already loaded in the global namespace owned by the\n"
-"running user, and none of the above options are set, then the image loaded\n" 
+"running user, and none of the above options are set, then the image loaded\n"
 "in the global namespace will be used.\n"
 "\n"
 "Command Selection: If a command is supplied on the command line Shifter will\n"
@@ -691,8 +691,8 @@ void free_options(struct options *opts, int freeStruct) {
 
 /**
  * isImageLoaded - Determine if an image with the exact same options is already
- * loaded on the system.  Calls shifter_core library function with image 
- * identifier and volume mount options to read the state of the system to 
+ * loaded on the system.  Calls shifter_core library function with image
+ * identifier and volume mount options to read the state of the system to
  * determine if it is a match.
  * */
 int isImageLoaded(ImageData *image, struct options *options, UdiRootConfig *udiConfig) {

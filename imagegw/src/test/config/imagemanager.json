@@ -7,10 +7,10 @@
     "PullUpdateTimeout": 300,
     "ImageExpirationTimeout": "90:00:00:00",
     "CacheDirectory": "/data/",
-    "ExpandDirectory": "/dev/shm/",
+    "ExpandDirectory": "/data/",
     "MongoDBURI":"mongodb://mongo/",
     "MongoDB":"ShifterTest",
-    "Broker":"redis://redis/",
+    "Broker":"redis://:password@redis/",
     "Authentication":"munge",
 
     "Locations": {
@@ -20,7 +20,7 @@
         },
         "registry.services.nersc.gov": {
             "remotetype": "dockerv2",
-            "sslcacert": "./cacert.pem",
+            "sslcacert": "/config/nersc.pem",
             "authentication": "http"
         }
     },
@@ -36,8 +36,8 @@
             ],
             "ssh": {
                 "username": "root",
-                "key": "/ssh/ssh.key",
-                "imageDir": "/data/"
+                "key": "/config/ssh.key",
+                "imageDir": "/images/"
             },
             "ldap": {
                 "userBase": "ou=People,ou=system,ou=Host,o=ldapsvc,dc=nersc,dc=gov",
@@ -49,7 +49,7 @@
             "accesstype": "local",
             "usergroupService": "local",
             "local": {
-                "imageDir": "/data/systemb"
+                "imageDir": "/images/systemb"
             }
         }
     }

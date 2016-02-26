@@ -1,0 +1,64 @@
+#! /bin/bash
+#
+#
+# Author:
+#    Miguel Gila <miguel.gila@cscs.ch>
+#
+#
+
+if [ -z ${ROOT_TREE} ]; then
+  ROOT_TREE='/opt/shifter/15.12.0/imagegw'
+fi
+
+if [ -z ${PYTHON_VENV} ]; then
+  PYTHON_VENV='imagegw_venv'
+fi
+
+# CWD should be the local contrib directory
+CWD=${PWD}
+REQ_FILE="${CWD}/../src/requirements.txt"
+DEP_RPM_LIST="mongodb-server mongodb redis zlib zlib-devel munge munge-devel openssl openssl-devel"
+
+uname -a |grep Linux 2>&1 >> /dev/null
+if [ $? -eq 0 ]; then
+  # a very ugly way to detect RHEL-compatible 6 OS
+  cat /etc/redhat-release |grep 6 2>&1 >> /dev/null
+  if [ $? -eq 0 ]; then
+    echo "*** Installing dependencies ${DEP_RPM_LIST}"
+    sudo yum install -y ${DEP_RPM_LIST}
+    sudo /etc/init.d/mongod start
+    sudo /etc/init.d/redis start
+  fi
+fi
+
+echo "*** Installing Python 2.7.9"
+cd ${ROOT_TREE}
+MYPYTHONPATH=${ROOT_TREE}/python_2.7.9
+curl 'https://www.python.org/ftp/python/2.7.9/Python-2.7.9.tgz' -o Python-2.7.9.tgz
+tar xzf Python-2.7.9.tgz
+cd Python-2.7.9/
+./configure --prefix=${MYPYTHONPATH}
+make -j4 && make install
+echo ">>> Python 2.7.9 build status: $?"
+cd ..
+find ./Python-2.7.9 -exec rm -rf {} \;
+
+echo "*** Installing Virtualenv 13.1.2"
+cd ${ROOT_TREE}
+curl 'https://pypi.python.org/packages/source/v/virtualenv/virtualenv-13.1.2.tar.gz#md5=b989598f068d64b32dead530eb25589a' -o virtualenv-13.1.2.tar.gz
+tar xzf virtualenv-13.1.2.tar.gz
+virtualenv-13.1.2/virtualenv.py ${PYTHON_VENV} --python=${MYPYTHONPATH}/bin/python2.7
+echo ">>> Virtualenv 13.1.2 build status: $?"
+
+echo "*** Installing python packages using pip on virtual environment ${PYTHON_VENV}"
+cd ${ROOT_TREE}
+source ${PYTHON_VENV}/bin/activate
+#pip install celery pymongo flask pysocks redis flower requests
+if [ -e ${REQ_FILE} ] ; then
+  pip install -r ${REQ_FILE}
+  echo ">>> pip install status: $?"
+else
+  echo ">>> Cannot find requirements.txt file ${REQ_FILE}."
+fi
+
+echo "*** Done"

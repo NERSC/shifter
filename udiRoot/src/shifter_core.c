@@ -7,7 +7,7 @@
 /* Shifter, Copyright (c) 2015, The Regents of the University of California,
  * through Lawrence Berkeley National Laboratory (subject to receipt of any
  * required approvals from the U.S. Dept. of Energy).  All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *  1. Redistributions of source code must retain the above copyright notice,
@@ -19,7 +19,7 @@
  *     National Laboratory, U.S. Dept. of Energy nor the names of its
  *     contributors may be used to endorse or promote products derived from this
  *     software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -31,7 +31,7 @@
  * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
- *  
+ *
  * You are under no obligation whatsoever to provide any bug fixes, patches, or
  * upgrades to the features, functionality or performance of the source code
  * ("Enhancements") to anyone; however, if you choose to make your Enhancements
@@ -60,6 +60,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <grp.h>
+#include <pwd.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -203,7 +204,7 @@ int bindImageIntoUDI(
 
         /* if target is a symlink, copy it */
         if (S_ISLNK(statData.st_mode)) {
-            char *args[] = { strdup(udiConfig->cpPath), strdup("-P"), 
+            char *args[] = { strdup(udiConfig->cpPath), strdup("-P"),
                 strdup(srcBuffer), strdup(mntBuffer), NULL
             };
             char **argsPtr = NULL;
@@ -664,7 +665,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
         }
     }
 
-    /* setup hostlist for current allocation 
+    /* setup hostlist for current allocation
        format of minNodeSpec is "host1/16 host2/16" for 16 copies each of host1 and host2 */
     if (minNodeSpec != NULL) {
         if (writeHostFile(minNodeSpec, udiConfig) != 0) {
@@ -869,7 +870,7 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
             char *pathPtr = path;
             char *pathEnd = NULL;
             int stop = 0;
-            
+
             /* skip leading slashes */
             while (*pathPtr == '/') {
                 pathPtr++;
@@ -1056,7 +1057,7 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
     return 0;
 _loopMount_unclean:
     return 1;
-} 
+}
 
 int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig) {
     char udiRoot[PATH_MAX];
@@ -1455,7 +1456,7 @@ int compareShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMa
 
     if (nread == len) {
         cmpVal = memcmp(configString, buffer, sizeof(char) * len);
-    } else { 
+    } else {
         cmpVal = -1;
     }
 
@@ -1794,7 +1795,7 @@ int _shifterCore_bindMount(MountList *mountCache, const char *from, const char *
         return 1;
     }
 
-    /* not interested in mounting over existing mounts, prevents 
+    /* not interested in mounting over existing mounts, prevents
        things from getting into a weird state later. */
     ptr = find_MountList(mountCache, to_real);
     if (ptr != NULL) {
@@ -1830,7 +1831,7 @@ int _shifterCore_bindMount(MountList *mountCache, const char *from, const char *
     }
     insert_MountList(mountCache, to);
 
-    /* if the source is exactly /dev or starts with /dev/ then 
+    /* if the source is exactly /dev or starts with /dev/ then
        ALLOW device entires, otherwise remount with noDev */
     if (strcmp(from, "/dev") != 0 && strncmp(from, "/dev/", 5) != 0) {
         remountFlags |= MS_NODEV;
@@ -1921,7 +1922,7 @@ int isSharedMount(const char *mountPoint) {
     return rc;
 }
 
-/*! Check if a kernel module is loaded 
+/*! Check if a kernel module is loaded
  *
  * \param name name of kernel module
  *
@@ -1967,7 +1968,7 @@ int isKernelModuleLoaded(const char *name) {
 /*! Loads a kernel module if required */
 /*!
  * Checks to see if the specified kernel module is already loaded, if so, does
- * nothing.  Otherwise, will try to load the module using modprobe (i.e., from 
+ * nothing.  Otherwise, will try to load the module using modprobe (i.e., from
  * the system /lib paths.  Finally, will attempt to load the from the shifter-
  * specific store installed with Shifter
  *
@@ -2018,7 +2019,7 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
     if (stat(kmodPath, &statData) == 0) {
         char *insmodArgs[] = {
             strdup(udiConfig->insmodPath),
-            strdup(kmodPath), 
+            strdup(kmodPath),
             NULL
         };
         char **argPtr = NULL;
@@ -2043,9 +2044,90 @@ _loadKrnlMod_unclean:
     return ret;
 }
 
+/** shifter_getpwuid
+ *  Lookup user information based on information in shifter passwd cache.
+ *  This is useful to avoid making remote getpwuid() calls on Cray systems
+ *  or other systems where access to LDAP may be slow, difficult, or impossible
+ *  on compute nodes.
+ *
+ */
+struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config) {
+    FILE *input = NULL;
+    char buffer[PATH_MAX];
+    struct passwd *pw = NULL;
+    int found = 0;
+
+    if (config == NULL) {
+        return NULL;
+    }
+
+    snprintf(buffer, PATH_MAX, "%s%s/passwd", config->nodeContextPrefix, config->etcPath);
+    input = fopen(buffer, "r");
+
+    if (input == NULL) {
+        fprintf(stderr, "FAILED to find shifter passwd file at %s", buffer);
+        goto _shifter_getpwuid_unclean;
+    }
+    while ((pw = fgetpwent(input)) != NULL) {
+        if (pw->pw_uid == tgtuid) {
+            found = 1;
+            break;
+        }
+    }
+    fclose(input);
+    input = NULL;
+
+    if (found) return pw;
+    return NULL;
+
+_shifter_getpwuid_unclean:
+    if (input != NULL) {
+        fclose(input);
+        input = NULL;
+    }
+    return NULL;
+}
+
+struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config) {
+    FILE *input = NULL;
+    char buffer[PATH_MAX];
+    struct passwd *pw = NULL;
+    int found = 0;
+
+    if (config == NULL) {
+        return NULL;
+    }
+
+    snprintf(buffer, PATH_MAX, "%s%s/passwd", config->nodeContextPrefix, config->etcPath);
+    input = fopen(buffer, "r");
+
+    if (input == NULL) {
+        fprintf(stderr, "FAILED to find shifter passwd file at %s", buffer);
+        goto _shifter_getpwnam_unclean;
+    }
+    while ((pw = fgetpwent(input)) != NULL) {
+        if (strcmp(pw->pw_name, tgtnam) == 0) {
+            found = 1;
+            break;
+        }
+    }
+    fclose(input);
+    input = NULL;
+
+    if (found) return pw;
+    return NULL;
+
+_shifter_getpwnam_unclean:
+    if (input != NULL) {
+        fclose(input);
+        input = NULL;
+    }
+    return NULL;
+}
+
 /** filterEtcGroup
- *  many implementations of initgroups() do not deal with huge /etc/group 
- *  files due to a variety of limitations (like per-line limits).  this 
+ *  many implementations of initgroups() do not deal with huge /etc/group
+ *  files due to a variety of limitations (like per-line limits).  this
  *  function reads a given etcgroup file and filters the content to only
  *  include the specified user
  *
@@ -2274,7 +2356,7 @@ int destructUDI(UdiRootConfig *udiConfig, int killSsh) {
  * to restore it upon success or failure of the unmount operations.
  * unmountTree will try to unmount all paths inclusive and under a given base
  * path.  e.g., if base is "/a", then "/a", "/a/b", and "/a/b/c" will all be
- * unmounted.  These are done in reverse alphabetic order, meaning that 
+ * unmounted.  These are done in reverse alphabetic order, meaning that
  * "/a/b/c" will be unmounted first, then "/a/b", then "/a".
  * The first error encountered will stop all unmounts.
  *

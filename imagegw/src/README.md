@@ -2,17 +2,29 @@
 
 The image gateway handles creating, tracking, and cleaning up images.  It provides a RESTful interface for client interactions, a manager layer that manages and tracks the images, and workers that do most of the fetching, packing and transferring of images.
 
+
+## Start Gateway with Docker and Docker-Compose
+
+If docker and docker-compose are installed, you can try starting a test environment with docker-compose.  There is a Makefile
+target that makes this easy.
+
+    make starttest
+
+This will create a munge key and ssh keys in test/config.  This directory gets volumed mounted into the API and Worker images.
+See the docker-compose.yml for details.  You can modify the docker-compose and create a configuration directory to run a non-test
+instance of the API and worker service.
+
 ## API
 
 The image manager provides a RESTful API.  It has three main verbs that it supports.  The API is a thin translation layer on top of the manager layer.  Most of the actual action is handled by functions in the management layer.
 
 ### Lookup
 
-TODO
+curl -H "authentication: mungehash" -X GET http://localhost:5555/api/lookup/system/docker/ubuntu:latest
 
 ### Pull
 
-TODO
+curl -H "authentication: mungehash" -X POST http://localhost:5555/api/pull/system/docker/ubuntu:latest
 
 ### List
 
@@ -20,7 +32,7 @@ TODO
 
 ### Expire
 
-TODO
+Not fully implemented yet.
 
 ## Manager layer
 
@@ -31,7 +43,7 @@ and transfer images.
 
 ### Configuration
 
-TODO
+See imagemanger.json
 
 ### Troubleshooting
 
@@ -46,7 +58,7 @@ remotely executed.
 
 ### Configuration
 
-TODO
+See imagemanager.json
 
 ### Troubleshooting
 
