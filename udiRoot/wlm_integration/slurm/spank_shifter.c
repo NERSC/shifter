@@ -305,7 +305,6 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
         generateSshKey(sp);
     }
     
-    spank_setenv(sp, "CRAY_ROOTFS", "UDI", 1);
     spank_setenv(sp, "SHIFTER_IMAGE", image, 1);
     spank_setenv(sp, "SHIFTER_IMAGETYPE", image_type, 1);
     spank_job_control_setenv(sp, "SHIFTER_IMAGE", image, 1);
@@ -314,6 +313,12 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     if (strlen(imagevolume) > 0) {
         spank_setenv(sp, "SHIFTER_VOLUME", imagevolume, 1);
         spank_job_control_setenv(sp, "SHIFTER_VOLUME", imagevolume, 1);
+    }
+    if (getgid() != 0) {
+        char buffer[128];
+        snprintf(buffer, 128, "%d", getgid());
+        spank_setenv(sp, "SHIFTER_GID", buffer, 1);
+        spank_job_control_setenv(sp, "SHIFTER_GID", buffer, 1);
     }
     return rc;
 }
@@ -421,6 +426,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     int i,j;
     uint32_t job;
     uid_t uid = 0;
+    gid_t gid = 0;
     uint16_t shared = 0;
 
     char buffer[1024];
@@ -434,6 +440,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     char *nodelist = NULL;
     char *username = NULL;
     char *uid_str = NULL;
+    char *gid_str = NULL;
     char *sshPubKey = NULL;
     const char *memory_cgroup_base = NULL;
     size_t tasksPerNode = 0;
@@ -517,6 +524,15 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         }
     }
 
+    gid_str = getenv("SHIFTER_GID");
+    if (gid_str != NULL) {
+        gid = strtoul(gid_str, NULL, 10);
+    } else {
+        if (spank_get_item(sp, S_JOB_GID, &gid) != ESPANK_SUCCESS) {
+            PROLOG_ERROR("FAILED to get job gid!", ESPANK_ERROR);
+        }
+    }
+
     /* try to get username from environment first, then fallback to getpwuid */
     username = getenv("SLURM_JOB_USER");
     if (username != NULL && strcmp(username, "(null)") != 0) {
@@ -537,11 +553,6 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
             username = strdup(result->pw_name);
             slurm_debug("shifter prolog: got username from getpwuid_r: %s", username);
         }
-    }
-
-    uid_str = getenv("SLURM_JOB_UID");
-    if (uid_str != NULL) {
-        uid = strtoul(uid_str, NULL, 10);
     }
 
     /* setupRoot argument construction 
@@ -569,6 +580,11 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     if (uid != 0) {
         snprintf(buffer, 1024, "%u", uid);
         strncpy_StringArray("-U", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+        strncpy_StringArray(buffer, strlen(buffer), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+    }
+    if (gid != 0) {
+        snprintf(buffer, 1024, "%u", gid);
+        strncpy_StringArray("-G", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
         strncpy_StringArray(buffer, strlen(buffer), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
     if (username != NULL) {
@@ -614,12 +630,12 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         close(stdoutPipe[1]);
         close(stderrPipe[1]);
 
-        stdoutStream = fdopen(stdoutPipe[1], "r");
-        stderrStream = fdopen(stderrPipe[1], "r");
+        stdoutStream = fdopen(stdoutPipe[0], "r");
+        stderrStream = fdopen(stderrPipe[0], "r");
 
         for ( ; stdoutStream && stderrStream ; ) {
             if (stdoutStream) {
-                size_t nBytes = getline(&lineBuffer, &lineBuffer_sz, stdoutStream);
+                ssize_t nBytes = getline(&lineBuffer, &lineBuffer_sz, stdoutStream);
                 if (nBytes > 0) {
                     slurm_error("setupRoot stdout: %s", lineBuffer);
                 } else {
@@ -628,7 +644,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
                 }
             }
             if (stderrStream) {
-                size_t nBytes = getline(&lineBuffer, &lineBuffer_sz, stderrStream);
+                ssize_t nBytes = getline(&lineBuffer, &lineBuffer_sz, stderrStream);
                 if (nBytes > 0) {
                     slurm_error("setupRoot stderr: %s", lineBuffer);
                 } else {
@@ -658,6 +674,8 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         /* make the pipe stdout/err */
         dup2(stdoutPipe[1], STDOUT_FILENO);
         dup2(stderrPipe[1], STDERR_FILENO);
+        close(stdoutPipe[1]);
+        close(stderrPipe[1]);
 
 
         execv(setupRootArgs[0], setupRootArgs);
