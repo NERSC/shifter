@@ -841,6 +841,7 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
         fprintf(stderr, "FAILED to chmod \"%s\" to 0755.\n", udiRoot);
         goto _mountImgVfs_unclean;
     }
+    makeUdiMountPrivate(udiConfig);
 
     /* get our needs injected first */
     if (prepareSiteModifications(username, minNodeSpec, udiConfig) != 0) {
@@ -1167,10 +1168,13 @@ int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *b
             fprintf(stderr, "Failed to open file %s for writing, failing\n", buffer);
             exit(1);
         }
+#if 0
         if (fallocate(fd, 0, 0, cache->cacheSize) < 0) {
             /* only some filesystems support this mode of fallocate, if
              * unsupported use dd to generate the backing file */
             if (errno == EOPNOTSUPP) {
+#endif
+        {
                 char *args[7];
                 char **arg = NULL;
                 int ret = 0;
@@ -1185,20 +1189,23 @@ int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *b
                 args[4] = strdup("count=0");
                 args[5] = alloc_strgenf("seek=%lu", cache->cacheSize);
                 args[6] = NULL;
-                ret = forkAndExecvSilent(args);
+                ret = forkAndExecv(args);
                 for (arg = args; *arg; arg++) {
                     free(*arg);
                 }
 
                 if (ret != 0) {
-                    fprintf(stderr, "FAILED to dd backing store for cache on %s\n", buffer);
+                    fprintf(stderr, "FAILED to dd backing store for cache on %s, %d\n", buffer, ret);
                     exit(1);
                 }
+        }
+#if 0
             } else {
                 perror("FAILED to fallocate() cache backing store");
                 exit(1);
             }
         }
+#endif
 
         if (strcmp(cache->fstype, "xfs") == 0) {
             char **args = NULL;
@@ -1213,7 +1220,7 @@ int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *b
             args[1] = strdup("-d");
             args[2] = alloc_strgenf("name=%s,file=1,size=%lu", buffer, cache->cacheSize);
             args[3] = NULL;
-            ret = forkAndExecv(args);
+            ret = forkAndExecvSilent(args);
             for (argPtr = args; argPtr && *argPtr; argPtr++) {
                 free(*argPtr);
             }
@@ -1781,8 +1788,11 @@ int _forkAndExecv(char *const *args, int silent) {
     }
     /* this is the child */
     if (silent) {
-        close(STDOUT_FILENO);
-        close(STDERR_FILENO);
+        char *const *argsp = args;
+        int devNull = open("/dev/null", O_RDWR);
+        dup2(devNull, STDOUT_FILENO);
+        dup2(devNull, STDERR_FILENO);
+        close(devNull);
     }
     execv(args[0], args);
     fprintf(stderr, "FAILED to execvp! Exiting.\n");
