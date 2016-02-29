@@ -7,7 +7,7 @@
 /* Shifter, Copyright (c) 2015, The Regents of the University of California,
  * through Lawrence Berkeley National Laboratory (subject to receipt of any
  * required approvals from the U.S. Dept. of Energy).  All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *  1. Redistributions of source code must retain the above copyright notice,
@@ -19,7 +19,7 @@
  *     National Laboratory, U.S. Dept. of Energy nor the names of its
  *     contributors may be used to endorse or promote products derived from this
  *     software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -31,7 +31,7 @@
  * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
- *  
+ *
  * You are under no obligation whatsoever to provide any bug fixes, patches, or
  * upgrades to the features, functionality or performance of the source code
  * ("Enhancements") to anyone; however, if you choose to make your Enhancements
@@ -60,6 +60,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <grp.h>
+#include <pwd.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -203,7 +204,7 @@ int bindImageIntoUDI(
 
         /* if target is a symlink, copy it */
         if (S_ISLNK(statData.st_mode)) {
-            char *args[] = { strdup(udiConfig->cpPath), strdup("-P"), 
+            char *args[] = { strdup(udiConfig->cpPath), strdup("-P"),
                 strdup(srcBuffer), strdup(mntBuffer), NULL
             };
             char **argsPtr = NULL;
@@ -664,7 +665,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
         }
     }
 
-    /* setup hostlist for current allocation 
+    /* setup hostlist for current allocation
        format of minNodeSpec is "host1/16 host2/16" for 16 copies each of host1 and host2 */
     if (minNodeSpec != NULL) {
         if (writeHostFile(minNodeSpec, udiConfig) != 0) {
@@ -869,7 +870,7 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
             char *pathPtr = path;
             char *pathEnd = NULL;
             int stop = 0;
-            
+
             /* skip leading slashes */
             while (*pathPtr == '/') {
                 pathPtr++;
@@ -924,6 +925,26 @@ _mountImgVfs_unclean:
     return 1;
 }
 
+/** makeUdiMountPrivate
+ *  Some Linux systems default their mounts to "shared" mounts, which means
+ *  that mount option changes Shifter makes (or unmounts) can propagate back up
+ *  to the original mount, which is not desirable.  This function remounts the
+ *  base udiMount point as MS_PRIVATE - which means that no external mount 
+ *  changes propagate into these mountpoints, nor do these go back up the 
+ *  chain.  It may be desirable to allow sites to choose MS_SLAVE instead of
+ *  MS_PRIVATE here, as that will allow site unmounts to propagate into shifter
+ *  containers.
+ */
+int makeUdiMountPrivate(UdiRootConfig *udiConfig) {
+    char buffer[PATH_MAX];
+    snprintf(buffer, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    if (mount(NULL, buffer, NULL, MS_PRIVATE|MS_REC, NULL) != 0) {
+        perror("Failed to remount non-shared.");
+        return 1;
+    }
+    return 0;
+}
+
 int remountUdiRootReadonly(UdiRootConfig *udiConfig) {
     char udiRoot[PATH_MAX];
 
@@ -938,6 +959,7 @@ int remountUdiRootReadonly(UdiRootConfig *udiConfig) {
         perror("   --- REASON: ");
         goto _remountUdiRootReadonly_unclean;
     }
+    makeUdiMountPrivate(udiConfig);
     return 0;
 
 _remountUdiRootReadonly_unclean:
@@ -1042,7 +1064,7 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
             NULL
         };
         char **argsPtr = NULL;
-        int ret = forkAndExecv(args);
+        int ret = forkAndExecvSilent(args);
         for (argsPtr = args; argsPtr && *argsPtr; argsPtr++) {
             free(*argsPtr);
         }
@@ -1056,7 +1078,7 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
     return 0;
 _loopMount_unclean:
     return 1;
-} 
+}
 
 int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig) {
     char udiRoot[PATH_MAX];
@@ -1146,10 +1168,13 @@ int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *b
             fprintf(stderr, "Failed to open file %s for writing, failing\n", buffer);
             exit(1);
         }
+#if 0
         if (fallocate(fd, 0, 0, cache->cacheSize) < 0) {
             /* only some filesystems support this mode of fallocate, if
              * unsupported use dd to generate the backing file */
             if (errno == EOPNOTSUPP) {
+#endif
+        {
                 char *args[7];
                 char **arg = NULL;
                 int ret = 0;
@@ -1164,20 +1189,23 @@ int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *b
                 args[4] = strdup("count=0");
                 args[5] = alloc_strgenf("seek=%lu", cache->cacheSize);
                 args[6] = NULL;
-                ret = forkAndExecv(args);
+                ret = forkAndExecvSilent(args);
                 for (arg = args; *arg; arg++) {
                     free(*arg);
                 }
 
                 if (ret != 0) {
-                    fprintf(stderr, "FAILED to dd backing store for cache on %s\n", buffer);
+                    fprintf(stderr, "FAILED to dd backing store for cache on %s, %d\n", buffer, ret);
                     exit(1);
                 }
+        }
+#if 0
             } else {
                 perror("FAILED to fallocate() cache backing store");
                 exit(1);
             }
         }
+#endif
 
         if (strcmp(cache->fstype, "xfs") == 0) {
             char **args = NULL;
@@ -1192,7 +1220,7 @@ int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *b
             args[1] = strdup("-d");
             args[2] = alloc_strgenf("name=%s,file=1,size=%lu", buffer, cache->cacheSize);
             args[3] = NULL;
-            ret = forkAndExecv(args);
+            ret = forkAndExecvSilent(args);
             for (argPtr = args; argPtr && *argPtr; argPtr++) {
                 free(*argPtr);
             }
@@ -1349,6 +1377,10 @@ int setupVolumeMapMounts(
                 fprintf(stderr, "FAILED to understand per-node cache mounting method, exiting.\n");
                 goto _setupVolumeMapMounts_unclean;
             }
+            if (chown(to_buffer, udiConfig->target_uid, udiConfig->target_gid) != 0) {
+                fprintf(stderr, "FAILED to chown per-node cache to user.\n");
+                goto _setupVolumeMapMounts_unclean;
+            }
         } else {
             _BINDMOUNT(mountCache, from_buffer, to_buffer, flagsInEffect, 1);
         }
@@ -1451,7 +1483,7 @@ int compareShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMa
 
     if (nread == len) {
         cmpVal = memcmp(configString, buffer, sizeof(char) * len);
-    } else { 
+    } else {
         cmpVal = -1;
     }
 
@@ -1729,7 +1761,7 @@ _startSshd_unclean:
     return 1;
 }
 
-int forkAndExecv(char *const *args) {
+int _forkAndExecv(char *const *args, int silent) {
     pid_t pid = 0;
 
     pid = fork();
@@ -1755,9 +1787,24 @@ int forkAndExecv(char *const *args) {
         return status;
     }
     /* this is the child */
+    if (silent) {
+        char *const *argsp = args;
+        int devNull = open("/dev/null", O_WRONLY);
+        dup2(devNull, STDOUT_FILENO);
+        dup2(devNull, STDERR_FILENO);
+        close(devNull);
+    }
     execv(args[0], args);
     fprintf(stderr, "FAILED to execvp! Exiting.\n");
     exit(127);
+}
+
+int forkAndExecv(char *const *args) {
+    return _forkAndExecv(args, 0);
+}
+
+int forkAndExecvSilent(char *const *args) {
+    return _forkAndExecv(args, 1);
 }
 
 int _shifterCore_bindMount(MountList *mountCache, const char *from, const char *to, size_t flags, int overwriteMounts) {
@@ -1766,6 +1813,7 @@ int _shifterCore_bindMount(MountList *mountCache, const char *from, const char *
     char *to_real = NULL;
     unsigned long mountFlags = MS_BIND;
     unsigned long remountFlags = MS_REMOUNT|MS_BIND|MS_NOSUID;
+    unsigned long privateRemountFlags = MS_PRIVATE;
 
     if (from == NULL || to == NULL || mountCache == NULL) {
         fprintf(stderr, "INVALID input to bind-mount. Fail\n");
@@ -1778,7 +1826,7 @@ int _shifterCore_bindMount(MountList *mountCache, const char *from, const char *
         return 1;
     }
 
-    /* not interested in mounting over existing mounts, prevents 
+    /* not interested in mounting over existing mounts, prevents
        things from getting into a weird state later. */
     ptr = find_MountList(mountCache, to_real);
     if (ptr != NULL) {
@@ -1805,6 +1853,7 @@ int _shifterCore_bindMount(MountList *mountCache, const char *from, const char *
     if (strcmp(from, "/dev") == 0 || (flags & VOLMAP_FLAG_RECURSIVE)) {
         mountFlags |= MS_REC;
         remountFlags |= MS_REC;
+        privateRemountFlags |= MS_REC;
     }
 
     /* perform the initial bind-mount */
@@ -1814,7 +1863,7 @@ int _shifterCore_bindMount(MountList *mountCache, const char *from, const char *
     }
     insert_MountList(mountCache, to);
 
-    /* if the source is exactly /dev or starts with /dev/ then 
+    /* if the source is exactly /dev or starts with /dev/ then
        ALLOW device entires, otherwise remount with noDev */
     if (strcmp(from, "/dev") != 0 && strncmp(from, "/dev/", 5) != 0) {
         remountFlags |= MS_NODEV;
@@ -1827,6 +1876,10 @@ int _shifterCore_bindMount(MountList *mountCache, const char *from, const char *
     /* remount the bind-mount to get the needed mount flags */
     ret = mount(from, to, "bind", remountFlags, NULL);
     if (ret != 0) {
+        goto _bindMount_unclean;
+    }
+    if (mount(NULL, to, NULL, privateRemountFlags, NULL) != 0) {
+        perror("Failed to remount non-shared: ");
         goto _bindMount_unclean;
     }
 _bindMount_exit:
@@ -1905,7 +1958,7 @@ int isSharedMount(const char *mountPoint) {
     return rc;
 }
 
-/*! Check if a kernel module is loaded 
+/*! Check if a kernel module is loaded
  *
  * \param name name of kernel module
  *
@@ -1951,7 +2004,7 @@ int isKernelModuleLoaded(const char *name) {
 /*! Loads a kernel module if required */
 /*!
  * Checks to see if the specified kernel module is already loaded, if so, does
- * nothing.  Otherwise, will try to load the module using modprobe (i.e., from 
+ * nothing.  Otherwise, will try to load the module using modprobe (i.e., from
  * the system /lib paths.  Finally, will attempt to load the from the shifter-
  * specific store installed with Shifter
  *
@@ -1978,7 +2031,7 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
             NULL
         };
         char **argPtr = NULL;
-        ret = forkAndExecv(args);
+        ret = forkAndExecvSilent(args);
         for (argPtr = args; argPtr && *argPtr; argPtr++) {
             free(*argPtr);
         }
@@ -2002,13 +2055,13 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
     if (stat(kmodPath, &statData) == 0) {
         char *insmodArgs[] = {
             strdup(udiConfig->insmodPath),
-            strdup(kmodPath), 
+            strdup(kmodPath),
             NULL
         };
         char **argPtr = NULL;
 
         /* run insmod and clean up */
-        ret = forkAndExecv(insmodArgs);
+        ret = forkAndExecvSilent(insmodArgs);
         for (argPtr = insmodArgs; *argPtr != NULL; argPtr++) {
             free(*argPtr);
         }
@@ -2027,9 +2080,90 @@ _loadKrnlMod_unclean:
     return ret;
 }
 
+/** shifter_getpwuid
+ *  Lookup user information based on information in shifter passwd cache.
+ *  This is useful to avoid making remote getpwuid() calls on Cray systems
+ *  or other systems where access to LDAP may be slow, difficult, or impossible
+ *  on compute nodes.
+ *
+ */
+struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config) {
+    FILE *input = NULL;
+    char buffer[PATH_MAX];
+    struct passwd *pw = NULL;
+    int found = 0;
+
+    if (config == NULL) {
+        return NULL;
+    }
+
+    snprintf(buffer, PATH_MAX, "%s%s/passwd", config->nodeContextPrefix, config->etcPath);
+    input = fopen(buffer, "r");
+
+    if (input == NULL) {
+        fprintf(stderr, "FAILED to find shifter passwd file at %s", buffer);
+        goto _shifter_getpwuid_unclean;
+    }
+    while ((pw = fgetpwent(input)) != NULL) {
+        if (pw->pw_uid == tgtuid) {
+            found = 1;
+            break;
+        }
+    }
+    fclose(input);
+    input = NULL;
+
+    if (found) return pw;
+    return NULL;
+
+_shifter_getpwuid_unclean:
+    if (input != NULL) {
+        fclose(input);
+        input = NULL;
+    }
+    return NULL;
+}
+
+struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config) {
+    FILE *input = NULL;
+    char buffer[PATH_MAX];
+    struct passwd *pw = NULL;
+    int found = 0;
+
+    if (config == NULL) {
+        return NULL;
+    }
+
+    snprintf(buffer, PATH_MAX, "%s%s/passwd", config->nodeContextPrefix, config->etcPath);
+    input = fopen(buffer, "r");
+
+    if (input == NULL) {
+        fprintf(stderr, "FAILED to find shifter passwd file at %s", buffer);
+        goto _shifter_getpwnam_unclean;
+    }
+    while ((pw = fgetpwent(input)) != NULL) {
+        if (strcmp(pw->pw_name, tgtnam) == 0) {
+            found = 1;
+            break;
+        }
+    }
+    fclose(input);
+    input = NULL;
+
+    if (found) return pw;
+    return NULL;
+
+_shifter_getpwnam_unclean:
+    if (input != NULL) {
+        fclose(input);
+        input = NULL;
+    }
+    return NULL;
+}
+
 /** filterEtcGroup
- *  many implementations of initgroups() do not deal with huge /etc/group 
- *  files due to a variety of limitations (like per-line limits).  this 
+ *  many implementations of initgroups() do not deal with huge /etc/group
+ *  files due to a variety of limitations (like per-line limits).  this
  *  function reads a given etcgroup file and filters the content to only
  *  include the specified user
  *
@@ -2258,7 +2392,7 @@ int destructUDI(UdiRootConfig *udiConfig, int killSsh) {
  * to restore it upon success or failure of the unmount operations.
  * unmountTree will try to unmount all paths inclusive and under a given base
  * path.  e.g., if base is "/a", then "/a", "/a/b", and "/a/b/c" will all be
- * unmounted.  These are done in reverse alphabetic order, meaning that 
+ * unmounted.  These are done in reverse alphabetic order, meaning that
  * "/a/b/c" will be unmounted first, then "/a/b", then "/a".
  * The first error encountered will stop all unmounts.
  *

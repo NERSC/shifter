@@ -49,7 +49,7 @@ extern char *slurm_hostlist_deranged_string_malloc(hostlist_t hl);
 
 struct spank_option spank_option_array[] = {
     { "image", "image", "shifter image to use", 1, 0, (spank_opt_cb_f) _opt_image},
-    { "imagevolume", "imagevolume", "shifter image bindings", 1, 0, (spank_opt_cb_f) _opt_imagevolume },
+    { "volume", "volume", "shifter image bindings", 1, 0, (spank_opt_cb_f) _opt_imagevolume },
     { "ccm", "ccm", "ccm emulation mode", 0, 0, (spank_opt_cb_f) _opt_ccm},
     SPANK_OPTIONS_TABLE_END
 };
@@ -269,9 +269,6 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
 
     // only perform this validation at submit time
     context = spank_context();
-    if (context != S_CTX_ALLOCATOR) {
-        return ESPANK_SUCCESS;
-    }
     if (strlen(image) == 0) {
         return rc;
     }
@@ -308,14 +305,20 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
         generateSshKey(sp);
     }
     
-    spank_setenv(sp, "CRAY_ROOTFS", "UDI", 1);
     spank_setenv(sp, "SHIFTER_IMAGE", image, 1);
     spank_setenv(sp, "SHIFTER_IMAGETYPE", image_type, 1);
     spank_job_control_setenv(sp, "SHIFTER_IMAGE", image, 1);
     spank_job_control_setenv(sp, "SHIFTER_IMAGETYPE", image_type, 1);
     
     if (strlen(imagevolume) > 0) {
-         spank_setenv(sp, "SHIFTER_VOLUME", imagevolume, 1);
+        spank_setenv(sp, "SHIFTER_VOLUME", imagevolume, 1);
+        spank_job_control_setenv(sp, "SHIFTER_VOLUME", imagevolume, 1);
+    }
+    if (getgid() != 0) {
+        char buffer[128];
+        snprintf(buffer, 128, "%d", getgid());
+        spank_setenv(sp, "SHIFTER_GID", buffer, 1);
+        spank_job_control_setenv(sp, "SHIFTER_GID", buffer, 1);
     }
     return rc;
 }
@@ -423,6 +426,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     int i,j;
     uint32_t job;
     uid_t uid = 0;
+    gid_t gid = 0;
     uint16_t shared = 0;
 
     char buffer[1024];
@@ -436,11 +440,16 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     char *nodelist = NULL;
     char *username = NULL;
     char *uid_str = NULL;
+    char *gid_str = NULL;
     char *sshPubKey = NULL;
     const char *memory_cgroup_base = NULL;
     size_t tasksPerNode = 0;
     UdiRootConfig *udiConfig = NULL;
     pid_t pid = 0;
+
+    /* pipes for reading from setupRoot */
+    int stdoutPipe[2];
+    int stderrPipe[2];
 
 #define PROLOG_ERROR(message, errCode) \
     slurm_error(message); \
@@ -515,6 +524,15 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         }
     }
 
+    gid_str = getenv("SHIFTER_GID");
+    if (gid_str != NULL) {
+        gid = strtoul(gid_str, NULL, 10);
+    } else {
+        if (spank_get_item(sp, S_JOB_GID, &gid) != ESPANK_SUCCESS) {
+            PROLOG_ERROR("FAILED to get job gid!", ESPANK_ERROR);
+        }
+    }
+
     /* try to get username from environment first, then fallback to getpwuid */
     username = getenv("SLURM_JOB_USER");
     if (username != NULL && strcmp(username, "(null)") != 0) {
@@ -537,11 +555,6 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         }
     }
 
-    uid_str = getenv("SLURM_JOB_UID");
-    if (uid_str != NULL) {
-        uid = strtoul(uid_str, NULL, 10);
-    }
-
     /* setupRoot argument construction 
        /path/to/setupRoot <imageType> <imageIdentifier> -u <uid> -U <username>
             [-v volMap ...] -s <sshPubKey> -N <nodespec> NULL
@@ -549,7 +562,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     if (strlen(imagevolume) > 0) {
         char *ptr = imagevolume;
         for ( ; ; ) {
-            char *limit = strchr(ptr, ',');
+            char *limit = strchr(ptr, ';');
             volArgs = (char **) realloc(volArgs,sizeof(char *) * (n_volArgs + 2));
             if (limit != NULL) *limit = 0;
             volArgs[n_volArgs++] = strdup(ptr);
@@ -563,11 +576,15 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         }
     }
     snprintf(setupRootPath, PATH_MAX, "%s%s/sbin/setupRoot", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
-    idx = 0;
     strncpy_StringArray(setupRootPath, strlen(setupRootPath), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     if (uid != 0) {
         snprintf(buffer, 1024, "%u", uid);
         strncpy_StringArray("-U", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+        strncpy_StringArray(buffer, strlen(buffer), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+    }
+    if (gid != 0) {
+        snprintf(buffer, 1024, "%u", gid);
+        strncpy_StringArray("-G", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
         strncpy_StringArray(buffer, strlen(buffer), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
     if (username != NULL) {
@@ -582,6 +599,10 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         strncpy_StringArray("-N", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
         strncpy_StringArray(nodelist, strlen(nodelist), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
+    for (idx = 0; idx < n_volArgs; idx++) {
+        strncpy_StringArray("-v", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+        strncpy_StringArray(volArgs[idx], strlen(volArgs[idx]), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+    }
     strncpy_StringArray(image_type, strlen(image_type), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     strncpy_StringArray(image, strlen(image), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
 
@@ -592,11 +613,49 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     /* return success because we don't want bad input to mark node in
        error state -- would be nice to do something to inform the job
        of this issue */
+    pipe(stdoutPipe);
+    pipe(stderrPipe);
     pid = fork();
     if (pid < 0) {
         PROLOG_ERROR("FAILED to fork setupRoot", ESPANK_ERROR);
     } else if (pid > 0) {
         int status = 0;
+        FILE *stdoutStream = NULL;
+        FILE *stderrStream = NULL;
+        char *lineBuffer = NULL;
+        size_t lineBuffer_sz = 0;
+
+
+        /* close the write end of both pipes */
+        close(stdoutPipe[1]);
+        close(stderrPipe[1]);
+
+        stdoutStream = fdopen(stdoutPipe[0], "r");
+        stderrStream = fdopen(stderrPipe[0], "r");
+
+        for ( ; stdoutStream && stderrStream ; ) {
+            if (stdoutStream) {
+                ssize_t nBytes = getline(&lineBuffer, &lineBuffer_sz, stdoutStream);
+                if (nBytes > 0) {
+                    slurm_error("setupRoot stdout: %s", lineBuffer);
+                } else {
+                    fclose(stdoutStream);
+                    stdoutStream = NULL;
+                }
+            }
+            if (stderrStream) {
+                ssize_t nBytes = getline(&lineBuffer, &lineBuffer_sz, stderrStream);
+                if (nBytes > 0) {
+                    slurm_error("setupRoot stderr: %s", lineBuffer);
+                } else {
+                    fclose(stderrStream);
+                    stderrStream = NULL;
+                }
+            }
+        }
+
+
+        /* wait on the child */
         slurm_error("waiting on child\n");
         waitpid(pid, &status, 0);
         if (WIFEXITED(status)) {
@@ -608,6 +667,17 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
             PROLOG_ERROR("FAILED to run setupRoot", ESPANK_ERROR);
         }
     } else {
+        /* close the read end of both pipes */
+        close(stdoutPipe[0]);
+        close(stderrPipe[0]);
+
+        /* make the pipe stdout/err */
+        dup2(stdoutPipe[1], STDOUT_FILENO);
+        dup2(stderrPipe[1], STDERR_FILENO);
+        close(stdoutPipe[1]);
+        close(stderrPipe[1]);
+
+
         execv(setupRootArgs[0], setupRootArgs);
         exit(127);
     }
