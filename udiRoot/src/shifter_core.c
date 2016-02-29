@@ -1189,7 +1189,7 @@ int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *b
                 args[4] = strdup("count=0");
                 args[5] = alloc_strgenf("seek=%lu", cache->cacheSize);
                 args[6] = NULL;
-                ret = forkAndExecv(args);
+                ret = forkAndExecvSilent(args);
                 for (arg = args; *arg; arg++) {
                     free(*arg);
                 }
@@ -1789,7 +1789,7 @@ int _forkAndExecv(char *const *args, int silent) {
     /* this is the child */
     if (silent) {
         char *const *argsp = args;
-        int devNull = open("/dev/null", O_RDWR);
+        int devNull = open("/dev/null", O_WRONLY);
         dup2(devNull, STDOUT_FILENO);
         dup2(devNull, STDERR_FILENO);
         close(devNull);
