@@ -440,6 +440,10 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     UdiRootConfig *udiConfig = NULL;
     pid_t pid = 0;
 
+    /* pipes for reading from setupRoot */
+    int stdoutPipe[2];
+    int stderrPipe[2];
+
 #define PROLOG_ERROR(message, errCode) \
     slurm_error(message); \
     rc = errCode; \
@@ -593,11 +597,49 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     /* return success because we don't want bad input to mark node in
        error state -- would be nice to do something to inform the job
        of this issue */
+    pipe(stdoutPipe);
+    pipe(stderrPipe);
     pid = fork();
     if (pid < 0) {
         PROLOG_ERROR("FAILED to fork setupRoot", ESPANK_ERROR);
     } else if (pid > 0) {
         int status = 0;
+        FILE *stdoutStream = NULL;
+        FILE *stderrStream = NULL;
+        char *lineBuffer = NULL;
+        size_t lineBuffer_sz = 0;
+
+
+        /* close the write end of both pipes */
+        close(stdoutPipe[1]);
+        close(stderrPipe[1]);
+
+        stdoutStream = fdopen(stdoutPipe[1], "r");
+        stderrStream = fdopen(stderrPipe[1], "r");
+
+        for ( ; stdoutStream && stderrStream ; ) {
+            if (stdoutStream) {
+                size_t nBytes = getline(&lineBuffer, &lineBuffer_sz, stdoutStream);
+                if (nBytes > 0) {
+                    slurm_error("setupRoot stdout: %s", lineBuffer);
+                } else {
+                    fclose(stdoutStream);
+                    stdoutStream = NULL;
+                }
+            }
+            if (stderrStream) {
+                size_t nBytes = getline(&lineBuffer, &lineBuffer_sz, stderrStream);
+                if (nBytes > 0) {
+                    slurm_error("setupRoot stderr: %s", lineBuffer);
+                } else {
+                    fclose(stderrStream);
+                    stderrStream = NULL;
+                }
+            }
+        }
+
+
+        /* wait on the child */
         slurm_error("waiting on child\n");
         waitpid(pid, &status, 0);
         if (WIFEXITED(status)) {
@@ -609,6 +651,15 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
             PROLOG_ERROR("FAILED to run setupRoot", ESPANK_ERROR);
         }
     } else {
+        /* close the read end of both pipes */
+        close(stdoutPipe[0]);
+        close(stderrPipe[0]);
+
+        /* make the pipe stdout/err */
+        dup2(stdoutPipe[1], STDOUT_FILENO);
+        dup2(stderrPipe[1], STDERR_FILENO);
+
+
         execv(setupRootArgs[0], setupRootArgs);
         exit(127);
     }
