@@ -185,8 +185,7 @@ int main(int argc, char **argv) {
         exit(1);
     }
     if (opts.tgtUid == 0 || opts.tgtGid == 0 || opts.username == NULL) {
-        fprintf(stderr, "%s\n", "Will not run as root.");
-        fprintf(stderr, "%d %d, %s\n", opts.tgtUid, opts.tgtGid, opts.username);
+        fprintf(stderr, "%s\n", "Failed to lookup username or attempted to run as root.\n");
         exit(1);
     }
 
@@ -777,6 +776,7 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
             goto _loadImage_error;
         }
     }
+    makeUdiMountPrivate(udiConfig);
 
     return 0;
 _loadImage_error:

@@ -925,6 +925,26 @@ _mountImgVfs_unclean:
     return 1;
 }
 
+/** makeUdiMountPrivate
+ *  Some Linux systems default their mounts to "shared" mounts, which means
+ *  that mount option changes Shifter makes (or unmounts) can propagate back up
+ *  to the original mount, which is not desirable.  This function remounts the
+ *  base udiMount point as MS_PRIVATE - which means that no external mount 
+ *  changes propagate into these mountpoints, nor do these go back up the 
+ *  chain.  It may be desirable to allow sites to choose MS_SLAVE instead of
+ *  MS_PRIVATE here, as that will allow site unmounts to propagate into shifter
+ *  containers.
+ */
+int makeUdiMountPrivate(UdiRootConfig *udiConfig) {
+    char buffer[PATH_MAX];
+    snprintf(buffer, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    if (mount(NULL, buffer, NULL, MS_PRIVATE|MS_REC, NULL) != 0) {
+        perror("Failed to remount non-shared.");
+        return 1;
+    }
+    return 0;
+}
+
 int remountUdiRootReadonly(UdiRootConfig *udiConfig) {
     char udiRoot[PATH_MAX];
 

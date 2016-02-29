@@ -113,6 +113,7 @@ struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config);
 
 int setupPerNodeCacheFilename(VolMapPerNodeCacheConfig *, char *, size_t);
 int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *from_buffer, UdiRootConfig *udiConfig);
+int makeUdiMountPrivate(UdiRootConfig *udiConfig);
 
 #ifdef __cplusplus
 }
