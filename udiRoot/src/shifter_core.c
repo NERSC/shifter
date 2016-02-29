@@ -841,7 +841,6 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
         fprintf(stderr, "FAILED to chmod \"%s\" to 0755.\n", udiRoot);
         goto _mountImgVfs_unclean;
     }
-    makeUdiMountPrivate(udiConfig);
 
     /* get our needs injected first */
     if (prepareSiteModifications(username, minNodeSpec, udiConfig) != 0) {
@@ -960,6 +959,7 @@ int remountUdiRootReadonly(UdiRootConfig *udiConfig) {
         perror("   --- REASON: ");
         goto _remountUdiRootReadonly_unclean;
     }
+    makeUdiMountPrivate(udiConfig);
     return 0;
 
 _remountUdiRootReadonly_unclean:
@@ -1813,6 +1813,7 @@ int _shifterCore_bindMount(MountList *mountCache, const char *from, const char *
     char *to_real = NULL;
     unsigned long mountFlags = MS_BIND;
     unsigned long remountFlags = MS_REMOUNT|MS_BIND|MS_NOSUID;
+    unsigned long privateRemountFlags = MS_PRIVATE;
 
     if (from == NULL || to == NULL || mountCache == NULL) {
         fprintf(stderr, "INVALID input to bind-mount. Fail\n");
@@ -1852,6 +1853,7 @@ int _shifterCore_bindMount(MountList *mountCache, const char *from, const char *
     if (strcmp(from, "/dev") == 0 || (flags & VOLMAP_FLAG_RECURSIVE)) {
         mountFlags |= MS_REC;
         remountFlags |= MS_REC;
+        privateRemountFlags |= MS_REC;
     }
 
     /* perform the initial bind-mount */
@@ -1874,6 +1876,10 @@ int _shifterCore_bindMount(MountList *mountCache, const char *from, const char *
     /* remount the bind-mount to get the needed mount flags */
     ret = mount(from, to, "bind", remountFlags, NULL);
     if (ret != 0) {
+        goto _bindMount_unclean;
+    }
+    if (mount(NULL, to, NULL, privateRemountFlags, NULL) != 0) {
+        perror("Failed to remount non-shared: ");
         goto _bindMount_unclean;
     }
 _bindMount_exit:

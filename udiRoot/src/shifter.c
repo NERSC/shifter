@@ -776,7 +776,6 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
             goto _loadImage_error;
         }
     }
-    makeUdiMountPrivate(udiConfig);
 
     return 0;
 _loadImage_error:

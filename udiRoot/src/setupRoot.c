@@ -168,7 +168,6 @@ int main(int argc, char **argv) {
         }
     }
 
-    makeUdiMountPrivate(&udiConfig);
     return 0;
 }
 

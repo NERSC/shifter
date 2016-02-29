@@ -66,7 +66,6 @@ int main(void) {
         fprintf(stderr, "FAILED to parse udiRoot configuration. Exiting.\n");
         exit(1);
     }
-    makeUdiMountPrivate(&udiConfig);
 
     destructUDI(&udiConfig, 1);
 
