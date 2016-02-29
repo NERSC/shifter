@@ -49,7 +49,7 @@ extern char *slurm_hostlist_deranged_string_malloc(hostlist_t hl);
 
 struct spank_option spank_option_array[] = {
     { "image", "image", "shifter image to use", 1, 0, (spank_opt_cb_f) _opt_image},
-    { "imagevolume", "imagevolume", "shifter image bindings", 1, 0, (spank_opt_cb_f) _opt_imagevolume },
+    { "volume", "volume", "shifter image bindings", 1, 0, (spank_opt_cb_f) _opt_imagevolume },
     { "ccm", "ccm", "ccm emulation mode", 0, 0, (spank_opt_cb_f) _opt_ccm},
     SPANK_OPTIONS_TABLE_END
 };
@@ -269,9 +269,6 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
 
     // only perform this validation at submit time
     context = spank_context();
-    if (context != S_CTX_ALLOCATOR) {
-        return ESPANK_SUCCESS;
-    }
     if (strlen(image) == 0) {
         return rc;
     }
@@ -315,7 +312,8 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     spank_job_control_setenv(sp, "SHIFTER_IMAGETYPE", image_type, 1);
     
     if (strlen(imagevolume) > 0) {
-         spank_setenv(sp, "SHIFTER_VOLUME", imagevolume, 1);
+        spank_setenv(sp, "SHIFTER_VOLUME", imagevolume, 1);
+        spank_job_control_setenv(sp, "SHIFTER_VOLUME", imagevolume, 1);
     }
     return rc;
 }
@@ -549,7 +547,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     if (strlen(imagevolume) > 0) {
         char *ptr = imagevolume;
         for ( ; ; ) {
-            char *limit = strchr(ptr, ',');
+            char *limit = strchr(ptr, ';');
             volArgs = (char **) realloc(volArgs,sizeof(char *) * (n_volArgs + 2));
             if (limit != NULL) *limit = 0;
             volArgs[n_volArgs++] = strdup(ptr);
@@ -563,7 +561,6 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         }
     }
     snprintf(setupRootPath, PATH_MAX, "%s%s/sbin/setupRoot", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
-    idx = 0;
     strncpy_StringArray(setupRootPath, strlen(setupRootPath), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     if (uid != 0) {
         snprintf(buffer, 1024, "%u", uid);
@@ -581,6 +578,10 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     if (nodelist != NULL) {
         strncpy_StringArray("-N", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
         strncpy_StringArray(nodelist, strlen(nodelist), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+    }
+    for (idx = 0; idx < n_volArgs; idx++) {
+        strncpy_StringArray("-v", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+        strncpy_StringArray(volArgs[idx], strlen(volArgs[idx]), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
     strncpy_StringArray(image_type, strlen(image_type), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     strncpy_StringArray(image, strlen(image), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
