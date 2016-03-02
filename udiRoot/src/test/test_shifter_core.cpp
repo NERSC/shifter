@@ -86,6 +86,7 @@ int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const cha
     (*config)->etcPath = alloc_strgenf("%s/%s", cwd, "etc");
     (*config)->cpPath = strdup("/bin/cp");
     (*config)->mvPath = strdup("/bin/mv");
+    (*config)->ddPath = strdup("/bin/dd");
     (*config)->chmodPath = strdup("/bin/chmod");
     (*config)->allowLocalChroot = 1;
     return 0;
@@ -147,7 +148,7 @@ TEST(ShifterCoreTestGroup, CopyFile_basic) {
     char *ptr = NULL;
     int ret = 0;
     struct stat statData;
-    
+
     toFile = alloc_strgenf("%s/passwd", tmpDir);
 
     /* check invalid input */
@@ -204,11 +205,12 @@ TEST(ShifterCoreTestGroup, setupPerNodeCacheFilename_tests) {
     char hostname[128];
     char result[1024];
     gethostname(hostname, 128);
-    snprintf(result, 1024, "/tmp/file_%s.ext4", hostname);
-    cache->fstype = strdup("ext4");
+    snprintf(result, 1024, "/tmp/file_%s.xfs", hostname);
+    cache->fstype = strdup("xfs");
     snprintf(buffer, PATH_MAX, "/tmp/file");
     ret = setupPerNodeCacheFilename(cache, buffer, PATH_MAX);
     CHECK(ret == 0);
+    fprintf(stderr, "buffer: %s, result: %s\n", buffer, result);
     CHECK(strcmp(buffer, result) == 0);
 
     /* should fail because fstype is NULL */
@@ -217,8 +219,8 @@ TEST(ShifterCoreTestGroup, setupPerNodeCacheFilename_tests) {
     ret = setupPerNodeCacheFilename(cache, buffer, PATH_MAX);
     CHECK(ret != 0);
 
-
     free_VolMapPerNodeCacheConfig(cache);
+    cache = NULL;
 }
 
 #ifdef NOTROOT
@@ -250,6 +252,10 @@ IGNORE_TEST(ShifterCoreTestGroup, setupPerNodeCacheBackingStore_tests) {
     ret = setupPerNodeCacheBackingStore(cache, backingStorePath, config);
     CHECK(ret == 0);
 
+    free(cache->fstype);
+    cache->fstype = NULL;
+    free_UdiRootConfig(config, 1);
+    free_ImageData(image, 1);
     free(cache);
 }
 

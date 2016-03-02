@@ -66,6 +66,8 @@ TEST(ImageDataTestGroup, ConfigAssign_basic) {
     ret = _ImageData_assign("ENV", "PATH=/bin:/usr/bin", &image);
     CHECK(ret == 0);
 
+    free_ImageData(&image, 0);
+
 }
 
 int main(int argc, char** argv) {

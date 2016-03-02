@@ -7,6 +7,7 @@ insmodPath=/sbin/insmod
 cpPath=/bin/cp
 mvPath=/bin/mv
 chmodPath=/bin/chmod
+ddPath=/bin/dd
 rootfsType=@@@ROOTFSTYPE@@@
 allowLocalChroot=1
 autoLoadKernelModule=1

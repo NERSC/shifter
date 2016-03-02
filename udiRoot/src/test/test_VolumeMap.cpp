@@ -291,7 +291,7 @@ TEST(VolumeMapTestGroup, GetVolumeMapSignature_basic) {
     char *sig = getVolMapSignature(&volMap);
     fprintf(stderr, "%s\n", sig);
 
-    CHECK(strcmp(sig, "/a:/b;/a:/c:ro:rec:perNodeCache=size=104857600,bs=1048576,method=loop,fstype=ext4;/d:/c;/q:/r") == 0);
+    CHECK(strcmp(sig, "/a:/b;/a:/c:ro:rec:perNodeCache=size=104857600,bs=1048576,method=loop,fstype=xfs;/d:/c;/q:/r") == 0);
 
     free(sig);
 

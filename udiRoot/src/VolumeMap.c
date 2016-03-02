@@ -539,6 +539,7 @@ int _parseVolumeMap(
         from = NULL;
         to = NULL;
         raw = NULL;
+        flags = NULL;
 
         ptr = eptr + 1;
         volMap->n += 1;
