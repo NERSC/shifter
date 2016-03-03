@@ -956,7 +956,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
 
         if (chdir(currcwd) != 0) {
             char error[PATH_MAX];
-            snprintf(error, PATH_MAX, "FAILED to change directory to: %s", newcwd);
+            snprintf(error, PATH_MAX, "FAILED to change directory to: %s", currcwd);
             TASKINITPRIV_ERROR(error, ESPANK_ERROR);
         }
 
