@@ -2165,7 +2165,10 @@ _shifter_getpwnam_unclean:
  *  many implementations of initgroups() do not deal with huge /etc/group
  *  files due to a variety of limitations (like per-line limits).  this
  *  function reads a given etcgroup file and filters the content to only
- *  include the specified user
+ *  include the specified user.  Additionally some services are unwilling
+ *  to allow more than, for example, 31 groups from a group file, thus an
+ *  upperbound to explicitly include users in is included.  Stub entries
+ *  for all remaining groups will be added to provide useful group metadata
  *
  *  \param group_dest_fname filename of filtered group file
  *  \param group_source_fname filename of to-be-filtered group file
@@ -2227,16 +2230,15 @@ int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname,
             counter++;
             if (foundUsername && gid != 0) break;
         }
-        if (group_name != NULL && foundUsername == 1) {
-            fprintf(output, "%s:x:%d:%s\n", group_name, gid, username);
-            foundGroups++;
-        }
         if (group_name != NULL) {
+            if (foundUsername == 1 && foundGroups < maxGroups) {
+                fprintf(output, "%s:x:%d:%s\n", group_name, gid, username);
+                foundGroups++;
+            } else {
+                fprintf(output, "%s:x:%d:\n", group_name, gid);
+            }
             free(group_name);
             group_name = NULL;
-        }
-        if (maxGroups > 0 && foundGroups == maxGroups) {
-            break;
         }
     }
     fclose(input);
