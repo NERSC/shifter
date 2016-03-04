@@ -381,7 +381,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                     }
                     config->rawVolumes = (char *) realloc(config->rawVolumes, sizeof(char) * (raw_capacity + new_capacity + 2));
                     char *ptr = config->rawVolumes + raw_capacity;
-                    snprintf(ptr, new_capacity + 2, "%s,", optarg);
+                    snprintf(ptr, new_capacity + 2, "%s;", optarg);
                     break;
                 }
             case 'i':
@@ -442,7 +442,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     if (config->rawVolumes != NULL) {
         /* remove trailing comma */
         size_t len = strlen(config->rawVolumes);
-        if (config->rawVolumes[len - 1] == ',') {
+        if (config->rawVolumes[len - 1] == ';') {
             config->rawVolumes[len - 1] = 0;
         }
     }
