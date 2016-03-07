@@ -4,7 +4,7 @@
  *  @author Douglas M. Jacobsen <dmjacobsen@lbl.gov>
  */
 
-/* Shifter, Copyright (c) 2015, The Regents of the University of California,
+/* Shifter, Copyright (c) 2016, The Regents of the University of California,
  * through Lawrence Berkeley National Laboratory (subject to receipt of any
  * required approvals from the U.S. Dept. of Energy).  All rights reserved.
  *
@@ -20,28 +20,7 @@
  *     contributors may be used to endorse or promote products derived from this
  *     software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- * You are under no obligation whatsoever to provide any bug fixes, patches, or
- * upgrades to the features, functionality or performance of the source code
- * ("Enhancements") to anyone; however, if you choose to make your Enhancements
- * available either publicly, or directly to Lawrence Berkeley National
- * Laboratory, without imposing a separate written license agreement for such
- * Enhancements, then you hereby grant the following license: a  non-exclusive,
- * royalty-free perpetual license to install, use, modify, prepare derivative
- * works, incorporate into other computer software, distribute, and sublicense
- * such enhancements or derivative works thereof, in binary and source code
- * form.
+ * See LICENSE for full text.
  */
 
 #ifndef __SHFTR_CORE_INCLUDE
@@ -110,6 +89,82 @@ int shifter_prependenv(char ***env, char *var);
 int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig);
 struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config);
 struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config);
+
+/**
+  * @brief read one record from group formatted field
+  *
+  * Reads an already open file line-by-line and returns a single group record.
+  * This is really an internal function intended to be used for parsing the
+  * shifter-specific group-file, and is implemented because various libc
+  * cannot be trusted to properly parse HUGE group files with large numbers of
+  * members in a reliable way. This function is intended to be called multiple
+  * times to parse a group file. User is responsible to free the contents of
+  * @p linebuf and @p grmembuf at the conclusion of all calls. This function
+  * gets around libc limitations by delegating memory management to calling
+  * function and not implementing any membership quantity limits.
+  * 
+  * Usage example:
+  * @code
+  * FILE *fp = fopen("group", "r");
+  * struct group grbuf, *gr = NULL;
+  * char *linebuf = NULL;
+  * size_t linebuf_sz = 0;
+  * char **grmembuf = NULL;
+  * size_t grmembuf_sz = 0;
+  * for ( ; ; ) {
+  *     gr = shifter_fgetgrent(fp, &grbuf, &linebuf, &linebuf_sz,
+  *         &grmembuf, &grmembuf_sz);
+  *     if (!gr) break;
+  *     // do something with group data in gr
+  * }
+  * if (linebuf) free(linebuf);
+  * if (grmembuf) free(grmembuf);
+  * close(fp);
+  * @endcode
+  *
+  * @param input pointer to an open group file
+  * @param gr pointer to an already-allocated (struct group) data structure
+  * @param linebuf pointer to string buffer for all character data, must not be
+  *        NULL, however may point to a NULL pointer. May be modified.
+  * @param linebuf_sz pointer to length of @p linebuf buffer.  May be modified.
+  * @param grmembuf pointer to store array of group members. May be modified.
+  * @param grmembuf_sz pointer to length of @p grmembuf buffer. May be modified.
+  * @return Returns @p gr upon success, NULL otherwise.  NULL if invalid input.
+  */
+struct group *
+shifter_fgetgrent(FILE *input, struct group *gr, char **linebuf,
+    size_t *linebuf_sz, char ***grmembuf, size_t *grmembuf_sz);
+
+/**
+ * @brief Generate group list for a user from shifter-specific group file
+ *
+ * Utility function to generate a list of groups from the shifter-specific group
+ * file. @p groups may get reallocated to store group list.
+ * 
+ * Usage example:
+ * @code
+ * // assume UdiRootConfig is already parse and stored in config
+ * gid_t *grpList = NULL;
+ * size_t ngroups = 0;
+ * if (shifter_getgrouplist("foo", fooGrp, &grpList, &ngroups, config) != 0) {
+ *     // ERROR
+ *     ...
+ * }
+ * // Use Groups...
+ * @endcode
+ *
+ * @param user string container username to search for
+ * @param group primary gid to seed gidlist with (from passwd file)
+ * @param groups list of groups, will be reallocated and modified. Cannot be
+ *        NULL, but may be a pointer to NULL.
+ * @param ngroups store number of found groups, will be modified.  Cannot be
+ *        NULL.
+ * @param config pointer to UdiRootConfig configuration
+ * @return 0 upon sucess, -1 otherwise
+ */
+int
+shifter_getgrouplist(const char *user, gid_t group, gid_t **groups,
+    size_t *ngroups, UdiRootConfig *config);
 
 int setupPerNodeCacheFilename(VolMapPerNodeCacheConfig *, char *, size_t);
 int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *from_buffer, UdiRootConfig *udiConfig);

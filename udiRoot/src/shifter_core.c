@@ -4,7 +4,7 @@
  *  @author Douglas M. Jacobsen <dmjacobsen@lbl.gov>
  */
 
-/* Shifter, Copyright (c) 2015, The Regents of the University of California,
+/* Shifter, Copyright (c) 2016, The Regents of the University of California,
  * through Lawrence Berkeley National Laboratory (subject to receipt of any
  * required approvals from the U.S. Dept. of Energy).  All rights reserved.
  *
@@ -20,28 +20,7 @@
  *     contributors may be used to endorse or promote products derived from this
  *     software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- * You are under no obligation whatsoever to provide any bug fixes, patches, or
- * upgrades to the features, functionality or performance of the source code
- * ("Enhancements") to anyone; however, if you choose to make your Enhancements
- * available either publicly, or directly to Lawrence Berkeley National
- * Laboratory, without imposing a separate written license agreement for such
- * Enhancements, then you hereby grant the following license: a  non-exclusive,
- * royalty-free perpetual license to install, use, modify, prepare derivative
- * works, incorporate into other computer software, distribute, and sublicense
- * such enhancements or derivative works thereof, in binary and source code
- * form.
+ * See LICENSE for full text.
  */
 
 
@@ -2122,6 +2101,165 @@ _shifter_getpwuid_unclean:
         input = NULL;
     }
     return NULL;
+}
+
+struct group *shifter_fgetgrent(
+        FILE *input,
+        struct group *gr,
+        char **linebuf,
+        size_t *linebuf_sz,
+        char ***grmembuf,
+        size_t *grmembuf_sz)
+{
+    struct group *ret = gr;
+    char *svptr = NULL;
+
+    gid_t gid = 0;
+    size_t counter = 0;
+    size_t nmem = 0;
+    ssize_t nbytes = 0;
+
+    if (gr == NULL) return NULL;
+    if (input == NULL) return NULL;
+    if (feof(input) || ferror(input)) return NULL;
+
+    /* read just one line of the file */
+    nbytes = getline(linebuf, linebuf_sz, input);
+    if (nbytes <= 0) {
+        return NULL;
+    }
+
+    /* parse the line */
+    for (token = strtok_r(*linebuf, ":,", &svptr);
+         token != NULL;
+         token = strtok_r(NULL, ":,", &svptr)) {
+
+        switch (counter) {
+            case 0: gr->gr_name = token;
+                    break;
+            case 1: gr->gr_passwd = token;
+                    break;
+            case 2: gr->gid = strtoul(token, NULL, 10);
+                    break;
+            default: 
+                    if (*grmembuf_sz < (nmem + 2)) {
+                        char **tmp = (char **) realloc(*grmembuf,
+                                sizeof(char **) * ((nmem+2) * 2));
+                        if (tmp == NULL) {
+                            return NULL;
+                        }
+                        *grmembuf = tmp;
+                        *grmembuf_sz = ((nmem+2) * 2);
+                    }
+                    (*grmembuf)[nmem++] = token;
+                    break;
+        }
+        counter++;
+    }
+
+    /* add trailing NULL to signify end of list */
+    (*grmembuf)[nmem] = NULL;
+    gr->gr_mem = grmembuf;
+
+    /* success!!! */
+    return gr;
+}
+
+int shifter_getgrouplist(
+        const char *user,
+        gid_t basegroup,
+        gid_t **groups,
+        size_t *ngroups,
+        UdiRootConfig *config)
+{
+    FILE *input = NULL;
+    char buffer[PATH_MAX];
+    struct group grbuf, *gr;
+    char *linebuf = NULL;
+    size_t linebuf_sz = 0;
+    char **grmembuf = NULL;
+    size_t grmembuf_sz = 0;
+    size_t groups_sz = 0;
+
+    memset(&grbuf, 0, sizeof(struct group));
+
+    if (config == NULL) {
+        return -1;
+    }
+
+    /* open shifter-specific group file */
+    snprintf(buffer, PATH_MAX, "%s%s/group",
+            config->nodeContextPrefix, config->etcPath);
+    input = fopen(buffer, "r");
+
+    if (input == NULL) {
+        fprintf(stderr, "FAILED to find shifter group file at %s", buffer);
+        goto _shifter_getgrouplist_unclean;
+    }
+
+    /* get initial allocation for groups */
+    groups_sz = 128;
+    *groups = (gid_t *) malloc(sizeof(gid_t) * 128);
+
+    /* add basegroup to the list first */
+    (*groups)[0] = basegroup;
+    *ngroups = 1;
+
+    for ( ; ; ) {
+        char **memptr = NULL;
+        gr = shifter_fgetgrent(input, &grbuf, &linebuf, &linebuf_sz,
+                &grmembuf, &grmembuf_sz);
+
+        if (gr == NULL) {
+            break;
+        }
+
+        /* already added basegroup to list, no repeats please */
+        if (gr->gid == basegroup) {
+            continue;
+        }
+        for (memptr = gr->gr_mem; memptr && *memptr; memptr++) {
+            if (strcmp(memptr, user) == 0) {
+                /* allocate extra memory if groups is too small */
+                if (*ngroups + 1 >= groups_sz) {
+                    if (groups_sz == 0) groups_sz = 128;
+                    *groups = (gid_t *) realloc(sizeof(gid_t) * groups_sz * 2);
+                    if (*groups == NULL) {
+                        fprintf(stderr, "FAILED to allocate memory for groups\n");
+                        goto _shifter_getgrouplist_unclean;
+                    }
+                    groups_sz *= 2;
+                }
+
+                /* match, add group to list */
+                (*groups)[*ngroups++] = gr->gid;
+                break;
+            }
+        }
+    }
+    close(input);
+    input = NULL;
+
+    free(linebuf);
+    linebuf = NULL;
+    free(grmembuf);
+    grmembuf = NULL;
+
+    return 0;
+_shifter_getgrouplist_unclean:
+    if (input != NULL) {
+        close(input);
+        input = NULL;
+    }
+    if (linebuf != NULL) {
+        free(linebuf);
+        linebuf = NULL;
+    }
+    if (grmembuf != NULL) {
+        free(grmembuf);
+        grmembuf = NULL;
+    }
+    return -1;
 }
 
 struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config) {
