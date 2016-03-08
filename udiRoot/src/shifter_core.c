@@ -1767,7 +1767,6 @@ int _forkAndExecv(char *const *args, int silent) {
     }
     /* this is the child */
     if (silent) {
-        char *const *argsp = args;
         int devNull = open("/dev/null", O_WRONLY);
         dup2(devNull, STDOUT_FILENO);
         dup2(devNull, STDERR_FILENO);
@@ -2111,10 +2110,10 @@ struct group *shifter_fgetgrent(
         char ***grmembuf,
         size_t *grmembuf_sz)
 {
-    struct group *ret = gr;
     char *svptr = NULL;
+    char *token = NULL;
+    char *ptr = NULL;
 
-    gid_t gid = 0;
     size_t counter = 0;
     size_t nmem = 0;
     ssize_t nbytes = 0;
@@ -2129,8 +2128,15 @@ struct group *shifter_fgetgrent(
         return NULL;
     }
 
+    ptr = shifter_trim(*linebuf);
+
+    if (*grmembuf_sz == 0) {
+        *grmembuf = (char **) malloc(sizeof(char *) * 128);
+        *grmembuf_sz = 128;
+    }
+
     /* parse the line */
-    for (token = strtok_r(*linebuf, ":,", &svptr);
+    for (token = strtok_r(ptr, ":,", &svptr);
          token != NULL;
          token = strtok_r(NULL, ":,", &svptr)) {
 
@@ -2139,12 +2145,12 @@ struct group *shifter_fgetgrent(
                     break;
             case 1: gr->gr_passwd = token;
                     break;
-            case 2: gr->gid = strtoul(token, NULL, 10);
+            case 2: gr->gr_gid = strtoul(token, NULL, 10);
                     break;
             default: 
                     if (*grmembuf_sz < (nmem + 2)) {
                         char **tmp = (char **) realloc(*grmembuf,
-                                sizeof(char **) * ((nmem+2) * 2));
+                                sizeof(char *) * ((nmem+2) * 2));
                         if (tmp == NULL) {
                             return NULL;
                         }
@@ -2159,7 +2165,7 @@ struct group *shifter_fgetgrent(
 
     /* add trailing NULL to signify end of list */
     (*grmembuf)[nmem] = NULL;
-    gr->gr_mem = grmembuf;
+    gr->gr_mem = *grmembuf;
 
     /* success!!! */
     return gr;
@@ -2215,29 +2221,32 @@ int shifter_getgrouplist(
         }
 
         /* already added basegroup to list, no repeats please */
-        if (gr->gid == basegroup) {
+        if (gr->gr_gid == basegroup) {
             continue;
         }
         for (memptr = gr->gr_mem; memptr && *memptr; memptr++) {
-            if (strcmp(memptr, user) == 0) {
+            if (strcmp(*memptr, user) == 0) {
                 /* allocate extra memory if groups is too small */
-                if (*ngroups + 1 >= groups_sz) {
+                if (*ngroups + 2 >= groups_sz) {
+                    gid_t *tmp = NULL;
                     if (groups_sz == 0) groups_sz = 128;
-                    *groups = (gid_t *) realloc(sizeof(gid_t) * groups_sz * 2);
-                    if (*groups == NULL) {
+                    tmp = (gid_t *) realloc(*groups, sizeof(gid_t) * groups_sz * 2);
+                    if (tmp == NULL) {
                         fprintf(stderr, "FAILED to allocate memory for groups\n");
                         goto _shifter_getgrouplist_unclean;
                     }
+                    *groups = tmp;
                     groups_sz *= 2;
                 }
 
                 /* match, add group to list */
-                (*groups)[*ngroups++] = gr->gid;
+                (*groups)[*ngroups] = gr->gr_gid;
+                *ngroups += 1;
                 break;
             }
         }
     }
-    close(input);
+    fclose(input);
     input = NULL;
 
     free(linebuf);
@@ -2248,7 +2257,7 @@ int shifter_getgrouplist(
     return 0;
 _shifter_getgrouplist_unclean:
     if (input != NULL) {
-        close(input);
+        fclose(input);
         input = NULL;
     }
     if (linebuf != NULL) {

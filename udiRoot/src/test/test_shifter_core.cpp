@@ -4,7 +4,7 @@
  *  @author Douglas M. Jacobsen <dmjacobsen@lbl.gov>
  */
 
-/* Shifter, Copyright (c) 2015, The Regents of the University of California,
+/* Shifter, Copyright (c) 2016, The Regents of the University of California,
  * through Lawrence Berkeley National Laboratory (subject to receipt of any
  * required approvals from the U.S. Dept. of Energy).  All rights reserved.
  * 
@@ -20,33 +20,15 @@
  *     contributors may be used to endorse or promote products derived from this
  *     software without specific prior written permission.
  * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *  
- * You are under no obligation whatsoever to provide any bug fixes, patches, or
- * upgrades to the features, functionality or performance of the source code
- * ("Enhancements") to anyone; however, if you choose to make your Enhancements
- * available either publicly, or directly to Lawrence Berkeley National
- * Laboratory, without imposing a separate written license agreement for such
- * Enhancements, then you hereby grant the following license: a  non-exclusive,
- * royalty-free perpetual license to install, use, modify, prepare derivative
- * works, incorporate into other computer software, distribute, and sublicense
- * such enhancements or derivative works thereof, in binary and source code
- * form.
+ * See LICENSE for full text.
  */
 
 #include <CppUTest/CommandLineTestRunner.h>
 #include <vector>
 #include <string>
+#include <iostream>
+
+#include <grp.h>
 
 #include "ImageData.h"
 #include "UdiRootConfig.h"
@@ -245,18 +227,85 @@ IGNORE_TEST(ShifterCoreTestGroup, setupPerNodeCacheBackingStore_tests) {
     config->target_gid = getgid();
     config->mkfsXfsPath = strdup("/sbin/mkfs.xfs");
 
-    getcwd(backingStorePath, PATH_MAX);
-    ptr = backingStorePath + strlen(backingStorePath);
-    snprintf(ptr, PATH_MAX - strlen(backingStorePath), "/testBackingStore.xfs");
-
+    snprintf(backingStorePath, PATH_MAX, "%s/testBackingStore.xfs", tmpDir);
     ret = setupPerNodeCacheBackingStore(cache, backingStorePath, config);
     CHECK(ret == 0);
 
+    unlink(backingStorePath);
     free(cache->fstype);
     cache->fstype = NULL;
     free_UdiRootConfig(config, 1);
     free_ImageData(image, 1);
     free(cache);
+}
+
+TEST(ShifterCoreTestGroup, ParseGroupFile) {
+    const char *smallGroupPath = "./etc_small/group";
+    FILE *smallGroup = fopen(smallGroupPath, "r");
+
+    char *linebuf = NULL;
+    size_t linebuf_sz = 0;
+    char **grmembuf = NULL;
+    size_t grmembuf_sz = 0;
+    struct group grbuf;
+    int cnt = 0;
+
+    memset(&grbuf, 0, sizeof(struct group));
+
+
+    for (cnt = 0; ; cnt++) {
+        struct group *gr = shifter_fgetgrent(smallGroup, &grbuf, &linebuf, &linebuf_sz, &grmembuf, &grmembuf_sz);
+        char predicted_name[128];
+        int nmem = 0;
+        if (gr == NULL) break;
+
+        snprintf(predicted_name, 128, "grp%d", cnt + 1);
+
+        CHECK(strcmp(predicted_name, gr->gr_name) == 0);
+        CHECK(gr->gr_gid == (100 * (cnt + 1)));
+        CHECK(strcmp(gr->gr_passwd, "x") == 0);
+
+        nmem = 0;
+        for (char **member = gr->gr_mem; member && *member; member++) {
+            if (member != gr->gr_mem) fprintf(stderr, "|");
+            nmem++;
+        }
+        if (cnt == 0) CHECK(nmem == 0);
+        if (cnt == 1) CHECK(nmem == 2);
+        if (cnt == 2) CHECK(nmem == 2);
+        if (cnt == 3) CHECK(nmem == 3);
+    }
+    CHECK(cnt == 4);
+    fclose(smallGroup);
+    free(linebuf);
+    free(grmembuf);
+    smallGroup = NULL;
+}
+
+TEST(ShifterCoreTestGroup, TestGetGroupList) {
+    UdiRootConfig config;
+    gid_t *groups = NULL;
+    size_t ngroups = 0;
+
+    memset(&config, 0, sizeof(UdiRootConfig));
+    config.nodeContextPrefix = strdup("");
+    config.etcPath = strdup("./etc_small");
+
+    CHECK(shifter_getgrouplist("user1", 100, &groups, &ngroups, &config) == 0);
+    CHECK(ngroups == 3);
+
+    free(groups);
+    groups = NULL;
+    ngroups = 0;
+
+    CHECK(shifter_getgrouplist("user2", 300, &groups, &ngroups, &config) == 0);
+    CHECK(ngroups == 2);
+
+    free(groups);
+
+
+    free_UdiRootConfig(&config, 0);
+
 }
 
 #ifdef NOTROOT
