@@ -467,6 +467,7 @@ int setupCpusetCgroupForSshd(const char *cpuset_cgroup_base,
         goto _setupCpusetCgroupForSshd_unclean;
     }
     fclose(fp);
+    fp = NULL;
 
     snprintf(buffer, PATH_MAX, "%s/mems", cpuset_cgroup_base);
     fp = fopen(buffer, "r");
@@ -483,6 +484,7 @@ int setupCpusetCgroupForSshd(const char *cpuset_cgroup_base,
         goto _setupCpusetCgroupForSshd_unclean;
     }
     fclose(fp);
+    fp = NULL;
 
     /* build path writing cpus and mems the whole way */
     snprintf(buffer, PATH_MAX, "%s/shifter/uid_%d/job_%d/ssh/", cpuset_cgroup_base, uid, job);
@@ -499,6 +501,7 @@ int setupCpusetCgroupForSshd(const char *cpuset_cgroup_base,
             slurm_error("setupCpusetCgroupForSshd: failed to mkdir %s: %d", buffer, errno);
             goto _setupCpusetCgroupForSshd_unclean;
         }
+        errno = 0;
 
         /* write allowable cpus */
         snprintf(wbuffer, PATH_MAX, "%s/cpus", buffer);
