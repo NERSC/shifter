@@ -418,6 +418,148 @@ const char *find_memory_cgroup_base(int argc, char **argv) {
     return NULL;
 }
 
+const char *find_cpuset_cgroup_base(int argc, char **argv) {
+    int idx = 0;
+    for (idx = 0; idx < argc; idx++) {
+        if (strncmp(argv[idx], "cpuset_cgroup=", 14) == 0) {
+            const char *ptr = argv[idx];
+            ptr += 14;
+            return ptr;
+        }
+    }
+    return NULL;
+}
+
+int setupCpuSetCgroupForSshd(const char *cpuset_cgroup_base,
+        uid_t uid,
+        int job,
+        pid_t pid)
+{
+    char *ptr = NULL;
+    FILE *fp = NULL;
+
+    char *allowableCpus = NULL;
+    char *allowableMems = NULL;
+    char *line = NULL;
+    size_t line_sz = 0;
+
+    char buffer[PATH_MAX];
+    char wbuffer[PATH_MAX];
+    ssize_t nbytes = 0;
+    int fd = 0;
+
+    int ret = 1;
+
+    /* first need to read cpus and mems to figure out what to give sshd */
+    snprintf(buffer, PATH_MAX, "%s/cpus", cpuset_cgroup_base);
+    fp = fopen(buffer, "r");
+    if (fp == NULL) {
+        slurm_error("setupCpusetCgroupForSshd: failed to open base cpus allocation");
+        goto _setupCpusetCgroupForSshd_unclean;
+    }
+    nbytes = getline(&line, &line_sz, fp);
+    if (nbytes > 0) {
+        allowableCpus = strdup(line);
+    } else {
+        slurm_error("setupCpusetCgroupForSshd: failed to read base cpus allocation");
+        goto _setupCpusetCgroupForSshd_unclean;
+    }
+    fclose(fp);
+
+    snprintf(buffer, PATH_MAX, "%s/mems", cpuset_cgroup_base);
+    fp = fopen(buffer, "r");
+    if (fp == NULL) {
+        slurm_error("setupCpusetCgroupForSshd: failed to open base mems allocation");
+        goto _setupCpusetCgroupForSshd_unclean;
+    }
+    nbytes = getline(&line, &line_sz, fp);
+    if (nbytes > 0) {
+        allowableMems = strdup(line);
+    } else {
+        slurm_error("setupCpusetCgroupForSshd: failed to read base mems allocation");
+        goto _setupCpusetCgroupForSshd_unclean;
+    }
+    fclose(fp);
+
+    /* build path writing cpus and mems the whole way */
+    snprintf(buffer, PATH_MAX, "%s/shifter/uid_%d/job_%d/ssh/", cpuset_cgroup_base, uid, job);
+    ptr = strstr(buffer, "shifter");
+    while ((ptr = strchr(ptr, '/')) != NULL) {
+        int fd = 0;
+
+        /* temporarily terminate the string here */
+        *ptr = 0;
+
+        /* create the cpuset, it's OK for mkdir to fail if dir already exists */
+        slurm_debug("setupCpusetCgroupForSshd: about to attempt to create: %s", buffer);
+        if (mkdir(buffer, 0755) != 0 && errno != EEXIST) {
+            slurm_error("setupCpusetCgroupForSshd: failed to mkdir %s: %d", buffer, errno);
+            goto _setupCpusetCgroupForSshd_unclean;
+        }
+
+        /* write allowable cpus */
+        snprintf(wbuffer, PATH_MAX, "%s/cpus", buffer);
+        fd = open(wbuffer, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0666);
+        if (fd >= 0) {
+            nbytes = write(fd, allowableCpus, strlen(allowableCpus));
+            slurm_debug("setupCpusetCgroupForSshd: write %d bytes to set %s on %s/cpus, errno: %d", nbytes, allowableCpus, wbuffer, errno);
+            close(fd);
+        } else {
+            slurm_error("setupCpusetCgroupForSshd: failed to open %s", wbuffer);
+            goto _setupCpusetCgroupForSshd_unclean;
+        }
+
+        /* write allowable mems */
+        snprintf(wbuffer, PATH_MAX, "%s/mems", buffer);
+        fd = open(wbuffer, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0666);
+        if (fd >= 0) {
+            nbytes = write(fd, allowableMems, strlen(allowableMems));
+            slurm_debug("setupCpusetCgroupForSshd: write %d bytes to set %s on %s/mems, errno: %d", nbytes, allowableMems, wbuffer, errno);
+            close(fd);
+        } else {
+            slurm_error("setupCpusetCgroupForSshd: failed to open %s", wbuffer);
+            goto _setupCpusetCgroupForSshd_unclean;
+        }
+
+        /* restore string to usual state */
+        *ptr = '/';
+    }
+
+    /* add pid to tasks list */
+    snprintf(wbuffer, PATH_MAX, "%s/tasks", buffer);
+    fd = open(wbuffer, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0666);
+    if (fd >= 0) {
+        snprintf(buffer, PATH_MAX, "%d", pid);
+        nbytes = write(fd, buffer, strlen(buffer));
+        slurm_debug("setupCpusetCgroupForSshd: write %d bytes to cpuset cgroup, errno: %d", nbytes, errno);
+        close(fd);
+    } else {
+        slurm_error("setupCpusetCgroupForSshd: failed to open %s", wbuffer);
+        goto _setupCpusetCgroupForSshd_unclean;
+    }
+
+    ret = 0;
+
+_setupCpusetCgroupForSshd_unclean:
+    if (line != NULL) {
+        free(line);
+        line = NULL;
+    }
+    if (allowableCpus != NULL) {
+        free(allowableCpus);
+        allowableCpus = NULL;
+    }
+    if (allowableMems != NULL) {
+        free(allowableMems);
+        allowableMems = NULL;
+    }
+    if (fp != NULL) {
+        fclose(fp);
+        fp = NULL;
+    }
+    return ret;
+}
+
 int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     int rc = ESPANK_SUCCESS;
 
@@ -443,6 +585,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     char *gid_str = NULL;
     char *sshPubKey = NULL;
     const char *memory_cgroup_base = NULL;
+    const char *cpuset_cgroup_base = NULL;
     size_t tasksPerNode = 0;
     UdiRootConfig *udiConfig = NULL;
     pid_t pid = 0;
@@ -491,6 +634,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         PROLOG_ERROR("Failed to read/parse shifter configuration.\n", rc);
     }
     memory_cgroup_base = find_memory_cgroup_base(argc, argv);
+    cpuset_cgroup_base = find_cpuset_cgroup_base(argc, argv);
 
     for (ptr = image_type; ptr - image_type < strlen(image_type); ptr++) {
         *ptr = tolower(*ptr);
@@ -685,6 +829,14 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
 
     pid = findSshd();
     slurm_debug("shifter_prolog: sshd on pid %d\n", pid);
+    if (pid > 0 && cpuset_cgroup_base != NULL) {
+        if (setupCpusetCgroupForSshd(cpuset_cgroup_base, uid, job, pid) != 0) {
+            slurm_error("shifter_prolog: failed to add sshd %d to cpuset cgroup; killing sshd", pid);
+            kill(pid, SIGKILL);
+            pid = 0;
+        }
+    }
+
     if (pid > 0 && memory_cgroup_base != NULL) {
         char *path = NULL;
         size_t pathLen = 0;
