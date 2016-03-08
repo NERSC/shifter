@@ -1,0 +1,4 @@
+grp1:x:100:
+grp2:x:200:user1,user3
+grp3:x:300:user2,user3
+grp4:x:400:user1,user2,user3
