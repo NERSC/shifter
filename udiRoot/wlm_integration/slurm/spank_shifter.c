@@ -523,6 +523,7 @@ int setupCpusetCgroupForSshd(const char *cpuset_cgroup_base,
 
         /* restore string to usual state */
         *ptr = '/';
+        ptr++;
     }
 
     /* add pid to tasks list */
