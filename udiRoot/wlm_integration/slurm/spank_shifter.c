@@ -441,6 +441,7 @@ int setupCpusetCgroupForSshd(const char *cpuset_cgroup_base,
     char *allowableCpus = NULL;
     char *allowableMems = NULL;
     char *line = NULL;
+    char *value = NULL;
     size_t line_sz = 0;
 
     char buffer[PATH_MAX];
@@ -458,8 +459,9 @@ int setupCpusetCgroupForSshd(const char *cpuset_cgroup_base,
         goto _setupCpusetCgroupForSshd_unclean;
     }
     nbytes = getline(&line, &line_sz, fp);
-    if (nbytes > 0) {
-        allowableCpus = strdup(line);
+    value = nbytes > 0 ? trim(line) : NULL;
+    if (value != NULL) {
+        allowableCpus = strdup(value);
     } else {
         slurm_error("setupCpusetCgroupForSshd: failed to read base cpus allocation");
         goto _setupCpusetCgroupForSshd_unclean;
@@ -473,8 +475,9 @@ int setupCpusetCgroupForSshd(const char *cpuset_cgroup_base,
         goto _setupCpusetCgroupForSshd_unclean;
     }
     nbytes = getline(&line, &line_sz, fp);
-    if (nbytes > 0) {
-        allowableMems = strdup(line);
+    value = nbytes > 0 ? trim(line) : NULL;
+    if (value != NULL) {
+        allowableMems = strdup(value);
     } else {
         slurm_error("setupCpusetCgroupForSshd: failed to read base mems allocation");
         goto _setupCpusetCgroupForSshd_unclean;
@@ -502,7 +505,7 @@ int setupCpusetCgroupForSshd(const char *cpuset_cgroup_base,
         fd = open(wbuffer, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0666);
         if (fd >= 0) {
             nbytes = write(fd, allowableCpus, strlen(allowableCpus));
-            slurm_debug("setupCpusetCgroupForSshd: write %d bytes to set %s on %s/cpus, errno: %d", nbytes, allowableCpus, wbuffer, errno);
+            slurm_debug("setupCpusetCgroupForSshd: write %d bytes to set %s on %s, errno: %d", nbytes, allowableCpus, wbuffer, errno);
             close(fd);
         } else {
             slurm_error("setupCpusetCgroupForSshd: failed to open %s", wbuffer);
@@ -514,7 +517,7 @@ int setupCpusetCgroupForSshd(const char *cpuset_cgroup_base,
         fd = open(wbuffer, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0666);
         if (fd >= 0) {
             nbytes = write(fd, allowableMems, strlen(allowableMems));
-            slurm_debug("setupCpusetCgroupForSshd: write %d bytes to set %s on %s/mems, errno: %d", nbytes, allowableMems, wbuffer, errno);
+            slurm_debug("setupCpusetCgroupForSshd: write %d bytes to set %s on %s, errno: %d", nbytes, allowableMems, wbuffer, errno);
             close(fd);
         } else {
             slurm_error("setupCpusetCgroupForSshd: failed to open %s", wbuffer);
