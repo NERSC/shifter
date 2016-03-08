@@ -430,7 +430,7 @@ const char *find_cpuset_cgroup_base(int argc, char **argv) {
     return NULL;
 }
 
-int setupCpuSetCgroupForSshd(const char *cpuset_cgroup_base,
+int setupCpusetCgroupForSshd(const char *cpuset_cgroup_base,
         uid_t uid,
         int job,
         pid_t pid)
