@@ -1046,6 +1046,10 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     uid_t job_uid = 0;
     uid_t curr_uid = geteuid();
 
+    gid_t *existing_suppl_gids = NULL;
+    int n_existing_suppl_gids = 0;
+    gid_t existing_gid = getegid();
+
     memset(&imageData, 0, sizeof(ImageData));
 
 #define TASKINITPRIV_ERROR(message, errCode) \
@@ -1082,7 +1086,11 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     if (strlen(udiConfig->udiMountPoint) > 0) {
         char currcwd[PATH_MAX];
         char newcwd[PATH_MAX];
+        gid_t *gids = NULL;
+        gid_t gid = 0;
+        int ngids = 0;
         struct stat st_data;
+
         if (getcwd(currcwd, PATH_MAX) == NULL) {
             TASKINITPRIV_ERROR("FAILED to determine working directory", ESPANK_ERROR);
         }
@@ -1102,6 +1110,33 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
 
         if (chroot(udiConfig->udiMountPoint) != 0) {
             TASKINITPRIV_ERROR("FAILED to chroot to designated image", ESPANK_ERROR);
+        }
+
+        if (spank_get_item(sp, S_JOB_SUPPLEMENTARY_GIDS, &gids, &ngids) != ESPANK_SUCCESS) {
+            TASKINITPRIV_ERROR("FAILED to obtain group ids", ESPANK_ERROR);
+        }
+
+        if (spank_get_item(sp, S_JOB_GID, &gid) != ESPANK_SUCCESS) {
+            TASKINITPRIV_ERROR("FAILED to obtain job group id", ESPANK_ERROR);
+        }
+
+        n_existing_suppl_gids = getgroups(0, NULL);
+        if (n_existing_suppl_gids > 0) {
+            existing_suppl_gids = (gid_t *) malloc(sizeof(gid_t) * n_existing_suppl_gids);
+            if (existing_suppl_gids == NULL) {
+                TASKINITPRIV_ERROR("FAILED to allocate memory to store current suppl gids", ESPANK_ERROR);
+            }
+            if (getgroups(n_existing_suppl_gids, existing_suppl_gids) < 0) {
+                TASKINITPRIV_ERROR("FAILED to get current suppl gids", ESPANK_ERROR);
+            }
+        }
+
+        if (setgroups(ngids, gids) != 0) {
+            TASKINITPRIV_ERROR("FAILED to set supplmentary group ids", ESPANK_ERROR);
+        }
+
+        if (setegid(gid) != 0) {
+            TASKINITPRIV_ERROR("FAILED to set job group id", ESPANK_ERROR);
         }
 
         /* briefly assume job uid prior to chdir into target path
@@ -1124,6 +1159,13 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
             char error[1024];
             snprintf(error, 1024, "FAILED to return effective uid to %d", curr_uid);
             TASKINITPRIV_ERROR(error, ESPANK_ERROR);
+        }
+
+        if (setegid(existing_gid) != 0) {
+            TASKINITPRIV_ERROR("FAILED to return effective gid", ESPANK_ERROR);
+        }
+        if (setgroups(n_existing_suppl_gids, existing_suppl_gids) != 0) {
+            TASKINITPRIV_ERROR("FAILED to drop supplementary gids", ESPANK_ERROR);
         }
 
         if (shifter_setupenv(&environ, &imageData, udiConfig) != 0) {
