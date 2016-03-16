@@ -1112,7 +1112,6 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
             TASKINITPRIV_ERROR("FAILED to chroot to designated image", ESPANK_ERROR);
         }
 
-#if 0
         if (spank_get_item(sp, S_JOB_SUPPLEMENTARY_GIDS, &gids, &ngids) != ESPANK_SUCCESS) {
             TASKINITPRIV_ERROR("FAILED to obtain group ids", ESPANK_ERROR);
         }
@@ -1121,6 +1120,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
         for (i = 0; i < ngids; i++) {
             slurm_error("got gid %d", gids[i]);
         }
+        slurm_error("extra debugging: spank context: %d", spank_context());
 
         if (spank_get_item(sp, S_JOB_GID, &gid) != ESPANK_SUCCESS) {
             TASKINITPRIV_ERROR("FAILED to obtain job group id", ESPANK_ERROR);
@@ -1173,7 +1173,6 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
         if (setgroups(n_existing_suppl_gids, existing_suppl_gids) != 0) {
             TASKINITPRIV_ERROR("FAILED to drop supplementary gids", ESPANK_ERROR);
         }
-#endif
 
         if (shifter_setupenv(&environ, &imageData, udiConfig) != 0) {
             TASKINITPRIV_ERROR("FAILED to setup shifter environment", ESPANK_ERROR);
