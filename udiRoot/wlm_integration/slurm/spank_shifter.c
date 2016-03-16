@@ -1112,6 +1112,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
             TASKINITPRIV_ERROR("FAILED to chroot to designated image", ESPANK_ERROR);
         }
 
+#if 0
         if (spank_get_item(sp, S_JOB_SUPPLEMENTARY_GIDS, &gids, &ngids) != ESPANK_SUCCESS) {
             TASKINITPRIV_ERROR("FAILED to obtain group ids", ESPANK_ERROR);
         }
@@ -1120,7 +1121,14 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
         for (i = 0; i < ngids; i++) {
             slurm_error("got gid %d", gids[i]);
         }
-
+#endif
+        char *username = getenv("SLURM_JOB_USER");
+        if (username != NULL && strcmp(username, "(null)") != 0) {
+            slurm_error("got username: %s", username);
+        } else {
+            slurm_error("no username in environment");
+        }
+        //shifter_getgrouplist(
 
         if (spank_get_item(sp, S_JOB_GID, &gid) != ESPANK_SUCCESS) {
             TASKINITPRIV_ERROR("FAILED to obtain job group id", ESPANK_ERROR);
