@@ -1115,6 +1115,12 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
         if (spank_get_item(sp, S_JOB_SUPPLEMENTARY_GIDS, &gids, &ngids) != ESPANK_SUCCESS) {
             TASKINITPRIV_ERROR("FAILED to obtain group ids", ESPANK_ERROR);
         }
+        slurm_error("got %d gids", ngids);
+        int i = 0;
+        for (i = 0; i < ngids; i++) {
+            slurm_error("got gid %d", gids[i]);
+        }
+
 
         if (spank_get_item(sp, S_JOB_GID, &gid) != ESPANK_SUCCESS) {
             TASKINITPRIV_ERROR("FAILED to obtain job group id", ESPANK_ERROR);
