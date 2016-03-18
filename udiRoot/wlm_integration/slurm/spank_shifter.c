@@ -27,7 +27,7 @@ SPANK_PLUGIN(shifter, 1)
 #endif
 
 #define IMAGE_MAXLEN 1024
-#define IMAGEVOLUME_MAXLEN 2048
+#define IMAGEVOLUME_MAXLEN PATH_MAX
 static char image[IMAGE_MAXLEN] = "";
 static char image_type[IMAGE_MAXLEN] = "";
 static char imagevolume[IMAGEVOLUME_MAXLEN] = "";
@@ -127,7 +127,26 @@ _opt_image_exit:
 int _opt_imagevolume(int val, const char *optarg, int remote) {
     if (optarg != NULL && strlen(optarg) > 0) {
         /* validate input */
-        snprintf(imagevolume, IMAGEVOLUME_MAXLEN, optarg);
+        VolumeMap *vmap = (VolumeMap *) malloc(sizeof(VolumeMap));
+        char *ptr = imagevolume + strlen(imagevolume);
+        memset(vmap, 0, sizeof(VolumeMap));
+
+        if (parseVolumeMap(optarg, vmap) != 0) {
+            slurm_error("Failed to parse or invalid/disallowed volume map request: %s\n", optarg);
+            free_VolumeMap(vmap, 1);
+            exit(1);
+        }
+        free_VolumeMap(vmap, 1);
+
+        if (ptr != imagevolume) {
+            *ptr++ = ';';
+        }
+        if (strlen(optarg) > IMAGEVOLUME_MAXLEN - (ptr - imagevolume)) {
+            slurm_error("Failed to store volume map request, too big: %s", optarg);
+            exit(1);
+        }
+
+        int nbytes = snprintf(ptr, IMAGEVOLUME_MAXLEN - (ptr - imagevolume), "%s", optarg);
         return ESPANK_SUCCESS;
     }
     slurm_error("Invalid image volume options - if specified, must not be zero length");
@@ -1115,12 +1134,6 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
         if (spank_get_item(sp, S_JOB_SUPPLEMENTARY_GIDS, &gids, &ngids) != ESPANK_SUCCESS) {
             TASKINITPRIV_ERROR("FAILED to obtain group ids", ESPANK_ERROR);
         }
-        slurm_error("got %d gids", ngids);
-        int i = 0;
-        for (i = 0; i < ngids; i++) {
-            slurm_error("got gid %d", gids[i]);
-        }
-        slurm_error("extra debugging: spank context: %d", spank_context());
 
         if (spank_get_item(sp, S_JOB_GID, &gid) != ESPANK_SUCCESS) {
             TASKINITPRIV_ERROR("FAILED to obtain job group id", ESPANK_ERROR);
@@ -1157,7 +1170,8 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
         if (chdir(currcwd) != 0) {
             char error[PATH_MAX];
             snprintf(error, PATH_MAX, "FAILED to change directory to: %s", currcwd);
-            TASKINITPRIV_ERROR(error, ESPANK_ERROR);
+            slurm_error("FAILED to change directory to %s, going to /tmp instead.", currcwd);
+            chdir("/tmp");
         }
 
         /* go back to our original effective uid */
