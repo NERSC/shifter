@@ -315,7 +315,6 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     }
     
     if (context == S_CTX_ALLOCATOR || context == S_CTX_LOCAL) {
-        /* TODO check if argument matches what is in environment */
         if (strcmp(image_type, "id") != 0 && strcmp(image_type, "local") != 0) {
             char *image_id = NULL;
             image_id = lookup_ImageIdentifier(image_type, image, verbose_lookup, udiConfig);
