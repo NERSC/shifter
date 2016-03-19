@@ -268,7 +268,7 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
     image[0] = 0;
     imagevolume[0] = 0;
 
-    //if (context == S_CTX_ALLOCATOR || context == S_CTX_LOCAL) {
+    if (context == S_CTX_ALLOCATOR || context == S_CTX_LOCAL || context == S_CTX_REMOTE) {
         for (i = 0; spank_option_array[i].name != NULL; ++i) {
             j = spank_option_register(sp, &spank_option_array[i]);
             if (j != ESPANK_SUCCESS) {
@@ -276,7 +276,7 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
                 rc = j;
             }
         }
-    //}
+    }
     return rc;
 }
 
@@ -286,7 +286,6 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     int verbose_lookup = 0;
     UdiRootConfig *udiConfig = NULL;
 
-    // only perform this validation at submit time
     context = spank_context();
     if (strlen(image) == 0) {
         return rc;
@@ -304,24 +303,27 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
         exit(-1);
     }
     
-    if (strcmp(image_type, "id") != 0 && strcmp(image_type, "local") != 0) {
-        char *image_id = NULL;
-        image_id = lookup_ImageIdentifier(image_type, image, verbose_lookup, udiConfig);
-        if (image_id == NULL) {
-            slurm_error("Failed to lookup image.  Aborting.");
-            exit(-1);
+    if (context == S_CTX_ALLOCATOR || context == S_CTX_LOCAL) {
+        /* TODO check if argument matches what is in environment */
+        if (strcmp(image_type, "id") != 0 && strcmp(image_type, "local") != 0) {
+            char *image_id = NULL;
+            image_id = lookup_ImageIdentifier(image_type, image, verbose_lookup, udiConfig);
+            if (image_id == NULL) {
+                slurm_error("Failed to lookup image.  Aborting.");
+                exit(-1);
+            }
+            snprintf(image, IMAGE_MAXLEN, "%s", image_id);
+            snprintf(image_type, IMAGE_MAXLEN, "id");
+            free(image_id);
         }
-        snprintf(image, IMAGE_MAXLEN, "%s", image_id);
-        snprintf(image_type, IMAGE_MAXLEN, "id");
-        free(image_id);
-    }
-    if (strlen(image) == 0) {
-        return rc;
-    }
+        if (strlen(image) == 0) {
+            return rc;
+        }
 
-    if (nativeSlurm) {
-        /* for slurm native, generate ssh keys here */
-        generateSshKey(sp);
+        if (nativeSlurm) {
+            /* for slurm native, generate ssh keys here */
+            generateSshKey(sp);
+        }
     }
     
     spank_setenv(sp, "SHIFTER_IMAGE", image, 1);
@@ -338,6 +340,15 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
         snprintf(buffer, 128, "%d", getgid());
         spank_setenv(sp, "SHIFTER_GID", buffer, 1);
         spank_job_control_setenv(sp, "SHIFTER_GID", buffer, 1);
+    }
+    if (ccmMode != 0) {
+        spank_setenv(sp, "SHIFTER_CCM", "1", 1);
+        spank_job_control_setenv(sp, "SHIFTER_CCM", "1", 1);
+
+        /* this is an irritating hack, but CCM needs to be propagated to all
+         * sruns within the job allocation (even sruns within sruns) and this
+         * achieves that */
+        spank_setenv(sp, "_SLURM_SPANK_OPTION_shifter_ccm", "", 1);
     }
     return rc;
 }
