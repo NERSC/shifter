@@ -686,6 +686,19 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     if (udiConfig == NULL) {
         PROLOG_ERROR("Failed to read/parse shifter configuration.\n", rc);
     }
+
+    /* check and see if there is an existing configuration */
+    struct stat statData;
+    memset(&statData, 0, sizeof(struct stat));
+    snprintf(buffer, 1024, "%s%s/var/shifterConfig.json", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
+    if (stat(buffer, &statData) == 0) {
+        /* oops, already something there -- do not run setupRoot
+         * this is probably going to be an issue for the job, however the 
+         * shifter executable can be relied upon to detect the mismatch and
+         * deal with it appropriately */
+        goto _prolog_exit_unclean;
+    }
+
     memory_cgroup_base = find_memory_cgroup_base(argc, argv);
     cpuset_cgroup_base = find_cpuset_cgroup_base(argc, argv);
 
