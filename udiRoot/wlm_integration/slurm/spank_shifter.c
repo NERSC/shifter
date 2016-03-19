@@ -68,8 +68,10 @@ char *trim(char *string) {
 }
 
 int _opt_ccm(int val, const char *optarg, int remote) {
-    snprintf(image, IMAGE_MAXLEN, "/");
-    snprintf(image_type, IMAGE_MAXLEN, "local");
+    if (strlen(image) == 0 && strlen(image_type) == 0) {
+        snprintf(image, IMAGE_MAXLEN, "/");
+        snprintf(image_type, IMAGE_MAXLEN, "local");
+    }
     ccmMode = 1;
     return ESPANK_SUCCESS;
 }
@@ -291,6 +293,15 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
         return rc;
     }
 
+    /* ensure ccm mode is only used for local redirect */
+    if (ccmMode == 1 && (strcmp(image_type, "local") != 0 || strcmp(image, "/") != 0)) {
+        if (context == S_CTX_ALLOCATOR || context == S_CTX_LOCAL) {
+            slurm_error("Cannot specify --ccm mode with --image, or in an allocation with a previously set image");
+            exit(1);
+        }
+        ccmMode = 0;
+    }
+
     udiConfig = read_config(argc, argv);
     if (udiConfig == NULL) {
         slurm_error("Failed to parse shifter config. Cannot use shifter.");
@@ -330,6 +341,12 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     spank_setenv(sp, "SHIFTER_IMAGETYPE", image_type, 1);
     spank_job_control_setenv(sp, "SHIFTER_IMAGE", image, 1);
     spank_job_control_setenv(sp, "SHIFTER_IMAGETYPE", image_type, 1);
+
+    /* change the cached value of the user supplied arg to match
+     * the looked-up value */
+    char *tmpval = alloc_strgenf("%s:%s", image_type, image);
+    spank_setenv(sp, "_SLURM_SPANK_OPTION_shifter_image", tmpval, 1);
+    free(tmpval);
     
     if (strlen(imagevolume) > 0) {
         spank_setenv(sp, "SHIFTER_VOLUME", imagevolume, 1);
