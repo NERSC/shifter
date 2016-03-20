@@ -97,7 +97,10 @@ int validateVolumeMap_siteRequest(
     };
     const char *fromStartsWithDisallowed[] = { NULL };
     const char *fromExactDisallowed[] = { NULL };
-    size_t allowedFlags = VOLMAP_FLAG_READONLY | VOLMAP_FLAG_RECURSIVE | VOLMAP_FLAG_PERNODECACHE;
+    size_t allowedFlags = VOLMAP_FLAG_READONLY
+        | VOLMAP_FLAG_RECURSIVE
+        | VOLMAP_FLAG_PERNODECACHE
+        | VOLMAP_FLAG_SLAVE;
 
     return _validateVolumeMap(
             from, to, flags, toStartsWithDisallowed, toExactDisallowed,
@@ -331,6 +334,12 @@ int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
             goto __parseFlags_exit_unclean;
         }
         cache = NULL;
+    } else if (strcasecmp(flagName, "slave") == 0) {
+        flag.type = VOLMAP_FLAG_SLAVE;
+        if (kvCount > 0) {
+            fprintf(stderr, "Flag slave takes no arguments, failed to parse.\n");
+            goto __parseFlags_exit_unclean;
+        }
     } else {
         fprintf(stderr, "Unknown flag: %s\n", sptr);
         goto __parseFlags_exit_unclean;
@@ -493,6 +502,8 @@ int _parseVolumeMap(
                 raw = alloc_strcatf(raw, &rawLen, &rawCapacity, ":ro");
             } else if (flags[flagIdx].type == VOLMAP_FLAG_RECURSIVE) {
                 raw = alloc_strcatf(raw, &rawLen, &rawCapacity, ":rec");
+            } else if (flags[flagIdx].type == VOLMAP_FLAG_SLAVE) {
+                raw = alloc_strcatf(raw, &rawLen, &rawCapacity, ":slave");
             } else if (flags[flagIdx].type == VOLMAP_FLAG_PERNODECACHE) {
                 VolMapPerNodeCacheConfig *cache = (VolMapPerNodeCacheConfig *) flags[flagIdx].value;
                 if (cache == NULL) {
@@ -655,6 +666,8 @@ size_t fprint_VolumeMap(FILE *fp, VolumeMap *volMap) {
                     nBytes += fprintf(fp, "%sread-only", (flagIdx > 0 ? ", " : ""));
                 } else if (flags[flagIdx].type == VOLMAP_FLAG_RECURSIVE) {
                     nBytes += fprintf(fp, "%srecursive", (flagIdx > 0 ? ", " : ""));
+                } else if (flags[flagIdx].type == VOLMAP_FLAG_SLAVE) {
+                    nBytes += fprintf(fp, "%sslave", (flagIdx > 0 ? ", ": ""));
                 } else if (flags[flagIdx].type == VOLMAP_FLAG_PERNODECACHE) {
                     VolMapPerNodeCacheConfig *cache = (VolMapPerNodeCacheConfig *) flags[flagIdx].value;
                     nBytes += fprintf(fp,

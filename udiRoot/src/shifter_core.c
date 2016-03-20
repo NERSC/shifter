@@ -1793,6 +1793,10 @@ int _shifterCore_bindMount(MountList *mountCache, const char *from, const char *
     unsigned long remountFlags = MS_REMOUNT|MS_BIND|MS_NOSUID;
     unsigned long privateRemountFlags = MS_PRIVATE;
 
+    if (flags & VOLMAP_FLAG_SLAVE) {
+        privateRemountFlags = MS_SLAVE;
+    }
+
     if (from == NULL || to == NULL || mountCache == NULL) {
         fprintf(stderr, "INVALID input to bind-mount. Fail\n");
         return 1;

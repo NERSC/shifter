@@ -58,6 +58,7 @@ extern "C" {
 #define VOLMAP_FLAG_READONLY 1
 #define VOLMAP_FLAG_RECURSIVE 2
 #define VOLMAP_FLAG_PERNODECACHE 4
+#define VOLMAP_FLAG_SLAVE 8
 
 typedef struct {
     int type;
