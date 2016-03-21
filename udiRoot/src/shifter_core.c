@@ -938,7 +938,6 @@ int remountUdiRootReadonly(UdiRootConfig *udiConfig) {
         perror("   --- REASON: ");
         goto _remountUdiRootReadonly_unclean;
     }
-    makeUdiMountPrivate(udiConfig);
     return 0;
 
 _remountUdiRootReadonly_unclean:

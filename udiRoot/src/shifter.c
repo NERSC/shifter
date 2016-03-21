@@ -234,8 +234,7 @@ int main(int argc, char **argv) {
 
     /* chdir (within chroot) to where we belong again */
     if (chdir(opts.workdir) != 0) {
-        fprintf(stderr, "Failed to switch to working dir: %s\n", opts.workdir);
-        exit(1);
+        fprintf(stderr, "Failed to switch to working dir: %s, staying in /\n", opts.workdir);
     }
 
     /* source the environment variables from the image */
@@ -731,11 +730,17 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
         goto _loadImage_error;
     }
 
-    if (isSharedMount("/") == 1) {
-        if (mount(NULL, "/", NULL, MS_PRIVATE|MS_REC, NULL) != 0) {
-            perror("Failed to remount \"/\" non-shared.");
-            goto _loadImage_error;
-        }
+    /* all of the mounts visible to us are now in our private namespace; since
+     * we'll be changing things, need to ensure that nothing is mounted with
+     * MS_SHARED, which would cause our changes to propagate out to the outside
+     * system.  If we used MS_PRIVATE it would prevent us from receiving 
+     * external events even if downstream bindmounts made by the container
+     * specify MS_SLAVE.  Thus setting MS_SLAVE forces the one-way propagation
+     * of mount/umounts that are desirable here
+     */
+    if (mount(NULL, "/", NULL, MS_SLAVE|MS_REC, NULL) != 0) {
+        perror("Failed to remount \"/\" non-shared.");
+        goto _loadImage_error;
     }
 
     /* remove access to any preexisting mounts in the global namespace to this area */
