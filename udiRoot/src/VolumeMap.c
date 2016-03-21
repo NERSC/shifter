@@ -100,7 +100,8 @@ int validateVolumeMap_siteRequest(
     size_t allowedFlags = VOLMAP_FLAG_READONLY
         | VOLMAP_FLAG_RECURSIVE
         | VOLMAP_FLAG_PERNODECACHE
-        | VOLMAP_FLAG_SLAVE;
+        | VOLMAP_FLAG_SLAVE
+        | VOLMAP_FLAG_PRIVATE;
 
     return _validateVolumeMap(
             from, to, flags, toStartsWithDisallowed, toExactDisallowed,
@@ -340,6 +341,12 @@ int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
             fprintf(stderr, "Flag slave takes no arguments, failed to parse.\n");
             goto __parseFlags_exit_unclean;
         }
+    } else if (strcasecmp(flagName, "private") == 0) {
+        flag.type = VOLMAP_FLAG_PRIVATE;
+        if (kvCount > 0) {
+            fprintf(stderr, "Flag private takes no arguments, failed to parse.\n");
+            goto __parseFlags_exit_unclean;
+        }
     } else {
         fprintf(stderr, "Unknown flag: %s\n", sptr);
         goto __parseFlags_exit_unclean;
@@ -504,6 +511,8 @@ int _parseVolumeMap(
                 raw = alloc_strcatf(raw, &rawLen, &rawCapacity, ":rec");
             } else if (flags[flagIdx].type == VOLMAP_FLAG_SLAVE) {
                 raw = alloc_strcatf(raw, &rawLen, &rawCapacity, ":slave");
+            } else if (flags[flagIdx].type == VOLMAP_FLAG_PRIVATE) {
+                raw = alloc_strcatf(raw, &rawLen, &rawCapacity, ":private");
             } else if (flags[flagIdx].type == VOLMAP_FLAG_PERNODECACHE) {
                 VolMapPerNodeCacheConfig *cache = (VolMapPerNodeCacheConfig *) flags[flagIdx].value;
                 if (cache == NULL) {
@@ -615,6 +624,13 @@ int _validateVolumeMap(
         }
     }
 
+    /* cannot specify both SLAVE and PRIVATE mount propagation styles */
+    if ((alreadySeenFlags & VOLMAP_FLAG_SLAVE) &&
+            (alreadySeenFlags & VOLMAP_FLAG_PRIVATE))
+    {
+        return 4;
+    }
+
     for (ptr = toStartsWithDisallowed; *ptr != NULL; ptr++) {
         size_t len = strlen(*ptr);
         if (strncmp(to, *ptr, len) == 0) {
@@ -668,6 +684,8 @@ size_t fprint_VolumeMap(FILE *fp, VolumeMap *volMap) {
                     nBytes += fprintf(fp, "%srecursive", (flagIdx > 0 ? ", " : ""));
                 } else if (flags[flagIdx].type == VOLMAP_FLAG_SLAVE) {
                     nBytes += fprintf(fp, "%sslave", (flagIdx > 0 ? ", ": ""));
+                } else if (flags[flagIdx].type == VOLMAP_FLAG_PRIVATE) {
+                    nBytes += fprintf(fp, "%sprivate", (flagIdx > 0 ? ", ": ""));
                 } else if (flags[flagIdx].type == VOLMAP_FLAG_PERNODECACHE) {
                     VolMapPerNodeCacheConfig *cache = (VolMapPerNodeCacheConfig *) flags[flagIdx].value;
                     nBytes += fprintf(fp,

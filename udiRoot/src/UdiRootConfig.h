@@ -99,6 +99,7 @@ typedef struct _UdiRootConfig {
     int mountUdiRootWritable;
     size_t maxGroupCount;
     size_t gatewayTimeout;
+    size_t mountPropagationStyle;
 
     char *modprobePath;
     char *insmodPath;

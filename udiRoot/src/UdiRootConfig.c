@@ -238,6 +238,9 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
             config->allowLocalChroot);
     written += fprintf(fp, "autoLoadKernelModule = %d\n",
         config->autoLoadKernelModule);
+    written += fprintf(fp, "mountPropagationStyle = %s\n",
+        (config->mountPropagationStyle == VOLMAP_FLAG_SLAVE ?
+         "slave" : "private"));
     written += fprintf(fp, "kmodBasePath = %s\n", 
         (config->kmodBasePath != NULL ? config->kmodBasePath : ""));
     written += fprintf(fp, "kmodPath = %s\n", 
@@ -408,6 +411,14 @@ static int _assign(const char *key, const char *value, void *t_config) {
         config->allowLocalChroot = atoi(value) != 0;
     } else if (strcmp(key, "autoLoadKernelModule") == 0) {
         config->autoLoadKernelModule = atoi(value);
+    } else if (strcmp(key, "mountPropagationStyle") == 0) {
+        if (strcmp(value, "private") == 0) {
+            config->mountPropagationStyle = VOLMAP_FLAG_PRIVATE;
+        } else if (strcmp(value, "slave") == 0) {
+            config->mountPropagationStyle = VOLMAP_FLAG_SLAVE;
+        } else {
+            return 1;
+        }
     } else if (strcmp(key, "mountUdiRootWritable") == 0) {
         config->mountUdiRootWritable = atoi(value);
     } else if (strcmp(key, "maxGroupCount") == 0) {

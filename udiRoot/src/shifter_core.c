@@ -62,7 +62,7 @@
 #define UMOUNT_NOFOLLOW 0x00000008 /* do not follow symlinks when unmounting */
 #endif
 
-int _shifterCore_bindMount(MountList *mounts, const char *from, const char *to, size_t flags, int overwrite);
+int _shifterCore_bindMount(UdiRootConfig *confg, MountList *mounts, const char *from, const char *to, size_t flags, int overwrite);
 int _shifterCore_copyFile(const char *cpPath, const char *source, const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode);
 
 /*! Bind subtree of static image into UDI rootfs */
@@ -106,7 +106,7 @@ int bindImageIntoUDI(
     fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", dir); \
     goto _bindImgUDI_unclean; \
 }
-#define BINDMOUNT(mounts, from, to, ro, overwrite) if (_shifterCore_bindMount(mounts, from, to, ro, overwrite) != 0) { \
+#define BINDMOUNT(mounts, from, to, ro, overwrite) if (_shifterCore_bindMount(udiConfig, mounts, from, to, ro, overwrite) != 0) { \
     fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from, to); \
     goto _bindImgUDI_unclean; \
 }
@@ -408,7 +408,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     ret = 1; \
     goto _prepSiteMod_unclean; \
 }
-#define _BINDMOUNT(mountCache, from, to, flags, overwrite) if (_shifterCore_bindMount(mountCache, from, to, flags, overwrite) != 0) { \
+#define _BINDMOUNT(mountCache, from, to, flags, overwrite) if (_shifterCore_bindMount(udiConfig, mountCache, from, to, flags, overwrite) != 0) { \
     fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from, to); \
     perror("   --- REASON: "); \
     ret = 1; \
@@ -1257,7 +1257,7 @@ int setupVolumeMapMounts(
         return 0;
     }
 
-#define _BINDMOUNT(mountCache, from, to, flags, overwrite) if (_shifterCore_bindMount(mountCache, from, to, flags, overwrite) != 0) { \
+#define _BINDMOUNT(mountCache, from, to, flags, overwrite) if (_shifterCore_bindMount(udiConfig, mountCache, from, to, flags, overwrite) != 0) { \
     fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from, to); \
     goto _setupVolumeMapMounts_unclean; \
 }
@@ -1501,7 +1501,7 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
     MountList mountCache;
     memset(&mountCache, 0, sizeof(MountList));
 
-#define _BINDMOUNT(mounts, from, to, flags, overwrite) if (_shifterCore_bindMount(mounts, from, to, flags, overwrite) != 0) { \
+#define _BINDMOUNT(mounts, from, to, flags, overwrite) if (_shifterCore_bindMount(udiConfig, mounts, from, to, flags, overwrite) != 0) { \
     fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from, to); \
     goto _setupImageSsh_unclean; \
 }
@@ -1784,16 +1784,22 @@ int forkAndExecvSilent(char *const *args) {
     return _forkAndExecv(args, 1);
 }
 
-int _shifterCore_bindMount(MountList *mountCache, const char *from, const char *to, size_t flags, int overwriteMounts) {
+int _shifterCore_bindMount(UdiRootConfig *udiConfig, MountList *mountCache,
+        const char *from, const char *to, size_t flags, int overwriteMounts)
+{
     int ret = 0;
     char **ptr = NULL;
     char *to_real = NULL;
     unsigned long mountFlags = MS_BIND;
     unsigned long remountFlags = MS_REMOUNT|MS_BIND|MS_NOSUID;
-    unsigned long privateRemountFlags = MS_PRIVATE;
+    unsigned long privateRemountFlags =
+        udiConfig->mountPropagationStyle == VOLMAP_FLAG_SLAVE ?
+        VOLMAP_FLAG_SLAVE : VOLMAP_FLAG_PRIVATE;
 
     if (flags & VOLMAP_FLAG_SLAVE) {
         privateRemountFlags = MS_SLAVE;
+    } else if (flags & VOLMAP_FLAG_PRIVATE) {
+        privateRemountFlags = MS_PRIVATE;
     }
 
     if (from == NULL || to == NULL || mountCache == NULL) {
