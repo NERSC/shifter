@@ -79,10 +79,6 @@ int parse_UdiRootConfig(const char *configFile, UdiRootConfig *config, int valid
 void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
     if (config == NULL) return;
 
-    if (config->nodeContextPrefix != NULL) {
-        free(config->nodeContextPrefix);
-        config->nodeContextPrefix = NULL;
-    }
     if (config->udiMountPoint != NULL) {
         free(config->udiMountPoint);
         config->udiMountPoint = NULL;
@@ -212,8 +208,6 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
     if (config == NULL || fp == NULL) return 0;
 
     written += fprintf(fp, "***** UdiRootConfig *****\n");
-    written += fprintf(fp, "nodeContextPrefix = %s\n", 
-        (config->nodeContextPrefix != NULL ? config->nodeContextPrefix : ""));
     written += fprintf(fp, "udiMountPoint = %s\n", 
         (config->udiMountPoint != NULL ? config->udiMountPoint : ""));
     written += fprintf(fp, "loopMountPoint = %s\n", 
@@ -297,9 +291,6 @@ int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
 }
 
     if (validateFlags & UDIROOT_VAL_PARSE) {
-        if (config->nodeContextPrefix == NULL) {
-            VAL_ERROR("nodeContextPrefix is not defined", UDIROOT_VAL_PARSE);
-        }
         if (config->udiMountPoint == NULL || strlen(config->udiMountPoint) == 0) {
             VAL_ERROR("Base mount point \"udiMount\" is not defined", UDIROOT_VAL_PARSE);
         }
@@ -520,8 +511,7 @@ static int _assign(const char *key, const char *value, void *t_config) {
         config->system = strdup(value);
         if (config->system == NULL) return 1;
     } else if (strcmp(key, "nodeContextPrefix") == 0) {
-        config->nodeContextPrefix = strdup(value);
-        if (config->nodeContextPrefix == NULL) return 1;
+        /* do nothing, this key is defunct */
     } else {
         printf("Couldn't understand key: %s\n", key);
         return 2;

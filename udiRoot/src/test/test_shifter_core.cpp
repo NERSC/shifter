@@ -64,7 +64,6 @@ int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const cha
     (*image)->identifier = strdup("/");
     (*config)->udiMountPoint = strdup(tmpDir);
     (*config)->rootfsType = strdup(ROOTFS_TYPE);
-    (*config)->nodeContextPrefix = strdup("");
     (*config)->etcPath = alloc_strgenf("%s/%s", cwd, "etc");
     (*config)->cpPath = strdup("/bin/cp");
     (*config)->mvPath = strdup("/bin/mv");
@@ -288,7 +287,6 @@ TEST(ShifterCoreTestGroup, TestGetGroupList) {
     size_t ngroups = 0;
 
     memset(&config, 0, sizeof(UdiRootConfig));
-    config.nodeContextPrefix = strdup("");
     config.etcPath = strdup("./etc_small");
 
     CHECK(shifter_getgrouplist("user1", 100, &groups, &ngroups, &config) == 0);
@@ -419,7 +417,6 @@ TEST(ShifterCoreTestGroup, writeHostFile_basic) {
    UdiRootConfig config;
    memset(&config, 0, sizeof(UdiRootConfig));
 
-   config.nodeContextPrefix = strdup("");
    config.udiMountPoint = tmpDir;
 
    int ret = writeHostFile("host1/4", &config);
@@ -470,7 +467,6 @@ TEST(ShifterCoreTestGroup, writeHostFile_basic) {
    fclose(fp);
 
    if (linePtr != NULL) free(linePtr);
-   free(config.nodeContextPrefix);
 }
 
 #ifdef NOTROOT

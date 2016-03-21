@@ -74,7 +74,6 @@ typedef struct _ImageGwServer {
 
 typedef struct _UdiRootConfig {
     /* long term configurations coming from configuration file */
-    char *nodeContextPrefix;
     char *udiMountPoint;
     char *loopMountPoint;
     char *batchType;

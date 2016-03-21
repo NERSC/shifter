@@ -690,7 +690,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     /* check and see if there is an existing configuration */
     struct stat statData;
     memset(&statData, 0, sizeof(struct stat));
-    snprintf(buffer, 1024, "%s%s/var/shifterConfig.json", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
+    snprintf(buffer, 1024, "%s/var/shifterConfig.json", udiConfig->udiRootPath);
     if (stat(buffer, &statData) == 0) {
         /* oops, already something there -- do not run setupRoot
          * this is probably going to be an issue for the job, however the 
@@ -785,7 +785,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
             ptr = limit + 1;
         }
     }
-    snprintf(setupRootPath, PATH_MAX, "%s%s/sbin/setupRoot", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
+    snprintf(setupRootPath, PATH_MAX, "%s/sbin/setupRoot", udiConfig->udiRootPath);
     strncpy_StringArray(setupRootPath, strlen(setupRootPath), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     if (uid != 0) {
         snprintf(buffer, 1024, "%u", uid);
@@ -1039,7 +1039,7 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
         free(cgroup_path);
     }
 
-    snprintf(path, PATH_MAX, "%s%s/sbin/unsetupRoot", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
+    snprintf(path, PATH_MAX, "%s/sbin/unsetupRoot", udiConfig->udiRootPath);
     epilogueArgs[0] = path;
     epilogueArgs[1] = NULL;
     pid = 0;
