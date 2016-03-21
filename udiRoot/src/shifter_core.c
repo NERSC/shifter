@@ -1794,7 +1794,7 @@ int _shifterCore_bindMount(UdiRootConfig *udiConfig, MountList *mountCache,
     unsigned long remountFlags = MS_REMOUNT|MS_BIND|MS_NOSUID;
     unsigned long privateRemountFlags =
         udiConfig->mountPropagationStyle == VOLMAP_FLAG_SLAVE ?
-        VOLMAP_FLAG_SLAVE : VOLMAP_FLAG_PRIVATE;
+        MS_SLAVE : MS_PRIVATE;
 
     if (flags & VOLMAP_FLAG_SLAVE) {
         privateRemountFlags = MS_SLAVE;

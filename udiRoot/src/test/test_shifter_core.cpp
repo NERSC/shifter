@@ -38,7 +38,7 @@
 #include "MountList.h"
 
 extern "C" {
-int _shifterCore_bindMount(MountList *mounts, const char *from, const char *to, int ro, int overwrite);
+int _shifterCore_bindMount(UdiRootConfig *config, MountList *mounts, const char *from, const char *to, int ro, int overwrite);
 int _shifterCore_copyFile(const char *cpPath, const char *source, const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode);
 }
 
@@ -480,6 +480,8 @@ TEST(ShifterCoreTestGroup, validateUnmounted_Basic) {
 #endif
     int rc = 0;
     MountList mounts;
+    UdiRootConfig config;
+    memset(&config, 0, sizeof(UdiRootConfig));
 
     memset(&mounts, 0, sizeof(MountList));
     CHECK(parse_MountList(&mounts) == 0);
@@ -487,7 +489,7 @@ TEST(ShifterCoreTestGroup, validateUnmounted_Basic) {
     rc = validateUnmounted(tmpDir, 0);
     CHECK(rc == 0);
 
-    CHECK(_shifterCore_bindMount(&mounts, "/", tmpDir, 1, 0) == 0);
+    CHECK(_shifterCore_bindMount(&config, &mounts, "/", tmpDir, 1, 0) == 0);
     
     rc = validateUnmounted(tmpDir, 0);
     CHECK(rc == 1);
@@ -542,12 +544,14 @@ TEST(ShifterCoreTestGroup, _bindMount_basic) {
     MountList mounts;
     int rc = 0;
     struct stat statData;
+    UdiRootConfig config;
+    memset(&config, 0, sizeof(UdiRootConfig));
     memset(&mounts, 0, sizeof(MountList));
     memset(&statData, 0, sizeof(struct stat));
 
     CHECK(parse_MountList(&mounts) == 0);
 
-    rc = _shifterCore_bindMount(&mounts, "/", tmpDir, 0, 0);
+    rc = _shifterCore_bindMount(&config, &mounts, "/", tmpDir, 0, 0);
     CHECK(rc == 0);
 
     char *usrPath = alloc_strgenf("%s/%s", tmpDir, "usr");
@@ -560,13 +564,13 @@ TEST(ShifterCoreTestGroup, _bindMount_basic) {
     CHECK(find_MountList(&mounts, tmpDir) != NULL);
 
     /* make sure that without overwrite set the mount is unchanged */
-    CHECK(_shifterCore_bindMount(&mounts, cwd, tmpDir, 0, 0) != 0);
+    CHECK(_shifterCore_bindMount(&config, &mounts, cwd, tmpDir, 0, 0) != 0);
     CHECK(stat(test_shifter_corePath, &statData) != 0);
     CHECK(stat(usrPath, &statData) == 0);
     CHECK(find_MountList(&mounts, tmpDir) != NULL);
 
     /* set overwrite and make sure that works */
-    CHECK(_shifterCore_bindMount(&mounts, cwd, tmpDir, 0, 1) == 0);
+    CHECK(_shifterCore_bindMount(&config, &mounts, cwd, tmpDir, 0, 1) == 0);
     CHECK(stat(test_shifter_corePath, &statData) == 0);
     CHECK(stat(usrPath, &statData) != 0);
     CHECK(find_MountList(&mounts, tmpDir) != NULL);
@@ -579,7 +583,7 @@ TEST(ShifterCoreTestGroup, _bindMount_basic) {
     free(tmpFile);
 
     /* remount with read-only set */
-    CHECK(_shifterCore_bindMount(&mounts, cwd, tmpDir, 1, 1) == 0);
+    CHECK(_shifterCore_bindMount(&config, &mounts, cwd, tmpDir, 1, 1) == 0);
     tmpFile = alloc_strgenf("%s/testFile.XXXXXX", tmpDir);
     mkstemp(tmpFile);
     CHECK(stat(tmpFile, &statData) != 0);
