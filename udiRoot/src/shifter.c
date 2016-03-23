@@ -506,10 +506,8 @@ int parse_environment(struct options *opts) {
         opts->imageType = strdup(envPtr);
     }
     if ((envPtr = getenv("SHIFTER_IMAGE")) != NULL) {
-        opts->imageIdentifier = strdup(envPtr);
         opts->imageTag = strdup(envPtr);
     } else if ((envPtr = getenv("SLURM_SPANK_SHIFTER_IMAGE")) != NULL) {
-        opts->imageIdentifier = strdup(envPtr);
         opts->imageTag = strdup(envPtr);
     }
 
