@@ -483,7 +483,7 @@ int setupCgroupStepExternForSshd(const char *cpuset_cgroup_base,
 {
     char buffer[PATH_MAX];
     FILE *fp = NULL;
-    snprintf(buffer, PATH_MAX, "%s/shifter/uid_%d/job_%d/step_extern/tasks", cpuset_cgroup_base, uid, job);
+    snprintf(buffer, PATH_MAX, "%s/slurm/uid_%d/job_%d/step_extern/tasks", cpuset_cgroup_base, uid, job);
 
     fp = fopen(buffer, "a");
     if (fp == NULL) {
