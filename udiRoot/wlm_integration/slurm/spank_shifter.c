@@ -476,141 +476,22 @@ const char *find_cpuset_cgroup_base(int argc, char **argv) {
     return NULL;
 }
 
-int setupCpusetCgroupForSshd(const char *cpuset_cgroup_base,
+int setupCgroupStepExternForSshd(const char *cpuset_cgroup_base,
         uid_t uid,
         int job,
         pid_t pid)
 {
-    char *ptr = NULL;
-    FILE *fp = NULL;
-
-    char *allowableCpus = NULL;
-    char *allowableMems = NULL;
-    char *line = NULL;
-    char *value = NULL;
-    size_t line_sz = 0;
-
     char buffer[PATH_MAX];
-    char wbuffer[PATH_MAX];
-    ssize_t nbytes = 0;
-    int fd = 0;
+    FILE *fp = NULL;
+    snprintf(buffer, PATH_MAX, "%s/shifter/uid_%d/job_%d/step_extern/tasks", cpuset_cgroup_base, uid, job);
 
-    int ret = 1;
-
-    /* first need to read cpus and mems to figure out what to give sshd */
-    snprintf(buffer, PATH_MAX, "%s/cpus", cpuset_cgroup_base);
-    fp = fopen(buffer, "r");
+    fp = fopen(buffer, "a");
     if (fp == NULL) {
-        slurm_error("setupCpusetCgroupForSshd: failed to open base cpus allocation");
-        goto _setupCpusetCgroupForSshd_unclean;
+        return 1;
     }
-    nbytes = getline(&line, &line_sz, fp);
-    value = nbytes > 0 ? trim(line) : NULL;
-    if (value != NULL) {
-        allowableCpus = strdup(value);
-    } else {
-        slurm_error("setupCpusetCgroupForSshd: failed to read base cpus allocation");
-        goto _setupCpusetCgroupForSshd_unclean;
-    }
+    fprintf(fp, "%d\n", pid);
     fclose(fp);
-    fp = NULL;
-
-    snprintf(buffer, PATH_MAX, "%s/mems", cpuset_cgroup_base);
-    fp = fopen(buffer, "r");
-    if (fp == NULL) {
-        slurm_error("setupCpusetCgroupForSshd: failed to open base mems allocation");
-        goto _setupCpusetCgroupForSshd_unclean;
-    }
-    nbytes = getline(&line, &line_sz, fp);
-    value = nbytes > 0 ? trim(line) : NULL;
-    if (value != NULL) {
-        allowableMems = strdup(value);
-    } else {
-        slurm_error("setupCpusetCgroupForSshd: failed to read base mems allocation");
-        goto _setupCpusetCgroupForSshd_unclean;
-    }
-    fclose(fp);
-    fp = NULL;
-
-    /* build path writing cpus and mems the whole way */
-    snprintf(buffer, PATH_MAX, "%s/shifter/uid_%d/job_%d/ssh/", cpuset_cgroup_base, uid, job);
-    ptr = strstr(buffer, "shifter");
-    while ((ptr = strchr(ptr, '/')) != NULL) {
-        int fd = 0;
-
-        /* temporarily terminate the string here */
-        *ptr = 0;
-
-        /* create the cpuset, it's OK for mkdir to fail if dir already exists */
-        slurm_debug("setupCpusetCgroupForSshd: about to attempt to create: %s", buffer);
-        if (mkdir(buffer, 0755) != 0 && errno != EEXIST) {
-            slurm_error("setupCpusetCgroupForSshd: failed to mkdir %s: %d", buffer, errno);
-            goto _setupCpusetCgroupForSshd_unclean;
-        }
-        errno = 0;
-
-        /* write allowable cpus */
-        snprintf(wbuffer, PATH_MAX, "%s/cpus", buffer);
-        fd = open(wbuffer, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0666);
-        if (fd >= 0) {
-            nbytes = write(fd, allowableCpus, strlen(allowableCpus));
-            slurm_debug("setupCpusetCgroupForSshd: write %d bytes to set %s on %s, errno: %d", nbytes, allowableCpus, wbuffer, errno);
-            close(fd);
-        } else {
-            slurm_error("setupCpusetCgroupForSshd: failed to open %s", wbuffer);
-            goto _setupCpusetCgroupForSshd_unclean;
-        }
-
-        /* write allowable mems */
-        snprintf(wbuffer, PATH_MAX, "%s/mems", buffer);
-        fd = open(wbuffer, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0666);
-        if (fd >= 0) {
-            nbytes = write(fd, allowableMems, strlen(allowableMems));
-            slurm_debug("setupCpusetCgroupForSshd: write %d bytes to set %s on %s, errno: %d", nbytes, allowableMems, wbuffer, errno);
-            close(fd);
-        } else {
-            slurm_error("setupCpusetCgroupForSshd: failed to open %s", wbuffer);
-            goto _setupCpusetCgroupForSshd_unclean;
-        }
-
-        /* restore string to usual state */
-        *ptr = '/';
-        ptr++;
-    }
-
-    /* add pid to tasks list */
-    snprintf(wbuffer, PATH_MAX, "%s/tasks", buffer);
-    fd = open(wbuffer, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0666);
-    if (fd >= 0) {
-        snprintf(buffer, PATH_MAX, "%d", pid);
-        nbytes = write(fd, buffer, strlen(buffer));
-        slurm_debug("setupCpusetCgroupForSshd: write %d bytes to cpuset cgroup, errno: %d", nbytes, errno);
-        close(fd);
-    } else {
-        slurm_error("setupCpusetCgroupForSshd: failed to open %s", wbuffer);
-        goto _setupCpusetCgroupForSshd_unclean;
-    }
-
-    ret = 0;
-
-_setupCpusetCgroupForSshd_unclean:
-    if (line != NULL) {
-        free(line);
-        line = NULL;
-    }
-    if (allowableCpus != NULL) {
-        free(allowableCpus);
-        allowableCpus = NULL;
-    }
-    if (allowableMems != NULL) {
-        free(allowableMems);
-        allowableMems = NULL;
-    }
-    if (fp != NULL) {
-        fclose(fp);
-        fp = NULL;
-    }
-    return ret;
+    return 0;
 }
 
 int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
@@ -896,7 +777,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     pid = findSshd();
     slurm_debug("shifter_prolog: sshd on pid %d\n", pid);
     if (pid > 0 && cpuset_cgroup_base != NULL) {
-        if (setupCpusetCgroupForSshd(cpuset_cgroup_base, uid, job, pid) != 0) {
+        if (setupCgroupStepExternForSshd(cpuset_cgroup_base, uid, job, pid) != 0) {
             slurm_error("shifter_prolog: failed to add sshd %d to cpuset cgroup; killing sshd", pid);
             kill(pid, SIGKILL);
             pid = 0;
@@ -904,40 +785,10 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     }
 
     if (pid > 0 && memory_cgroup_base != NULL) {
-        char *path = NULL;
-        size_t pathLen = 0;
-        size_t pathCapacity = 0;
-        int taskFilefd = 0;
-
-        /* create cgroup and append ssnd to cgroup */
-        path = alloc_strcatf(path, &pathLen, &pathCapacity, "%s/shifter", memory_cgroup_base);
-        slurm_debug("shifter_prolog: about to attempt to create: %s", path);
-        mkdir(path, 0755);
-        path = alloc_strcatf(path, &pathLen, &pathCapacity, "/uid_%d", uid);
-        slurm_debug("shifter_prolog: about to attempt to create: %s", path);
-        mkdir(path, 0755);
-        path = alloc_strcatf(path, &pathLen, &pathCapacity, "/job_%d", job);
-        slurm_debug("shifter_prolog: about to attempt to create: %s", path);
-        mkdir(path, 0755);
-        path = alloc_strcatf(path, &pathLen, &pathCapacity, "/ssh");
-        slurm_debug("shifter_prolog: about to attempt to create: %s", path);
-        mkdir(path, 0755);
-        path = alloc_strcatf(path, &pathLen, &pathCapacity, "/tasks");
-        slurm_debug("shifter_prolog: about to attempt to create: %s", path);
-        taskFilefd = open(path, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0666);
-        if (taskFilefd >= 0) {
-            char buffer[128];
-            ssize_t written_bytes = 0;
-            snprintf(buffer, 128, "%d", pid);
-            written_bytes = write(taskFilefd, buffer, strlen(buffer));
-            slurm_debug("shifter_prolog: write %d bytes to put pid %d on %s task list, %d", written_bytes, pid, path, errno);
-            close(taskFilefd);
-        } else {
-            slurm_error("shifter_prolog: failed to add sshd %d to %s cgroup", pid, path);
-        }
-        if (path != NULL) {
-            free(path);
-            path = NULL;
+        if (setupCgroupStepExternForSshd(memory_cgroup_base, uid, job, pid) != 0) {
+            slurm_error("shifter_prolog: failed to add sshd %d to memory cgroup; killing sshd", pid);
+            kill(pid, SIGKILL);
+            pid = 0;
         }
     }
     
