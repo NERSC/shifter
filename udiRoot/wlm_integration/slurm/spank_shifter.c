@@ -35,12 +35,10 @@ static int nativeSlurm = IS_NATIVE_SLURM;
 static int ccmMode = 0;
 static int serialMode = 0;
 static int trustedImage = 1;
-static int autoshift = 0;
 
 static int _opt_image(int val, const char *optarg, int remote);
 static int _opt_imagevolume(int val, const char *optarg, int remote);
 static int _opt_ccm(int val, const char *optarg, int remote);
-static int _opt_autoshift(int val, const char *optarg, int remote);
 
 /* using a couple functions from libslurm that aren't prototyped in any
    accessible header file */
@@ -53,6 +51,12 @@ struct spank_option spank_option_array[] = {
     { "ccm", "ccm", "ccm emulation mode", 0, 0, (spank_opt_cb_f) _opt_ccm},
     SPANK_OPTIONS_TABLE_END
 };
+
+typedef struct {
+    char *shifter_config;
+    char *memory_cgroup;
+    char *cpuset_cgroup;
+} shifter_spank_config;
 
 char *trim(char *string) {
     char *ptr = string;
@@ -73,11 +77,6 @@ int _opt_ccm(int val, const char *optarg, int remote) {
         snprintf(image_type, IMAGE_MAXLEN, "local");
     }
     ccmMode = 1;
-    return ESPANK_SUCCESS;
-}
-
-int _opt_autoshift(int val, const char *optarg, int remote) {
-    autoshift = 1;
     return ESPANK_SUCCESS;
 }
 
@@ -148,11 +147,95 @@ int _opt_imagevolume(int val, const char *optarg, int remote) {
             exit(1);
         }
 
-        int nbytes = snprintf(ptr, IMAGEVOLUME_MAXLEN - (ptr - imagevolume), "%s", optarg);
+        snprintf(ptr, IMAGEVOLUME_MAXLEN - (ptr - imagevolume), "%s", optarg);
         return ESPANK_SUCCESS;
     }
     slurm_error("Invalid image volume options - if specified, must not be zero length");
     return ESPANK_ERROR;
+}
+
+int forkAndExecvLogToSlurm(const char *appname, char **args) {
+    int rc = 0;
+    pid_t pid = 0;
+
+    /* pipes for reading from setupRoot */
+    int stdoutPipe[2];
+    int stderrPipe[2];
+
+    pipe(stdoutPipe);
+    pipe(stderrPipe);
+    pid = fork();
+    if (pid < 0) {
+        slurm_error("FAILED to fork %s", appname);
+        rc = ESPANK_ERROR;
+        goto endf;
+    } else if (pid > 0) {
+        int status = 0;
+        FILE *stdoutStream = NULL;
+        FILE *stderrStream = NULL;
+        char *lineBuffer = NULL;
+        size_t lineBuffer_sz = 0;
+
+
+        /* close the write end of both pipes */
+        close(stdoutPipe[1]);
+        close(stderrPipe[1]);
+
+        stdoutStream = fdopen(stdoutPipe[0], "r");
+        stderrStream = fdopen(stderrPipe[0], "r");
+
+        for ( ; stdoutStream && stderrStream ; ) {
+            if (stdoutStream) {
+                ssize_t nBytes = getline(&lineBuffer, &lineBuffer_sz, stdoutStream);
+                if (nBytes > 0) {
+                    slurm_error("%s stdout: %s", appname, lineBuffer);
+                } else {
+                    fclose(stdoutStream);
+                    stdoutStream = NULL;
+                }
+            }
+            if (stderrStream) {
+                ssize_t nBytes = getline(&lineBuffer, &lineBuffer_sz, stderrStream);
+                if (nBytes > 0) {
+                    slurm_error("%s stderr: %s", appname, lineBuffer);
+                } else {
+                    fclose(stderrStream);
+                    stderrStream = NULL;
+                }
+            }
+        }
+
+
+        /* wait on the child */
+        slurm_error("waiting on %s\n", appname);
+        waitpid(pid, &status, 0);
+        if (WIFEXITED(status)) {
+             rc = WEXITSTATUS(status);
+        } else {
+             rc = 1;
+        }
+        if (status != 0) {
+            slurm_error("FAILED to run %s", appname);
+            rc = ESPANK_ERROR;
+            goto endf;
+        }
+    } else {
+        /* close the read end of both pipes */
+        close(stdoutPipe[0]);
+        close(stderrPipe[0]);
+
+        /* make the pipe stdout/err */
+        dup2(stdoutPipe[1], STDOUT_FILENO);
+        dup2(stderrPipe[1], STDERR_FILENO);
+        close(stdoutPipe[1]);
+        close(stderrPipe[1]);
+
+
+        execv(args[0], args);
+        exit(127);
+    }
+endf:
+    return rc;
 }
 
 
@@ -264,6 +347,7 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
     spank_context_t context;
     int rc = ESPANK_SUCCESS;
     int i, j;
+    UdiRootConfig *udiConfig = NULL;
 
     context = spank_context();
 
@@ -279,6 +363,75 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
             }
         }
     }
+
+    if (context == S_CTX_REMOTE) {
+        uint32_t stepid = 0;
+        if (spank_get_item(sp, S_JOB_STEPID, &stepid) != ESPANK_SUCCESS) {
+            slurm_error("FAILED to get stepid");
+        }
+
+        /* if this is the slurmstepd for prologflags=contain, then do the
+         * proper setup to finalize shifter setup */
+        if (stepid == SLURM_EXTERN_CONT) {
+            char buffer[PATH_MAX];
+
+            UdiRootConfig *udiConfig = read_config(argc, argv);
+            if (udiConfig == NULL) {
+                slurm_error("Failed to parse shifter config. Cannot use shifter.");
+                return rc;
+            }
+            for (i = 0; spank_option_array[i].name != NULL; ++i) {
+                char *optarg = NULL;
+                j = spank_option_getopt(sp, &spank_option_array[i], &optarg);
+                if (j != ESPANK_SUCCESS) {
+                    continue;
+                }
+                (spank_option_array[i].cb)(spank_option_array[i].val, optarg, 1);
+            }
+            /* check and see if there is an existing configuration */
+            struct stat statData;
+            memset(&statData, 0, sizeof(struct stat));
+            snprintf(buffer, 1024, "%s%s/var/shifterConfig.json", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+            if (stat(buffer, &statData) == 0) {
+                int stepd_fd = 0;
+                int i = 0;
+                char *dir = NULL;
+                char *hostname = NULL;
+                uint32_t jobid = 0;
+                uint16_t protocol = 0;
+                if (spank_get_item(sp, S_JOB_ID, &jobid) != ESPANK_SUCCESS) {
+                    slurm_error("Couldnt get job id");
+                    return ESPANK_ERROR;
+                }
+
+                /* move sshd into slurm proctrack */
+                int sshd_pid = findSshd();
+                if (sshd_pid > 0) {
+                    stepd_fd = stepd_connect(dir, hostname, jobid, SLURM_EXTERN_CONT, &protocol);
+                    int ret = stepd_add_extern_pid(stepd_fd, protocol, sshd_pid);
+                    slurm_error("moved sshd (pid %d) into slurm controlled extern_step (ret: %d) via fd %d\n", sshd_pid, ret, stepd_fd);
+                }
+
+                /* see if an extern step is defined, if so, run it */
+                char *script = NULL;
+                for (i = 0; i < argc; i++) {
+                    if (strncmp(argv[i], "extern_setup=", 13) == 0) {
+                        script = argv[i] + 13;
+                        break;
+                    }
+                }
+                if (script != NULL) {
+                    char *externScript[2];
+                    externScript[0] = script;
+                    externScript[1] = NULL;
+                    int status = forkAndExecvLogToSlurm("extern_setup", externScript);
+                    if (status == 0) rc = ESPANK_SUCCESS;
+                    else rc = ESPANK_ERROR;
+                }
+            }
+
+        }
+    }
     return rc;
 }
 
@@ -289,6 +442,13 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     UdiRootConfig *udiConfig = NULL;
 
     context = spank_context();
+
+    udiConfig = read_config(argc, argv);
+    if (udiConfig == NULL) {
+        slurm_error("Failed to parse shifter config. Cannot use shifter.");
+        return rc;
+    }
+
     if (strlen(image) == 0) {
         return rc;
     }
@@ -300,12 +460,6 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
             exit(1);
         }
         ccmMode = 0;
-    }
-
-    udiConfig = read_config(argc, argv);
-    if (udiConfig == NULL) {
-        slurm_error("Failed to parse shifter config. Cannot use shifter.");
-        return rc;
     }
 
     verbose_lookup = 1;
@@ -537,7 +691,7 @@ int setupCgroupForSshd(const char *cgroup_base,
     }
 
     /* build path writing cpus and mems the whole way */
-    snprintf(buffer, PATH_MAX, "%s/slurm/uid_%d/job_%d/step_extern/", cgroup_base, uid, job);
+    snprintf(buffer, PATH_MAX, "%s/shifter/uid_%d/job_%d/ssh/", cgroup_base, uid, job);
     ptr = strstr(buffer, "slurm");
     while ((ptr = strchr(ptr, '/')) != NULL) {
         int fd = 0;
@@ -630,7 +784,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     gid_t gid = 0;
     uint16_t shared = 0;
 
-    char buffer[1024];
+    char buffer[PATH_MAX];
     char setupRootPath[PATH_MAX];
     char **setupRootArgs = NULL;
     char **setupRootArgs_sv = NULL;
@@ -648,10 +802,6 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     size_t tasksPerNode = 0;
     UdiRootConfig *udiConfig = NULL;
     pid_t pid = 0;
-
-    /* pipes for reading from setupRoot */
-    int stdoutPipe[2];
-    int stderrPipe[2];
 
 #define PROLOG_ERROR(message, errCode) \
     slurm_error(message); \
@@ -696,7 +846,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     /* check and see if there is an existing configuration */
     struct stat statData;
     memset(&statData, 0, sizeof(struct stat));
-    snprintf(buffer, 1024, "%s%s/var/shifterConfig.json", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
+    snprintf(buffer, PATH_MAX, "%s%s/var/shifterConfig.json", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
     if (stat(buffer, &statData) == 0) {
         /* oops, already something there -- do not run setupRoot
          * this is probably going to be an issue for the job, however the 
@@ -794,12 +944,12 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     snprintf(setupRootPath, PATH_MAX, "%s%s/sbin/setupRoot", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
     strncpy_StringArray(setupRootPath, strlen(setupRootPath), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     if (uid != 0) {
-        snprintf(buffer, 1024, "%u", uid);
+        snprintf(buffer, PATH_MAX, "%u", uid);
         strncpy_StringArray("-U", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
         strncpy_StringArray(buffer, strlen(buffer), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
     if (gid != 0) {
-        snprintf(buffer, 1024, "%u", gid);
+        snprintf(buffer, PATH_MAX, "%u", gid);
         strncpy_StringArray("-G", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
         strncpy_StringArray(buffer, strlen(buffer), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
@@ -826,78 +976,18 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         slurm_error("setupRoot arg %d: %s", (int)(setupRootArgs_sv - setupRootArgs), *setupRootArgs_sv);
     }
 
-    /* return success because we don't want bad input to mark node in
-       error state -- would be nice to do something to inform the job
-       of this issue */
-    pipe(stdoutPipe);
-    pipe(stderrPipe);
-    pid = fork();
-    if (pid < 0) {
-        PROLOG_ERROR("FAILED to fork setupRoot", ESPANK_ERROR);
-    } else if (pid > 0) {
-        int status = 0;
-        FILE *stdoutStream = NULL;
-        FILE *stderrStream = NULL;
-        char *lineBuffer = NULL;
-        size_t lineBuffer_sz = 0;
+    int status = forkAndExecvLogToSlurm("setupRoot", setupRootArgs);
 
-
-        /* close the write end of both pipes */
-        close(stdoutPipe[1]);
-        close(stderrPipe[1]);
-
-        stdoutStream = fdopen(stdoutPipe[0], "r");
-        stderrStream = fdopen(stderrPipe[0], "r");
-
-        for ( ; stdoutStream && stderrStream ; ) {
-            if (stdoutStream) {
-                ssize_t nBytes = getline(&lineBuffer, &lineBuffer_sz, stdoutStream);
-                if (nBytes > 0) {
-                    slurm_error("setupRoot stdout: %s", lineBuffer);
-                } else {
-                    fclose(stdoutStream);
-                    stdoutStream = NULL;
-                }
-            }
-            if (stderrStream) {
-                ssize_t nBytes = getline(&lineBuffer, &lineBuffer_sz, stderrStream);
-                if (nBytes > 0) {
-                    slurm_error("setupRoot stderr: %s", lineBuffer);
-                } else {
-                    fclose(stderrStream);
-                    stderrStream = NULL;
-                }
-            }
-        }
-
-
-        /* wait on the child */
-        slurm_error("waiting on child\n");
-        waitpid(pid, &status, 0);
-        if (WIFEXITED(status)) {
-             status = WEXITSTATUS(status);
-        } else {
-             status = 1;
-        }
-        if (status != 0) {
-            PROLOG_ERROR("FAILED to run setupRoot", ESPANK_ERROR);
-        }
-    } else {
-        /* close the read end of both pipes */
-        close(stdoutPipe[0]);
-        close(stderrPipe[0]);
-
-        /* make the pipe stdout/err */
-        dup2(stdoutPipe[1], STDOUT_FILENO);
-        dup2(stderrPipe[1], STDERR_FILENO);
-        close(stdoutPipe[1]);
-        close(stderrPipe[1]);
-
-
-        execv(setupRootArgs[0], setupRootArgs);
-        exit(127);
-    }
     slurm_error("after setupRoot");
+
+    snprintf(buffer, PATH_MAX, "%s%s/var/shifterSlurm.jobid", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    FILE *fp = fopen(buffer, "w");
+    if (fp == NULL) {
+        slurm_error("shifter_prolog: failed to open file %s\n", buffer);
+    } else {
+        fprintf(fp, "%d", job);
+        fclose(fp);
+    }
 
     pid = findSshd();
     slurm_debug("shifter_prolog: sshd on pid %d\n", pid);
@@ -908,6 +998,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
             pid = 0;
         }
     }
+#if 0
     if (pid > 0 && memory_cgroup_base != NULL) {
         if (setupCgroupForSshd(memory_cgroup_base, "memory", uid, job, pid) != 0) {
             slurm_error("shifter_prolog: failed to add sshd %d to memory cgroup; killing sshd", pid);
@@ -915,6 +1006,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
             pid = 0;
         }
     }
+#endif
 
     
 _prolog_exit_unclean:
@@ -1018,31 +1110,9 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     snprintf(path, PATH_MAX, "%s%s/sbin/unsetupRoot", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
     epilogueArgs[0] = path;
     epilogueArgs[1] = NULL;
-    pid = 0;
-    pid = fork();
-    if (pid < 0) {
-        EPILOG_ERROR("FAILED to fork unsetupRoot", ESPANK_ERROR);
-    } else if (pid > 0) {
-        int status = 0;
-        slurm_error("shifter_epilog: waiting on unsetupRoot\n");
-        do {
-            pid_t ret = waitpid(pid, &status, 0);
-            if (ret != pid) {
-                slurm_error("This might be impossible: forked by couldn't wait, FAIL!\n");
-            }
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-        if (WIFEXITED(status)) {
-             status = WEXITSTATUS(status);
-        } else {
-             status = -1;
-        }
-        slurm_error("shifter_epilog: unsetupRoot completed with status %d", status);
-        if (status != 0) {
-            rc = ESPANK_ERROR;
-        }
-    } else {
-        execv(epilogueArgs[0], epilogueArgs);
-        exit(127);
+    int status = forkAndExecvLogToSlurm("unsetupRoot", epilogueArgs);
+    if (status != 0) {
+        rc = SLURM_ERROR;
     }
 
     slurm_debug("shifter_epilog: done with unsetupRoot");
@@ -1107,7 +1177,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     if (strlen(image) == 0 || strlen(image_type) == 0) {
         return rc;
     }
-    if (ccmMode == 0 && autoshift == 0) return rc;
+    if (ccmMode == 0) return rc;
     udiConfig = read_config(argc, argv);
     if (udiConfig == NULL) {
         TASKINITPRIV_ERROR("Failed to load udiRoot config!", ESPANK_ERROR);
