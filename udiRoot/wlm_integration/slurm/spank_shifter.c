@@ -403,6 +403,7 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
                     slurm_error("Couldnt get job id");
                     return ESPANK_ERROR;
                 }
+                sleep(1);
 
                 /* move sshd into slurm proctrack */
                 int sshd_pid = findSshd();
