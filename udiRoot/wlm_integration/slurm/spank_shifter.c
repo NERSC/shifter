@@ -403,7 +403,6 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
                     slurm_error("Couldnt get job id");
                     return ESPANK_ERROR;
                 }
-                sleep(1);
 
                 /* move sshd into slurm proctrack */
                 int sshd_pid = findSshd();
@@ -489,37 +488,37 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
             /* for slurm native, generate ssh keys here */
             generateSshKey(sp);
         }
-    }
     
-    spank_setenv(sp, "SHIFTER_IMAGE", image, 1);
-    spank_setenv(sp, "SHIFTER_IMAGETYPE", image_type, 1);
-    spank_job_control_setenv(sp, "SHIFTER_IMAGE", image, 1);
-    spank_job_control_setenv(sp, "SHIFTER_IMAGETYPE", image_type, 1);
+        spank_setenv(sp, "SHIFTER_IMAGE", image, 1);
+        spank_setenv(sp, "SHIFTER_IMAGETYPE", image_type, 1);
+        spank_job_control_setenv(sp, "SHIFTER_IMAGE", image, 1);
+        spank_job_control_setenv(sp, "SHIFTER_IMAGETYPE", image_type, 1);
 
-    /* change the cached value of the user supplied arg to match
-     * the looked-up value */
-    char *tmpval = alloc_strgenf("%s:%s", image_type, image);
-    spank_setenv(sp, "_SLURM_SPANK_OPTION_shifter_image", tmpval, 1);
-    free(tmpval);
-    
-    if (strlen(imagevolume) > 0) {
-        spank_setenv(sp, "SHIFTER_VOLUME", imagevolume, 1);
-        spank_job_control_setenv(sp, "SHIFTER_VOLUME", imagevolume, 1);
-    }
-    if (getgid() != 0) {
-        char buffer[128];
-        snprintf(buffer, 128, "%d", getgid());
-        spank_setenv(sp, "SHIFTER_GID", buffer, 1);
-        spank_job_control_setenv(sp, "SHIFTER_GID", buffer, 1);
-    }
-    if (ccmMode != 0) {
-        spank_setenv(sp, "SHIFTER_CCM", "1", 1);
-        spank_job_control_setenv(sp, "SHIFTER_CCM", "1", 1);
+        /* change the cached value of the user supplied arg to match
+         * the looked-up value */
+        char *tmpval = alloc_strgenf("%s:%s", image_type, image);
+        spank_setenv(sp, "_SLURM_SPANK_OPTION_shifter_image", tmpval, 1);
+        free(tmpval);
+        
+        if (strlen(imagevolume) > 0) {
+            spank_setenv(sp, "SHIFTER_VOLUME", imagevolume, 1);
+            spank_job_control_setenv(sp, "SHIFTER_VOLUME", imagevolume, 1);
+        }
+        if (getgid() != 0) {
+            char buffer[128];
+            snprintf(buffer, 128, "%d", getgid());
+            spank_setenv(sp, "SHIFTER_GID", buffer, 1);
+            spank_job_control_setenv(sp, "SHIFTER_GID", buffer, 1);
+        }
+        if (ccmMode != 0) {
+            spank_setenv(sp, "SHIFTER_CCM", "1", 1);
+            spank_job_control_setenv(sp, "SHIFTER_CCM", "1", 1);
 
-        /* this is an irritating hack, but CCM needs to be propagated to all
-         * sruns within the job allocation (even sruns within sruns) and this
-         * achieves that */
-        spank_setenv(sp, "_SLURM_SPANK_OPTION_shifter_ccm", "", 1);
+            /* this is an irritating hack, but CCM needs to be propagated to all
+             * sruns within the job allocation (even sruns within sruns) and this
+             * achieves that */
+            spank_setenv(sp, "_SLURM_SPANK_OPTION_shifter_ccm", "", 1);
+        }
     }
     return rc;
 }
