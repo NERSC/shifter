@@ -66,6 +66,7 @@ AC_CONFIG_FILES([Makefile
                  src/Makefile
                  src/test/Makefile
                  dep/Makefile
+                 extra/Makefile
                  wlm_integration/slurm/Makefile
                ])
 #                 config/Makefile
