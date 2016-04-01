@@ -488,7 +488,6 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
             /* for slurm native, generate ssh keys here */
             generateSshKey(sp);
         }
-    
         spank_setenv(sp, "SHIFTER_IMAGE", image, 1);
         spank_setenv(sp, "SHIFTER_IMAGETYPE", image_type, 1);
         spank_job_control_setenv(sp, "SHIFTER_IMAGE", image, 1);
@@ -499,26 +498,26 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
         char *tmpval = alloc_strgenf("%s:%s", image_type, image);
         spank_setenv(sp, "_SLURM_SPANK_OPTION_shifter_image", tmpval, 1);
         free(tmpval);
-        
-        if (strlen(imagevolume) > 0) {
-            spank_setenv(sp, "SHIFTER_VOLUME", imagevolume, 1);
-            spank_job_control_setenv(sp, "SHIFTER_VOLUME", imagevolume, 1);
-        }
-        if (getgid() != 0) {
-            char buffer[128];
-            snprintf(buffer, 128, "%d", getgid());
-            spank_setenv(sp, "SHIFTER_GID", buffer, 1);
-            spank_job_control_setenv(sp, "SHIFTER_GID", buffer, 1);
-        }
-        if (ccmMode != 0) {
-            spank_setenv(sp, "SHIFTER_CCM", "1", 1);
-            spank_job_control_setenv(sp, "SHIFTER_CCM", "1", 1);
+    }
+    
+    if (strlen(imagevolume) > 0) {
+        spank_setenv(sp, "SHIFTER_VOLUME", imagevolume, 1);
+        spank_job_control_setenv(sp, "SHIFTER_VOLUME", imagevolume, 1);
+    }
+    if (getgid() != 0) {
+        char buffer[128];
+        snprintf(buffer, 128, "%d", getgid());
+        spank_setenv(sp, "SHIFTER_GID", buffer, 1);
+        spank_job_control_setenv(sp, "SHIFTER_GID", buffer, 1);
+    }
+    if (ccmMode != 0) {
+        spank_setenv(sp, "SHIFTER_CCM", "1", 1);
+        spank_job_control_setenv(sp, "SHIFTER_CCM", "1", 1);
 
-            /* this is an irritating hack, but CCM needs to be propagated to all
-             * sruns within the job allocation (even sruns within sruns) and this
-             * achieves that */
-            spank_setenv(sp, "_SLURM_SPANK_OPTION_shifter_ccm", "", 1);
-        }
+        /* this is an irritating hack, but CCM needs to be propagated to all
+         * sruns within the job allocation (even sruns within sruns) and this
+         * achieves that */
+        spank_setenv(sp, "_SLURM_SPANK_OPTION_shifter_ccm", "", 1);
     }
     return rc;
 }
@@ -817,6 +816,8 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         (spank_option_array[i].cb)(spank_option_array[i].val, optarg, 1);
     }
 
+    slurm_debug("shifter prolog, id after looking at args: %s:%s", image_type, image);
+
     /* if processing the user-specified options indicates no image, dump out */
     if (strlen(image) == 0 || strlen(image_type) == 0) {
         return rc;
@@ -836,6 +837,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     if (ptr != NULL) {
         snprintf(imagevolume, IMAGEVOLUME_MAXLEN, "%s", ptr);
     }
+    slurm_debug("shifter prolog, id after looking at env: %s:%s", image_type, image);
 
     /* parse udi configuration */
     udiConfig = read_config(argc, argv);
@@ -852,7 +854,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
          * this is probably going to be an issue for the job, however the 
          * shifter executable can be relied upon to detect the mismatch and
          * deal with it appropriately */
-        goto _prolog_exit_unclean;
+        PROLOG_ERROR("shifterConfig.json already exists!", rc);
     }
 
     memory_cgroup_base = find_memory_cgroup_base(argc, argv);
@@ -869,6 +871,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
 
     /* this prolog should not be used for shared-node jobs */
     if (shared != 0) {
+        slurm_debug("shifter prolog: job is shared, moving on");
         goto _prolog_exit_unclean;
     }
 
