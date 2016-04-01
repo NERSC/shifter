@@ -45,7 +45,7 @@ int main(int argc, char **argv) {
 
     unmountTree(&mounts, dwMountPoint);
 
-    _shifterCore_bindMount(&config, &mounts, "/var/opt/cray/dws", "/var/opt/cray/dws", VOLMAP_FLAG_RECURSIVE, 1);
+    _shifterCore_bindMount(&config, &mounts, "/var/opt/cray/dws", dwMountPoint, VOLMAP_FLAG_RECURSIVE, 1);
 
     return 0;
 }
