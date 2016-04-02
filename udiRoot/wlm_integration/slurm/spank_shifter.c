@@ -54,8 +54,6 @@ struct spank_option spank_option_array[] = {
 
 typedef struct {
     char *shifter_config;
-    char *memory_cgroup;
-    char *cpuset_cgroup;
 } shifter_spank_config;
 
 char *trim(char *string) {
@@ -341,6 +339,67 @@ UdiRootConfig *read_config(int argc, char **argv) {
     return udiConfig;
 }
 
+int doForceArgParse(spank_t sp) {
+    int i,j;
+    int rc = ESPANK_SUCCESS;
+    for (i = 0; spank_option_array[i].name != NULL; ++i) {
+        char *optarg = NULL;
+        j = spank_option_getopt(sp, &spank_option_array[i], &optarg);
+        if (j != ESPANK_SUCCESS) {
+            continue;
+        }
+        (spank_option_array[i].cb)(spank_option_array[i].val, optarg, 1);
+    }
+    return rc;
+}
+
+int doExternStepTaskSetup(spank_t sp, int argc, char **argv, UdiRootConfig *udiConfig) {
+    int rc = ESPANK_SUCCESS;
+    struct stat statData;
+    char buffer[PATH_MAX];
+    /* check and see if there is an existing configuration */
+    memset(&statData, 0, sizeof(struct stat));
+    snprintf(buffer, 1024, "%s%s/var/shifterConfig.json", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    if (stat(buffer, &statData) == 0) {
+        int stepd_fd = 0;
+        int i = 0;
+        char *dir = NULL;
+        char *hostname = NULL;
+        uint32_t jobid = 0;
+        uint16_t protocol = 0;
+        if (spank_get_item(sp, S_JOB_ID, &jobid) != ESPANK_SUCCESS) {
+            slurm_error("Couldnt get job id");
+            return ESPANK_ERROR;
+        }
+
+        /* move sshd into slurm proctrack */
+        int sshd_pid = findSshd();
+        if (sshd_pid > 0) {
+            stepd_fd = stepd_connect(dir, hostname, jobid, SLURM_EXTERN_CONT, &protocol);
+            int ret = stepd_add_extern_pid(stepd_fd, protocol, sshd_pid);
+            slurm_error("moved sshd (pid %d) into slurm controlled extern_step (ret: %d) via fd %d\n", sshd_pid, ret, stepd_fd);
+        }
+
+        /* see if an extern step is defined, if so, run it */
+        char *script = NULL;
+        for (i = 0; i < argc; i++) {
+            if (strncmp(argv[i], "extern_setup=", 13) == 0) {
+                script = argv[i] + 13;
+                break;
+            }
+        }
+        if (script != NULL) {
+            char *externScript[2];
+            externScript[0] = script;
+            externScript[1] = NULL;
+            int status = forkAndExecvLogToSlurm("extern_setup", externScript);
+            if (status == 0) rc = ESPANK_SUCCESS;
+            else rc = ESPANK_ERROR;
+        }
+    }
+    return rc;
+}
+
 char *lookup_ImageIdentifier(const char *imageType, const char *imageTag, int verbose, UdiRootConfig *);
 
 int slurm_spank_init(spank_t sp, int argc, char **argv) {
@@ -364,6 +423,7 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
         }
     }
 
+#ifdef NERSCCUSTUMSLURM150809
     if (context == S_CTX_REMOTE) {
         uint32_t stepid = 0;
         if (spank_get_item(sp, S_JOB_STEPID, &stepid) != ESPANK_SUCCESS) {
@@ -373,65 +433,18 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
         /* if this is the slurmstepd for prologflags=contain, then do the
          * proper setup to finalize shifter setup */
         if (stepid == SLURM_EXTERN_CONT) {
-            char buffer[PATH_MAX];
-
             UdiRootConfig *udiConfig = read_config(argc, argv);
             if (udiConfig == NULL) {
                 slurm_error("Failed to parse shifter config. Cannot use shifter.");
                 return rc;
             }
-            for (i = 0; spank_option_array[i].name != NULL; ++i) {
-                char *optarg = NULL;
-                j = spank_option_getopt(sp, &spank_option_array[i], &optarg);
-                if (j != ESPANK_SUCCESS) {
-                    continue;
-                }
-                (spank_option_array[i].cb)(spank_option_array[i].val, optarg, 1);
-            }
-            /* check and see if there is an existing configuration */
-            struct stat statData;
-            memset(&statData, 0, sizeof(struct stat));
-            snprintf(buffer, 1024, "%s%s/var/shifterConfig.json", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
-            if (stat(buffer, &statData) == 0) {
-                int stepd_fd = 0;
-                int i = 0;
-                char *dir = NULL;
-                char *hostname = NULL;
-                uint32_t jobid = 0;
-                uint16_t protocol = 0;
-                if (spank_get_item(sp, S_JOB_ID, &jobid) != ESPANK_SUCCESS) {
-                    slurm_error("Couldnt get job id");
-                    return ESPANK_ERROR;
-                }
 
-                /* move sshd into slurm proctrack */
-                int sshd_pid = findSshd();
-                if (sshd_pid > 0) {
-                    stepd_fd = stepd_connect(dir, hostname, jobid, SLURM_EXTERN_CONT, &protocol);
-                    int ret = stepd_add_extern_pid(stepd_fd, protocol, sshd_pid);
-                    slurm_error("moved sshd (pid %d) into slurm controlled extern_step (ret: %d) via fd %d\n", sshd_pid, ret, stepd_fd);
-                }
-
-                /* see if an extern step is defined, if so, run it */
-                char *script = NULL;
-                for (i = 0; i < argc; i++) {
-                    if (strncmp(argv[i], "extern_setup=", 13) == 0) {
-                        script = argv[i] + 13;
-                        break;
-                    }
-                }
-                if (script != NULL) {
-                    char *externScript[2];
-                    externScript[0] = script;
-                    externScript[1] = NULL;
-                    int status = forkAndExecvLogToSlurm("extern_setup", externScript);
-                    if (status == 0) rc = ESPANK_SUCCESS;
-                    else rc = ESPANK_ERROR;
-                }
-            }
-
+            doForceArgParse(sp);
+            rc = doExternStepTaskSetup(sp, argc, argv, udiConfig);
         }
     }
+#endif
+
     return rc;
 }
 
@@ -605,173 +618,6 @@ int read_data_from_job(spank_t sp, uint32_t *jobid, char **nodelist, size_t *tas
     return ESPANK_SUCCESS;
 }
 
-const char *find_memory_cgroup_base(int argc, char **argv) {
-    int idx = 0;
-    for (idx = 0; idx < argc; idx++) {
-        if (strncmp(argv[idx], "memory_cgroup=", 14) == 0) {
-            const char *ptr = argv[idx];
-            ptr += 14;
-            return ptr;
-        }
-    }
-    return NULL;
-}
-
-const char *find_cpuset_cgroup_base(int argc, char **argv) {
-    int idx = 0;
-    for (idx = 0; idx < argc; idx++) {
-        if (strncmp(argv[idx], "cpuset_cgroup=", 14) == 0) {
-            const char *ptr = argv[idx];
-            ptr += 14;
-            return ptr;
-        }
-    }
-    return NULL;
-}
-
-int setupCgroupForSshd(const char *cgroup_base,
-        const char *cgroup_type,
-        uid_t uid,
-        int job,
-        pid_t pid)
-{
-    char *ptr = NULL;
-    FILE *fp = NULL;
-
-    char *allowableCpus = NULL;
-    char *allowableMems = NULL;
-    char *line = NULL;
-    char *value = NULL;
-    size_t line_sz = 0;
-
-    char buffer[PATH_MAX];
-    char wbuffer[PATH_MAX];
-    ssize_t nbytes = 0;
-    int fd = 0;
-
-    int ret = 1;
-    int is_cpuset = strcmp(cgroup_type, "cpuset") == 0 ? 1 : 0;
-
-    if (is_cpuset) {
-        /* first need to read cpus and mems to figure out what to give sshd */
-        snprintf(buffer, PATH_MAX, "%s/cpus", cgroup_base);
-        fp = fopen(buffer, "r");
-        if (fp == NULL) {
-            slurm_error("setupCgroupForSshd: failed to open base cpus allocation");
-            goto _setupCgroupForSshd_unclean;
-        }
-        nbytes = getline(&line, &line_sz, fp);
-        value = nbytes > 0 ? trim(line) : NULL;
-        if (value != NULL) {
-            allowableCpus = strdup(value);
-        } else {
-            slurm_error("setupCgroupForSshd: failed to read base cpus allocation");
-            goto _setupCgroupForSshd_unclean;
-        }
-        fclose(fp);
-        fp = NULL;
-
-        snprintf(buffer, PATH_MAX, "%s/mems", cgroup_base);
-        fp = fopen(buffer, "r");
-        if (fp == NULL) {
-            slurm_error("setupCgroupForSshd: failed to open base mems allocation");
-            goto _setupCgroupForSshd_unclean;
-        }
-        nbytes = getline(&line, &line_sz, fp);
-        value = nbytes > 0 ? trim(line) : NULL;
-        if (value != NULL) {
-            allowableMems = strdup(value);
-        } else {
-            slurm_error("setupCgroupForSshd: failed to read base mems allocation");
-            goto _setupCgroupForSshd_unclean;
-        }
-        fclose(fp);
-        fp = NULL;
-    }
-
-    /* build path writing cpus and mems the whole way */
-    snprintf(buffer, PATH_MAX, "%s/shifter/uid_%d/job_%d/ssh/", cgroup_base, uid, job);
-    ptr = strstr(buffer, "slurm");
-    while ((ptr = strchr(ptr, '/')) != NULL) {
-        int fd = 0;
-
-        /* temporarily terminate the string here */
-        *ptr = 0;
-
-        /* create the cpuset, it's OK for mkdir to fail if dir already exists */
-        slurm_debug("setupCgroupForSshd: about to attempt to create: %s", buffer);
-        if (mkdir(buffer, 0755) != 0 && errno != EEXIST) {
-            slurm_error("setupCgroupForSshd: failed to mkdir %s: %d", buffer, errno);
-            goto _setupCgroupForSshd_unclean;
-        }
-        errno = 0;
-
-        if (is_cpuset) {
-            /* write allowable cpus */
-            snprintf(wbuffer, PATH_MAX, "%s/cpus", buffer);
-            fd = open(wbuffer, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0666);
-            if (fd >= 0) {
-                nbytes = write(fd, allowableCpus, strlen(allowableCpus));
-                slurm_debug("setupCgroupForSshd: write %d bytes to set %s on %s, errno: %d", nbytes, allowableCpus, wbuffer, errno);
-                close(fd);
-            } else {
-                slurm_error("setupCgroupForSshd: failed to open %s", wbuffer);
-                goto _setupCgroupForSshd_unclean;
-            }
-
-            /* write allowable mems */
-            snprintf(wbuffer, PATH_MAX, "%s/mems", buffer);
-            fd = open(wbuffer, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0666);
-            if (fd >= 0) {
-                nbytes = write(fd, allowableMems, strlen(allowableMems));
-                slurm_debug("setupCgroupForSshd: write %d bytes to set %s on %s, errno: %d", nbytes, allowableMems, wbuffer, errno);
-                close(fd);
-            } else {
-                slurm_error("setupCgroupForSshd: failed to open %s", wbuffer);
-                goto _setupCgroupForSshd_unclean;
-            }
-        }
-
-        /* restore string to usual state */
-        *ptr = '/';
-        ptr++;
-    }
-
-    /* add pid to tasks list */
-    snprintf(wbuffer, PATH_MAX, "%s/tasks", buffer);
-    fd = open(wbuffer, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0666);
-    if (fd >= 0) {
-        snprintf(buffer, PATH_MAX, "%d", pid);
-        nbytes = write(fd, buffer, strlen(buffer));
-        slurm_debug("setupCgroupForSshd: write %d bytes to cpuset cgroup, errno: %d", nbytes, errno);
-        close(fd);
-    } else {
-        slurm_error("setupCgroupForSshd: failed to open %s", wbuffer);
-        goto _setupCgroupForSshd_unclean;
-    }
-
-    ret = 0;
-
-_setupCgroupForSshd_unclean:
-    if (line != NULL) {
-        free(line);
-        line = NULL;
-    }
-    if (allowableCpus != NULL) {
-        free(allowableCpus);
-        allowableCpus = NULL;
-    }
-    if (allowableMems != NULL) {
-        free(allowableMems);
-        allowableMems = NULL;
-    }
-    if (fp != NULL) {
-        fclose(fp);
-        fp = NULL;
-    }
-    return ret;
-}
-
 int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     int rc = ESPANK_SUCCESS;
 
@@ -796,8 +642,6 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     char *uid_str = NULL;
     char *gid_str = NULL;
     char *sshPubKey = NULL;
-    const char *memory_cgroup_base = NULL;
-    const char *cpuset_cgroup_base = NULL;
     size_t tasksPerNode = 0;
     UdiRootConfig *udiConfig = NULL;
     pid_t pid = 0;
@@ -856,9 +700,6 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
          * deal with it appropriately */
         PROLOG_ERROR("shifterConfig.json already exists!", rc);
     }
-
-    memory_cgroup_base = find_memory_cgroup_base(argc, argv);
-    cpuset_cgroup_base = find_cpuset_cgroup_base(argc, argv);
 
     for (ptr = image_type; ptr - image_type < strlen(image_type); ptr++) {
         *ptr = tolower(*ptr);
@@ -994,23 +835,6 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
 
     pid = findSshd();
     slurm_debug("shifter_prolog: sshd on pid %d\n", pid);
-    if (pid > 0 && cpuset_cgroup_base != NULL) {
-        if (setupCgroupForSshd(cpuset_cgroup_base, "cpuset", uid, job, pid) != 0) {
-            slurm_error("shifter_prolog: failed to add sshd %d to cpuset cgroup; killing sshd", pid);
-            kill(pid, SIGKILL);
-            pid = 0;
-        }
-    }
-#if 0
-    if (pid > 0 && memory_cgroup_base != NULL) {
-        if (setupCgroupForSshd(memory_cgroup_base, "memory", uid, job, pid) != 0) {
-            slurm_error("shifter_prolog: failed to add sshd %d to memory cgroup; killing sshd", pid);
-            kill(pid, SIGKILL);
-            pid = 0;
-        }
-    }
-#endif
-
     
 _prolog_exit_unclean:
     if (udiConfig != NULL) free_UdiRootConfig(udiConfig, 1);
@@ -1041,11 +865,8 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     char *epilogueArgs[2];
     int i, j;
     pid_t pid = 0;
-    FILE *cgroup_tasks = NULL;
     char *lineBuffer = NULL;
     size_t lineBuffer_sz = 0;
-    char *cgroup_path = NULL;
-    const char *memory_cgroup_base = NULL;
     uid_t uid = 0;
     int job = 0;
     int retry = 0;
@@ -1080,36 +901,6 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
         EPILOG_ERROR("Couldnt get job id", ESPANK_ERROR);
     }
 
-    memory_cgroup_base = find_memory_cgroup_base(argc, argv);
-    if (memory_cgroup_base != NULL) {
-        cgroup_path = alloc_strgenf("%s/shifter/uid_%d/job_%d/ssh/tasks", memory_cgroup_base, uid, job);
-        slurm_debug("shifter_epilog: cgroup_path is %s", cgroup_path);
-        while (retry < 10) {
-            int count = 0;
-            cgroup_tasks = fopen(cgroup_path, "r");
-            if (cgroup_tasks == NULL) break;
-            while (!feof(cgroup_tasks) && !ferror(cgroup_tasks)) {
-                size_t nread = getline(&lineBuffer, &lineBuffer_sz, cgroup_tasks);
-                int pid = 0;
-                if (nread == 0 || feof(cgroup_tasks) || ferror(cgroup_tasks)) {
-                    break;
-                }
-                pid = atoi(lineBuffer);
-                if (pid == 0) continue;
-                slurm_debug("shifter_epilog: sending SIGKILL to %d", pid);
-                kill(pid, SIGKILL);
-            }
-            fclose(cgroup_tasks);
-            if (count == 0) break;
-            retry++;
-        }
-        if (lineBuffer != NULL) {
-            free(lineBuffer);
-            lineBuffer = NULL;
-        }
-        free(cgroup_path);
-    }
-
     snprintf(path, PATH_MAX, "%s%s/sbin/unsetupRoot", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
     epilogueArgs[0] = path;
     epilogueArgs[1] = NULL;
@@ -1119,24 +910,6 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     }
 
     slurm_debug("shifter_epilog: done with unsetupRoot");
-    if (memory_cgroup_base != NULL) {
-        slurm_debug("shifter_epilog: about to remove cgroups");
-        cgroup_path = alloc_strgenf("%s/shifter/uid_%d/job_%d/ssh", memory_cgroup_base, uid, job);
-        if (rmdir(cgroup_path) != 0) {
-            slurm_debug("shifter_epilog: failed to remove %s, errno: %d", cgroup_path, errno);
-        }
-        free(cgroup_path);
-        cgroup_path = alloc_strgenf("%s/shifter/uid_%d/job_%d", memory_cgroup_base, uid, job);
-        if (rmdir(cgroup_path) != 0) {
-            slurm_debug("shifter_epilog: failed to remove %s, errno: %d", cgroup_path, errno);
-        }
-        free(cgroup_path);
-        cgroup_path = alloc_strgenf("%s/shifter/uid_%d", memory_cgroup_base, uid);
-        if (rmdir(cgroup_path) != 0) {
-            slurm_debug("shifter_epilog: failed to remove %s, errno: %d", cgroup_path, errno);
-        }
-        free(cgroup_path);
-    }
     
 _epilog_exit_unclean:
     if (udiConfig != NULL) {
@@ -1157,8 +930,12 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     gid_t *existing_suppl_gids = NULL;
     int n_existing_suppl_gids = 0;
     gid_t existing_gid = getegid();
+    uint32_t stepid = 0;
 
     memset(&imageData, 0, sizeof(ImageData));
+    if (spank_get_item(sp, S_JOB_STEPID, &stepid) != ESPANK_SUCCESS) {
+        slurm_error("FAILED to get stepid");
+    }
 
 #define TASKINITPRIV_ERROR(message, errCode) \
     slurm_error(message); \
@@ -1166,14 +943,8 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     goto _taskInitPriv_exit_unclean;
 
     if (nativeSlurm == 0) return ESPANK_SUCCESS;
-    for (i = 0; spank_option_array[i].name != NULL; ++i) {
-        char *optarg = NULL;
-        j = spank_option_getopt(sp, &spank_option_array[i], &optarg);
-        if (j != ESPANK_SUCCESS) {
-            continue;
-        }
-        (spank_option_array[i].cb)(spank_option_array[i].val, optarg, 1);
-    }
+    doForceArgParse(sp);
+
     if (strlen(image) == 0) {
         return rc;
     }
@@ -1185,6 +956,15 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     if (udiConfig == NULL) {
         TASKINITPRIV_ERROR("Failed to load udiRoot config!", ESPANK_ERROR);
     }
+
+#ifndef NERSCCUSTUMSLURM150809
+    /* if this is the slurmstepd for prologflags=contain, then do the
+     * proper setup to finalize shifter setup */
+    if (stepid == SLURM_EXTERN_CONT) {
+        return doExternStepTaskSetup(sp, argc, argv, udiConfig);
+    }
+#endif
+
     parse_ImageData(image_type, image, udiConfig, &imageData);
 
     if (spank_get_item(sp, S_JOB_UID, &job_uid) != ESPANK_SUCCESS) {
