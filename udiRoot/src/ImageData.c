@@ -107,8 +107,8 @@ char *lookup_ImageIdentifier(
         return strdup(imageTag);
     }
 
-    snprintf(lookupCmd, PATH_MAX, "%s%s/bin/shifterimg lookup %s:%s",
-            config->nodeContextPrefix, config->udiRootPath, imageType, imageTag);
+    snprintf(lookupCmd, PATH_MAX, "%s/bin/shifterimg lookup %s:%s",
+            config->udiRootPath, imageType, imageTag);
 
     pp = popen(lookupCmd, "r");
     while (!feof(pp) && !ferror(pp)) {

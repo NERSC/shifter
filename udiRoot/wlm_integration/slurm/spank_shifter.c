@@ -359,7 +359,7 @@ int doExternStepTaskSetup(spank_t sp, int argc, char **argv, UdiRootConfig *udiC
     char buffer[PATH_MAX];
     /* check and see if there is an existing configuration */
     memset(&statData, 0, sizeof(struct stat));
-    snprintf(buffer, 1024, "%s%s/var/shifterConfig.json", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    snprintf(buffer, 1024, "%s/var/shifterConfig.json", udiConfig->udiMountPoint);
     if (stat(buffer, &statData) == 0) {
         int stepd_fd = 0;
         int i = 0;
@@ -692,7 +692,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     /* check and see if there is an existing configuration */
     struct stat statData;
     memset(&statData, 0, sizeof(struct stat));
-    snprintf(buffer, PATH_MAX, "%s%s/var/shifterConfig.json", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    snprintf(buffer, PATH_MAX, "%s/var/shifterConfig.json", udiConfig->udiMountPoint);
     if (stat(buffer, &statData) == 0) {
         /* oops, already something there -- do not run setupRoot
          * this is probably going to be an issue for the job, however the 
@@ -785,7 +785,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
             ptr = limit + 1;
         }
     }
-    snprintf(setupRootPath, PATH_MAX, "%s%s/sbin/setupRoot", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
+    snprintf(setupRootPath, PATH_MAX, "%s/sbin/setupRoot", udiConfig->udiRootPath);
     strncpy_StringArray(setupRootPath, strlen(setupRootPath), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     if (uid != 0) {
         snprintf(buffer, PATH_MAX, "%u", uid);
@@ -824,7 +824,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
 
     slurm_error("after setupRoot");
 
-    snprintf(buffer, PATH_MAX, "%s%s/var/shifterSlurm.jobid", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    snprintf(buffer, PATH_MAX, "%s/var/shifterSlurm.jobid", udiConfig->udiMountPoint);
     FILE *fp = fopen(buffer, "w");
     if (fp == NULL) {
         slurm_error("shifter_prolog: failed to open file %s\n", buffer);
@@ -901,7 +901,7 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
         EPILOG_ERROR("Couldnt get job id", ESPANK_ERROR);
     }
 
-    snprintf(path, PATH_MAX, "%s%s/sbin/unsetupRoot", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
+    snprintf(path, PATH_MAX, "%s/sbin/unsetupRoot", udiConfig->udiRootPath);
     epilogueArgs[0] = path;
     epilogueArgs[1] = NULL;
     int status = forkAndExecvLogToSlurm("unsetupRoot", epilogueArgs);
