@@ -427,6 +427,8 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
 
 int slurm_spank_task_post_fork(spank_t sp, int argc, char **argv) {
     uint32_t stepid = 0;
+    int rc = ESPANK_SUCCESS;
+
     if (spank_get_item(sp, S_JOB_STEPID, &stepid) != ESPANK_SUCCESS) {
         slurm_error("FAILED to get stepid");
     }
