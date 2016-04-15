@@ -422,28 +422,29 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
             }
         }
     }
+    return rc;
+}
 
-#ifdef NERSCCUSTUMSLURM150809
-    if (context == S_CTX_REMOTE) {
-        uint32_t stepid = 0;
-        if (spank_get_item(sp, S_JOB_STEPID, &stepid) != ESPANK_SUCCESS) {
-            slurm_error("FAILED to get stepid");
-        }
+int slurm_spank_task_post_fork(spank_t sp, int argc, char **argv) {
+    uint32_t stepid = 0;
+    int rc = ESPANK_SUCCESS;
 
-        /* if this is the slurmstepd for prologflags=contain, then do the
-         * proper setup to finalize shifter setup */
-        if (stepid == SLURM_EXTERN_CONT) {
-            UdiRootConfig *udiConfig = read_config(argc, argv);
-            if (udiConfig == NULL) {
-                slurm_error("Failed to parse shifter config. Cannot use shifter.");
-                return rc;
-            }
-
-            doForceArgParse(sp);
-            rc = doExternStepTaskSetup(sp, argc, argv, udiConfig);
-        }
+    if (spank_get_item(sp, S_JOB_STEPID, &stepid) != ESPANK_SUCCESS) {
+        slurm_error("FAILED to get stepid");
     }
-#endif
+
+    /* if this is the slurmstepd for prologflags=contain, then do the
+     * proper setup to finalize shifter setup */
+    if (stepid == SLURM_EXTERN_CONT) {
+        UdiRootConfig *udiConfig = read_config(argc, argv);
+        if (udiConfig == NULL) {
+            slurm_error("Failed to parse shifter config. Cannot use shifter.");
+            return rc;
+        }
+
+        doForceArgParse(sp);
+        rc = doExternStepTaskSetup(sp, argc, argv, udiConfig);
+    }
 
     return rc;
 }
@@ -957,13 +958,11 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
         TASKINITPRIV_ERROR("Failed to load udiRoot config!", ESPANK_ERROR);
     }
 
-#ifndef NERSCCUSTUMSLURM150809
     /* if this is the slurmstepd for prologflags=contain, then do the
      * proper setup to finalize shifter setup */
     if (stepid == SLURM_EXTERN_CONT) {
-        return doExternStepTaskSetup(sp, argc, argv, udiConfig);
+        return rc;
     }
-#endif
 
     parse_ImageData(image_type, image, udiConfig, &imageData);
 
