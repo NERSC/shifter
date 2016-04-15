@@ -105,6 +105,10 @@ class ImageMngrTestCase(unittest.TestCase):
         except:
             pass
 
+# Create an image and tag with a new tag.
+# Make sure both tags show up.
+# Remove the tag and make sure the original tags
+# doesn't also get removed.
     def test_0add_remove_tag(self):
         record={'system':self.system,
             'itype':self.itype,
@@ -123,20 +127,20 @@ class ImageMngrTestCase(unittest.TestCase):
         before=self.images.find_one({'_id':id})
         assert before is not None
         # Add a tag a make sure it worked
-        status=self.m.add_tag(id,'testtag')
+        status=self.m.add_tag(id,self.system,'testtag')
         assert status is True
         after=self.images.find_one({'_id':id})
         assert after is not None
         assert after['tag'].count('testtag')==1
         assert after['tag'].count(self.tag)==1
         # Remove a tag and make sure it worked
-        status=self.m.remove_tag('testtag')
+        status=self.m.remove_tag(self.system,'testtag')
         assert status is True
         after=self.images.find_one({'_id':id})
         assert after is not None
         assert after['tag'].count('testtag')==0
 
-    # Test if tag isn't a list
+    # Similar to above but just test the adding part
     def test_0add_remove_tagitem(self):
         record={'system':self.system,
             'itype':self.itype,
@@ -151,14 +155,15 @@ class ImageMngrTestCase(unittest.TestCase):
         # Create a fake record in mongo
         id=self.images.insert(record)
 
-        status=self.m.add_tag(id,'testtag')
+        status=self.m.add_tag(id,self.system,'testtag')
         assert status is True
         rec=self.images.find_one({'_id':id})
         assert rec is not None
         assert rec['tag'].count(self.tag)==1
         assert rec['tag'].count('testtag')==1
 
-    # Test if tag isn't a list
+    # Same as above but use the lookup instead of a directory
+    # direct mongo lookup
     def test_0add_remove_withtag(self):
         record={'system':self.system,
             'itype':self.itype,
@@ -175,7 +180,7 @@ class ImageMngrTestCase(unittest.TestCase):
 
         session=self.m.new_session(self.auth,self.system)
         i=self.query.copy()
-        status=self.m.add_tag(id,'testtag')
+        status=self.m.add_tag(id,self.system,'testtag')
         assert status is True
         rec=self.m.lookup(session,i)
         assert rec is not None
@@ -203,12 +208,39 @@ class ImageMngrTestCase(unittest.TestCase):
 
         session=self.m.new_session(self.auth,self.system)
         i=self.query.copy()
-        status=self.m.add_tag(id2,self.tag)
+        status=self.m.add_tag(id2,self.system,self.tag)
         assert status is True
         rec1=self.images.find_one({'_id':id1})
         rec2=self.images.find_one({'_id':id2})
         assert rec1['tag'].count(self.tag)==0
         assert rec2['tag'].count(self.tag)==1
+
+    # Similar to above but just test the adding part
+    def test_0add_same_image_two_system(self):
+        record={'system':self.system,
+            'itype':self.itype,
+            'id':self.id,
+            'tag':self.tag,
+            'status':'READY',
+            'userACL':[],
+            'groupACL':[],
+            'ENV':[],
+            'ENTRY':'',
+            }
+        # Create a fake record in mongo
+        id1=self.images.insert(record.copy())
+        # add testtag for systema
+        status=self.m.add_tag(id1,self.system,'testtag')
+        assert status is True
+        record['system']='systemb'
+        id2=self.images.insert(record.copy())
+        status=self.m.add_tag(id2,'systemb','testtag')
+        assert status is True
+        # Now make sure testtag for first system is still
+        # present
+        rec=self.images.find_one({'_id':id1})
+        assert rec is not None
+        assert rec['tag'].count('testtag')==1
 
     def test_0isasystem(self):
         assert self.m.isasystem(self.system) is True

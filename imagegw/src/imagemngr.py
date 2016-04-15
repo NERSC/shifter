@@ -312,13 +312,13 @@ class imagemngr:
           state='READY'
       self.images.update({'_id':id},{'$set':{'status':state}})
 
-  def add_tag(self,id,tag):
+  def add_tag(self,id,system,tag):
       """
       Helper function to add a tag to an image. id is the mongo id (not image id)
       """
       #self.images.update({'_id':id},{'$set':})
       # Remove the tag first
-      self.remove_tag(tag)
+      self.remove_tag(system,tag)
       # see if tag isn't a list
       rec=self.images.find_one({'_id':id})
       if rec is not None and 'tag' in rec and not isinstance(rec['tag'],(list)):
@@ -328,13 +328,13 @@ class imagemngr:
       self.images.update({'_id':id},{'$addToSet':{'tag':tag}})
       return True
 
-  def remove_tag(self,tag):
+  def remove_tag(self,system,tag):
       """
       Helper function to remove a tag to an image.
       """
-      self.images.update({ 'tag': { '$in':[tag]}},{'$pull':{'tag':tag}},multi=True)
+      self.images.update({ 'system':system,'tag': { '$in':[tag]}},{'$pull':{'tag':tag}},multi=True)
       # for old tag format
-      for rec in self.images.find({'tag':tag }):
+      for rec in self.images.find({'system':system,'tag':tag }):
           if isinstance(rec['tag'],(str)):
               self.images.update({'_id':id},{'$set':{'tag':[]}})
       #This didn't work
@@ -366,12 +366,12 @@ class imagemngr:
           try:
               index=rec['tag'].index(response['tag'])
           except:
-              self.add_tag(rec['_id'],tag)
+              self.add_tag(rec['_id'],pullrec['system'],tag)
           return True
       else:
           response['last_pull']=time()
           self.update_mongo(id,response)
-          self.add_tag(id,tag)
+          self.add_tag(id,pullrec['system'],tag)
 
 
   def update_mongo(self,id,resp):
