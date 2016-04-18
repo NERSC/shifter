@@ -396,6 +396,9 @@ int doExternStepTaskSetup(spank_t sp, int argc, char **argv, UdiRootConfig *udiC
             if (status == 0) rc = ESPANK_SUCCESS;
             else rc = ESPANK_ERROR;
         }
+        snprintf(buffer, PATH_MAX, "%s/var/shifterExtern.complete", udiConfig->udiMountPoint);
+        int fd = open(buffer, O_CREAT|O_WRONLY|O_TRUNC);
+        close(fd);
     }
     return rc;
 }
@@ -952,7 +955,6 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     if (strlen(image) == 0 || strlen(image_type) == 0) {
         return rc;
     }
-    if (ccmMode == 0) return rc;
     udiConfig = read_config(argc, argv);
     if (udiConfig == NULL) {
         TASKINITPRIV_ERROR("Failed to load udiRoot config!", ESPANK_ERROR);
@@ -962,7 +964,22 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
      * proper setup to finalize shifter setup */
     if (stepid == SLURM_EXTERN_CONT) {
         return rc;
+    } else {
+        /* need to ensure the extern step is setup */
+        char buffer[PATH_MAX];
+        struct stat statData;
+        int tries = 0;
+        snprintf(buffer, PATH_MAX, "%s/var/shifterExtern.complete", udiConfig->udiMountPoint);
+        for (tries = 0; tries < 10; tries++) {
+            if (stat(buffer, &statData) == 0) {
+                break;
+            } else {
+                sleep(1);
+            }
+        }
     }
+
+    if (ccmMode == 0) return rc;
 
     parse_ImageData(image_type, image, udiConfig, &imageData);
 
