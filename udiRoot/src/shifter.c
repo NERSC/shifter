@@ -154,7 +154,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    snprintf(udiRoot, PATH_MAX, "%s%s", udiConfig.nodeContextPrefix, udiConfig.udiMountPoint);
+    snprintf(udiRoot, PATH_MAX, "%s", udiConfig.udiMountPoint);
     udiRoot[PATH_MAX-1] = 0;
 
     /* figure out who we are and who we want to be */
@@ -506,10 +506,8 @@ int parse_environment(struct options *opts) {
         opts->imageType = strdup(envPtr);
     }
     if ((envPtr = getenv("SHIFTER_IMAGE")) != NULL) {
-        opts->imageIdentifier = strdup(envPtr);
         opts->imageTag = strdup(envPtr);
     } else if ((envPtr = getenv("SLURM_SPANK_SHIFTER_IMAGE")) != NULL) {
-        opts->imageIdentifier = strdup(envPtr);
         opts->imageTag = strdup(envPtr);
     }
 
@@ -708,7 +706,7 @@ int isImageLoaded(ImageData *image, struct options *options, UdiRootConfig *udiC
 int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) {
     int retryCnt = 0;
     char chrootPath[PATH_MAX];
-    snprintf(chrootPath, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    snprintf(chrootPath, PATH_MAX, "%s", udiConfig->udiMountPoint);
     chrootPath[PATH_MAX - 1] = 0;
     gid_t gidZero = 0;
 

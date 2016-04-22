@@ -120,14 +120,14 @@ int bindImageIntoUDI(
     setSort_MountList(&mountCache, MOUNT_SORT_FORWARD);
 
     /* calculate important base paths */
-    snprintf(udiRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    snprintf(udiRoot, PATH_MAX, "%s", udiConfig->udiMountPoint);
     udiRoot[PATH_MAX-1] = 0;
 
     if (imageData->useLoopMount) {
-        snprintf(imgRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->loopMountPoint);
+        snprintf(imgRoot, PATH_MAX, "%s", udiConfig->loopMountPoint);
         imgRoot[PATH_MAX-1] = 0;
     } else {
-        snprintf(imgRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, imageData->filename);
+        snprintf(imgRoot, PATH_MAX, "%s", imageData->filename);
         imgRoot[PATH_MAX-1] = 0;
     }
 
@@ -391,7 +391,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     };
 
     memset(&mountCache, 0, sizeof(MountList));
-    snprintf(udiRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    snprintf(udiRoot, PATH_MAX, "%s", udiConfig->udiMountPoint);
     udiRoot[PATH_MAX-1] = 0;
     if (chdir(udiRoot) != 0) {
         fprintf(stderr, "FAILED to chdir to %s. Exiting.\n", udiRoot);
@@ -502,7 +502,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
         fprintf(stderr, "UDI etcPath source directory not defined.\n");
         goto _prepSiteMod_unclean;
     }
-    snprintf(srcBuffer, PATH_MAX, "%s/%s", udiConfig->nodeContextPrefix, udiConfig->etcPath);
+    snprintf(srcBuffer, PATH_MAX, "%s", udiConfig->etcPath);
     srcBuffer[PATH_MAX-1] = 0;
     memset(&statData, 0, sizeof(struct stat));
     if (stat(srcBuffer, &statData) == 0) {
@@ -518,7 +518,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
                 fprintf(stderr, "FAILED to allocate filename string.\n");
                 goto _prepSiteMod_unclean;
             }
-            snprintf(srcBuffer, PATH_MAX, "%s/%s/%s", udiConfig->nodeContextPrefix, udiConfig->etcPath, filename);
+            snprintf(srcBuffer, PATH_MAX, "%s/%s", udiConfig->etcPath, filename);
             srcBuffer[PATH_MAX-1] = 0;
             snprintf(mntBuffer, PATH_MAX, "%s/etc/%s", udiRoot, filename);
             mntBuffer[PATH_MAX-1] = 0;
@@ -602,7 +602,7 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
     /* recursively copy /opt/udiImage (to allow modifications) */
     if (udiConfig->optUdiImage != NULL) {
         char finalPath[PATH_MAX];
-        snprintf(srcBuffer, PATH_MAX, "%s/%s/", udiConfig->nodeContextPrefix, udiConfig->optUdiImage);
+        snprintf(srcBuffer, PATH_MAX, "%s/", udiConfig->optUdiImage);
         srcBuffer[PATH_MAX-1] = 0;
         if (stat(srcBuffer, &statData) != 0) {
             fprintf(stderr, "FAILED to stat udiImage source directory: %s\n", srcBuffer);
@@ -716,7 +716,7 @@ int writeHostFile(const char *minNodeSpec, UdiRootConfig *udiConfig) {
     minNode = strdup(minNodeSpec);
     limit = minNode + strlen(minNode);
 
-    snprintf(filename, PATH_MAX, "%s%s/var/hostsfile",  udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    snprintf(filename, PATH_MAX, "%s/var/hostsfile", udiConfig->udiMountPoint);
     filename[PATH_MAX-1] = 0;
 
     fp = fopen(filename, "w");
@@ -795,7 +795,7 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
     goto _mountImgVfs_unclean; \
 }
 
-    snprintf(udiRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    snprintf(udiRoot, PATH_MAX, "%s", udiConfig->udiMountPoint);
 
     if (stat(udiRoot, &statData) != 0) {
         _MKDIR(udiRoot, 0755);
@@ -913,7 +913,7 @@ _mountImgVfs_unclean:
  */
 int makeUdiMountPrivate(UdiRootConfig *udiConfig) {
     char buffer[PATH_MAX];
-    snprintf(buffer, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    snprintf(buffer, PATH_MAX, "%s", udiConfig->udiMountPoint);
     if (mount(NULL, buffer, NULL, MS_PRIVATE|MS_REC, NULL) != 0) {
         perror("Failed to remount non-shared.");
         return 1;
@@ -924,11 +924,10 @@ int makeUdiMountPrivate(UdiRootConfig *udiConfig) {
 int remountUdiRootReadonly(UdiRootConfig *udiConfig) {
     char udiRoot[PATH_MAX];
 
-    if (udiConfig == NULL || udiConfig->nodeContextPrefix == NULL ||
-            udiConfig->udiMountPoint == NULL) {
+    if (udiConfig == NULL || udiConfig->udiMountPoint == NULL) {
         return 1;
     }
-    snprintf(udiRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    snprintf(udiRoot, PATH_MAX, "%s", udiConfig->udiMountPoint);
 
     if (mount(udiRoot, udiRoot, udiConfig->rootfsType, MS_REMOUNT|MS_NOSUID|MS_NODEV|MS_RDONLY, NULL) != 0) {
         fprintf(stderr, "FAILED to remount rootfs readonly on %s\n", udiRoot);
@@ -961,9 +960,9 @@ int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig) {
     if (stat(udiConfig->loopMountPoint, &statData) != 0) {
         MKDIR(udiConfig->loopMountPoint, 0755);
     }
-    snprintf(loopMountPath, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->loopMountPoint);
+    snprintf(loopMountPath, PATH_MAX, "%s", udiConfig->loopMountPoint);
     loopMountPath[PATH_MAX-1] = 0;
-    snprintf(imagePath, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, imageData->filename);
+    snprintf(imagePath, PATH_MAX, "%s", imageData->filename);
     imagePath[PATH_MAX-1] = 0;
     loopMount(imagePath, loopMountPath, imageData->format, udiConfig, 1);
 #undef MKDIR
@@ -983,7 +982,7 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
     goto _loopMount_unclean; \
 }
 
-    snprintf(mountExec, PATH_MAX, "%s%s/sbin/mount", udiConfig->nodeContextPrefix, udiConfig->udiRootPath);
+    snprintf(mountExec, PATH_MAX, "%s/sbin/mount", udiConfig->udiRootPath);
 
     if (stat(mountExec, &statData) != 0) {
         fprintf(stderr, "udiRoot mount executable missing: %s\n", mountExec);
@@ -1061,7 +1060,7 @@ int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig) {
     int ret = 0;
 
     memset(&mountCache, 0, sizeof(MountList));
-    snprintf(udiRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    snprintf(udiRoot, PATH_MAX, "%s", udiConfig->udiMountPoint);
     udiRoot[PATH_MAX-1] = 0;
 
     /* get list of current mounts for this namespace */
@@ -1405,8 +1404,8 @@ int saveShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMap, 
         goto _saveShifterConfig_error;
     }
 
-    snprintf(saveFilename, PATH_MAX, "%s%s/var/shifterConfig.json",
-            udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    snprintf(saveFilename, PATH_MAX, "%s/var/shifterConfig.json",
+            udiConfig->udiMountPoint);
     fp = fopen(saveFilename, "w");
     if (fp == NULL) {
         goto _saveShifterConfig_error;
@@ -1444,8 +1443,8 @@ int compareShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMa
     len = strlen(configString);
     buffer = (char *) malloc(sizeof(char) * len);
 
-    snprintf(configFilename, PATH_MAX, "%s%s/var/shifterConfig.json",
-            udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    snprintf(configFilename, PATH_MAX, "%s/var/shifterConfig.json",
+            udiConfig->udiMountPoint);
 
     fp = fopen(configFilename, "r");
     if (fp == NULL) {
@@ -1508,7 +1507,7 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
         goto _setupImageSsh_unclean;
     }
 
-    snprintf(udiImage, PATH_MAX, "%s%s/opt/udiImage", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    snprintf(udiImage, PATH_MAX, "%s/opt/udiImage", udiConfig->udiMountPoint);
     udiImage[PATH_MAX-1] = 0;
     if (stat(udiImage, &statData) != 0) {
         fprintf(stderr, "FAILED to find udiImage path, cannot setup sshd\n");
@@ -1627,21 +1626,21 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
         char to[PATH_MAX];
 
         snprintf(from, PATH_MAX, "%s/bin/ssh", udiImage);
-        snprintf(to, PATH_MAX, "%s%s/usr/bin/ssh", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+        snprintf(to, PATH_MAX, "%s/usr/bin/ssh", udiConfig->udiMountPoint);
         from[PATH_MAX-1] = 0;
         to[PATH_MAX-1] = 0;
         if (stat(to, &statData) == 0) {
             _BINDMOUNT(&mountCache, from, to, VOLMAP_FLAG_READONLY, 1);
         }
         snprintf(from, PATH_MAX, "%s/bin/ssh", udiImage);
-        snprintf(to, PATH_MAX, "%s%s/bin/ssh", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+        snprintf(to, PATH_MAX, "%s/bin/ssh", udiConfig->udiMountPoint);
         from[PATH_MAX - 1] = 0;
         to[PATH_MAX - 1] = 0;
         if (stat(to, &statData) == 0) {
             _BINDMOUNT(&mountCache, from, to, VOLMAP_FLAG_READONLY, 1);
         }
         snprintf(from, PATH_MAX, "%s/etc/ssh_config", udiImage);
-        snprintf(to, PATH_MAX, "%s%s/etc/ssh/ssh_config", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+        snprintf(to, PATH_MAX, "%s/etc/ssh/ssh_config", udiConfig->udiMountPoint);
         {
             char *args[] = {strdup(udiConfig->cpPath),
                 strdup("-p"),
@@ -1687,7 +1686,7 @@ int startSshd(UdiRootConfig *udiConfig) {
     char chrootPath[PATH_MAX];
     pid_t pid = 0;
 
-    snprintf(chrootPath, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    snprintf(chrootPath, PATH_MAX, "%s", udiConfig->udiMountPoint);
     chrootPath[PATH_MAX - 1] = 0;
 
     if (chdir(chrootPath) != 0) {
@@ -2024,8 +2023,7 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
         }
     }
 
-    if (udiConfig->nodeContextPrefix == NULL
-            || udiConfig->kmodPath == NULL
+    if (udiConfig->kmodPath == NULL
             || strlen(udiConfig->kmodPath) == 0
             || !udiConfig->autoLoadKernelModule)
     {
@@ -2033,7 +2031,7 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
     }
 
     /* construct path to kernel modulefile */
-    snprintf(kmodPath, PATH_MAX, "%s%s/%s", udiConfig->nodeContextPrefix, udiConfig->kmodPath, path);
+    snprintf(kmodPath, PATH_MAX, "%s/%s", udiConfig->kmodPath, path);
     kmodPath[PATH_MAX-1] = 0;
 
     if (stat(kmodPath, &statData) == 0) {
@@ -2081,7 +2079,7 @@ struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config) {
         return NULL;
     }
 
-    snprintf(buffer, PATH_MAX, "%s%s/passwd", config->nodeContextPrefix, config->etcPath);
+    snprintf(buffer, PATH_MAX, "%s/passwd", config->etcPath);
     input = fopen(buffer, "r");
 
     if (input == NULL) {
@@ -2200,8 +2198,7 @@ int shifter_getgrouplist(
     }
 
     /* open shifter-specific group file */
-    snprintf(buffer, PATH_MAX, "%s%s/group",
-            config->nodeContextPrefix, config->etcPath);
+    snprintf(buffer, PATH_MAX, "%s/group", config->etcPath);
     input = fopen(buffer, "r");
 
     if (input == NULL) {
@@ -2287,7 +2284,7 @@ struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config) {
         return NULL;
     }
 
-    snprintf(buffer, PATH_MAX, "%s%s/passwd", config->nodeContextPrefix, config->etcPath);
+    snprintf(buffer, PATH_MAX, "%s/passwd", config->etcPath);
     input = fopen(buffer, "r");
 
     if (input == NULL) {
@@ -2506,9 +2503,9 @@ int destructUDI(UdiRootConfig *udiConfig, int killSsh) {
     if (parse_MountList(&mounts) != 0) {
         /*error*/
     }
-    snprintf(udiRoot, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->udiMountPoint);
+    snprintf(udiRoot, PATH_MAX, "%s", udiConfig->udiMountPoint);
     udiRoot[PATH_MAX-1] = 0;
-    snprintf(loopMount, PATH_MAX, "%s%s", udiConfig->nodeContextPrefix, udiConfig->loopMountPoint);
+    snprintf(loopMount, PATH_MAX, "%s", udiConfig->loopMountPoint);
     loopMount[PATH_MAX-1] = 0;
     for (idx = 0; idx < 10; idx++) {
 
