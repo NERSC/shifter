@@ -321,9 +321,12 @@ int _shifterCore_copyFile(const char *cpPath, const char *source, const char *de
     cmdArgs[cmdArgs_idx++] = strdup(dest);
     cmdArgs[cmdArgs_idx++] = NULL;
 
+    /* perform the copy (and try a second time just in case the source file changes during copy) */
     if (forkAndExecv(cmdArgs) != 0) {
-        fprintf(stderr, "Failed to copy %s to %s\n", source, dest);
-        goto _copyFile_unclean;
+        if (forkAndExecv(cmdArgs) != 0) {
+            fprintf(stderr, "Failed to copy %s to %s\n", source, dest);
+            goto _copyFile_unclean;
+        }
     }
 
     if (owner != INVALID_USER && group != INVALID_GROUP) {
@@ -416,7 +419,6 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
 }
 
     _MKDIR("etc", 0755);
-    _MKDIR("etc/local", 0755);
     _MKDIR("etc/udiImage", 0755);
     _MKDIR("opt", 0755);
     _MKDIR("opt/udiImage", 0755);
@@ -470,16 +472,11 @@ int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiR
         }
     }
 
-    /* setup site needs for /etc */
-    snprintf(mntBuffer, PATH_MAX, "%s/etc/local", udiRoot);
-    mntBuffer[PATH_MAX-1] = 0;
-    _BINDMOUNT(&mountCache, "/etc", mntBuffer, 0, 1);
-
     /* copy needed local files */
     for (fnamePtr = copyLocalEtcFiles; *fnamePtr != NULL; fnamePtr++) {
         char source[PATH_MAX];
         char dest[PATH_MAX];
-        snprintf(source, PATH_MAX, "%s/etc/local/%s", udiRoot, *fnamePtr);
+        snprintf(source, PATH_MAX, "/etc/%s", *fnamePtr);
         snprintf(dest, PATH_MAX, "%s/etc/%s", udiRoot, *fnamePtr);
         source[PATH_MAX - 1] = 0;
         dest[PATH_MAX - 1] = 0;
