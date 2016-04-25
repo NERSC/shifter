@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+unset CFLAGS
+unset CPPFLAGS
+
 INST_PREFIX=${INST_PREFIX:-/opt/udiImage}
 SPRT_PREFIX=$( mktemp -d )
 PREFIX=$( mktemp -d )
