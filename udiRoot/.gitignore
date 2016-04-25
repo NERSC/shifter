@@ -21,6 +21,7 @@ auxdir/ltoptions.m4
 auxdir/ltsugar.m4
 auxdir/ltversion.m4
 auxdir/lt~obsolete.m4
+aclocal.m4
 config.h
 config.h.in
 config.status
