@@ -1,6 +1,6 @@
 import os
 #os.environ['CONFIG']='test.json'
-from shifter_imagegw import imagegwapi
+import imagegwapi
 import unittest
 import tempfile
 import time
