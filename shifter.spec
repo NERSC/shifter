@@ -19,9 +19,15 @@ cd udiRoot
 %configure 
 MK_SMP_FLAGS=%{?_smp_mflags} make %{?_smp_mflags}
 
+cd ../imagegw
+python setup.py build
+
 %install
 cd udiRoot
 %make_install
+
+cd ../imagegw
+python setup.py install -O1 --root=$RPM_BUILD_ROOT --record=IMAGEGW_INSTALLED_FILES
 
 rm -f $RPM_BUILD_ROOT/%{_libdir}/shifterudiroot/shifter_slurm.a
 rm -f $RPM_BUILD_ROOT/%{_libdir}/shifterudiroot/shifter_slurm.la
@@ -43,8 +49,7 @@ runtime and user interface components of shifter
 %{_sbindir}/setupRoot
 %{_sbindir}/unsetupRoot
 %{_sbindir}/slurm_bb_support
-%{_libexecdir}/shifterudiroot/mount
-%{_datadir}/shifterudiroot
+%{_libexecdir}/shifterudiroot
 
 %package slurm
 Summary:  slurm spank module for shifter
@@ -54,6 +59,14 @@ spank module for integrating shifter into slurm
 
 %files slurm
 %{_libdir}/shifterudiroot/shifter_slurm.so
+
+%package imagegw
+Summary: shifter image manager
+%description imagegw
+image manager
+
+%files imagegw -f IMAGEGW_INSTALLED_FILES
+%defattr(-,root,root)
 
 
 
