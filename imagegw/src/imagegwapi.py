@@ -5,7 +5,7 @@ import os
 import sys
 import socket
 import time
-import imagemngr
+from shifter_imagegw import imagemngr
 import logging
 from flask import Flask, Blueprint, request, Response, url_for, jsonify
 

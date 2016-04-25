@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import requests, json, os, sys
-from munge import munge
+from shifter_imagegw.munge import munge
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
