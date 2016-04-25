@@ -397,7 +397,7 @@ int doExternStepTaskSetup(spank_t sp, int argc, char **argv, UdiRootConfig *udiC
             else rc = ESPANK_ERROR;
         }
         snprintf(buffer, PATH_MAX, "%s/var/shifterExtern.complete", udiConfig->udiMountPoint);
-        int fd = open(buffer, O_CREAT|O_WRONLY|O_TRUNC);
+        int fd = open(buffer, O_CREAT|O_WRONLY|O_TRUNC, 0644);
         close(fd);
     }
     return rc;
