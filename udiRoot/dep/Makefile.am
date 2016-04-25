@@ -1,9 +1,9 @@
 AUTOMAKE_OPTIONS=foreign
 
-pkglibexec_SCRIPTS = shifter_mount
+pkglibexec_SCRIPTS = mount
 noinst_PROGRAMS = cpputest/include
 
-shifter_mount:
+mount:
 	./build.sh
 
 cpputest/include:
@@ -12,8 +12,8 @@ cpputest/include:
 .PHONY: clean-local-check
 
 install-data-hook:
-	mkdir -p $(DESTDIR)$(exec_prefix)/opt
-	tar xf udiRoot_dep.tar -C $(DESTDIR)$(exec_prefix)/opt --strip-components=2 -p --no-same-owner
+	mkdir -p $(DESTDIR)/$(datarootdir)/shifterudiroot/opt
+	tar xf udiRoot_dep.tar -C $(DESTDIR)$(datarootdir)/shifterudiroot/opt --strip-components=2 -p --no-same-owner
 
 clean-local: clean-local-check
 clean-local-check:
