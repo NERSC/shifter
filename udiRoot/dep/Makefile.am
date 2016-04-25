@@ -1,9 +1,9 @@
 AUTOMAKE_OPTIONS=foreign
 
-sbin_PROGRAMS = mount
+pkglibexec_SCRIPTS = shifter_mount
 noinst_PROGRAMS = cpputest/include
 
-mount:
+shifter_mount:
 	./build.sh
 
 cpputest/include:
