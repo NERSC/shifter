@@ -12,8 +12,8 @@ cpputest/include:
 .PHONY: clean-local-check
 
 install-data-hook:
-	mkdir -p $(DESTDIR)/$(datarootdir)/shifterudiroot/opt
-	tar xf udiRoot_dep.tar -C $(DESTDIR)$(datarootdir)/shifterudiroot/opt --strip-components=2 -p --no-same-owner
+	mkdir -p $(DESTDIR)/$(libexecdir)/shifterudiroot/opt
+	tar xf udiRoot_dep.tar -C $(DESTDIR)$(libexecdir)/shifterudiroot/opt --strip-components=2 -p --no-same-owner
 
 clean-local: clean-local-check
 clean-local-check:
