@@ -1,6 +1,6 @@
 AUTOMAKE_OPTIONS=foreign
 
-AM_CPPFLAGS = -DCONFIG_FILE=\"${sysconfdir}/udiRoot.conf\" -I../src -Wall
+AM_CPPFLAGS = -DCONFIG_FILE=\"${sysconfdir}/udiRoot.conf\" -DLIBEXECDIR=\"${libexecdir}/shifterudiroot\" -I../src -Wall
 
 pkglibexec_PROGRAMS = shifter_slurm_dws_support
 
