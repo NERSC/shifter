@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.62])
-AC_INIT([shifterUdiRoot], [2015.09], [shifter@nersc.gov])
+AC_INIT([shifter], [2015.09], [shifter@nersc.gov])
 AC_CONFIG_SRCDIR([src/shifter_core.h])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_AUX_DIR([auxdir])
