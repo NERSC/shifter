@@ -985,7 +985,7 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
     goto _loopMount_unclean; \
 }
 
-    snprintf(mountExec, PATH_MAX, "%s/libexec/shifterudiroot/mount", udiConfig->udiRootPath);
+    snprintf(mountExec, PATH_MAX, "%s/mount", LIBEXECDIR);
 
     if (stat(mountExec, &statData) != 0) {
         fprintf(stderr, "udiRoot mount executable missing: %s\n", mountExec);
