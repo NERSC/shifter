@@ -15,22 +15,16 @@ Shifter - environment containers for HPC
 
 %build
 ## build udiRoot (runtime) first
-cd udiRoot
 %configure 
 MK_SMP_FLAGS=%{?_smp_mflags} make %{?_smp_mflags}
-cd ..
 
-cd imagegw
 python setup.py build
 
 %install
-cd udiRoot
 %make_install
-cd ..
 rm -f $RPM_BUILD_ROOT/%{_libdir}/shifterudiroot/shifter_slurm.a
 rm -f $RPM_BUILD_ROOT/%{_libdir}/shifterudiroot/shifter_slurm.la
 
-cd imagegw
 python setup.py install -O1 --root=$RPM_BUILD_ROOT --record=IMAGEGW_INSTALLED_FILES
 
 %package  runtime
@@ -61,7 +55,7 @@ spank module for integrating shifter into slurm
 Summary: shifter image manager
 %description imagegw
 image manager
-%files imagegw -f imagegw/IMAGEGW_INSTALLED_FILES
+%files imagegw -f IMAGEGW_INSTALLED_FILES
 %defattr(-,root,root)
 
 
