@@ -39,8 +39,8 @@ runtime and user interface components of shifter
 %{_bindir}/shifterimg
 %{_sbindir}/setupRoot
 %{_sbindir}/unsetupRoot
-%{_sbindir}/slurm_bb_support
 %{_libexecdir}/shifterudiroot
+%{_sysconfdir}/udiRoot.conf.example
 
 %package slurm
 Summary:  slurm spank module for shifter
@@ -56,8 +56,7 @@ Summary: shifter image manager
 image manager
 %files imagegw
 %{_libdir}/python2.7/site-packages/shifter_imagegw
-%{_sbindir}/imagecli.py
-%{_sbindir}/imagegwapi.py
+%{_sysconfdir}/imagemanager.json.example
 %defattr(-,root,root)
 
 
