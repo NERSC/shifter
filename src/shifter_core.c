@@ -1008,10 +1008,10 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
     } else if (format == FORMAT_SQUASHFS) {
         if (system("grep squashfs /proc/filesystems") != 0) {
             LOADKMOD("squashfs", "fs/squashfs/squashfs.ko");
-            useAutoclear = 1;
-            ready = 1;
-            imgType = "squashfs";
         }
+        useAutoclear = 1;
+        ready = 1;
+        imgType = "squashfs";
     } else if (format == FORMAT_CRAMFS) {
         LOADKMOD("cramfs", "fs/cramfs/cramfs.ko");
         useAutoclear = 1;
