@@ -51,7 +51,10 @@ spank module for integrating shifter into slurm
 Summary: shifter image manager
 %description imagegw
 image manager
-%files imagegw -f IMAGEGW_INSTALLED_FILES
+%files imagegw
+%{_libdir}/python2.7/site-packages/shifter_imagegw
+%{_sbindir}/imagecli.py
+%{_sbindir}/imagegwapi.py
 %defattr(-,root,root)
 
 
