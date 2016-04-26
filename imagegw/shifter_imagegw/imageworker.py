@@ -2,6 +2,7 @@ from celery import Celery
 import json
 import os
 import time
+import shifter_imagegw
 import dockerv2
 import dockerhub
 import converters
@@ -35,7 +36,7 @@ modification, are permitted provided that the following conditions are met:
 See LICENSE for full text.
 """
 
-CONFIGFILE='imagemanager.json'
+CONFIGFILE='%s/imagemanager.json' % (shifter_imagegw.configPath)
 
 queue = None
 if 'CONFIG' in os.environ:

@@ -19,6 +19,8 @@ X_AC_MUNGE
 X_AC_SLURM
 X_AC_JSON
 
+AM_PATH_PYTHON
+
 AC_ARG_ENABLE([cray], AS_HELP_STRING([--enable-cray], [Turn on cray support and testing options]))
 ROOTFS_TYPE=tmpfs
 USE_GETPWUID=1
@@ -68,6 +70,8 @@ AC_CONFIG_FILES([Makefile
                  dep/Makefile
                  extra/Makefile
                  wlm_integration/slurm/Makefile
+                 imagegw/Makefile
+                 imagegw/shifter_imagegw/Makefile
                ])
 #                 config/Makefile
 #                 dep/Makefile

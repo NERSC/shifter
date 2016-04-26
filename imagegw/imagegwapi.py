@@ -5,6 +5,7 @@ import os
 import sys
 import socket
 import time
+import shifter_imagegw
 from shifter_imagegw import imagemngr
 import logging
 from flask import Flask, Blueprint, request, Response, url_for, jsonify
@@ -174,7 +175,7 @@ def expire(system,type,tag,id):
 
 
 if __name__ == '__main__':
-    CONFIG='imagemanager.json'
+    CONFIG='%s/imagemanager.json' % (shifter_imagegw.configPath)
     if 'GWCONFIG' in os.environ:
         CONFIG=os.environ['GWCONFIG']
     init(CONFIG)

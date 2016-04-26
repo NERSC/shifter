@@ -18,14 +18,10 @@ Shifter - environment containers for HPC
 %configure 
 MK_SMP_FLAGS=%{?_smp_mflags} make %{?_smp_mflags}
 
-python setup.py build
-
 %install
 %make_install
 rm -f $RPM_BUILD_ROOT/%{_libdir}/shifterudiroot/shifter_slurm.a
 rm -f $RPM_BUILD_ROOT/%{_libdir}/shifterudiroot/shifter_slurm.la
-
-python setup.py install -O1 --root=$RPM_BUILD_ROOT --record=IMAGEGW_INSTALLED_FILES
 
 %package  runtime
 Summary:  runtime component for shifter (formerly udiRoot)
