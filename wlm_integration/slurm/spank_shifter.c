@@ -965,6 +965,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     if (stepid == SLURM_EXTERN_CONT) {
         return rc;
     } else {
+#if 0
         /* need to ensure the extern step is setup */
         char buffer[PATH_MAX];
         struct stat statData;
@@ -977,6 +978,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
                 sleep(1);
             }
         }
+#endif
     }
 
     if (ccmMode == 0) return rc;
