@@ -1,6 +1,6 @@
 # udiRoot.conf
 #
-# See https://bitbucket.org/berkeleylab/shifter/wiki/config-reference
+# See https://github.com/NERSC/shifter/wiki/config-reference
 #
 # udiRoot.conf is read by shifter and most other related shifter utilities within 
 # the udiRoot component. Unless udiRoot is built enabling particular options 
@@ -46,9 +46,10 @@ imagePath=/images
 # Absolute path (can be a symlink) to where current version of udiRoot is 
 # installed. This path is used to find all needed shifter-specific utilities 
 # (shifter, shifterimg, setupRoot, unsetupRoot, mount, etc).
+# In general, this should match the installation ${prefix} used when building.
 #
 # Recommended value: /opt/shifter/default
-udiRootPath=/opt/shifter/udiRoot/1.0/
+udiRootPath=/usr
 
 # sitePreMountHook
 #
@@ -73,7 +74,6 @@ sitePreMountHook=/etc/shifter/premount.sh
 # paths within the script should be relative to that.
 #
 # Recommended value: /etc/opt/nersc/udiRoot/postmount.sh
-
 sitePostMountHook=/etc/shifter/postmount.sh
 
 #optUdiImage
@@ -83,7 +83,6 @@ sitePostMountHook=/etc/shifter/postmount.sh
 # other things if you so desire.
 #
 # Recommended value: /opt/shifter/udiRoot/default/deps/udiImage
-
 etcPath=/opt/shifter/default/etc_files
 #
 # Absolute path to the files you want copied into /etc for every container. This 
@@ -204,7 +203,7 @@ rootfsType=tmpfs
 #
 # It is OK to perform this under /var or /opt or a novel path that your site 
 # maintains (e.g., for NERSC, /global).
-siteFs=/home
+siteFs=/home:/home
 
 
 #siteEnv

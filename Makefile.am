@@ -5,3 +5,5 @@ SUBDIRS    = dep src extra imagegw
 if WITH_SLURM
     SUBDIRS += wlm_integration/slurm
 endif WITH_SLURM
+
+sysconf_DATA=udiRoot.conf.example

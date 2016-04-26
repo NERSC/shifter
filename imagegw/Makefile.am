@@ -1,4 +1,6 @@
 SUBDIRS = shifter_imagegw
 
-sbin_SCRIPTS = imagecli.py \
-			   imagegwapi.py
+pkglibexec_SCRIPTS = imagecli.py \
+			         imagegwapi.py
+
+sysconf_DATA  = imagemanager.json.example

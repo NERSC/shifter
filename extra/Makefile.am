@@ -2,10 +2,10 @@ AUTOMAKE_OPTIONS=foreign
 
 AM_CPPFLAGS = -DCONFIG_FILE=\"${sysconfdir}/udiRoot.conf\" -I../src -Wall
 
-sbin_PROGRAMS = slurm_bb_support
+pkglibexec_PROGRAMS = shifter_slurm_dws_support
 
-SLURM_BB_SUPPORT_SOURCES = \
-	slurm_bb_support.c \
+SHIFTER_SLURM_DWS_SUPPORT_SOURCES = \
+	shifter_slurm_dws_support.c \
 	../src/UdiRootConfig.c \
 	../src/utility.c \
 	../src/VolumeMap.c \
@@ -13,4 +13,4 @@ SLURM_BB_SUPPORT_SOURCES = \
 	../src/shifter_core.c
 
 
-slurm_bb_support_SOURCES = $(SLURM_BB_SUPPORT_SOURCES)
+shifter_slurm_dws_support_SOURCES = $(SHIFTER_SLURM_DWS_SUPPORT_SOURCES)

@@ -1,3 +1,6 @@
+%{!?_shifter_sysconfdir: %global _shifter_sysconfdir /etc/shifter}
+%define _sysconfdir %_shifter_sysconfdir
+
 Summary:  shifter
 Name:     shifter
 Version:  16.04.0pre1
