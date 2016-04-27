@@ -29,9 +29,15 @@ rm -f $RPM_BUILD_ROOT/%{_libdir}/shifterudiroot/shifter_slurm.la
 %package  runtime
 Summary:  runtime component for shifter (formerly udiRoot)
 Group:    System Environment/Base
+%if 0%{?suse_version}
+BuildRequires: munge
+BuildRequires: libcurl-devel
+BuildRequires: libjson-c-devel
+%else
 BuildRequires: munge
 BuildRequires: libcurl libcurl-devel
 BuildRequires: json-c json-c-devel
+%endif
 %description runtime
 runtime and user interface components of shifter
 %files runtime
@@ -39,7 +45,8 @@ runtime and user interface components of shifter
 %{_bindir}/shifterimg
 %{_sbindir}/setupRoot
 %{_sbindir}/unsetupRoot
-%{_libexecdir}/shifterudiroot
+%{_libexecdir}/shifter/mount
+%{_libexecdir}/shifter/opt
 %{_sysconfdir}/udiRoot.conf.example
 
 %package slurm
@@ -48,7 +55,10 @@ BuildRequires: slurm-devel
 %description slurm
 spank module for integrating shifter into slurm
 %files slurm
-%{_libdir}/shifterudiroot/shifter_slurm.so
+%{_libdir}/shifter/shifter_slurm.so
+%{_libdir}/shifter/shifter_slurm.a
+%{_libdir}/shifter/shifter_slurm.la
+%{_libexecdir}/shifter/shifter_slurm_dws_support
 
 %package imagegw
 Summary: shifter image manager
@@ -56,6 +66,8 @@ Summary: shifter image manager
 image manager
 %files imagegw
 %{_libdir}/python2.7/site-packages/shifter_imagegw
+%{_libexecdir}/shifter/imagecli.py*
+%{_libexecdir}/shifter/imagegwapi.py*
 %{_sysconfdir}/imagemanager.json.example
 %defattr(-,root,root)
 
