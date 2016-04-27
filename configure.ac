@@ -97,6 +97,7 @@ AC_CONFIG_FILES([Makefile
                  wlm_integration/slurm/Makefile
                  imagegw/Makefile
                  imagegw/shifter_imagegw/Makefile
+                 imagegw/shifter_imagegw/__init__.py
                  udiRoot.conf.example
                ])
 #                 config/Makefile
