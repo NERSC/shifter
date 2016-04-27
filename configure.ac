@@ -19,6 +19,18 @@ X_AC_MUNGE
 X_AC_SLURM
 X_AC_JSON
 
+AC_ARG_VAR([DD_PATH], [Path to dd executable])
+AC_PATH_PROG([DD_PATH], [dd], [NotFound])
+
+AC_ARG_VAR([CP_PATH], [Path to cp executable])
+AC_PATH_PROG([CP_PATH], [cp], [NotFound])
+
+AC_ARG_VAR([MV_PATH], [Path to mv executable])
+AC_PATH_PROG([MV_PATH], [mv], [NotFound])
+
+AC_ARG_VAR([MKFSXFS_PATH], [Path to mkfs.xfs executable])
+AC_PATH_PROG([MKFSXFS_PATH], [mkfs.xfs], [NotFound], [$PATH$PATH_SEPARATOR/sbin$PATH_SEPARATOR/usr/sbin])
+
 AM_PATH_PYTHON
 
 AC_ARG_ENABLE([cray], AS_HELP_STRING([--enable-cray], [Turn on cray support and testing options]))
