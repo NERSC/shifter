@@ -220,7 +220,7 @@ def cleanup_temporary(request):
             logging.info("Worker: removing %s" % cleanitem)
             subprocess.call(['chmod', '-R', 'u+w', cleanitem])
             if os.path.isdir(cleanitem):
-                shutil.rmtree(cleanitem)
+                shutil.rmtree(cleanitem,ignore_errors=True)
             else:
                 os.unlink(cleanitem)
 
