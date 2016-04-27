@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.62])
-AC_INIT([shifter], [2015.09], [shifter@nersc.gov])
+AC_INIT([shifter], [2016.04.0pre1], [shifter-hpc@googlegroups.com])
 AC_CONFIG_SRCDIR([src/shifter_core.h])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_AUX_DIR([auxdir])
@@ -37,7 +37,7 @@ AC_ARG_ENABLE([cray], AS_HELP_STRING([--enable-cray], [Turn on cray support and 
 ROOTFS_TYPE=tmpfs
 USE_GETPWUID=1
 AS_IF([test "x$enable_cray" == "xyes"], [
-        ROOTFS_TYPE=rootfs
+        ROOTFS_TYPE=ramfs
         USE_GETPWUID=0
 ])
 AC_SUBST(ROOTFS_TYPE)
