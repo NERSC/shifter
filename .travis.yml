@@ -1,0 +1,22 @@
+language: python
+python:
+  - "2.7"
+# command to install dependencies
+env:
+  - PATH
+install: "pip install -r imagegw/requirements.txt"
+# command to run tests
+before_script:
+  - export PATH=$PWD/imagegw/test/:$PATH
+  - cp imagegw/test.json.example imagegw/test.json
+  - mkdir /tmp/imagegw /tmp/imagegw/ /tmp/systema /tmp/systemb
+  - rm imagegw/test/sha256sum
+script: cd imagegw/ && nosetests -x -s
+services:
+  - mongodb
+  - redis
+after_failure:
+  - find /tmp/
+  - df /tmp/
+  - cat /tmp/worker.log
+  - tar xf /tmp/imagegw/sha256:759d6771041e35f923aa25fdb5e9ba81caad123d8392807711f570562f331f99.tar -C /tmp/imagegw/ex/a572fb20fc42a3350180e9380278e4f65be0ee4f267b7b37bc3b3f0daa4acf5a --exclude=dev/* --force-local
