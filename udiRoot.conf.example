@@ -162,11 +162,21 @@ mvPath=/bin/mv
 # Absolute path to known-good chmod
 chmodPath=/bin/chmod
 
+#ddPath
+#
+# Absolute path to known-good dd
+ddPath=/usr/bin/dd
+
+#mkfsXfsPath
+#
+# Absolute path to known-good mkfs.xfs
+mkfsXfsPath=/usr/sbin/mkfs.xfs
+
 #rootfsType
 #
 # The filesystem type to use for setting up the shifter VFS layer. This is 
 # typically just tmpfs. On cray compute nodes (CLE 5.2), tmpfs will not work, 
-# instead use rootfs. rootfs is only known to work in the CLE environment.
+# instead use ramfs.
 #
 # Recommended value: tmpfs
 rootfsType=tmpfs
@@ -217,7 +227,7 @@ siteFs=/home:/home
 #
 siteEnv=SHIFTER_RUNTIME=1
 
-#
+
 #siteEnvAppend
 #
 # Space seperated list of environment variables to automatically append (or add) 
@@ -253,7 +263,7 @@ siteEnvAppend=PATH=/opt/udiImage/bin
 # Used by batch integration code to pick useful settings. May be deprecated in 
 # the future as it is not necessary at this point.
 #
-imageGateway=http://imagegwapi:5000/
+imageGateway=http://imagegwapi:5000
 
 
 #system (required)
@@ -263,10 +273,3 @@ imageGateway=http://imagegwapi:5000/
 # which system it is representing.
 #
 system=mycluster
-
-#nodeContextPrefix
-#
-# Must be blank, e.g. put nodeContextPrefix= in your config file.
-#
-# Recommended value:
-nodeContextPrefix=
