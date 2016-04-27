@@ -9,7 +9,7 @@ install: "pip install -r imagegw/requirements.txt"
 before_script:
   - export PATH=$PWD/imagegw/test/:$PATH
   - cp imagegw/test.json.example imagegw/test.json
-  - mkdir /tmp/imagegw /tmp/imagegw/ /tmp/systema /tmp/systemb
+  - mkdir /tmp/imagegw /tmp/systema /tmp/systemb
   - rm imagegw/test/sha256sum
 script: cd imagegw/ && nosetests -x -s
 services:
