@@ -23,8 +23,8 @@ MK_SMP_FLAGS=%{?_smp_mflags} make %{?_smp_mflags}
 
 %install
 %make_install
-rm -f $RPM_BUILD_ROOT/%{_libdir}/shifterudiroot/shifter_slurm.a
-rm -f $RPM_BUILD_ROOT/%{_libdir}/shifterudiroot/shifter_slurm.la
+rm -f $RPM_BUILD_ROOT/%{_libdir}/shifter/shifter_slurm.a
+rm -f $RPM_BUILD_ROOT/%{_libdir}/shifter/shifter_slurm.la
 
 %package  runtime
 Summary:  runtime component for shifter (formerly udiRoot)
@@ -56,8 +56,6 @@ BuildRequires: slurm-devel
 spank module for integrating shifter into slurm
 %files slurm
 %{_libdir}/shifter/shifter_slurm.so
-%{_libdir}/shifter/shifter_slurm.a
-%{_libdir}/shifter/shifter_slurm.la
 %{_libexecdir}/shifter/shifter_slurm_dws_support
 
 %package imagegw
