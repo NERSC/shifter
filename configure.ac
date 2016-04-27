@@ -28,8 +28,17 @@ AC_PATH_PROG([CP_PATH], [cp], [NotFound])
 AC_ARG_VAR([MV_PATH], [Path to mv executable])
 AC_PATH_PROG([MV_PATH], [mv], [NotFound])
 
+AC_ARG_VAR([CHMOD_PATH], [Path to chmod executable])
+AC_PATH_PROG([CHMOD_PATH], [chmod], [NotFound])
+
 AC_ARG_VAR([MKFSXFS_PATH], [Path to mkfs.xfs executable])
 AC_PATH_PROG([MKFSXFS_PATH], [mkfs.xfs], [NotFound], [$PATH$PATH_SEPARATOR/sbin$PATH_SEPARATOR/usr/sbin])
+
+AC_ARG_VAR([INSMOD_PATH], [Path to insmod executable])
+AC_PATH_PROG([INSMOD_PATH], [insmod], [NotFound], [$PATH$PATH_SEPARATOR/sbin$PATH_SEPARATOR/usr/sbin])
+
+AC_ARG_VAR([MODPROBE_PATH], [Path to modprobe executable])
+AC_PATH_PROG([MODPROBE_PATH], [modprobe], [NotFound], [$PATH$PATH_SEPARATOR/sbin$PATH_SEPARATOR/usr/sbin])
 
 AM_PATH_PYTHON
 
@@ -42,6 +51,10 @@ AS_IF([test "x$enable_cray" == "xyes"], [
 ])
 AC_SUBST(ROOTFS_TYPE)
 AC_SUBST(USE_GETPWUID)
+
+AC_DEFINE_DIR(SHIFTER_PREFIX, prefix, [fully expanded prefix])
+AC_DEFINE_DIR(SHIFTER_LIBEXECDIR, libexecdir, [fully expanded libexecdir])
+AC_DEFINE_DIR(SHIFTER_SYSCONFDIR, sysconfdir, [fully expanded sysconfdir])
 
 AC_PROG_LIBTOOL
 
@@ -84,6 +97,7 @@ AC_CONFIG_FILES([Makefile
                  wlm_integration/slurm/Makefile
                  imagegw/Makefile
                  imagegw/shifter_imagegw/Makefile
+                 udiRoot.conf.example
                ])
 #                 config/Makefile
 #                 dep/Makefile

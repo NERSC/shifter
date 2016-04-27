@@ -49,7 +49,7 @@ imagePath=/images
 # In general, this should match the installation ${prefix} used when building.
 #
 # Recommended value: /opt/shifter/default
-udiRootPath=/usr
+udiRootPath=@SHIFTER_PREFIX@
 
 # sitePreMountHook
 #
@@ -62,7 +62,7 @@ udiRootPath=/usr
 # paths within the script should be relative to that.
 #
 # Recommended value: /etc/opt/nersc/udiRoot/premount.sh
-sitePreMountHook=/etc/shifter/premount.sh
+sitePreMountHook=@SHIFTER_SYSCONFDIR@/premount.sh
 
 # sitePostMountHook
 #
@@ -74,7 +74,7 @@ sitePreMountHook=/etc/shifter/premount.sh
 # paths within the script should be relative to that.
 #
 # Recommended value: /etc/opt/nersc/udiRoot/postmount.sh
-sitePostMountHook=/etc/shifter/postmount.sh
+sitePostMountHook=@SHIFTER_SYSCONFDIR@/postmount.sh
 
 #optUdiImage
 #
@@ -83,7 +83,7 @@ sitePostMountHook=/etc/shifter/postmount.sh
 # other things if you so desire.
 #
 # Recommended value: /opt/shifter/udiRoot/default/deps/udiImage
-etcPath=/opt/shifter/default/etc_files
+optUdiImage=@SHIFTER_LIBEXECDIR@/@PACKAGE_NAME@/opt/udiImage
 #
 # Absolute path to the files you want copied into /etc for every container. This 
 # path must be root owned (including the files within), and it must contain, at 
@@ -93,6 +93,7 @@ etcPath=/opt/shifter/default/etc_files
 # included in their image.
 #
 # Recommended value: /opt/shifter/default/etc_files
+etcPath=/opt/shifter/default/etc_files
 
 
 #allowLocalChroot (0 or 1)
@@ -140,37 +141,37 @@ maxGroupCount=31
 #modprobePath
 #
 # Absolute path to known-good modprobe
-modprobePath=/sbin/modprobe
+modprobePath=@MODPROBE_PATH@
 
 #insmodPath (required)
 #
 # Absolute path to known-good insmod
-insmodPath=/sbin/insmod
+insmodPath=@INSMOD_PATH@
 
 #cpPath (required)
 #
 # Absolute path to known-good cp
-cpPath=/bin/cp
+cpPath=@CP_PATH@
 
 #mvPath (required)
 #
 # Absolute path to known-good mv
-mvPath=/bin/mv
+mvPath=@MV_PATH@
 
 #chmodPath
 #
 # Absolute path to known-good chmod
-chmodPath=/bin/chmod
+chmodPath=@CHMOD_PATH@
 
 #ddPath
 #
 # Absolute path to known-good dd
-ddPath=/usr/bin/dd
+ddPath=@DD_PATH@
 
 #mkfsXfsPath
 #
 # Absolute path to known-good mkfs.xfs
-mkfsXfsPath=/usr/sbin/mkfs.xfs
+mkfsXfsPath=@MKFSXFS_PATH@
 
 #rootfsType
 #
@@ -179,7 +180,7 @@ mkfsXfsPath=/usr/sbin/mkfs.xfs
 # instead use ramfs.
 #
 # Recommended value: tmpfs
-rootfsType=tmpfs
+rootfsType=@ROOTFS_TYPE@
 
 #gatewayTimeout (optional)
 #
