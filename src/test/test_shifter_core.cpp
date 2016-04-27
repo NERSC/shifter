@@ -238,6 +238,16 @@ IGNORE_TEST(ShifterCoreTestGroup, setupPerNodeCacheBackingStore_tests) {
     free(cache);
 }
 
+TEST(ShifterCoreTestGroup, CheckSupportedFilesystems) {
+    char **fsTypes = getSupportedFilesystems();
+    char **ptr = NULL;
+    CHECK(fsTypes != NULL);
+
+    CHECK(supportsFilesystem(fsTypes, "proc") == 0);
+    CHECK(supportsFilesystem(fsTypes, "ext4") == 0);
+    CHECK(supportsFilesystem(fsTypes, "blergityboo") != 0);
+}
+
 TEST(ShifterCoreTestGroup, ParseGroupFile) {
     const char *smallGroupPath = "./etc_small/group";
     FILE *smallGroup = fopen(smallGroupPath, "r");
