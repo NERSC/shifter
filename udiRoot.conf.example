@@ -253,7 +253,7 @@ siteEnvAppend=PATH=/opt/udiImage/bin
 # Used by batch integration code to pick useful settings. May be deprecated in 
 # the future as it is not necessary at this point.
 #
-imageGateway=http://imagegwapi:5000/
+imageGateway=http://imagegwapi:5000
 
 
 #system (required)

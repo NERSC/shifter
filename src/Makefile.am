@@ -2,7 +2,7 @@ AUTOMAKE_OPTIONS=foreign
 
 SUBDIRS = test
 
-AM_CPPFLAGS = -DCONFIG_FILE=\"${sysconfdir}/udiRoot.conf\" -DLIBEXECDIR=\"${libexecdir}/shifterudiroot\" -Wall
+AM_CPPFLAGS = -DCONFIG_FILE=\"${sysconfdir}/udiRoot.conf\" -DLIBEXECDIR=\"${libexecdir}/shifter\" -Wall
 
 sbin_PROGRAMS = setupRoot unsetupRoot
 bin_PROGRAMS = shifter shifterimg
