@@ -169,6 +169,8 @@ shifter_getgrouplist(const char *user, gid_t group, gid_t **groups,
 int setupPerNodeCacheFilename(VolMapPerNodeCacheConfig *, char *, size_t);
 int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *from_buffer, UdiRootConfig *udiConfig);
 int makeUdiMountPrivate(UdiRootConfig *udiConfig);
+char **getSupportedFilesystems();
+int supportsFilesystem(char *const * fsTypes, const char *fsType);
 
 #ifdef __cplusplus
 }

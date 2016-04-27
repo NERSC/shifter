@@ -974,12 +974,96 @@ _mountImageLoop_unclean:
     return 1;
 }
 
+/**
+ * _sortFsTypeForward
+ * Utility function use for comparisons for sorting filesystems
+ */
+static int _sortFsTypeForward(const void *ta, const void *tb) {
+    const char **a = (const char **) ta;
+    const char **b = (const char **) tb;
+
+    return strcmp(*a, *b);
+}
+
+/** getSupportedFilesystems
+ *  Read /proc/filesystems and produce a list of filesystems supported by this
+ *  kernel.
+ *
+ *  Returns NULL-terminated array of strings with all filesystem types
+ */
+char **getSupportedFilesystems() {
+    char buffer[4096];
+    char **ret = (char **) malloc(sizeof(char *) * 10);
+    char **writePtr = NULL;
+    size_t listExtent = 10;
+    size_t listLen = 0;
+    FILE *fp = fopen("/proc/filesystems", "r");
+    ssize_t nread = 0;
+    
+    if (ret == NULL || fp == NULL) { // || buffer == NULL) {
+        /* ran out of memory */
+        return NULL;
+    }
+
+    writePtr = ret;
+    *writePtr = NULL;
+    while (fgets(buffer, 4096, fp) != NULL) {
+        char *ptr = strchr(buffer, '\t');
+
+        if (ptr != NULL) {
+            ptr = shifter_trim(ptr);
+            if (strlen(ptr) == 0) continue;
+            if (listLen == listExtent - 2) {
+                char **tmp = (char **) realloc(ret, sizeof(char *) * (listExtent + 10));
+                if (tmp == NULL) {
+                    goto error;
+                }
+                writePtr = tmp + (writePtr - ret);
+                ret = tmp;
+                listExtent += 10;
+            }
+            *writePtr = strdup(ptr);
+            writePtr++;
+            *writePtr = NULL;
+            listLen++;
+        }
+    }
+    qsort(ret, listLen, sizeof(char **), _sortFsTypeForward);
+
+    if (fp != NULL) {
+        fclose(fp);
+        fp = NULL;
+    }
+    return ret;
+error:
+    if (fp != NULL) {
+        fclose(fp);
+        fp = NULL;
+    }
+    return NULL;
+}
+
+int supportsFilesystem(char *const * fsTypes, const char *fsType) {
+    char *const *ptr = fsTypes;
+
+    if (fsTypes == NULL || fsType == NULL) {
+        return -1;
+    }
+    for (ptr = fsTypes; ptr && *ptr; ptr++) {
+        if (strcmp(fsType, *ptr) == 0) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat format, UdiRootConfig *udiConfig, int readOnly) {
     char mountExec[PATH_MAX];
     struct stat statData;
     int ready = 0;
     int useAutoclear = 0;
     const char *imgType = NULL;
+    char **fstypes = getSupportedFilesystems();
 #define LOADKMOD(name, path) if (loadKernelModule(name, path, udiConfig) != 0) { \
     fprintf(stderr, "FAILED to load %s kernel module.\n", name); \
     goto _loopMount_unclean; \
@@ -999,28 +1083,34 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
         LOADKMOD("loop", "drivers/block/loop.ko");
     }
     if (format == FORMAT_EXT4) {
-        LOADKMOD("mbcache", "fs/mbcache.ko");
-        LOADKMOD("jbd2", "fs/jbd2/jbd2.ko");
-        LOADKMOD("ext4", "fs/ext4/ext4.ko");
+        if (supportsFilesystem(fstypes, "ext4") != 0) {
+            LOADKMOD("mbcache", "fs/mbcache.ko");
+            LOADKMOD("jbd2", "fs/jbd2/jbd2.ko");
+            LOADKMOD("ext4", "fs/ext4/ext4.ko");
+        }
         useAutoclear = 1;
         ready = 1;
         imgType = "ext4";
     } else if (format == FORMAT_SQUASHFS) {
-        if (system("grep squashfs /proc/filesystems") != 0) {
+        if (supportsFilesystem(fstypes, "squashfs") != 0) {
             LOADKMOD("squashfs", "fs/squashfs/squashfs.ko");
         }
         useAutoclear = 1;
         ready = 1;
         imgType = "squashfs";
     } else if (format == FORMAT_CRAMFS) {
-        LOADKMOD("cramfs", "fs/cramfs/cramfs.ko");
+        if (supportsFilesystem(fstypes, "cramfs") != 0) {
+            LOADKMOD("cramfs", "fs/cramfs/cramfs.ko");
+        }
         useAutoclear = 1;
         ready = 1;
         imgType = "cramfs";
     } else if (format == FORMAT_XFS) {
-        if (loadKernelModule("xfs", "fs/xfs/xfs.ko", udiConfig) != 0) {
-            LOADKMOD("exportfs", "fs/exportfs/exportfs.ko");
-            LOADKMOD("xfs", "fs/xfs/xfs.ko");
+        if (supportsFilesystem(fstypes, "cramfs") != 0) {
+            if (loadKernelModule("xfs", "fs/xfs/xfs.ko", udiConfig) != 0) {
+                LOADKMOD("exportfs", "fs/exportfs/exportfs.ko");
+                LOADKMOD("xfs", "fs/xfs/xfs.ko");
+            }
         }
         useAutoclear = 0;
         ready = 1;
@@ -1053,9 +1143,26 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
         }
     }
 
+    if (fstypes != NULL) {
+        char **ptr = NULL;
+        for (ptr = fstypes; ptr && *ptr; ptr++) {
+            free(*ptr);
+        }
+        free(fstypes);
+        fstypes = NULL;
+    }
 #undef LOADKMOD
     return 0;
 _loopMount_unclean:
+
+    if (fstypes != NULL) {
+        char **ptr = NULL;
+        for (ptr = fstypes; ptr && *ptr; ptr++) {
+            free(*ptr);
+        }
+        free(fstypes);
+        fstypes = NULL;
+    }
     return 1;
 }
 
@@ -2466,7 +2573,6 @@ pid_t findSshd(void) {
             }
         }
     }
-_findSshd_exit:
     closedir(proc);
     if (filename != NULL) {
         free(filename);
