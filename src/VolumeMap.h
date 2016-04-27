@@ -98,6 +98,7 @@ int validateVolumeMap_siteRequest(const char *from, const char *to, VolumeMapFla
 void free_VolumeMapFlag(VolumeMapFlag *flag, int freeStruct);
 void free_VolMapPerNodeCacheConfig(VolMapPerNodeCacheConfig *cacheConfig);
 int validate_VolMapPerNodeCacheConfig(VolMapPerNodeCacheConfig *cacheConfig);
+ssize_t parseBytes(const char *input);
 
 /* semi-private methods */
 int _validateVolumeMap(
@@ -113,7 +114,6 @@ int _validateVolumeMap(
 int _parseVolumeMap(const char *input, VolumeMap *volMap,
         int (*_validate_fp)(const char *, const char *, VolumeMapFlag *),
         short requireTo);
-ssize_t _parseBytes(const char *input);
 const char *_findEndVolumeMapString(const char *basePtr);
 char **_tokenizeVolumeMapInput(char *input);
 int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity);
