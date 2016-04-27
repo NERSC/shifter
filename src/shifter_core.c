@@ -1373,6 +1373,7 @@ int setupVolumeMapMounts(
     for (mapIdx = 0; mapIdx < map->n; mapIdx++) {
         size_t flagsInEffect = 0;
         size_t flagIdx = 0;
+        int backingStoreExists = 0;
         filtered_from = userInputPathFilter(map->from[mapIdx], 1);
         filtered_to = userInputPathFilter(map->to[mapIdx], 1);
         flags = map->flags[mapIdx];
@@ -1413,6 +1414,7 @@ int setupVolumeMapMounts(
                     fprintf(stderr, "FAILED to setup perNodeCache\n");
                     goto _setupVolumeMapMounts_unclean;
                 }
+                backingStoreExists = 1;
             }
         }
 
@@ -1467,6 +1469,13 @@ int setupVolumeMapMounts(
                 fprintf(stderr, "FAILED to chown per-node cache to user.\n");
                 goto _setupVolumeMapMounts_unclean;
             }
+            if (unlink(from_buffer) != 0) {
+                fprintf(stderr, "FAILED to unlink backing file: %s!", from_buffer);
+                perror("Error: ");
+                goto _setupVolumeMapMounts_unclean;
+            }
+            backingStoreExists = 0;
+
         } else {
             _BINDMOUNT(mountCache, from_buffer, to_buffer, flagsInEffect, 1);
         }
@@ -1481,6 +1490,10 @@ _setupVolumeMapMounts_unclean:
     }
     if (filtered_to != NULL) {
         free(filtered_to);
+    }
+    if ((flagsInEffect & VOLMAP_FLAG_PERNODECACHE) && backingStoreExists == 1) {
+        unlink(from_buffer);
+        backingStoreExists = 0;
     }
     return 1;
 }
