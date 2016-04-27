@@ -66,8 +66,8 @@ Summary: shifter image manager
 image manager
 %files imagegw
 %{_libdir}/python2.7/site-packages/shifter_imagegw
-%{_libexecdir}/shifter/imagecli.py
-%{_libexecdir}/shifter/imagegwapi.py
+%{_libexecdir}/shifter/imagecli.py*
+%{_libexecdir}/shifter/imagegwapi.py*
 %{_sysconfdir}/imagemanager.json.example
 %defattr(-,root,root)
 
