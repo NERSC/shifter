@@ -10,3 +10,5 @@ install-sh
 libtool.m4
 missing
 Makefile.in
+tags
+*.swp
