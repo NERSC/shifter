@@ -3,4 +3,3 @@ pymongo
 flask
 pysocks
 redis
-flower
