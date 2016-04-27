@@ -11,6 +11,7 @@ before_script:
   - cp imagegw/test.json.example imagegw/test.json
   - mkdir /tmp/imagegw /tmp/systema /tmp/systemb
   - rm imagegw/test/sha256sum
+  - touch imagegw/shifter_imagegw/__init__.py
 script: cd imagegw/ && export PYTHONPATH=`pwd` && nosetests -x -s
 services:
   - mongodb

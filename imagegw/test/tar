@@ -1,0 +1,4 @@
+#!/bin/sh
+
+tar "$@"
+exit 0
