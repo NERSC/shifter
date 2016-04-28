@@ -440,7 +440,6 @@ def pullImage(options, baseUrl, repo, tag, cachedir='./', expanddir='./', cacert
     a = dockerv2Handle(imageident, options)
 
     manifest = a.getImageManifest()
-    print manifest
     (eldest,youngest) = a.constructImageMetadata(manifest)
     layer = eldest
     while layer is not None:
