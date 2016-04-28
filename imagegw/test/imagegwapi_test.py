@@ -1,6 +1,4 @@
 import os
-#os.environ['CONFIG']='test.json'
-import imagegwapi
 import unittest
 import tempfile
 import time
@@ -33,6 +31,7 @@ AUTH_HEADER='authentication'
 class GWTestCase(unittest.TestCase):
 
     def setUp(self):
+        import imagegwapi
         self.configfile='test.json'
         with open(self.configfile) as config_file:
             self.config = json.load(config_file)
@@ -77,7 +76,7 @@ class GWTestCase(unittest.TestCase):
         if pid==0:  # Child process
             os.environ['CONFIG']='test.json'
             os.environ['TESTMODE']='%d'%(TESTMODE)
-            os.execvp('celery',['celery','-A','imageworker',
+            os.execvp('celery',['celery','-A','shifter_imagegw.imageworker',
                 'worker','--quiet',
                 '-Q','%s'%(system),
                 '--loglevel=WARNING',
@@ -87,6 +86,7 @@ class GWTestCase(unittest.TestCase):
             self.pid=pid
 
     def stop_worker(self):
+        print "Stopping worker"
         if self.pid>0:
             os.kill(self.pid,9)
 
@@ -129,6 +129,8 @@ class GWTestCase(unittest.TestCase):
             assert rv.status_code==200
             r=json.loads(rv.data)
             if r['status']=='READY':
+                break
+            if r['status']=='FAILURE':
                 break
             print '  %s...'%(r['status'])
             time.sleep(1)
