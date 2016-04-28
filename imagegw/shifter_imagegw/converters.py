@@ -3,7 +3,7 @@
 import os
 import subprocess
 import shutil
-from util import program_exists
+from shifter_imagegw.util import program_exists
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
