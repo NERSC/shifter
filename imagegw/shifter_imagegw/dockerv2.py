@@ -154,18 +154,23 @@ class dockerv2Handle():
         (protocol, url) = url.split('://', 1)
         location = None
         conn = None
+        port = 443
         if (url.find('/') >= 0):
             (server, location) = url.split('/', 1)
         else:
             server = url
+        if ':' in server:
+            (server, port) = server.split(':')
         if protocol == 'http':
             conn = httplib.HTTPConnection(server)
         elif protocol == 'https':
-            sslContext = ssl.create_default_context()
-
-            if cacert is not None:
-                sslContext = ssl.create_default_context(cafile=cacert)
-            conn = httplib.HTTPSConnection(server, context=sslContext)
+            try:
+                sslContext = ssl.create_default_context()
+                if cacert is not None:
+                    sslContext = ssl.create_default_context(cafile=cacert)
+                conn = httplib.HTTPSConnection(server, context=sslContext)
+            except AttributeError:
+                conn = httplib.HTTPSConnection(server, port, None, cacert)
         else:
             print "Error, unknown protocol %s" % protocol
             return None
@@ -435,6 +440,7 @@ def pullImage(options, baseUrl, repo, tag, cachedir='./', expanddir='./', cacert
     a = dockerv2Handle(imageident, options)
 
     manifest = a.getImageManifest()
+    print manifest
     (eldest,youngest) = a.constructImageMetadata(manifest)
     layer = eldest
     while layer is not None:
