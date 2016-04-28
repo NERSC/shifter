@@ -46,7 +46,7 @@ make ${MK_SMP_FLAGS}
 make install
 cd "${builddir}"
 
-dirs="linux asm asm-generic"
+dirs="linux asm asm-generic x86_64-linux-gnu/asm"
 for dir in $dirs; do
     if [[ -e "/usr/include/$dir" ]]; then
         if [[ -L "/usr/include/$dir" ]]; then
@@ -57,10 +57,6 @@ for dir in $dirs; do
         cp -rp "/usr/include/$dir" "${SPRT_PREFIX}/include/"
     fi
 done
-if [[ -e "/usr/include/x86_64-linux-gnu/asm" ]]; then
-    mkdir -p ${SPRT_PREFIX}/include/x86_64-linux-gnu
-    cp -rp /usr/include/x86_64-linux-gnu/asm "${SPRT_PREFIX}/include/x86_64-linux-gnu/"
-fi
 
 cd "${builddir}"
 mkdir -p util-linux
