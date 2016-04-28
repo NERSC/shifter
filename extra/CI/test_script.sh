@@ -34,7 +34,6 @@ function runTest() {
    fi
    valgrind --tool=memcheck --leak-check=full --suppressions=valgrind.suppressions -v ./$test
    gcov -b $sources 
-   cat $source.c.gcov | grep "#####:";
 }
 
 runTest test_ImageData ImageData

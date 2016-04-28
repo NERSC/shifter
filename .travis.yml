@@ -23,8 +23,8 @@ script:
   - echo "have $PROC_COUNT processors"
   - ./autogen.sh
   - ./configure --prefix=/usr --sysconfdir=/etc/shifter
-  - MK_SMP_FLAGS="-j$PROC_COUNT" make -j$PROC_COUNT
-  - sudo make install
+  - MK_SMP_FLAGS="-j$PROC_COUNT" make -j$PROC_COUNT > make.log
+  - sudo make install 
   - cd src/test
   - ../../extra/CI/test_script.sh
   - cd ../../imagegw
@@ -35,5 +35,6 @@ services:
 after_failure:
   - find /tmp/
   - cat /tmp/worker.log
+  - cat /tmp/make.log
 notifications:
   slack: shifter-hpc:G2yziADLjfv5y0KoCVT907cS
