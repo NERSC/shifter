@@ -1236,7 +1236,7 @@ int setupPerNodeCacheFilename(
     if (gethostname(hostname_buf, 128) != 0) {
         return -1;
     }
-    nbytes = snprintf(buffer, buffer_len, "%s/perNodeCache_uid%d_gid%d_%s_XXXXXX.%s",
+    nbytes = snprintf(buffer, buffer_len, "%s/perNodeCache_uid%d_gid%d_%s.%s.XXXXXX",
             udiConfig->perNodeCachePath,
             udiConfig->target_uid,
             udiConfig->target_gid,
