@@ -22,3 +22,4 @@ kmodCacheFile=/tmp/udiRootLoadedModules.txt
 batchType=slurm
 imageGateway=http://localhost:5000
 system=testSystem
+perNodeCachePath=/tmp

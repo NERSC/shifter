@@ -1267,7 +1267,7 @@ int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *b
     int ret = 0;
     if (udiConfig->ddPath == NULL) {
         fprintf(stderr, "Must define ddPath in udiRoot configuration to use this feature\n");
-        exit(1);
+        return 1;
     }
     args[0] = strdup(udiConfig->ddPath);
     args[1] = strdup("if=/dev/zero");

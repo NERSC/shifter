@@ -69,6 +69,7 @@ int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const cha
     (*config)->mvPath = strdup("/bin/mv");
     (*config)->ddPath = strdup("/bin/dd");
     (*config)->chmodPath = strdup("/bin/chmod");
+    (*config)->perNodeCachePath = strdup("/tmp");
     (*config)->allowLocalChroot = 1;
     return 0;
 }
