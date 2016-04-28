@@ -9,7 +9,8 @@
     "MongoDBURI":"mongodb://localhost/",
     "MongoDB":"Shifter",
     "Broker":"redis://localhost/",
-
+    "CacheDirectory": "/images/cache/",
+    "ExpandDirectory": "/images/expand/",
     "Locations": {
         "index.docker.io": {
             "remotetype": "dockerhub",

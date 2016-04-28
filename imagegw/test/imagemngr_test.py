@@ -1,6 +1,4 @@
 import os
-os.environ['CONFIG']='test.json'
-import imagemngr
 import unittest
 import tempfile
 import time
@@ -32,6 +30,7 @@ See LICENSE for full text.
 class ImageMngrTestCase(unittest.TestCase):
 
     def setUp(self):
+        from shifter_imagegw import imagemngr
         self.configfile='test.json'
         with open(self.configfile) as config_file:
             self.config = json.load(config_file)
@@ -69,7 +68,7 @@ class ImageMngrTestCase(unittest.TestCase):
         if pid==0:  # Child process
             os.environ['CONFIG']='test.json'
             #os.environ['TESTMODE']='%d'%(TESTMODE)
-            os.execvp('celery',['celery','-A','imageworker',
+            os.execvp('celery',['celery','-A','shifter_imagegw.imageworker',
                 'worker','--quiet',
                 '-Q','%s'%(system),
                 '--loglevel=WARNING',

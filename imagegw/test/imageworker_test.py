@@ -42,12 +42,12 @@ class ImageWorkerTestCase(unittest.TestCase):
         self.tag='registry.services.nersc.gov/nersc-py:latest'
         self.tag='ubuntu:latest'
         self.tag='scanon/shanetest:latest'
-        self.hash='71483e58b33aac94ba640c2ba93852988b9b0f16c4daab6828feccb4d38304ca'
+        self.hash='c6afa7300a4cf6e717c92dd057b8be12e36a586cc8b66f952be8a901a7d8ba57'
         if not os.path.exists(self.config['CacheDirectory']):
             os.mkdir(self.config['CacheDirectory'])
         self.expandedpath=os.path.join(self.config['CacheDirectory'],
             '%s_%s'%(self.itype,self.tag.replace('/','_')))
-        self.imagefile=os.path.join(self.config['CacheDirectory'],
+        self.imagefile=os.path.join(self.config['ExpandDirectory'],
             '%s.%s'%(self.hash,'squashfs'))
         idir=self.config['Platforms']['systema']['ssh']['imageDir']
         if not os.path.exists(idir):

@@ -36,11 +36,12 @@ modification, are permitted provided that the following conditions are met:
 See LICENSE for full text.
 """
 
-CONFIGFILE='%s/imagemanager.json' % (shifter_imagegw.configPath)
 
 queue = None
 if 'CONFIG' in os.environ:
     CONFIGFILE=os.environ['CONFIG']
+else:
+    CONFIGFILE='%s/imagemanager.json' % (shifter_imagegw.configPath)
 
 logging.info("Opening %s"%(CONFIGFILE))
 
@@ -219,7 +220,7 @@ def cleanup_temporary(request):
             logging.info("Worker: removing %s" % cleanitem)
             subprocess.call(['chmod', '-R', 'u+w', cleanitem])
             if os.path.isdir(cleanitem):
-                shutil.rmtree(cleanitem)
+                shutil.rmtree(cleanitem,ignore_errors=True)
             else:
                 os.unlink(cleanitem)
 

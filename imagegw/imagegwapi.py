@@ -175,9 +175,10 @@ def expire(system,type,tag,id):
 
 
 if __name__ == '__main__':
-    CONFIG='%s/imagemanager.json' % (shifter_imagegw.configPath)
     if 'GWCONFIG' in os.environ:
         CONFIG=os.environ['GWCONFIG']
+    else:
+        CONFIG='%s/imagemanager.json' % (shifter_imagegw.configPath)
     init(CONFIG)
 
     imagegwapi.run(debug=DEBUG_FLAG, host='0.0.0.0', port=LISTEN_PORT, threaded=True)

@@ -1,0 +1,17 @@
+#!/bin/bash
+# Mock scp
+# if the target host is localhost, then just cp
+#
+
+let last=$#-1
+array=( "$@" )
+
+src=${array[$last-1]}
+target=$(echo ${array[$last]}|sed 's|.*:/|/|')
+host=$(echo ${array[$last]}|sed 's|.*@||'|sed 's|:.*||')
+if [ $host = "localhost" ] ; then
+  exec cp $src $target
+else
+  exec /usr/bin/scp $@
+fi
+
