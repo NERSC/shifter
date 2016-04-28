@@ -18,6 +18,6 @@ services:
   - redis
 after_failure:
   - find /tmp/
-  - df /tmp/
   - cat /tmp/worker.log
-  - tar xf /tmp/imagegw/sha256:759d6771041e35f923aa25fdb5e9ba81caad123d8392807711f570562f331f99.tar -C /tmp/imagegw/ex/a572fb20fc42a3350180e9380278e4f65be0ee4f267b7b37bc3b3f0daa4acf5a --exclude=dev/* --force-local
+notifications:
+  slack: shifter-hpc:G2yziADLjfv5y0KoCVT907cS
