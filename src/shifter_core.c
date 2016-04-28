@@ -1012,7 +1012,6 @@ char **getSupportedFilesystems() {
     size_t listExtent = 10;
     size_t listLen = 0;
     FILE *fp = fopen("/proc/filesystems", "r");
-    ssize_t nread = 0;
     
     if (ret == NULL || fp == NULL) { // || buffer == NULL) {
         /* ran out of memory */
