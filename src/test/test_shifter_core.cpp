@@ -71,6 +71,8 @@ int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const cha
     (*config)->chmodPath = strdup("/bin/chmod");
     (*config)->perNodeCachePath = strdup("/tmp");
     (*config)->allowLocalChroot = 1;
+    (*config)->target_uid = 1000;
+    (*config)->target_gid = 1000;
     return 0;
 }
 
@@ -195,15 +197,14 @@ TEST(ShifterCoreTestGroup, setupPerNodeCacheFilename_tests) {
     cache->fstype = strdup("xfs");
     snprintf(buffer, PATH_MAX, "/tmp/file");
     ret = setupPerNodeCacheFilename(config, cache, buffer, PATH_MAX);
-    CHECK(ret == 0);
-    fprintf(stderr, "buffer: %s, result: %s\n", buffer, result);
-    CHECK(strcmp(buffer, result) == 0);
+    CHECK(ret >= 0);
+    close(ret);
 
     /* should fail because fstype is NULL */
     free(cache->fstype);
     cache->fstype = NULL;
     ret = setupPerNodeCacheFilename(config, cache, buffer, PATH_MAX);
-    CHECK(ret != 0);
+    CHECK(ret == -1);
 
     free_VolMapPerNodeCacheConfig(cache);
     cache = NULL;
