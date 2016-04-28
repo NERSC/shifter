@@ -35,6 +35,5 @@ services:
 after_failure:
   - find /tmp/
   - cat /tmp/worker.log
-  - cat /tmp/make.log
 notifications:
   slack: shifter-hpc:G2yziADLjfv5y0KoCVT907cS
