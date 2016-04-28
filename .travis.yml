@@ -19,11 +19,15 @@ before_script:
   - rm imagegw/test/sha256sum
   - touch imagegw/shifter_imagegw/__init__.py
 script:
+  - export PROC_COUNT=$(cat /proc/cpuinfo  | egrep '^processor' | wc -l)
+  - echo "have $PROC_COUNT processors"
   - ./autogen.sh
   - ./configure --prefix=/usr --sysconfdir=/etc/shifter
-  - MK_SMP_FLAGS="-j4" make -j4
+  - MK_SMP_FLAGS="-j$PROC_COUNT" make -j$PROC_COUNT
   - sudo make install
-  - cd imagegw
+  - cd src/test
+  - ../../extra/CI/test_script.sh
+  - cd ../../imagegw
   - nosetests -x -s
 services:
   - mongodb
