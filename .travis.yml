@@ -1,9 +1,15 @@
 language: python
+sudo: true
 python:
   - "2.7"
 # command to install dependencies
 env:
   - PATH
+before_install:
+  - sudo add-apt-repository "deb http://us.archive.ubuntu.com/ubuntu/ precise universe multiverse"
+  - sudo add-apt-repository -y ppa:ondrej/php5
+  - sudo apt-get update -qq
+  - sudo apt-get install -qq libjson-c2 libjson-c-dev libmunge2 libmunge-dev libcurl4-openssl-dev autoconf automake libtool curl make valgrind
 install: "pip install -r imagegw/requirements.txt"
 # command to run tests
 before_script:
@@ -12,7 +18,17 @@ before_script:
   - mkdir /tmp/imagegw /tmp/systema /tmp/systemb
   - rm imagegw/test/sha256sum
   - touch imagegw/shifter_imagegw/__init__.py
-script: cd imagegw/ && export PYTHONPATH=`pwd` && nosetests -x -s
+script:
+  - export PROC_COUNT=$(cat /proc/cpuinfo  | egrep '^processor' | wc -l)
+  - echo "have $PROC_COUNT processors"
+  - ./autogen.sh
+  - ./configure --prefix=/usr --sysconfdir=/etc/shifter
+  - MK_SMP_FLAGS="-j$PROC_COUNT" make -j$PROC_COUNT
+  - sudo make install
+  - cd src/test
+  - ../../extra/CI/test_script.sh
+  - cd ../../imagegw
+  - nosetests -x -s
 services:
   - mongodb
   - redis

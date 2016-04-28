@@ -1,3 +1,18 @@
+16.04.0
+===========
++  Modified repo layout to push udiRoot to top-level
++  Added RPM spec file for RHEL- and SLES-based systems
++  Added writable perNodeCache capability
++  Enabled BB support
+
+15.12.1
+===========
++  Fixed bug preventing autoshift/ccm in slurm/udiRoot integration from 
+   chdir'ing to permission restricted paths on root-squashed filesystems
++  Fixed bug on some systems where the udiRoot would get recursively mounted in
+   the odd situation that the udiMount point overlapped the VFS being mounted
++  Corrected udiRoot testsuite to run in automated test framework
+
 15.12.0
 ===========
 +  Integrate external deps (util-linux/mount, openssh, libressl) into automake
@@ -8,12 +23,4 @@
 +  Updated ImageGwConnect helper application to work with changes to imagegw
    output and allow user to specify image type. Add image listing support.
 +  Created iniital README
-
-15.12.1
-===========
-+  Fixed bug preventing autoshift/ccm in slurm/udiRoot integration from 
-   chdir'ing to permission restricted paths on root-squashed filesystems
-+  Fixed bug on some systems where the udiRoot would get recursively mounted in
-   the odd situation that the udiMount point overlapped the VFS being mounted
-+  Corrected udiRoot testsuite to run in automated test framework
 

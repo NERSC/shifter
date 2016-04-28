@@ -46,14 +46,16 @@ make ${MK_SMP_FLAGS}
 make install
 cd "${builddir}"
 
-dirs="linux asm asm-generic"
+dirs="linux asm asm-generic x86_64-linux-gnu/asm"
 for dir in $dirs; do
-    if [[ -L "/usr/include/$dir" ]]; then
-        # SLES has symlinks for asm
-        realpath=$(readlink -f "/usr/include/$dir")
-        cp -rp "$realpath" "${SPRT_PREFIX}/include/"
+    if [[ -e "/usr/include/$dir" ]]; then
+        if [[ -L "/usr/include/$dir" ]]; then
+            # SLES has symlinks for asm
+            realpath=$(readlink -f "/usr/include/$dir")
+            cp -rp "$realpath" "${SPRT_PREFIX}/include/"
+        fi
+        cp -rp "/usr/include/$dir" "${SPRT_PREFIX}/include/"
     fi
-    cp -rp "/usr/include/$dir" "${SPRT_PREFIX}/include/"
 done
 
 cd "${builddir}"

@@ -134,16 +134,16 @@ TEST(VolumeMapTestGroup, VolumeMapTokenize) {
 }
 
 TEST(VolumeMapTestGroup, VolumeMapParseBytes) {
-    ssize_t parsedVal = _parseBytes("5");
+    ssize_t parsedVal = parseBytes("5");
     CHECK(parsedVal == 5);
 
-    parsedVal = _parseBytes("5k");
+    parsedVal = parseBytes("5k");
     CHECK(parsedVal = 5 * 1024);
 
-    parsedVal = _parseBytes("500K");
+    parsedVal = parseBytes("500K");
     CHECK(parsedVal == 500 * 1024);
 
-    parsedVal = _parseBytes("500KB");
+    parsedVal = parseBytes("500KB");
     CHECK(parsedVal == 500 * 1024);
 }
 

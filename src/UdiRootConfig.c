@@ -56,6 +56,7 @@
 
 #define SITEFS_ALLOC_BLOCK 16
 #define SERVER_ALLOC_BLOCK 3
+#define PNCALLOWEDFS_ALLOC_BLOCK 10
 
 static int _assign(const char *key, const char *value, void *tUdiRootConfig);
 static int _validateConfigFile(const char *);
@@ -102,6 +103,10 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
     if (config->udiRootPath != NULL) {
         free(config->udiRootPath);
         config->udiRootPath = NULL;
+    }
+    if (config->perNodeCachePath != NULL) {
+        free(config->perNodeCachePath);
+        config->perNodeCachePath = NULL;
     }
     if (config->sitePreMountHook != NULL) {
         free(config->sitePreMountHook);
@@ -186,7 +191,14 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         config->jobIdentifier = NULL;
     }
 
-    char **arrays[] = {config->gwUrl, config->siteEnv, config->siteEnvAppend, config->siteEnvPrepend, NULL};
+    char **arrays[] = {
+        config->perNodeCacheAllowedFsType,
+        config->gwUrl,
+        config->siteEnv,
+        config->siteEnvAppend,
+        config->siteEnvPrepend,
+        NULL
+    };
     char ***arrayPtr = NULL;
     for (arrayPtr = arrays; *arrayPtr != NULL; arrayPtr++) {
         char **iPtr = NULL;
@@ -220,6 +232,16 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->imageBasePath != NULL ? config->imageBasePath : ""));
     written += fprintf(fp, "udiRootPath = %s\n", 
         (config->udiRootPath != NULL ? config->udiRootPath : ""));
+    written += fprintf(fp, "perNodeCachePath = %s\n",
+        (config->perNodeCachePath != NULL ? config->perNodeCachePath : ""));
+    written += fprintf(fp, "perNodeCacheSizeLimit = %lu\n",
+        config->perNodeCacheSizeLimit);
+    written += fprintf(fp, "perNodeCacheAllowedFsType =");
+    for (idx = 0; idx < config->perNodeCacheAllowedFsType_size; idx++) {
+        char *ptr = config->perNodeCacheAllowedFsType[idx];
+        written += fprintf(fp, " %s", ptr);
+    }
+    fprintf(fp, "\n");
     written += fprintf(fp, "sitePreMountHook = %s\n",
         (config->sitePreMountHook != NULL ? config->sitePreMountHook : ""));
     written += fprintf(fp, "sitePostMountHook = %s\n",
@@ -386,6 +408,27 @@ static int _assign(const char *key, const char *value, void *t_config) {
     } else if (strcmp(key, "udiRootPath") == 0) {
         config->udiRootPath = strdup(value);
         if (config->udiRootPath == NULL) return 1;
+    } else if (strcmp(key, "perNodeCachePath") == 0) {
+        config->perNodeCachePath = strdup(value);
+    } else if (strcmp(key, "perNodeCacheSizeLimit") == 0) {
+        config->perNodeCacheSizeLimit = parseBytes(value);
+    } else if (strcmp(key, "perNodeCacheAllowedFsType") == 0) {
+        char *valueDup = strdup(value);
+        char *search = valueDup;
+        char *svPtr = NULL;
+        char *ptr = NULL;
+        while ((ptr = strtok_r(search, " ", &svPtr)) != NULL) {
+            char **pncPtr = config->perNodeCacheAllowedFsType +
+                    config->perNodeCacheAllowedFsType_size;
+
+            strncpy_StringArray(ptr, strlen(ptr), &pncPtr,
+                    &(config->perNodeCacheAllowedFsType),
+                    &(config->perNodeCacheAllowedFsType_capacity),
+                    PNCALLOWEDFS_ALLOC_BLOCK);
+            config->perNodeCacheAllowedFsType_size++;
+            search = NULL;
+        }
+        free(valueDup);
     } else if (strcmp(key, "sitePreMountHook") == 0) {
         config->sitePreMountHook = strdup(value);
         if (config->sitePreMountHook == NULL) return 1;
@@ -524,14 +567,17 @@ static int _validateConfigFile(const char *configFile) {
     memset(&st, 0, sizeof(struct stat));
 
     if (stat(configFile, &st) != 0) {
+        fprintf(stderr, "Cannot find %s\n", configFile);
         return 1;
     }
 #ifndef NO_ROOT_OWN_CHECK
     if (st.st_uid != 0) {
+        fprintf(stderr, "udiRoot.conf must be owned by user root!");
         return UDIROOT_VAL_CFGFILE;
     }
 #endif
     if (st.st_mode & (S_IWOTH | S_IWGRP)) {
+        fprintf(stderr, "udiRoot.conf must not be writable by non-root users!");
         return UDIROOT_VAL_CFGFILE;
     }
     return 0;

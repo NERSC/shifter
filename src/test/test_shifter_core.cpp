@@ -166,19 +166,23 @@ TEST(ShifterCoreTestGroup, setupPerNodeCacheFilename_tests) {
     int ret = 0;
     char buffer[PATH_MAX];
     VolMapPerNodeCacheConfig *cache = (VolMapPerNodeCacheConfig *) malloc(sizeof(VolMapPerNodeCacheConfig));
+    UdiRootConfig *config = NULL;
+    ImageData *image = NULL;
+
+    CHECK(setupLocalRootVFSConfig(&config, &image, tmpDir, cwd) == 0);
 
     memset(cache, 0, sizeof(VolMapPerNodeCacheConfig));
 
     /* should fail because cache is NULL */
-    ret = setupPerNodeCacheFilename(NULL, buffer, 10);
+    ret = setupPerNodeCacheFilename(config, NULL, buffer, 10);
     CHECK(ret != 0);
 
     /* should fail because buffer is NULL */
-    ret = setupPerNodeCacheFilename(cache, NULL, 10);
+    ret = setupPerNodeCacheFilename(config, cache, NULL, 10);
     CHECK(ret != 0);
 
     /* should fail because buffer len is 0 */
-    ret = setupPerNodeCacheFilename(cache, buffer, 0);
+    ret = setupPerNodeCacheFilename(config, cache, buffer, 0);
     CHECK(ret != 0);
 
 
@@ -189,7 +193,7 @@ TEST(ShifterCoreTestGroup, setupPerNodeCacheFilename_tests) {
     snprintf(result, 1024, "/tmp/file_%s.xfs", hostname);
     cache->fstype = strdup("xfs");
     snprintf(buffer, PATH_MAX, "/tmp/file");
-    ret = setupPerNodeCacheFilename(cache, buffer, PATH_MAX);
+    ret = setupPerNodeCacheFilename(config, cache, buffer, PATH_MAX);
     CHECK(ret == 0);
     fprintf(stderr, "buffer: %s, result: %s\n", buffer, result);
     CHECK(strcmp(buffer, result) == 0);
@@ -197,7 +201,7 @@ TEST(ShifterCoreTestGroup, setupPerNodeCacheFilename_tests) {
     /* should fail because fstype is NULL */
     free(cache->fstype);
     cache->fstype = NULL;
-    ret = setupPerNodeCacheFilename(cache, buffer, PATH_MAX);
+    ret = setupPerNodeCacheFilename(config, cache, buffer, PATH_MAX);
     CHECK(ret != 0);
 
     free_VolMapPerNodeCacheConfig(cache);

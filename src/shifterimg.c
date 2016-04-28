@@ -356,7 +356,6 @@ ImageGwImageRec **parseImagesResponse(ImageGwState *imageGw) {
                 /* ERROR */
                 continue;
             }
-            json_object_iter jArrIt;
             int len = json_object_array_length(jIt.val);
             int idx = 0;
             for (idx = 0; idx < len; idx++) {
@@ -389,7 +388,6 @@ ImageGwImageRec *parseLookupResponse(ImageGwState *imageGw) {
         return NULL;
     }
     json_object *jObj = json_tokener_parse(imageGw->message);
-    json_object_iter jIt;
     ImageGwImageRec *image = NULL;
 
     if (jObj == NULL) {
@@ -425,7 +423,6 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
     char *cred = NULL;
     struct curl_slist *headers = NULL;
     char *authstr = NULL;
-    size_t authstr_len = 0;
     ImageGwState *imageGw = (ImageGwState *) malloc(sizeof(ImageGwState));
     memset(imageGw, 0, sizeof(ImageGwState));
 
@@ -511,7 +508,7 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
         }
     } else {
         if (config->verbose) {
-            printf("Got response: %d\nMessage: %s\n", http_code, imageGw->message);
+            printf("Got response: %ld\nMessage: %s\n", http_code, imageGw->message);
         }
         free_ImageGwState(imageGw);
         return NULL;
@@ -527,7 +524,6 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         {"verbose", 0, 0, 'v'},
         {0, 0, 0, 0}
     };
-    char *ptr = NULL;
 
     /* ensure that getopt processing stops at first non-option */
     setenv("POSIXLY_CORRECT", "1", 1);
