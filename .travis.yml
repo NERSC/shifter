@@ -6,8 +6,9 @@ python:
 env:
   - PATH
 before_install:
+  - sudo add-apt-repository "deb http://us.archive.ubuntu.com/ubuntu/ precise universe multiverse"
   - sudo apt-get update -qq
-  - sudo apt-get install -qq libjson-c2 libjson-c-dev libmunge2 libmunge-dev libcurl4-openssl-dev
+  - sudo apt-get install -qq libjson0 libjson0-dev libmunge2 libmunge-dev libcurl4-openssl-dev
 install: "pip install -r imagegw/requirements.txt"
 # command to run tests
 before_script:
