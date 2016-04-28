@@ -19,7 +19,7 @@ Shifter - environment containers for HPC
 %build
 ## build udiRoot (runtime) first
 %configure 
-MK_SMP_FLAGS=%{?_smp_mflags} make %{?_smp_mflags}
+MAKEFLAGS=%{?_smp_mflags} make
 
 %install
 %make_install

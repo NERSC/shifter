@@ -4,10 +4,10 @@ pkglibexec_SCRIPTS = mount
 noinst_PROGRAMS = cpputest/include
 
 mount:
-	./build.sh 2>&1 > build_dep.log
+	+./build.sh > build_dep.log
 
 cpputest/include:
-	./cpputest.sh 2>&1 > build_cpputest.log
+	+./cpputest.sh > build_cpputest.log
 
 .PHONY: clean-local-check
 
