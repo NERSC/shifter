@@ -1,9 +1,12 @@
 language: python
+sudo: true
 python:
   - "2.7"
 # command to install dependencies
 env:
   - PATH
+before_install:
+  - travis_retry sudo apt-get install rpmbuild
 install: "pip install -r imagegw/requirements.txt"
 # command to run tests
 before_script:
