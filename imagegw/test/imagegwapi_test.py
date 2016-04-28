@@ -62,7 +62,7 @@ class GWTestCase(unittest.TestCase):
         self.logfile='/tmp/worker.log'
         self.pid=0
         if os.path.exists(self.logfile):
-            os.unlink(self.logfile)
+            pass#os.unlink(self.logfile)
         self.start_worker()
 
 
