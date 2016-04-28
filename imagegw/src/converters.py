@@ -3,6 +3,7 @@
 import os
 import subprocess
 import shutil
+from util import program_exists
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
@@ -66,6 +67,7 @@ def generateCramFSImage(expandedPath, imagePath):
     """
     Creates a CramFS based image
     """
+    program_exists ('mkfs.cramfs')
     ret = subprocess.call(["mkfs.cramfs", expandedPath, imagePath], stdout=fdnull, stderr=fdnull)
     if ret != 0:
         # error handling
@@ -82,6 +84,9 @@ def generateSquashFSImage(expandedPath, imagePath):
     """
     Creates a SquashFS based image
     """
+    # This will raise an exception if mksquashfs tool is not found
+    # it should be handled by the calling function
+    program_exists ('mksquashfs')
 
     ret = subprocess.call(["mksquashfs", expandedPath, imagePath, "-all-root"])
     if ret != 0:
@@ -136,3 +141,4 @@ def writemeta(format,meta,metafile):
         mf.close()
     # Some error must have occurred
     return True
+
