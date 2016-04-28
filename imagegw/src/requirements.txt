@@ -1,6 +1,0 @@
-celery
-pymongo
-flask
-pysocks
-redis
-flower

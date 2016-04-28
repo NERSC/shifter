@@ -1,0 +1,46 @@
+{
+    "WorkerThreads":8,
+    "DefaultLustreReplication": 1,
+    "DefaultOstCount": 16,
+    "DefaultImageLocation": "index.docker.io",
+    "DefaultImageFormat": "squashfs",
+    "PullUpdateTimeout": 300,
+    "ImageExpirationTimeout": "90:00:00:00",
+    "CacheDirectory": "/tmp/imagegw/",
+    "ExpandDirectory": "/tmp/imagegw/",
+    "MongoDBURI":"mongodb://localhost/",
+    "MongoDB":"ShifterTest",
+    "Broker":"redis://localhost/",
+    "Authentication":"mock",
+
+    "Locations": {
+        "index.docker.io": {
+            "remotetype": "dockerv2",
+            "authentication": "http"
+        }
+    },
+
+    "Platforms": {
+        "systema": {
+            "mungeSocketPath": "/tmp/systema/munge.socket",
+            "accesstype": "remote",
+            "mountCommand": "/bin/mount",
+            "host": [
+                "localhost"
+            ],
+            "ssh": {
+                "username": "user",
+                "key": "/tmp/ssh.key",
+                "imageDir": "/tmp/systema/images"
+            }
+        },
+        "systemb": {
+            "mungeSocketPath": "/tmp/systemb/munge.socket",
+            "accesstype": "local",
+            "usergroupService": "local",
+            "local": {
+                "imageDir": "/tmp/systemb/images"
+            }
+        }
+    }
+}
