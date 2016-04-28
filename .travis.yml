@@ -17,11 +17,14 @@ before_script:
   - mkdir /tmp/imagegw /tmp/systema /tmp/systemb
   - rm imagegw/test/sha256sum
   - touch imagegw/shifter_imagegw/__init__.py
-script: |
-    ./configure --prefix=/usr --sysconfdir=/etc/shifter
-    MK_SMP_FLAGS="-j4" make -j4
-    sudo make install
-    cd imagegw/ && export PYTHONPATH=`pwd` && nosetests -x -s
+script:
+  - pwd
+  - ls
+  - ./configure --prefix=/usr --sysconfdir=/etc/shifter
+  - MK_SMP_FLAGS="-j4" make -j4
+  - sudo make install
+  - cd imagegw
+  - nosetests -x -s
 services:
   - mongodb
   - redis
