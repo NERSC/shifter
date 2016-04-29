@@ -80,7 +80,7 @@ class GWTestCase(unittest.TestCase):
                 'worker','--quiet',
                 '-Q','%s'%(system),
                 '--loglevel=WARNING',
-                '-c','2',
+                '-c','1',
                 '-f',self.logfile])
         else:
             self.pid=pid
