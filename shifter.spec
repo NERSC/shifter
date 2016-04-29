@@ -34,10 +34,12 @@ Group:    System Environment/Base
 BuildRequires: munge
 BuildRequires: libcurl-devel
 BuildRequires: libjson-c-devel
+BuildRequires: pam-devel
 %else
 BuildRequires: munge
 BuildRequires: libcurl libcurl-devel
 BuildRequires: json-c json-c-devel
+BuildRequires: pam-devel
 %endif
 %description runtime
 runtime and user interface components of shifter
