@@ -124,7 +124,7 @@ class GWTestCase(unittest.TestCase):
         # Do a pull so we can create an image record
         uri='%s/pull/%s/'%(self.url,self.urlreq)
         i=0
-        while i<20:
+        while i<200:
             rv = self.app.post(uri,headers={AUTH_HEADER:self.auth})
             assert rv.status_code==200
             r=json.loads(rv.data)
