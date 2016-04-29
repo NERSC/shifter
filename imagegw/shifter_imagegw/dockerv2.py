@@ -439,10 +439,13 @@ def pullImage(options, baseUrl, repo, tag, cachedir='./', expanddir='./', cacert
     imageident = '%s:%s' % (repo, tag)
     a = dockerv2Handle(imageident, options)
 
+    print "about to get manifest"
     manifest = a.getImageManifest()
     (eldest,youngest) = a.constructImageMetadata(manifest)
     layer = eldest
+    print "about to get layers"
     while layer is not None:
+        print "about to pull layer: ", layer['fsLayer']['blobSum']
         a.saveLayer(layer['fsLayer']['blobSum'], cachedir)
         layer = layer['child']
 

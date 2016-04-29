@@ -24,11 +24,12 @@ script:
   - echo "have $PROC_COUNT processors"
   - ./autogen.sh
   - ./configure --prefix=/usr --sysconfdir=/etc/shifter
+  - cd imagegw ## temporary to debug imagegw test issues
   - MAKEFLAGS="-j$PROC_COUNT" make
   - sudo make install 
-  - cd src/test
-  - ../../extra/CI/test_script.sh
-  - cd ../../imagegw
+#  - cd src/test
+#  - ../../extra/CI/test_script.sh
+#  - cd ../../imagegw
   - nosetests -x -s
 services:
   - mongodb
