@@ -13,11 +13,9 @@ before_install:
 install: "pip install -r imagegw/requirements.txt"
 # command to run tests
 before_script:
-  - export PATH=$PWD/imagegw/test/:$PATH
   - cp imagegw/test.json.example imagegw/test.json
   - mkdir /tmp/imagegw /tmp/systema /tmp/systemb
   - rm imagegw/test/sha256sum
-  - touch imagegw/shifter_imagegw/__init__.py
   - find /tmp/
 script:
   - export PROC_COUNT=$(cat /proc/cpuinfo  | egrep '^processor' | wc -l)
@@ -30,6 +28,7 @@ script:
 #  - cd src/test
 #  - ../../extra/CI/test_script.sh
 #  - cd ../../imagegw
+  - export PATH=$PWD/test:$PATH
   - nosetests -x -s
   - df /tmp
   - find /tmp/
