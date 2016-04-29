@@ -35,6 +35,7 @@ services:
   - mongodb
   - redis
 after_failure:
+  - df /tmp
   - find /tmp/
   - ls -latrh /tmp/*
   - ls -latrh /tmp/imagegw/*
