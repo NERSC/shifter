@@ -31,6 +31,12 @@ script:
 #  - ../../extra/CI/test_script.sh
 #  - cd ../../imagegw
   - nosetests -x -s
+  - df /tmp
+  - find /tmp/
+  - ls -latrh /tmp/*
+  - ls -latrh /tmp/imagegw/*
+  - ls -latrh /tmp/systema/images/*
+  - cat /tmp/worker.log
 services:
   - mongodb
   - redis
