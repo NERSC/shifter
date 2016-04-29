@@ -218,11 +218,15 @@ def cleanup_temporary(request):
             raise ValueError('Invalid location for %s: %s' % (item, cleanitem))
         if os.path.exists(cleanitem):
             logging.info("Worker: removing %s" % cleanitem)
-            subprocess.call(['chmod', '-R', 'u+w', cleanitem])
-            if os.path.isdir(cleanitem):
-                shutil.rmtree(cleanitem,ignore_errors=True)
-            else:
-                os.unlink(cleanitem)
+            try:
+                subprocess.call(['chmod', '-R', 'u+w', cleanitem])
+                if os.path.isdir(cleanitem):
+                    shutil.rmtree(cleanitem,ignore_errors=True)
+                else:
+                    os.unlink(cleanitem)
+            except:
+                logging.error("Worker: caught exception while trying to clean up %s." % cleanitem)
+                logging.warn(sys.exc_value)
 
 @queue.task(bind=True)
 def dopull(self,request,TESTMODE=0):

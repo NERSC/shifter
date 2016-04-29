@@ -34,15 +34,7 @@ function runTest() {
    fi
    valgrind --tool=memcheck --leak-check=full --suppressions=valgrind.suppressions -v ./$test
    gcov -b $sources 
-   cat $source.c.gcov | grep "#####:";
 }
-
-cd udiRoot
-./autogen.sh
-./configure --prefix=/opt/shifter/abcd --with-munge --with-json-c --with-libcurl
-make
-
-cd src/test
 
 runTest test_ImageData ImageData
 runTest test_MountList MountList

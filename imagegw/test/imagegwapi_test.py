@@ -62,7 +62,7 @@ class GWTestCase(unittest.TestCase):
         self.logfile='/tmp/worker.log'
         self.pid=0
         if os.path.exists(self.logfile):
-            os.unlink(self.logfile)
+            pass#os.unlink(self.logfile)
         self.start_worker()
 
 
@@ -80,7 +80,7 @@ class GWTestCase(unittest.TestCase):
                 'worker','--quiet',
                 '-Q','%s'%(system),
                 '--loglevel=WARNING',
-                '-c','2',
+                '-c','1',
                 '-f',self.logfile])
         else:
             self.pid=pid
@@ -124,7 +124,7 @@ class GWTestCase(unittest.TestCase):
         # Do a pull so we can create an image record
         uri='%s/pull/%s/'%(self.url,self.urlreq)
         i=0
-        while i<20:
+        while i<200:
             rv = self.app.post(uri,headers={AUTH_HEADER:self.auth})
             assert rv.status_code==200
             r=json.loads(rv.data)

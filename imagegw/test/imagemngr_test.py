@@ -51,7 +51,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.pid=0
         self.query={'system':self.system,'itype':self.itype,'tag':self.tag}
         if os.path.exists(self.logfile):
-            os.unlink(self.logfile)
+            pass#os.unlink(self.logfile)
         # Cleanup Mongo
         if self.images.find_one(self.query):
             self.images.remove(self.query)

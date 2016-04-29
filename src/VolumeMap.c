@@ -171,7 +171,7 @@ __tokenizeVolumeMapInput_unclean_exit:
     return NULL;
 }
 
-ssize_t _parseBytes(const char *input) {
+ssize_t parseBytes(const char *input) {
     const char *scale = "bkmgtpe";
     char *ptr = NULL;
     const char *sptr = NULL;
@@ -289,7 +289,7 @@ int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
                 goto __parseFlags_exit_unclean;
             }
             if (strcasecmp(key, "size") == 0) {
-                cache->cacheSize = _parseBytes(value);
+                cache->cacheSize = parseBytes(value);
                 if (cache->cacheSize <= 0) {
                     fprintf(stderr, "Invalid size for perNodeCache: %s\n", value);
                     goto __parseFlags_exit_unclean;
@@ -309,7 +309,7 @@ int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
                     goto __parseFlags_exit_unclean;
                 }
             } else if (strcasecmp(key, "bs") == 0) {
-                cache->blockSize = _parseBytes(value);
+                cache->blockSize = parseBytes(value);
                 if (cache->blockSize <= 0) {
                     fprintf(stderr, "Invalid blocksize for perNodeCache: %s\n", value);
                     goto __parseFlags_exit_unclean;

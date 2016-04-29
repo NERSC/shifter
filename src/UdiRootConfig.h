@@ -80,6 +80,9 @@ typedef struct _UdiRootConfig {
     char *system;
     char *imageBasePath;
     char *udiRootPath;
+    char *perNodeCachePath;
+    size_t perNodeCacheSizeLimit;
+    char **perNodeCacheAllowedFsType;
     char *sitePreMountHook;
     char *sitePostMountHook;
     char *optUdiImage;
@@ -117,6 +120,8 @@ typedef struct _UdiRootConfig {
     size_t siteEnv_size;
     size_t siteEnvAppend_size;
     size_t siteEnvPrepend_size;
+    size_t perNodeCacheAllowedFsType_capacity;
+    size_t perNodeCacheAllowedFsType_size;
 
     /* current execution context */
     uid_t target_uid;

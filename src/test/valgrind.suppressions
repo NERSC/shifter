@@ -1,7 +1,6 @@
 {
    ShifterCopyEnvTESTwithExplicitLeak
    Memcheck:Leak
-   match-leak-kinds: definite
    fun:malloc
    fun:strdup
    fun:_Z7copyenvv

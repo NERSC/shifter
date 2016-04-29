@@ -42,18 +42,20 @@ mkdir -p musl
 tar xf "musl-${MUSL_VERSION}.tar.gz" -C musl --strip-components=1
 cd musl
 ./configure "--prefix=${SPRT_PREFIX}" --enable-static --disable-shared
-make ${MK_SMP_FLAGS}
+make
 make install
 cd "${builddir}"
 
-dirs="linux asm asm-generic"
+dirs="linux asm asm-generic x86_64-linux-gnu/asm"
 for dir in $dirs; do
-    if [[ -L "/usr/include/$dir" ]]; then
-        # SLES has symlinks for asm
-        realpath=$(readlink -f "/usr/include/$dir")
-        cp -rp "$realpath" "${SPRT_PREFIX}/include/"
+    if [[ -e "/usr/include/$dir" ]]; then
+        if [[ -L "/usr/include/$dir" ]]; then
+            # SLES has symlinks for asm
+            realpath=$(readlink -f "/usr/include/$dir")
+            cp -rp "$realpath" "${SPRT_PREFIX}/include/"
+        fi
+        cp -rp "/usr/include/$dir" "${SPRT_PREFIX}/include/"
     fi
-    cp -rp "/usr/include/$dir" "${SPRT_PREFIX}/include/"
 done
 
 cd "${builddir}"
@@ -61,7 +63,7 @@ mkdir -p util-linux
 tar xf "util-linux-2.26.2.tar.gz" -C util-linux --strip-components=1
 cd util-linux
 CC=gcc ./configure "--prefix=${INST_PREFIX}" --enable-static --disable-shared
-CC=gcc make ${MK_SMP_FLAGS} mount
+CC=gcc make mount
 cp -p mount "${origdir}/"
 
 cd "${builddir}"
@@ -69,7 +71,7 @@ mkdir -p libressl
 tar xf "libressl-${LIBRESSL_VERSION}.tar.gz" -C libressl --strip-components=1
 cd libressl
 CC="${SPRT_PREFIX}/bin/musl-gcc" ./configure "--prefix=${SPRT_PREFIX}" --enable-static --disable-shared
-make ${MK_SMP_FLAGS}
+make
 make install
 
 cd "${builddir}"
@@ -77,7 +79,7 @@ mkdir -p zlib
 tar xf "zlib-${ZLIB_VERSION}.tar.gz" -C zlib --strip-components=1
 cd zlib
 CC="${SPRT_PREFIX}/bin/musl-gcc" ./configure "--prefix=${SPRT_PREFIX}"
-make ${MK_SMP_FLAGS}
+make
 make install
 
 cd "${builddir}"
@@ -90,7 +92,7 @@ cd openssh
 ## very nearly the path it was built with)
 export PATH="/usr/bin:/bin"
 CC="${SPRT_PREFIX}/bin/musl-gcc" ./configure --without-pam "--with-ssl-dir=${SPRT_PREFIX}" --without-ssh1 --enable-static --disable-shared "--with-zlib=${SPRT_PREFIX}" "--prefix=${INST_PREFIX}"
-make ${MK_SMP_FLAGS}
+make
 make install "DESTDIR=${PREFIX}"
 cd "${builddir}"
 

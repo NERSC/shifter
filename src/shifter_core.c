@@ -141,12 +141,15 @@ int bindImageIntoUDI(
         goto _bindImgUDI_unclean;
     }
     while ((dirEntry = readdir(subtree)) != NULL) {
-        if (strcmp(dirEntry->d_name, ".") == 0 || strcmp(dirEntry->d_name, "..") == 0) {
+        if (strcmp(dirEntry->d_name, ".") == 0 ||
+            strcmp(dirEntry->d_name, "..") == 0)
+        {
             continue;
         }
         itemname = userInputPathFilter(dirEntry->d_name, 0);
         if (itemname == NULL) {
-            fprintf(stderr, "FAILED to correctly filter entry: %s\n", dirEntry->d_name);
+            fprintf(stderr, "FAILED to correctly filter entry: %s\n",
+                dirEntry->d_name);
             rc = 2;
             goto _bindImgUDI_unclean;
         }
@@ -237,7 +240,8 @@ int bindImageIntoUDI(
                     free(*argsPtr);
                 }
                 if (ret != 0) {
-                    fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
+                    fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer,
+                            mntBuffer);
                     rc = 2;
                     goto _bindImgUDI_unclean;
                 }
@@ -281,7 +285,9 @@ _bindImgUDI_unclean:
  *
  * In all cases stick/setuid bits will be removed.
  */
-int _shifterCore_copyFile(const char *cpPath, const char *source, const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode) {
+int _shifterCore_copyFile(const char *cpPath, const char *source,
+        const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode)
+{
     struct stat destStat;
     struct stat sourceStat;
     char *cmdArgs[5] = { NULL, NULL, NULL, NULL, NULL };
@@ -290,14 +296,20 @@ int _shifterCore_copyFile(const char *cpPath, const char *source, const char *de
     int isLink = 0;
     mode_t tgtMode = mode;
 
-    if (cpPath == NULL || dest == NULL || source == NULL || strlen(dest) == 0 || strlen(source) == 0) {
+    if (cpPath == NULL ||
+            dest == NULL ||
+            source == NULL ||
+            strlen(dest) == 0 ||
+            strlen(source) == 0)
+    {
         fprintf(stderr, "Invalid arguments for _shifterCore_copyFile\n");
         goto _copyFile_unclean;
     }
     if (stat(dest, &destStat) == 0) {
         /* check if dest is a directory */
         if (!S_ISDIR(destStat.st_mode)) {
-            fprintf(stderr, "Destination path %s exists and is not a directory. Will not copy\n", dest);
+            fprintf(stderr, "Destination path %s exists and is not a directory."
+                   " Will not copy\n", dest);
             goto _copyFile_unclean;
         }
     }
@@ -369,8 +381,10 @@ _copyFile_unclean:
   \param udiConfig global configuration for udiRoot
   \return 0 for succss, 1 otherwise
 */
-int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig) {
-
+int prepareSiteModifications(const char *username,
+                             const char *minNodeSpec,
+                             UdiRootConfig *udiConfig)
+{
     /* construct path to "live" copy of the image. */
     char udiRoot[PATH_MAX];
     char mntBuffer[PATH_MAX];
@@ -998,7 +1012,6 @@ char **getSupportedFilesystems() {
     size_t listExtent = 10;
     size_t listLen = 0;
     FILE *fp = fopen("/proc/filesystems", "r");
-    ssize_t nread = 0;
     
     if (ret == NULL || fp == NULL) { // || buffer == NULL) {
         /* ran out of memory */
@@ -1187,29 +1200,61 @@ int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig) {
 }
 
 int setupPerNodeCacheFilename(
+        UdiRootConfig *udiConfig,
         VolMapPerNodeCacheConfig *cache,
         char *buffer,
         size_t buffer_len)
 {
     char hostname_buf[128];
     size_t pos = 0;
+    int fd = 0;
+    int nbytes = 0;
 
     if (    cache == NULL ||
             cache->fstype == NULL  ||
             buffer == NULL ||
-            buffer_len == 0)
+            buffer_len == 0 ||
+            udiConfig == NULL)
     {
-        return 1;
+        return -1;
+    }
+    if (    udiConfig->perNodeCachePath == NULL ||
+            strlen(udiConfig->perNodeCachePath) == 0)
+    {
+        fprintf(stderr, "udiRoot.conf does not have a valid perNodeCachePath."
+                " Cannot generate perNodeCache backing stores.\n");
+        return -1;
+    }
+    if (udiConfig->target_uid == 0 || udiConfig->target_gid == 0) {
+        fprintf(stderr, "will not setup per-node cache with target uid or gid of 0\n");
+        return -1;
     }
     pos = strlen(buffer);
     if (pos > buffer_len) {
-        return 1;
+        return -1;
     }
     if (gethostname(hostname_buf, 128) != 0) {
-        return 1;
+        return -1;
     }
-    snprintf(&(buffer[pos]), buffer_len - pos, "_%s.%s", hostname_buf, cache->fstype);
-    return 0;
+    nbytes = snprintf(buffer, buffer_len, "%s/perNodeCache_uid%d_gid%d_%s.%s.XXXXXX",
+            udiConfig->perNodeCachePath,
+            udiConfig->target_uid,
+            udiConfig->target_gid,
+            hostname_buf,
+            cache->fstype
+    );
+    if (nbytes >= buffer_len - 1) {
+        fprintf(stderr, "perNodeCache filename too long to store in buffer.\n");
+        return -1;
+    }
+    fd = mkstemp(buffer);
+    if (fd < 0) {
+        fprintf(stderr, "Failed to open perNodeCache backing store %s.\n",
+                buffer);
+        perror("Error: ");
+        return -1;
+    }
+    return fd;
 }
 
 int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *buffer, UdiRootConfig *udiConfig) {
@@ -1217,124 +1262,51 @@ int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *b
         fprintf(stderr, "configuration is invalid (null), cannot setup per-node cache\n");
         return 1;
     }
-    if (udiConfig->target_uid == 0 || udiConfig->target_gid == 0) {
-        fprintf(stderr, "will not setup per-node cache with target uid or gid of 0\n");
+    char *args[7];
+    char **arg = NULL;
+    int ret = 0;
+    if (udiConfig->ddPath == NULL) {
+        fprintf(stderr, "Must define ddPath in udiRoot configuration to use this feature\n");
         return 1;
     }
+    args[0] = strdup(udiConfig->ddPath);
+    args[1] = strdup("if=/dev/zero");
+    args[2] = alloc_strgenf("of=%s", buffer);
+    args[3] = strdup("bs=1");
+    args[4] = strdup("count=0");
+    args[5] = alloc_strgenf("seek=%lu", cache->cacheSize);
+    args[6] = NULL;
+    ret = forkAndExecvSilent(args);
+    for (arg = args; *arg; arg++) {
+        free(*arg);
+    }
 
-    pid_t pid = fork();
-    if (pid == 0) {
-        struct stat statData;
-        int fd = 0;
-        memset(&statData, 0, sizeof(struct stat));
-
-        chdir("/");
-        /* drop privileges */
-        if (getuid() != udiConfig->target_uid) {
-            if (setgroups(1, &(udiConfig->target_gid)) != 0) {
-                fprintf(stderr, "Failed to setgroups\n");
-                exit(1);
-            }
-            if (setresgid(udiConfig->target_gid, udiConfig->target_gid, udiConfig->target_gid) != 0) {
-                fprintf(stderr, "Failed to setgid to %d\n", udiConfig->target_gid);
-                exit(1);
-            }
-            if (setresuid(udiConfig->target_uid, udiConfig->target_uid, udiConfig->target_uid) != 0) {
-                fprintf(stderr, "Failed to setuid to %d\n", udiConfig->target_uid);
-                exit(1);
-            }
-        }
-
-        if (stat(buffer, &statData) == 0) {
-            fprintf(stderr, "Backing file %s already exists, failing\n", buffer);
-            exit(1);
-        }
-        fd = open(buffer, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-        if (fd < 0) {
-            fprintf(stderr, "Failed to open file %s for writing, failing\n", buffer);
-            exit(1);
-        }
-#if 0
-        if (fallocate(fd, 0, 0, cache->cacheSize) < 0) {
-            /* only some filesystems support this mode of fallocate, if
-             * unsupported use dd to generate the backing file */
-            if (errno == EOPNOTSUPP) {
-#endif
-        {
-                char *args[7];
-                char **arg = NULL;
-                int ret = 0;
-                if (udiConfig->ddPath == NULL) {
-                    fprintf(stderr, "Must define ddPath in udiRoot configuration to use this feature\n");
-                    exit(1);
-                }
-                args[0] = strdup(udiConfig->ddPath);
-                args[1] = strdup("if=/dev/zero");
-                args[2] = alloc_strgenf("of=%s", buffer);
-                args[3] = strdup("bs=1");
-                args[4] = strdup("count=0");
-                args[5] = alloc_strgenf("seek=%lu", cache->cacheSize);
-                args[6] = NULL;
-                ret = forkAndExecvSilent(args);
-                for (arg = args; *arg; arg++) {
-                    free(*arg);
-                }
-
-                if (ret != 0) {
-                    fprintf(stderr, "FAILED to dd backing store for cache on %s, %d\n", buffer, ret);
-                    exit(1);
-                }
-        }
-#if 0
-            } else {
-                perror("FAILED to fallocate() cache backing store");
-                exit(1);
-            }
-        }
-#endif
-
-        if (strcmp(cache->fstype, "xfs") == 0) {
-            char **args = NULL;
-            char **argPtr = NULL;
-            int ret = 0;
-            if (udiConfig->mkfsXfsPath == NULL) {
-                fprintf(stderr, "Must define mkfsXfsPath in udiRoot configuration to use this feature\n");
-                exit(1);
-            }
-            args = (char **) malloc(sizeof(char *) * 4);
-            args[0] = strdup(udiConfig->mkfsXfsPath);
-            args[1] = strdup("-d");
-            args[2] = alloc_strgenf("name=%s,file=1,size=%lu", buffer, cache->cacheSize);
-            args[3] = NULL;
-            ret = forkAndExecvSilent(args);
-            for (argPtr = args; argPtr && *argPtr; argPtr++) {
-                free(*argPtr);
-            }
-            free(args);
-            if (ret != 0) {
-                fprintf(stderr, "FAILED to create the XFS cache filesystem on %s\n", buffer);
-                exit(1);
-            }
-        }
-        exit(0);
-    } else if (pid > 0) {
-        int status = 0;
-        do {
-            pid_t ret = waitpid(pid, &status, 0);
-            if (ret != pid) {
-                fprintf(stderr, "waited for wrong pid: %d != %d\n", pid, ret);
-                return 1;
-            }
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-        if (WIFEXITED(status)) {
-            status = WEXITSTATUS(status);
-        } else {
-            status = 1;
-        }
-        return status;
-    } else {
-        fprintf(stderr, "FAILED to fork to create backing store!\n");
+    if (ret != 0) {
+        fprintf(stderr, "FAILED to dd backing store for cache on %s, %d\n", buffer, ret);
         return 1;
+    }
+    if (strcmp(cache->fstype, "xfs") == 0) {
+        char **args = NULL;
+        char **argPtr = NULL;
+        int ret = 0;
+        if (udiConfig->mkfsXfsPath == NULL) {
+            fprintf(stderr, "Must define mkfsXfsPath in udiRoot configuration to use this feature\n");
+            exit(1);
+        }
+        args = (char **) malloc(sizeof(char *) * 4);
+        args[0] = strdup(udiConfig->mkfsXfsPath);
+        args[1] = strdup("-d");
+        args[2] = alloc_strgenf("name=%s,file=1,size=%lu", buffer, cache->cacheSize);
+        args[3] = NULL;
+        ret = forkAndExecvSilent(args);
+        for (argPtr = args; argPtr && *argPtr; argPtr++) {
+            free(*argPtr);
+        }
+        free(args);
+        if (ret != 0) {
+            fprintf(stderr, "FAILED to create the XFS cache filesystem on %s\n", buffer);
+            return 1;
+        }
     }
     return 0;
 }
@@ -1365,14 +1337,10 @@ int setupVolumeMapMounts(
         return 0;
     }
 
-#define _BINDMOUNT(mountCache, from, to, flags, overwrite) if (_shifterCore_bindMount(udiConfig, mountCache, from, to, flags, overwrite) != 0) { \
-    fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from, to); \
-    goto _setupVolumeMapMounts_unclean; \
-}
-
     for (mapIdx = 0; mapIdx < map->n; mapIdx++) {
         size_t flagsInEffect = 0;
         size_t flagIdx = 0;
+        int backingStoreExists = 0;
         filtered_from = userInputPathFilter(map->from[mapIdx], 1);
         filtered_to = userInputPathFilter(map->to[mapIdx], 1);
         flags = map->flags[mapIdx];
@@ -1380,7 +1348,7 @@ int setupVolumeMapMounts(
         if (filtered_from == NULL || filtered_to == NULL) {
             fprintf(stderr, "INVALID mount from %s to %s\n",
                     filtered_from, filtered_to);
-            goto _setupVolumeMapMounts_unclean;
+            goto _handleVolMountError;
         }
         snprintf(from_buffer, PATH_MAX, "%s/%s",
                 (fromPrefix != NULL ? fromPrefix : ""),
@@ -1393,52 +1361,62 @@ int setupVolumeMapMounts(
         );
         to_buffer[PATH_MAX-1] = 0;
 
+        free(filtered_from);
+        filtered_from = NULL;
+        free(filtered_to);
+        filtered_to = NULL;
+
         /* check if this is a per-volume cache, and if so mangle the from name
          * and then create the volume backing store */
         for (flagIdx = 0; flags && flags[flagIdx].type != 0; flagIdx++) {
             flagsInEffect |= flags[flagIdx].type;
             if (flags[flagIdx].type == VOLMAP_FLAG_PERNODECACHE) {
                 int ret = 0;
+                int fd = 0;
 
-                VolMapPerNodeCacheConfig *cache = (VolMapPerNodeCacheConfig *) flags[flagIdx].value;
-                ret = setupPerNodeCacheFilename(cache, from_buffer, PATH_MAX);
-                if (ret != 0) {
+                VolMapPerNodeCacheConfig *cache =
+                        (VolMapPerNodeCacheConfig *) flags[flagIdx].value;
+                fd = setupPerNodeCacheFilename(udiConfig, cache, from_buffer,
+                        PATH_MAX);
+                if (fd < 0) {
                     fprintf(stderr, "FAILED to set perNodeCache name\n");
-                    goto _setupVolumeMapMounts_unclean;
+                    goto _handleVolMountError;
                 }
 
                 /* intialize the backing store */
                 ret = setupPerNodeCacheBackingStore(cache, from_buffer, udiConfig);
                 if (ret != 0) {
                     fprintf(stderr, "FAILED to setup perNodeCache\n");
-                    goto _setupVolumeMapMounts_unclean;
+                    goto _handleVolMountError;
                 }
+                close(fd);
+                backingStoreExists = 1;
             }
         }
 
         if (stat(from_buffer, &statData) != 0) {
             fprintf(stderr, "FAILED to find volume \"from\": %s\n", from_buffer);
-            goto _setupVolumeMapMounts_unclean;
+            goto _handleVolMountError;
         }
         if (!(flagsInEffect & VOLMAP_FLAG_PERNODECACHE) && !S_ISDIR(statData.st_mode)) {
             fprintf(stderr, "FAILED \"from\" location is not directory: %s\n", from_buffer);
-            goto _setupVolumeMapMounts_unclean;
+            goto _handleVolMountError;
         }
         if (stat(to_buffer, &statData) != 0) {
             if (createTo) {
                 mkdir(to_buffer, 0755);
                 if (stat(to_buffer, &statData) != 0) {
                     fprintf(stderr, "FAILED to find volume \"to\": %s\n", to_buffer);
-                    goto _setupVolumeMapMounts_unclean;
+                    goto _handleVolMountError;
                 }
             } else {
                 fprintf(stderr, "FAILED to find volume \"to\": %s\n", to_buffer);
-                goto _setupVolumeMapMounts_unclean;
+                goto _handleVolMountError;
             }
         }
         if (!S_ISDIR(statData.st_mode)) {
             fprintf(stderr, "FAILED \"to\" location is not directory: %s\n", to_buffer);
-            goto _setupVolumeMapMounts_unclean;
+            goto _handleVolMountError;
         }
         if (flagsInEffect & VOLMAP_FLAG_PERNODECACHE) {
             VolMapPerNodeCacheConfig *cacheConfig = NULL;
@@ -1451,7 +1429,7 @@ int setupVolumeMapMounts(
             }
             if (cacheConfig == NULL) {
                 fprintf(stderr, "FAILED to find per-node cache config, exiting.\n");
-                goto _setupVolumeMapMounts_unclean;
+                goto _handleVolMountError;
             }
             ImageFormat format = FORMAT_INVALID;
             if (strcmp(cacheConfig->fstype, "xfs") == 0) {
@@ -1461,15 +1439,32 @@ int setupVolumeMapMounts(
                 loopMount(from_buffer, to_buffer, format, udiConfig, 0);
             } else {
                 fprintf(stderr, "FAILED to understand per-node cache mounting method, exiting.\n");
-                goto _setupVolumeMapMounts_unclean;
+                goto _handleVolMountError;
             }
             if (chown(to_buffer, udiConfig->target_uid, udiConfig->target_gid) != 0) {
                 fprintf(stderr, "FAILED to chown per-node cache to user.\n");
-                goto _setupVolumeMapMounts_unclean;
+                goto _handleVolMountError;
             }
+            if (unlink(from_buffer) != 0) {
+                fprintf(stderr, "FAILED to unlink backing file: %s!", from_buffer);
+                perror("Error: ");
+                goto _handleVolMountError;
+            }
+            backingStoreExists = 0;
+
         } else {
-            _BINDMOUNT(mountCache, from_buffer, to_buffer, flagsInEffect, 1);
+            if (_shifterCore_bindMount(udiConfig, mountCache, from_buffer, to_buffer, flagsInEffect, 1) != 0) {
+                fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from_buffer, to_buffer);
+                goto _handleVolMountError;
+            }
         }
+        continue;
+_handleVolMountError:
+        if ((flagsInEffect & VOLMAP_FLAG_PERNODECACHE) && backingStoreExists == 1) {
+            unlink(from_buffer);
+            backingStoreExists = 0;
+        }
+        goto _setupVolumeMapMounts_unclean;
     }
 
 #undef _BINDMOUNT
