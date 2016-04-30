@@ -4,6 +4,12 @@ SUBDIRS = test
 
 AM_CPPFLAGS = -DCONFIG_FILE=\"${sysconfdir}/udiRoot.conf\" -DLIBEXECDIR=\"${libexecdir}/shifter\" -Wall
 
+if ALLOW_STATICSSHD
+SSH_CPPFLAGS=-DALLOW_STATICSSHD=1
+else
+SSH_CPPFLAGS=
+endif
+
 sbin_PROGRAMS = setupRoot unsetupRoot
 bin_PROGRAMS = shifter shifterimg
 
@@ -46,7 +52,7 @@ SHIFTERIMG_SOURCES = \
 
 
 shifter_SOURCES = $(SHIFTER_SOURCES)
-setupRoot_SOURCES = $(SETUPROOT_SOURCES)
+setupRoot_SOURCES = $(SETUPROOT_SOURCES) $(SSH_CPPFLAGS)
 unsetupRoot_SOURCES = $(UNSETUPROOT_SOURCES)
 shifterimg_SOURCES = $(SHIFTERIMG_SOURCES)
 shifterimg_LDFLAGS = $(MUNGE_LDFLAGS) $(JSON_LDFLAGS) $(LIBCURL) $(MUNGE_LDFLAGS)

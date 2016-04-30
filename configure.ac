@@ -52,6 +52,10 @@ AS_IF([test "x$enable_cray" == "xyes"], [
 AC_SUBST(ROOTFS_TYPE)
 AC_SUBST(USE_GETPWUID)
 
+AC_ARG_ENABLE([staticsshd], AS_HELP_STRING([--disable-staticsshd], [Turn off support for starting a staticly-linked sshd to within the container]))
+AM_CONDITIONAL([BUILD_STATICSSHD], [test "x$enable_staticsshd" != "xno"])
+AM_CONDITIONAL([ALLOW_STATICSSHD], [test "x$enable_staticsshd" != "xno"])
+
 AC_DEFINE_DIR(SHIFTER_PREFIX, prefix, [fully expanded prefix])
 AC_DEFINE_DIR(SHIFTER_LIBEXECDIR, libexecdir, [fully expanded libexecdir])
 AC_DEFINE_DIR(SHIFTER_SYSCONFDIR, sysconfdir, [fully expanded sysconfdir])

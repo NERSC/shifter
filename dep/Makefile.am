@@ -1,13 +1,23 @@
 AUTOMAKE_OPTIONS=foreign
 
+if BUILD_STATICSSHD
+OPT = udiRoot_dep.tar
+else
+OPT =
+endif
+
 pkglibexec_SCRIPTS = mount
-noinst_PROGRAMS = cpputest/include
+check_PROGRAMS = cpputest/include/CppUTest/CppUTestConfig.h
+noinst_DATA = $(OPT)
 
 mount:
-	+./build.sh > build_dep.log
+	+./build_mount.sh > build_mount.log
 
 cpputest/include:
 	+./cpputest.sh > build_cpputest.log
+
+udiRoot_dep.tar:
+	+./build_ssh.sh > build_ssh.log
 
 .PHONY: clean-local-check
 
@@ -18,6 +28,7 @@ install-data-hook:
 clean-local: clean-local-check
 clean-local-check:
 	-rm -rf build
+	-rm -rf build_mount
 	-rm -rf cpputest
 	-rm udiRoot_dep.tar
 	-rm mount
