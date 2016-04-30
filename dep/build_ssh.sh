@@ -34,9 +34,6 @@ fi
 if [[ ! -e "openssh-${OPENSSH_VERSION}.tar.gz" ]]; then
     curl -o "openssh-${OPENSSH_VERSION}.tar.gz" "http://mirrors.sonic.net/pub/OpenBSD/OpenSSH/portable/openssh-${OPENSSH_VERSION}.tar.gz"
 fi
-if [[ ! -e "util-linux-2.26.2.tar.gz" ]]; then
-    curl -k -o "util-linux-2.26.2.tar.gz" "https://www.kernel.org/pub/linux/utils/util-linux/v2.26/util-linux-2.26.2.tar.gz"
-fi
 
 mkdir -p musl
 tar xf "musl-${MUSL_VERSION}.tar.gz" -C musl --strip-components=1
@@ -57,14 +54,6 @@ for dir in $dirs; do
         cp -rp "/usr/include/$dir" "${SPRT_PREFIX}/include/"
     fi
 done
-
-cd "${builddir}"
-mkdir -p util-linux
-tar xf "util-linux-2.26.2.tar.gz" -C util-linux --strip-components=1
-cd util-linux
-CC=gcc ./configure "--prefix=${INST_PREFIX}" --enable-static --disable-shared
-CC=gcc make mount
-cp -p mount "${origdir}/"
 
 cd "${builddir}"
 mkdir -p libressl

@@ -23,6 +23,7 @@ script:
   - ./autogen.sh
   - ./configure --prefix=/usr --sysconfdir=/etc/shifter
   - MAKEFLAGS="-j$PROC_COUNT" make
+  - MAKEFLAGS="-j$PROC_COUNT" make check
   - sudo make install 
   - cd src/test
   - ../../extra/CI/test_script.sh
