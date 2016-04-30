@@ -15,7 +15,9 @@ Shifter - environment containers for HPC
 
 %prep
 %setup -q
-./autogen.sh
+if [[ ! -e ./configure ]]; then
+    ./autogen.sh
+fi
 
 %build
 ## build udiRoot (runtime) first
