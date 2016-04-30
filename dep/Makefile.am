@@ -7,13 +7,13 @@ OPT =
 endif
 
 pkglibexec_SCRIPTS = mount
-check_PROGRAMS = cpputest/include/CppUTest/CppUTestConfig.h
+check_DATA = cpputest/include/CppUTest/CppUTestConfig.h
 noinst_DATA = $(OPT)
 
 mount:
 	+./build_mount.sh > build_mount.log
 
-cpputest/include:
+cpputest/include/CppUTest/CppUTestConfig.h:
 	+./cpputest.sh > build_cpputest.log
 
 udiRoot_dep.tar:
