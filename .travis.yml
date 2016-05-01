@@ -25,7 +25,6 @@ before_script:
   - find /tmp/
 script:
   - export PROC_COUNT=$(cat /proc/cpuinfo  | egrep '^processor' | wc -l)
-  - echo "have $PROC_COUNT processors"
   - ./autogen.sh
   - ./configure --prefix=/usr --sysconfdir=/etc/shifter
   - MAKEFLAGS="-j$PROC_COUNT" make
@@ -47,9 +46,6 @@ after_failure:
   - ls -latrh /tmp/systema/images/*
   - cat /tmp/worker.log
 after_success:
-  - ls -latrh
-  - which cpp-coveralls
-  - which coveralls
   - cpp-coveralls --exclude dep -n --dump cpp_coveralls.json
   - coveralls-merge cpp_coveralls.json 
 notifications:
