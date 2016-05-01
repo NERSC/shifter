@@ -27,7 +27,6 @@ script:
   - echo "have $PROC_COUNT processors"
   - ./autogen.sh
   - ./configure --prefix=/usr --sysconfdir=/etc/shifter
-  - coverage
 #  - MAKEFLAGS="-j$PROC_COUNT" make
 #  - MAKEFLAGS="-j$PROC_COUNT" make check
 #  - sudo make install 
@@ -35,7 +34,7 @@ script:
 #  - ../../extra/CI/test_script.sh
 #  - cd ../..
   - export PATH=$PWD/imagegw/test:$PATH
-  - PYTHONPATH=$PWD/imagegw nosetests -x -s --with-coverage imagegw
+  - PYTHONPATH=$PWD/imagegw nosetests -x -s --with-coverage --cov-config .coveragerc imagegw
 services:
   - mongodb
   - redis
