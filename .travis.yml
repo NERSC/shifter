@@ -27,12 +27,12 @@ script:
   - echo "have $PROC_COUNT processors"
   - ./autogen.sh
   - ./configure --prefix=/usr --sysconfdir=/etc/shifter
-#  - MAKEFLAGS="-j$PROC_COUNT" make
-#  - MAKEFLAGS="-j$PROC_COUNT" make check
-#  - sudo make install 
-#  - cd src/test
-#  - ../../extra/CI/test_script.sh
-#  - cd ../..
+  - MAKEFLAGS="-j$PROC_COUNT" make
+  - MAKEFLAGS="-j$PROC_COUNT" make check
+  - sudo make install 
+  - cd src/test
+  - ../../extra/CI/test_script.sh
+  - cd ../..
   - export PATH=$PWD/imagegw/test:$PATH
   - PYTHONPATH=$PWD/imagegw nosetests -x -s --with-coverage imagegw
 services:
@@ -46,7 +46,7 @@ after_failure:
   - ls -latrh /tmp/systema/images/*
   - cat /tmp/worker.log
 after_success:
-#  - cpp-coveralls --exclude dep -n --dryrun --dump cpp_coveralls.json
-#  - coveralls --merge=cpp_coveralls.json 
+  - cpp-coveralls --exclude dep -n --dryrun --dump cpp_coveralls.json
+  - coveralls --merge=cpp_coveralls.json 
 notifications:
   slack: shifter-hpc:G2yziADLjfv5y0KoCVT907cS
