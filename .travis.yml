@@ -16,6 +16,7 @@ install:
   - pip install cpp-coveralls
   - LOC=$(dirname $(which coveralls) ); sudo mv $LOC/coveralls $LOC/cpp-coveralls
   - pip install coveralls
+  - pip install coveralls-merge
 # command to run tests
 before_script:
   - cp imagegw/test.json.example test.json
@@ -46,7 +47,10 @@ after_failure:
   - ls -latrh /tmp/systema/images/*
   - cat /tmp/worker.log
 after_success:
-  - cpp-coveralls --exclude dep -n --dryrun --dump cpp_coveralls.json
-  - coveralls --merge=cpp_coveralls.json 
+  - ls -latrh
+  - which cpp-coveralls
+  - which coveralls
+  - cpp-coveralls --exclude dep -n --dump cpp_coveralls.json
+  - coveralls-merge cpp_coveralls.json 
 notifications:
   slack: shifter-hpc:G2yziADLjfv5y0KoCVT907cS
