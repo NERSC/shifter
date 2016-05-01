@@ -9,4 +9,4 @@ def setup():
   # Create __init__
 
 def teardown():
-  subprocess.check_call("./test/cleanup.sh") 
+  subprocess.check_call("cleanup.sh") 
