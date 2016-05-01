@@ -16,7 +16,7 @@ before_install:
 install: "pip install -r imagegw/requirements.txt"
 # command to run tests
 before_script:
-  - cp imagegw/test.json.example imagegw/test.json
+  - cp imagegw/test.json.example test.json
   - mkdir /tmp/imagegw /tmp/systema /tmp/systemb
   - rm imagegw/test/sha256sum
   - find /tmp/
