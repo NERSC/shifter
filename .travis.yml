@@ -11,7 +11,7 @@ before_install:
   - sudo apt-get update -qq
   - sudo apt-get install -qq libjson-c2 libjson-c-dev libmunge2 libmunge-dev libcurl4-openssl-dev autoconf automake libtool curl make valgrind xfsprogs squashfs-tools
   - sudo pip install cpp-coveralls
-  - sudo mv /usr/bin/coveralls /usr/bin/cpp-coveralls
+  - LOC=$(dirname $(which coveralls) ); sudo mv $LOC/coveralls $LOC/cpp-coveralls
   - sudo pip install coveralls
 install: "pip install -r imagegw/requirements.txt"
 # command to run tests
