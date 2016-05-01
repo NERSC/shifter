@@ -43,6 +43,6 @@ after_failure:
   - ls -latrh /tmp/systema/images/*
   - cat /tmp/worker.log
 after_success:
-  - coveralls
+  - coveralls --exclude dep -n 
 notifications:
   slack: shifter-hpc:G2yziADLjfv5y0KoCVT907cS
