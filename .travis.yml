@@ -11,6 +11,8 @@ before_install:
   - sudo apt-get update -qq
   - sudo apt-get install -qq libjson-c2 libjson-c-dev libmunge2 libmunge-dev libcurl4-openssl-dev autoconf automake libtool curl make valgrind xfsprogs squashfs-tools
   - sudo pip install cpp-coveralls
+  - sudo mv /usr/bin/coveralls /usr/bin/cpp-coveralls
+  - sudo pip install coveralls
 install: "pip install -r imagegw/requirements.txt"
 # command to run tests
 before_script:
@@ -28,10 +30,9 @@ script:
   - sudo make install 
   - cd src/test
   - ../../extra/CI/test_script.sh
-  - cd ../../imagegw
+  - cd ../..
   - export PATH=$PWD/test:$PATH
-  - nosetests -x -s
-  - cd ..
+  - nosetests -x -s --with-coverage imagegw
 services:
   - mongodb
   - redis
@@ -43,6 +44,7 @@ after_failure:
   - ls -latrh /tmp/systema/images/*
   - cat /tmp/worker.log
 after_success:
-  - coveralls --exclude dep -n 
+  - cpp-coveralls --exclude dep -n --dryrun --dump cpp_coveralls.json
+  - coveralls --merge=cpp_coveralls.json 
 notifications:
   slack: shifter-hpc:G2yziADLjfv5y0KoCVT907cS
