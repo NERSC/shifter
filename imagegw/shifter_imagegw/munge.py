@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import sys
 import os
-from subprocess import check_output, Popen, PIPE
+from subprocess import Popen, PIPE
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
@@ -32,8 +32,9 @@ def munge(text,socket=None):
         com=["munge", '-s', text]
         if socket is not None:
             com.extend(['-S',socket])
-        message = check_output(com)
-        return message.replace('\n','')
+        proc = Popen(com, stdout=PIPE, stderr=PIPE);
+        (stdout,stderr) = p.communicate()
+        return stdout.replace('\n','')
     except:
         return None
 

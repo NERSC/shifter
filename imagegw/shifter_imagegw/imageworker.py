@@ -48,6 +48,14 @@ logging.info("Opening %s"%(CONFIGFILE))
 with open(CONFIGFILE) as configfile:
     config=json.load(configfile)
 
+if 'CacheDirectory' in config:
+    if not os.path.exists(config['CacheDirectory']):
+        os.mkdir(config['CacheDirectory'])
+if 'ExpandDirectory' in config:
+    if not os.path.exists(config['ExpandDirectory']):
+        os.mkdir(config['ExpandDirectory'])
+
+
 # Create Celery Queue and configure serializer
 #
 queue = Celery('tasks', backend=config['Broker'],broker=config['Broker'])
