@@ -296,8 +296,25 @@ TEST(UtilityTestGroup, allocStrgenf_basic) {
     char *myString = alloc_strgenf("This is a test: %d\n", 37*73);
     CHECK(myString != NULL)
     CHECK(strcmp(myString, "This is a test: 2701\n") == 0)
-
     free(myString);
+    myString = NULL;
+
+    /* strgenf allocates a 128 character buffer by default and will get more
+     * if necessary, need to test this */
+
+    myString = alloc_strgenf("%s %s %s %s %s %s %s",
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do",
+            "eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut",
+            "enim ad minim veniam, quis nostrud exercitation ullamco laboris",
+            "nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in",
+            "reprehenderit in voluptate velit esse cillum dolore eu fugiat",
+            "nulla pariatur. Excepteur sint occaecat cupidatat non proident,",
+            "sunt in culpa qui officia deserunt mollit anim id est laborum.");
+
+    CHECK(myString != NULL);
+    CHECK(strcmp(myString, "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.") == 0);
+    free(myString);
+    myString = NULL;
 }
 
 TEST(UtilityTestGroup, cleanPath_basic) {

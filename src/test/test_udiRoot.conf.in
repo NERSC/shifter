@@ -23,3 +23,11 @@ batchType=slurm
 imageGateway=http://localhost:5000
 system=testSystem
 perNodeCachePath=/tmp
+perNodeCacheAllowedFsType=xfs
+perNodeCacheSizeLimit=100G
+mkfsXfsPath=/usr/sbin/mkfs.xfs
+siteEnv=SHIFTER_RUNTIME=1 \
+        TEST_ENV=yes
+siteEnvAppend=PATH=/opt/udiImage/bin\
+              MANPATH=/opt/udiImage/share/man
+siteEnvPrepend=PKG_CONFIG_PATH=/this/is/fake
