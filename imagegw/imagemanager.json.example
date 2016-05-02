@@ -20,7 +20,7 @@
 
     "Platforms": {
         "mycluster": {
-            "mungeSocketPath": "/var/run/munge/munge.socket",
+            "mungeSocketPath": "/var/run/munge/munge.socket.2",
             "accesstype": "local",
             "usergroupService": "local",
             "local": {
