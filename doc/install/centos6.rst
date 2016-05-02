@@ -48,6 +48,7 @@ Configuring the Image Manager
 =============================
 Copy /etc/shifter/imagemanager.json.example to /etc/shifter/imagemanager.json.
 At minimum you should check that:
+
 * "MongoDBURI" is correct URL to shifter imagegw mongodb server
 * "Broker" is correct url to redis
 * "CacheDirectory" exists, semi-permanent storage for docker layers
@@ -84,6 +85,7 @@ At minimum you need to change:
 * set the URL for imageGateway to match your imagegw machine, no trailing slash
 
 Generate a passwd and group file for all your shifter users and place in:
+
 * ``/etc/shifter/etc_files/passwd``
 * ``/etc/shifter/etc_files/group``
 
