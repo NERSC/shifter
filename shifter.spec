@@ -29,6 +29,8 @@ MAKEFLAGS=%{?_smp_mflags} make
 %install
 %make_install
 
+rm -f $RPM_BUILD_ROOT/%{_sysconfdir}/shifter_etc_files/passwd
+rm -f $RPM_BUILD_ROOT/%{_sysconfdir}/shifter_etc_files/group
 %if %{?with_slurm:1}0
 rm -f $RPM_BUILD_ROOT/%{_libdir}/shifter/shifter_slurm.a
 rm -f $RPM_BUILD_ROOT/%{_libdir}/shifter/shifter_slurm.la
@@ -67,6 +69,10 @@ runtime and user interface components of shifter
 %{_libexecdir}/shifter/opt
 %{_sysconfdir}/udiRoot.conf.example
 %{_sysconfdir}/shifter_etc_files/nsswitch.conf
+
+%post runtime
+getent passwd > %{_sysconfdir}/shifter_etc_files/passwd
+getent group > %{_sysconfdir}/shifter_etc_files/group
 
 %if 0%{?with_slurm:1}
 %package slurm
