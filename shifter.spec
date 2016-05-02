@@ -38,7 +38,10 @@ BuildRequires: libcurl-devel
 BuildRequires: libjson-c-devel
 BuildRequires: pam-devel
 %else
-BuildRequires: munge
+BuildRequires: munge-devel
+BuildRequires: gcc
+BuildRequires: gcc-c++
+BuildRequires: libtool autoconf automake
 BuildRequires: libcurl libcurl-devel
 BuildRequires: json-c json-c-devel
 BuildRequires: pam-devel
