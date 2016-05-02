@@ -101,4 +101,22 @@ See TODO:FutureDocument for more information on udiRoot.conf configuration.
 Starting the Image Manager
 ==========================
 
+Ensure that mongod is running, if configured to be on the same host as
+the imagegw, do something like:
+
+1. ``yum install mongodb-server``
+2. ``/etc/init.d/mongod start``
+
+Ensure that redis is running, this needs to be on the same host as the
+imagegw:
+
+1. ``yum install redis``
+2. ``/etc/init.d/redis start``
+
 TODO:  put init scripts into RPM distribution
+Without init scripts, do something like:
+
+1. ``/usr/libexec/shifter/imagegwapi.py > /var/log/imagegwapi.log &``
+2. ``celery worker -A shifter_imagegw.imageworker -Q $CLUSTERNAME -t /var/log/imagegw_worker_$CLUSTERNAME.log &``
+
+   * Ensure that CLUSTERNAME matches the values in udiRoot.conf (system) and imagemanger.json (platform)
