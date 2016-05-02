@@ -57,6 +57,7 @@ AM_CONDITIONAL([BUILD_STATICSSHD], [test "x$enable_staticsshd" != "xno"])
 AM_CONDITIONAL([ALLOW_STATICSSHD], [test "x$enable_staticsshd" != "xno"])
 
 AS_VAR_SET(shifter_etc_files, $sysconfdir/shifter_etc_files)
+AC_SUBST(shifter_etc_files)
 
 AC_DEFINE_DIR(SHIFTER_PREFIX, prefix, [fully expanded prefix])
 AC_DEFINE_DIR(SHIFTER_LIBEXECDIR, libexecdir, [fully expanded libexecdir])
