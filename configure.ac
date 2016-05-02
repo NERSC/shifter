@@ -56,9 +56,12 @@ AC_ARG_ENABLE([staticsshd], AS_HELP_STRING([--disable-staticsshd], [Turn off sup
 AM_CONDITIONAL([BUILD_STATICSSHD], [test "x$enable_staticsshd" != "xno"])
 AM_CONDITIONAL([ALLOW_STATICSSHD], [test "x$enable_staticsshd" != "xno"])
 
+AS_VAR_SET(shifter_etc_files, $sysconfdir/shifter_etc_files)
+
 AC_DEFINE_DIR(SHIFTER_PREFIX, prefix, [fully expanded prefix])
 AC_DEFINE_DIR(SHIFTER_LIBEXECDIR, libexecdir, [fully expanded libexecdir])
 AC_DEFINE_DIR(SHIFTER_SYSCONFDIR, sysconfdir, [fully expanded sysconfdir])
+AC_DEFINE_DIR(SHIFTER_ETC_FILESDIR, shifter_etc_files, [fully expanded shifter_etc_files])
 
 AC_PROG_LIBTOOL
 
@@ -95,6 +98,7 @@ AC_CHECK_FUNCS([getcwd memmove memset mkdir putenv realpath rmdir setenv strchr 
 
 AC_CONFIG_FILES([Makefile
                  src/Makefile
+                 etc_files/Makefile
                  src/test/Makefile
                  dep/Makefile
                  extra/Makefile

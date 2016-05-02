@@ -93,7 +93,7 @@ optUdiImage=@SHIFTER_LIBEXECDIR@/@PACKAGE_NAME@/opt/udiImage
 # included in their image.
 #
 # Recommended value: /opt/shifter/default/etc_files
-etcPath=/opt/shifter/default/etc_files
+etcPath=@SHIFTER_ETC_FILES@
 
 
 #allowLocalChroot (0 or 1)

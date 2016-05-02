@@ -66,6 +66,7 @@ runtime and user interface components of shifter
 %{_libexecdir}/shifter/mount
 %{_libexecdir}/shifter/opt
 %{_sysconfdir}/udiRoot.conf.example
+%{_sysconfdir}/shifter_etc_files/nsswitch.conf
 
 %if 0%{?with_slurm:1}
 %package slurm
