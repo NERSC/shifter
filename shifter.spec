@@ -21,13 +21,23 @@ fi
 
 %build
 ## build udiRoot (runtime) first
-%configure 
+%configure \
+    %{?with_slurm:--with-slurm=%{?with_slurm}}
+
 MAKEFLAGS=%{?_smp_mflags} make
 
 %install
 %make_install
+
+%if %{?with_slurm:1}0
 rm -f $RPM_BUILD_ROOT/%{_libdir}/shifter/shifter_slurm.a
 rm -f $RPM_BUILD_ROOT/%{_libdir}/shifter/shifter_slurm.la
+%else
+rm -f $RPM_BUILD_ROOT/%{_libdir}/shifter/shifter_slurm.a
+rm -f $RPM_BUILD_ROOT/%{_libdir}/shifter/shifter_slurm.la
+rm -f $RPM_BUILD_ROOT/%{_libdir}/shifter/shifter_slurm.so
+rm -f $RPM_BUILD_ROOT/%{_libexecdir}/shifter/shifter_slurm_dws_support
+%endif
 
 %package  runtime
 Summary:  runtime component for shifter (formerly udiRoot)
@@ -57,6 +67,7 @@ runtime and user interface components of shifter
 %{_libexecdir}/shifter/opt
 %{_sysconfdir}/udiRoot.conf.example
 
+%if 0%{?with_slurm:1}
 %package slurm
 Summary:  slurm spank module for shifter
 BuildRequires: slurm-devel
@@ -65,6 +76,7 @@ spank module for integrating shifter into slurm
 %files slurm
 %{_libdir}/shifter/shifter_slurm.so
 %{_libexecdir}/shifter/shifter_slurm_dws_support
+%endif
 
 %package imagegw
 Summary: shifter image manager
