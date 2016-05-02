@@ -71,7 +71,7 @@ Summary: shifter image manager
 %description imagegw
 image manager
 %files imagegw
-%{_libdir}/python2.7/site-packages/shifter_imagegw
+%{_libdir}/python2.*/site-packages/shifter_imagegw
 %{_libexecdir}/shifter/imagecli.py*
 %{_libexecdir}/shifter/imagegwapi.py*
 %{_datadir}/shifter/requirements.txt
