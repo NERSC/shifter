@@ -31,6 +31,8 @@ script:
   - MAKEFLAGS="-j$PROC_COUNT" make check
   - sudo make install 
   - cd src/test
+  - export DO_ROOT_TESTS=1
+  - export DO_ROOT_DANGEROUS_TESTS=1
   - ../../extra/CI/test_script.sh
   - cd ../..
   - export PATH=$PWD/imagegw/test:$PATH
