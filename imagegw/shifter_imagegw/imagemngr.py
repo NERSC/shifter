@@ -263,7 +263,7 @@ class imagemngr:
             'pulltag':image['tag']}
       self.logger.debug('Pull called Test Mode=%d'%TESTMODE)
       if not self.check_session(session,request['system']):
-          self.logger.warn('Invalid session on system %s'%{request['system']})
+          self.logger.warn('Invalid session on system %s' % (request['system']))
           raise OSError("Invalid Session")
       # If a pull request exist for this tag
       #  check to see if it is expired or a failure, if so remove it
