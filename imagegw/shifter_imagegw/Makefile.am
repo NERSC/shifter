@@ -1,3 +1,4 @@
+SUBDIRS = api
 shifter_imagegw_PYTHON = auth.py \
 				converters.py \
 				dockerhub.py \
@@ -7,7 +8,6 @@ shifter_imagegw_PYTHON = auth.py \
 				__init__.py \
 				munge.py \
 				transfer.py \
-				util.py \
-				api/__init__.py
+				util.py 
 
 shifter_imagegwdir = $(pyexecdir)/shifter_imagegw
