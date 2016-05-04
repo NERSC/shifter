@@ -37,7 +37,7 @@ script:
   - cd ../..
   - export PATH=$PWD/imagegw/test:$PATH
   - export PYTHONPATH=$PWD/imagegw
-  - nosetests -x -s --with-coverage imagegw
+  - nosetests -x -s --with-coverage imagegw/test
 services:
   - mongodb
   - redis
