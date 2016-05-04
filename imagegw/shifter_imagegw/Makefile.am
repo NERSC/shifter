@@ -7,6 +7,7 @@ shifter_imagegw_PYTHON = auth.py \
 				__init__.py \
 				munge.py \
 				transfer.py \
-				util.py
+				util.py \
+				api/__init__.py
 
 shifter_imagegwdir = $(pyexecdir)/shifter_imagegw
