@@ -461,8 +461,8 @@ class imagemngr:
       return self.images.remove(desc)
         
   @mongo_reconnect_reattempt
-  def images_update(self, desc, value):
-      return self.images.update(desc, value)
+  def images_update(self, desc, value, **kwargs):
+      return self.images.update(desc, value, **kwargs)
 
   @mongo_reconnect_reattempt
   def images_find(self, query):
