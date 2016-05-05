@@ -417,6 +417,21 @@ ImageGwImageRec *parsePullResponse(ImageGwState *imageGw) {
     return image;
 }
 
+int imgCompare(const void *ta, const void *tb) {
+    const ImageGwImageRec *a = (const ImageGwImageRec *) ta;
+    const ImageGwImageRec *b = (const ImageGwImageRec *) tb;
+    if (!a && !b) return 0;
+    if (!a && b) return 1;
+    if (a && !b) return -1;
+    if (!(a->tag) && !(b->tag)) return 0;
+    if (!(a->tag) && (b->tag)) return 1;
+    if ((a->tag) && !(b->tag)) return -1;
+    if (!(a->tag[0]) && !(b->tag[0])) return 0;
+    if (!(a->tag[0]) && (b->tag[0])) return 1;
+    if ((a->tag[0]) && !(b->tag[0])) return -1;
+    return strcmp(a->tag[0], b->tag[0]);
+}
+
 ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options *config, UdiRootConfig *udiConfig) {
     const char *modeStr = NULL;
     if (config->mode == MODE_LOOKUP) {
@@ -506,6 +521,7 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
                             config->verbose ? "\n" : "");
                     fflush(stdout);
                     if (strcmp(image->status, "MISSING") == 0 ||
+                        strcmp(image->status, "INIT") == 0 ||
                         strcmp(image->status, "PULLING") == 0 ||
                         strcmp(image->status, "EXAMINATION") == 0 ||
                         strcmp(image->status, "CONVERSION") == 0 || 
@@ -538,25 +554,44 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
             } else if (config->mode == MODE_IMAGES) {
                 ImageGwImageRec **images = parseImagesResponse(imageGw);
                 if (images != NULL && *images != NULL) {
+                    size_t count = 0;
+                    size_t lidx = 0;
                     ImageGwImageRec **ptr = images;
                     for (ptr = images; ptr != NULL && *ptr != NULL; ptr++) {
                         ImageGwImageRec *image = *ptr;
                         char **tagPtr = image->tag;
                         while (tagPtr && *tagPtr) {
-                            time_t pull_time = image->last_pull;
-                            struct tm time_struct;
-                            char time_str[100];
-                            memset(&time_struct, 0, sizeof(struct tm));
-                            if (localtime_r(&pull_time, &time_struct) == NULL) {
-                                /* if above generated an error, re-zero so we display obvious nonsense */
-                                memset(&time_struct, 0, sizeof(struct tm));
-                            }
-                            strftime(time_str, 100, "%Y-%m-%dT%H:%M:%S", &time_struct);
-
-                            printf("%-10s %-10s %-8s %-.10s   %s %-30s\n", image->system, image->type, image->status, image->identifier, time_str, *tagPtr);
+                            count++;
                             tagPtr++;
                         }
-                        free_ImageGwImageRec(image, 1);
+                    }
+                    ImageGwImageRec *limages = (ImageGwImageRec *) malloc(sizeof(ImageGwImageRec) * count);
+                    for (ptr = images; ptr != NULL && *ptr != NULL; ptr++) {
+                        ImageGwImageRec *image = *ptr;
+                        char **tagPtr = image->tag;
+                        while (tagPtr && *tagPtr) {
+                            memcpy(&(limages[lidx]), image, sizeof(ImageGwImageRec));
+                            limages[lidx].tag = (char **) malloc(sizeof(char *) * 1);
+                            limages[lidx].tag[0] = *tagPtr;
+                            lidx++;
+                            tagPtr++;
+                        }
+                    }
+                    qsort(limages, count, sizeof(ImageGwImageRec), imgCompare);
+                    for (lidx = 0; lidx < count; lidx++) {
+                        ImageGwImageRec *image = &(limages[lidx]);
+                        char *tag = image->tag[0];
+                        time_t pull_time = image->last_pull;
+                        struct tm time_struct;
+                        char time_str[100];
+                        memset(&time_struct, 0, sizeof(struct tm));
+                        if (localtime_r(&pull_time, &time_struct) == NULL) {
+                            /* if above generated an error, re-zero so we display obvious nonsense */
+                            memset(&time_struct, 0, sizeof(struct tm));
+                        }
+                        strftime(time_str, 100, "%Y-%m-%dT%H:%M:%S", &time_struct);
+
+                        printf("%-10s %-10s %-8s %-.10s   %s %-30s\n", image->system, image->type, image->status, image->identifier, time_str, tag);
                     }
                 }
                 if (images != NULL) {
@@ -617,6 +652,8 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         config->mode = MODE_LOOKUP;
     } else if (strcmp(argv[optind], "pull") == 0) {
         config->mode = MODE_PULL;
+    } else if (strcmp(argv[optind], "pullnb") == 0) {
+        config->mode = MODE_PULL_NONBLOCK;
     } else if (strcmp(argv[optind], "images") == 0) {
         config->mode = MODE_IMAGES;
     } else if (strcmp(argv[optind], "login") == 0) {
