@@ -41,6 +41,7 @@ enum ImageGwAction {
     MODE_PULL,
     MODE_IMAGES,
     MODE_LOGIN,
+    MODE_PULL_NONBLOCK,
     MODE_INVALID
 };
 
@@ -49,6 +50,8 @@ struct options {
     enum ImageGwAction mode;
     char *type;
     char *tag;
+    char *rawtype;
+    char *rawtag;
 };
 
 typedef struct _ImageGwState {
@@ -73,7 +76,6 @@ typedef struct _ImageGwImageRec {
     char **tag;
     char **userAcl;
 } ImageGwImageRec;
-
 
 void _usage(int ret) {
     FILE *output = stdout;
@@ -399,11 +401,27 @@ ImageGwImageRec *parseLookupResponse(ImageGwState *imageGw) {
     return image;
 }
 
+ImageGwImageRec *parsePullResponse(ImageGwState *imageGw) {
+    if (imageGw == NULL || !imageGw->isJsonMessage || !imageGw->messageComplete) {
+        return NULL;
+    }
+    json_object *jObj = json_tokener_parse(imageGw->message);
+    ImageGwImageRec *image = NULL;
+
+    if (jObj == NULL) {
+        return NULL;
+    }
+    image = parseImageJson(jObj);
+
+    json_object_put(jObj);  /* apparently this weirdness frees the json object */
+    return image;
+}
+
 ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options *config, UdiRootConfig *udiConfig) {
     const char *modeStr = NULL;
     if (config->mode == MODE_LOOKUP) {
         modeStr = "lookup";
-    } else if (config->mode == MODE_PULL) {
+    } else if (config->mode == MODE_PULL || config->mode == MODE_PULL_NONBLOCK) {
         modeStr = "pull";
     } else if (config->mode == MODE_IMAGES) {
         modeStr = "list";
@@ -413,8 +431,6 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
     const char *url = NULL;
     if (tag != NULL) {
         url = alloc_strgenf("%s/api/%s/%s/%s/%s/", baseUrl, modeStr, udiConfig->system, type, tag);
-        free(type);
-        free(tag);
     } else {
         url = alloc_strgenf("%s/api/%s/%s/", baseUrl, modeStr, udiConfig->system);
     }
@@ -447,7 +463,7 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, handleResponseData);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, imageGw);
 
-    if (config->mode == MODE_PULL) {
+    if (config->mode == MODE_PULL || config->mode == MODE_PULL_NONBLOCK) {
         curl_easy_setopt(curl, CURLOPT_POST, 1);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "");
     }
@@ -476,7 +492,49 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
                     printf("%s\n", image->identifier);
                 }
                 free_ImageGwImageRec(image, 1);
+            } else if (config->mode == MODE_PULL_NONBLOCK) {
+                time_t curr_timet = time(NULL);
+                struct tm *curr = localtime(&curr_timet);
+                char timebuf[128];
+                strftime(timebuf, 128, "%Y-%m-%dT%H:%M:%S", curr);
+                ImageGwImageRec *image = parsePullResponse(imageGw);
+                if (image != NULL) {
+
+                    printf("%s%s Pulling Image: %s:%s, status: %s%s",
+                            config->verbose ? "" : "\r\x1b[2K",
+                            timebuf, config->rawtype, config->rawtag, image->status,
+                            config->verbose ? "\n" : "");
+                    fflush(stdout);
+                    if (strcmp(image->status, "MISSING") == 0 ||
+                        strcmp(image->status, "PULLING") == 0 ||
+                        strcmp(image->status, "EXAMINATION") == 0 ||
+                        strcmp(image->status, "CONVERSION") == 0 || 
+                        strcmp(image->status, "TRANSFER") == 0) {
+                        free_ImageGwImageRec(image, 1);
+                        return imageGw;
+                    } else {
+                        printf("\n");
+                        free_ImageGwImageRec(image, 1);
+                        free_ImageGwState(imageGw);
+                        return NULL;
+                    }
+                } else {
+                    free_ImageGwState(imageGw);
+                    return NULL;
+                }
             } else if (config->mode == MODE_PULL) {
+                ImageGwImageRec *image = parsePullResponse(imageGw);
+                if (image != NULL) {
+                    for ( ; ; ) {
+                        usleep(500000);
+                        config->mode = MODE_PULL_NONBLOCK;
+                        /* query again */
+                        ImageGwState *gwState = queryGateway(baseUrl, type, tag, config, udiConfig);
+                        if (gwState == NULL) break;
+                        free_ImageGwState(gwState);
+                        config->mode = MODE_PULL;
+                    }
+                }
             } else if (config->mode == MODE_IMAGES) {
                 ImageGwImageRec **images = parseImagesResponse(imageGw);
                 if (images != NULL && *images != NULL) {
@@ -582,7 +640,9 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
 
         *ptr++ = 0;
         config->type = curl_easy_escape(curl, type, strlen(type));
+        config->rawtype = strdup(type);
         config->tag = curl_easy_escape(curl, ptr, strlen(ptr));
+        config->rawtag = strdup(ptr);
         ptr--;
         *ptr = ':';
 
