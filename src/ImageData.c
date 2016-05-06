@@ -433,6 +433,7 @@ int parse_ImageDescriptor(char *userinput, char **imageType, char **imageTag, Ud
     char *tag = NULL;
     char *tmp = NULL;
     char *ptr = NULL;
+    const char **ref = allowedImageTypes;
 
     if (imageType == NULL || imageTag == NULL ||
         userinput == NULL || strlen(userinput) == 0 ||
@@ -446,7 +447,6 @@ int parse_ImageDescriptor(char *userinput, char **imageType, char **imageTag, Ud
     ptr = strchr(userinput, ':');
     if (ptr != NULL) {
         /* ptr might be an image type, or it might just be part of the tag */
-        const char **ref = allowedImageTypes;
         *ptr = 0;
         tmp = _filterString(userinput, 0);
         if (tmp == NULL) {
@@ -482,7 +482,7 @@ int parse_ImageDescriptor(char *userinput, char **imageType, char **imageTag, Ud
 
     /* if no type is found, then the whole userinput string must be the image
      * descriptor, so assume default image type from udiRoot.conf */
-    if (!foundType) {
+    if (!foundType && udiConfig->defaultImageType != NULL) {
         type = strdup(udiConfig->defaultImageType);
         if (type == NULL) {
             fprintf(stderr, "ERROR: failed to copy type string (out of mem?) "
@@ -492,11 +492,26 @@ int parse_ImageDescriptor(char *userinput, char **imageType, char **imageTag, Ud
         ptr = userinput;
     }
 
+    /* validate type */
     if (type == NULL || strlen(type) == 0) {
         fprintf(stderr, "FAILED to determine image type.  Either specify image "
                 "type or set defaultImageType in udiRoot.conf\n");
         goto _error;
     }
+    foundType = 0;
+    for (ref = allowedImageTypes; ref && *ref; ref++) {
+        if (strcmp(*ref, type) == 0) {
+            foundType = 1;
+            break;
+        }
+    }
+    if (foundType == 0) {
+        fprintf(stderr, "ERROR: requested image type %s is invalid.  Please "
+                "check formatting or set defaultImageType in udiRoot.conf "
+                "correctly\n");
+        goto _error;
+    }
+
     if (strcmp(type, "local") == 0 ||
         strcmp(type, "docker") == 0) {
 

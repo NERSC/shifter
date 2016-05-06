@@ -70,6 +70,71 @@ TEST(ImageDataTestGroup, ConfigAssign_basic) {
 
 }
 
+TEST(ImageDataTestGroup, parseImageDescriptor) {
+    UdiRootConfig config;
+    config.defaultImageType = strdup("docker");
+
+    char *input = NULL;
+    char *tag = NULL;
+    char *type = NULL;
+    int ret = 0;
+
+    /* check valid input with explicit well-formed descriptor */
+    input = strdup("docker:ubuntu:14.04");
+    ret = parse_ImageDescriptor(input, &type, &tag, &config);
+    CHECK(ret == 0);
+    CHECK(tag != NULL && strcmp(tag, "ubuntu:14.04") == 0);
+    CHECK(type != NULL && strcmp(type, "docker") == 0);
+    free(tag);
+    free(type);
+    free(input);
+
+    /* check valid input with implicit type used by descriptor */
+    tag = NULL;
+    type = NULL;
+    input = strdup("ubuntu:14.04");
+    ret = parse_ImageDescriptor(input, &type, &tag, &config);
+    CHECK(ret == 0);
+    CHECK(type != NULL && strcmp(type, "docker") == 0);
+    CHECK(tag != NULL && strcmp(tag, "ubuntu:14.04") == 0);
+    free(tag);
+    free(type);
+    free(input);
+
+    /* check that NULL pointers for inputs are rejected */
+    tag = NULL;
+    type = NULL;
+    input = strdup("test");
+    CHECK(parse_ImageDescriptor(NULL, &type, &tag, &config) == -1);
+    CHECK(parse_ImageDescriptor(input, NULL, &tag, &config) == -1);
+    CHECK(parse_ImageDescriptor(input, &type, NULL, &config) == -1);
+    CHECK(parse_ImageDescriptor(input, &type, &tag, NULL) == -1);
+    free(input);
+
+    /* check invalid descriptor with NULL default */
+    free(config.defaultImageType);
+    config.defaultImageType = NULL;
+    input = strdup("invalid");
+    CHECK(parse_ImageDescriptor(input, &type, &tag, &config) == -1);
+
+    /* check invalid descriptor owing to invalid default */
+    config.defaultImageType = strdup("invalid");
+    CHECK(parse_ImageDescriptor(input, &type, &tag, &config) == -1);
+    free(input);
+    free(config.defaultImageType);
+
+    /* check that invalid input is properly screened */
+    config.defaultImageType = strdup("docker");
+    input = strdup("this is *incorrect*");
+    type = NULL;
+    tag = NULL;
+    CHECK(parse_ImageDescriptor(input, &type, &tag, &config) == 0);
+    CHECK(type != NULL && strcmp(type, "docker") == 0);
+    CHECK(tag != NULL && strcmp(tag, "thisisincorrect") == 0);
+    free(type);
+    free(tag);
+}
+
 int main(int argc, char** argv) {
     return CommandLineTestRunner::RunAllTests(argc, argv);
 }
