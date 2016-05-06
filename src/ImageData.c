@@ -391,3 +391,65 @@ char *_ImageData_filterString(const char *input, int allowSlash) {
     *wptr = 0;
     return ret;
 }
+
+int parse_ImageDescriptor(char *userinput, char **imageType, char **imageTag, UdiRootConfig *udiConfig) {
+    int isLocalOrDocker = 0;
+    int foundType = 0;
+    char *type = NULL;
+    char *tmp = NULL;
+    ptr = strchr(userinput, ':');
+
+    if (ptr != NULL) {
+        /* ptr might be an image type, or it might just be part of the tag */
+        const char **ref = allowedImageTypes;
+        *ptr = 0;
+        tmp = _filterString(userinput, 0);
+
+        /* check to see if it is in the approved list of types */
+        for (ref = allowedImageTypes; ref && *ref; ref++) {
+            if (strcmp(*ref, tmp) == 0) {
+                foundType = 1;
+                break;
+            }
+        }
+
+        if (foundType) {
+            type = strdup(tmp);
+            *ptr = ':';
+            ptr++;
+        } else {
+            *ptr = ':';
+        }
+    }
+
+    /* if no type is found, then the whole userinput string must be the image
+     * descriptor */
+    if (!foundType) {
+        type = strdup(udiConfig->defaultImageType);
+        ptr = userinput;
+    }
+
+
+
+
+
+        fprintf(stderr, "Incorrect format for image identifier:  need \"image_type:image_id\"\n");
+        _usage(1);
+        break;
+    }
+    *ptr++ = 0;
+    tmp = _shifter_filterString(optarg, 0);
+    if (config->imageType != NULL) free(config->imageType);
+    config->imageType = tmp;
+    if (strcmp(config->imageType, "local") == 0 || strcmp(config->imageType, "docker") == 0) {
+        isLocalOrDocker = 1;
+    }
+    tmp = _shifter_filterString(ptr, isLocalOrDocker);
+    if (config->imageTag != NULL) free(config->imageTag);
+    config->imageTag = tmp;
+    if (config->imageIdentifier != NULL) {
+        free(config->imageIdentifier);
+        config->imageIdentifier = NULL;
+    }
+}
+

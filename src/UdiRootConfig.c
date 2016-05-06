@@ -96,6 +96,10 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         free(config->system);
         config->system = NULL;
     }
+    if (config->defaultImageType != NULL) {
+        free(config->defaultImageType);
+        config->defaultImageType = NULL;
+    }
     if (config->imageBasePath != NULL) {
         free(config->imageBasePath);
         config->imageBasePath = NULL;
@@ -228,6 +232,8 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->batchType != NULL ? config->batchType : ""));
     written += fprintf(fp, "system = %s\n", 
         (config->system != NULL ? config->system : ""));
+    written += fprintf(fp, "defaultImageType = %s\n",
+        (config->defaultImageType != NULL ? config->defaultImageType : ""));
     written += fprintf(fp, "imageBasePath = %s\n", 
         (config->imageBasePath != NULL ? config->imageBasePath : ""));
     written += fprintf(fp, "udiRootPath = %s\n", 
@@ -553,6 +559,8 @@ static int _assign(const char *key, const char *value, void *t_config) {
     } else if (strcmp(key, "system") == 0) {
         config->system = strdup(value);
         if (config->system == NULL) return 1;
+    } else if (strcmp(key, "defaultImageType") == 0) {
+        config->defaultImageType = strdup(value);
     } else if (strcmp(key, "nodeContextPrefix") == 0) {
         /* do nothing, this key is defunct */
     } else {
