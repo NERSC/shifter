@@ -22,14 +22,26 @@ if [[ -z "$INST_PREFIX" || "$INST_PREFIX" == "/" ]]; then
     exit 1
 fi
 
+if [[ ! -e "musl-${MUSL_VERSION}.tar.gz" && -n "$DEPTAR_DIR" && -e "$DEPTAR_DIR/musl-${MUSL_VERSION}.tar.gz" ]]; then
+    cp "$DEPTAR_DIR/musl-${MUSL_VERSION}.tar.gz" .
+fi
 if [[ ! -e "musl-${MUSL_VERSION}.tar.gz" ]]; then
     curl -o "musl-${MUSL_VERSION}.tar.gz" "http://www.musl-libc.org/releases/musl-${MUSL_VERSION}.tar.gz"
+fi
+if [[ ! -e "libressl-${LIBRESSL_VERSION}.tar.gz" && -n "$DEPTAR_DIR" && -e "$DEPTAR_DIR/libressl-${LIBRESSL_VERSION}.tar.gz" ]]; then
+    cp "$DEPTAR_DIR/libressl-${LIBRESSL_VERSION}.tar.gz" .
 fi
 if [[ ! -e "libressl-${LIBRESSL_VERSION}.tar.gz" ]]; then
     curl -o "libressl-${LIBRESSL_VERSION}.tar.gz" "http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-${LIBRESSL_VERSION}.tar.gz"
 fi
+if [[ ! -e "zlib-${ZLIB_VERSION}.tar.gz" && -n "$DEPTAR_DIR" && -e "$DEPTAR_DIR/zlib-${ZLIB_VERSION}.tar.gz" ]]; then
+    cp "$DEPTAR_DIR/zlib-${ZLIB_VERSION}.tar.gz" .
+fi
 if [[ ! -e "zlib-${ZLIB_VERSION}.tar.gz" ]]; then
     curl -o "zlib-${ZLIB_VERSION}.tar.gz" "http://zlib.net/zlib-${ZLIB_VERSION}.tar.gz"
+fi
+if [[ ! -e "openssh-${OPENSSH_VERSION}.tar.gz" && -n "$DEPTAR_DIR" && -e "$DEPTAR_DIR/openssh-${OPENSSH_VERSION}.tar.gz" ]]; then
+    cp "$DEPTAR_DIR/openssh-${OPENSSH_VERSION}.tar.gz" .
 fi
 if [[ ! -e "openssh-${OPENSSH_VERSION}.tar.gz" ]]; then
     curl -o "openssh-${OPENSSH_VERSION}.tar.gz" "http://mirrors.sonic.net/pub/OpenBSD/OpenSSH/portable/openssh-${OPENSSH_VERSION}.tar.gz"
