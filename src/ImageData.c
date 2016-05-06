@@ -58,6 +58,14 @@
 #define ENV_ALLOC_SIZE 512
 #define VOL_ALLOC_SIZE 256
 
+static const char *allowedImageTypes[] = {
+    "docker",
+    "custom",
+    "id",
+    "local",
+    NULL
+};
+
 int _ImageData_assign(const char *key, const char *value, void *t_imageData);
 char *_ImageData_filterString(const char *input, int allowSlash);
 
@@ -392,18 +400,60 @@ char *_ImageData_filterString(const char *input, int allowSlash) {
     return ret;
 }
 
+char *_filterString(const char *input, int allowSlash) {
+    ssize_t len = 0;
+    char *ret = NULL;
+    const char *rptr = NULL;
+    char *wptr = NULL;
+    if (input == NULL) return NULL;
+
+    len = strlen(input) + 1;
+    ret = (char *) malloc(sizeof(char) * len);
+    if (ret == NULL) return NULL;
+
+    rptr = input;
+    wptr = ret;
+    while (wptr - ret < len && *rptr != 0) {
+        if (isalnum(*rptr) || *rptr == '_' || *rptr == ':' || *rptr == '.' || *rptr == '+' || *rptr == '-') {
+            *wptr++ = *rptr;
+        }
+        if (allowSlash && *rptr == '/') {
+            *wptr++ = *rptr;
+        }
+        rptr++;
+    }
+    *wptr = 0;
+    return ret;
+}
+
 int parse_ImageDescriptor(char *userinput, char **imageType, char **imageTag, UdiRootConfig *udiConfig) {
     int isLocalOrDocker = 0;
     int foundType = 0;
     char *type = NULL;
+    char *tag = NULL;
     char *tmp = NULL;
-    ptr = strchr(userinput, ':');
+    char *ptr = NULL;
 
+    if (imageType == NULL || imageTag == NULL ||
+        userinput == NULL || strlen(userinput) == 0 ||
+        udiConfig == NULL) {
+
+        fprintf(stderr, "ERROR: NULL input when attempting to parse "
+                "image descriptor\n");
+        goto _error;
+    }
+
+    ptr = strchr(userinput, ':');
     if (ptr != NULL) {
         /* ptr might be an image type, or it might just be part of the tag */
         const char **ref = allowedImageTypes;
         *ptr = 0;
         tmp = _filterString(userinput, 0);
+        if (tmp == NULL) {
+            fprintf(stderr, "ERROR: Failed to allocate filtered input string "
+                    "when attempting to parse image descriptor.\n");
+            goto _error;
+        }
 
         /* check to see if it is in the approved list of types */
         for (ref = allowedImageTypes; ref && *ref; ref++) {
@@ -415,41 +465,68 @@ int parse_ImageDescriptor(char *userinput, char **imageType, char **imageTag, Ud
 
         if (foundType) {
             type = strdup(tmp);
+            if (type == NULL) {
+                fprintf(stderr, "ERROR: failed to copy type string (out of "
+                        "mem?) when attempting to parse image descriptor.\n");
+                goto _error;
+            }
             *ptr = ':';
             ptr++;
         } else {
             *ptr = ':';
         }
+
+        free(tmp);
+        tmp = NULL;
     }
 
     /* if no type is found, then the whole userinput string must be the image
-     * descriptor */
+     * descriptor, so assume default image type from udiRoot.conf */
     if (!foundType) {
         type = strdup(udiConfig->defaultImageType);
+        if (type == NULL) {
+            fprintf(stderr, "ERROR: failed to copy type string (out of mem?) "
+                    "when attempting to parse image descriptor.\n");
+            goto _error;
+        }
         ptr = userinput;
     }
 
-
-
-
-
-        fprintf(stderr, "Incorrect format for image identifier:  need \"image_type:image_id\"\n");
-        _usage(1);
-        break;
+    if (type == NULL || strlen(type) == 0) {
+        fprintf(stderr, "FAILED to determine image type.  Either specify image "
+                "type or set defaultImageType in udiRoot.conf\n");
+        goto _error;
     }
-    *ptr++ = 0;
-    tmp = _shifter_filterString(optarg, 0);
-    if (config->imageType != NULL) free(config->imageType);
-    config->imageType = tmp;
-    if (strcmp(config->imageType, "local") == 0 || strcmp(config->imageType, "docker") == 0) {
+    if (strcmp(type, "local") == 0 ||
+        strcmp(type, "docker") == 0) {
+
         isLocalOrDocker = 1;
     }
-    tmp = _shifter_filterString(ptr, isLocalOrDocker);
-    if (config->imageTag != NULL) free(config->imageTag);
-    config->imageTag = tmp;
-    if (config->imageIdentifier != NULL) {
-        free(config->imageIdentifier);
-        config->imageIdentifier = NULL;
+
+    tag = _filterString(ptr, isLocalOrDocker);
+    if (tag == NULL || strlen(tag) == 0) {
+        fprintf(stderr, "FAILED To filter or copy image descriptor when "
+                "attempting to parse.  Out of memory or invalid input.\n");
+        goto _error;
     }
+
+    *imageType = type;
+    *imageTag = tag;
+    return 0;
+
+_error:
+    if (tmp != NULL) {
+        free(tmp);
+        tmp = NULL;
+    }
+    if (type != NULL) {
+        free(type);
+        type = NULL;
+    }
+    if (tag != NULL) { 
+        free(tag);
+        tag = NULL;
+    }
+    return -1;
 }
 
