@@ -31,11 +31,12 @@ AUTH_HEADER='authentication'
 class GWTestCase(unittest.TestCase):
 
     def setUp(self):
-        import imagegwapi
         self.configfile='test.json'
         with open(self.configfile) as config_file:
             self.config = json.load(config_file)
         os.environ['GWCONFIG']=self.configfile
+
+        from shifter_imagegw import api
         mongouri=self.config['MongoDBURI']
         print "Debug: Connecting to %s"%mongouri
         client = MongoClient(mongouri)
@@ -47,9 +48,8 @@ class GWTestCase(unittest.TestCase):
             os.makedirs(p)
         self.images=client[db].images
         self.images.drop()
-        imagegwapi.imagegwapi.config['TESTING'] = True
-        imagegwapi.init(self.configfile)
-        self.app = imagegwapi.imagegwapi.test_client()
+        api.config['TESTING'] = True
+        self.app = api.app.test_client()
         self.url="/api"
         self.system="systema"
         self.type="docker"
