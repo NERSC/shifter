@@ -127,7 +127,7 @@ int parse_ImageDescriptor(char *userinput, char **imageType, char **imageTag, Ud
   * \param type if not-NULL can adjust the allowed characters based on avlue
   * \returns newly allocated filtered string
   */
-char *imageDesc_filterString(char *target, const char *type);
+char *imageDesc_filterString(const char *target, const char *type);
 
 #ifdef __cplusplus
 }
