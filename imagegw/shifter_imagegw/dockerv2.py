@@ -288,6 +288,7 @@ class dockerv2Handle():
         """
         path = "/v2/%s/blobs/%s" % (self.repo, layer)
         url = self.url
+        output_fname = None
         while True:
             conn = self.setupHttpConn(url, self.cacert)
             if conn is None:
@@ -308,8 +309,6 @@ class dockerv2Handle():
                     # there was a checksum mismatch, nuke the file
                     os.unlink(filename)
 
-            partial_filename = filename + '.partial'
-
             conn.request("GET", path, None, headers)
             r1 = conn.getresponse()
             location = r1.getheader('location')
@@ -325,21 +324,27 @@ class dockerv2Handle():
                 return False
         maxlen = int(r1.getheader('content-length'))
         nread = 0
-        output = open(partial_filename, "w")
-        readsz = 4 * 1024 * 1024 # read 4MB chunks
-        while nread < maxlen:
-            buff = r1.read(readsz)
-            if buff is None:
-                break
-            if type(buff) != str:
-                print buff
+        (output_fd, output_fname) = tempfile.mkstemp('.partial', layer, cachedir)
+        output_fp = os.fdopen(output_fd, 'w')
 
-            output.write(buff)
-            nread += len(buff)
-        output.close()
-        self.checkLayerChecksum(layer, partial_filename)
-        os.rename(partial_filename, filename)
+        try:
+            readsz = 4 * 1024 * 1024 # read 4MB chunks
+            while nread < maxlen:
+                buff = r1.read(readsz)
+                if buff is None:
+                    break
+                if type(buff) != str:
+                    print buff
 
+                output_fp.write(buff)
+                nread += len(buff)
+            output_fp.close()
+            self.checkLayerChecksum(layer, output_fname)
+        except:
+            os.unlink(output_fname)
+            raise
+
+        os.rename(output_fname, filename)
         return True
 
     def checkLayerChecksum(self, layer, filename):
