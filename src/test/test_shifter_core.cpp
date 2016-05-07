@@ -600,7 +600,7 @@ TEST(ShifterCoreTestGroup, _bindMount_basic) {
     CHECK(_shifterCore_bindMount(&config, &mounts, cwd, tmpDir, 1, 1) == 0);
     tmpFile = alloc_strgenf("%s/testFile.XXXXXX", tmpDir);
     fd = mkstemp(tmpFile);
-    CHECK(fd >= 0);
+    CHECK(fd < 0);
     CHECK(stat(tmpFile, &statData) != 0);
     close(fd);
     free(tmpFile);
