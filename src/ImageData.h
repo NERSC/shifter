@@ -115,16 +115,6 @@ size_t fprint_ImageData(FILE *, ImageData *);
  */
 int parse_ImageDescriptor(char *userinput, char **imageType, char **imageTag, UdiRootConfig *);
 
-
-  if (isalnum(*rptr) || *rptr == '_' || *rptr == ':' || *rptr == '.' || *rptr == '+' || *rptr == '-') {
-                  *wptr++ = *rptr;
-                          }
-        if (allowSlash && *rptr == '/') {
-                        *wptr++ = *rptr;
-                                }
-
-
-
 /**
   * imageDesc_filterString screens out disallowed characters from user input
   *
