@@ -302,8 +302,13 @@ class dockerv2Handle():
             filename = '%s/%s.tar' % (cachedir,layer)
 
             if os.path.exists(filename):
-                self.checkLayerChecksum(layer, filename)
-                return True
+                try:
+                    return self.checkLayerChecksum(layer, filename)
+                except ValueError:
+                    # there was a checksum mismatch, nuke the file
+                    os.unlink(filename)
+
+            partial_filename = filename + '.partial'
 
             conn.request("GET", path, None, headers)
             r1 = conn.getresponse()
@@ -320,7 +325,7 @@ class dockerv2Handle():
                 return False
         maxlen = int(r1.getheader('content-length'))
         nread = 0
-        output = open(filename, "w")
+        output = open(partial_filename, "w")
         readsz = 4 * 1024 * 1024 # read 4MB chunks
         while nread < maxlen:
             buff = r1.read(readsz)
@@ -332,7 +337,8 @@ class dockerv2Handle():
             output.write(buff)
             nread += len(buff)
         output.close()
-        self.checkLayerChecksum(layer, filename)
+        self.checkLayerChecksum(layer, partial_filename)
+        os.rename(partial_filename, filename)
 
         return True
 
