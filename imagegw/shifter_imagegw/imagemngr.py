@@ -457,24 +457,24 @@ class imagemngr:
       return _mongo_reconnect_safe
 
   @mongo_reconnect_reattempt
-  def images_remove(self, desc):
-      return self.images.remove(desc)
+  def images_remove(self, *args, **kwargs):
+      return self.images.remove(*args, **kwargs)
         
   @mongo_reconnect_reattempt
-  def images_update(self, desc, value, **kwargs):
-      return self.images.update(desc, value, **kwargs)
+  def images_update(self, *args, **kwargs):
+      return self.images.update(*args, **kwargs)
 
   @mongo_reconnect_reattempt
-  def images_find(self, query):
-      return self.images.find(query)
+  def images_find(self, *args, **kwargs):
+      return self.images.find(*args, **kwargs)
 
   @mongo_reconnect_reattempt
-  def images_find_one(self, query):
-      return self.images.find_one(query)
+  def images_find_one(self, *args, **kwargs):
+      return self.images.find_one(*args, **kwargs)
 
   @mongo_reconnect_reattempt
-  def images_insert(self, doc):
-      return self.images.insert(doc)
+  def images_insert(self, *args, **kwargs):
+      return self.images.insert(*args, **kwargs)
 
 def usage():
     """Print usage"""
