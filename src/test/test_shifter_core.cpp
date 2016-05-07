@@ -602,7 +602,6 @@ TEST(ShifterCoreTestGroup, _bindMount_basic) {
     fd = mkstemp(tmpFile);
     CHECK(fd < 0);
     CHECK(stat(tmpFile, &statData) != 0);
-    close(fd);
     free(tmpFile);
 
     /* clean up */
