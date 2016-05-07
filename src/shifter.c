@@ -78,10 +78,9 @@ struct options {
 
 
 static void _usage(int);
-char *_shifter_filterString(const char *input, int allowSlash);
 char **copyenv(void);
 int parse_options(int argc, char **argv, struct options *opts, UdiRootConfig *);
-int parse_environment(struct options *opts);
+int parse_environment(struct options *opts, UdiRootConfig *);
 int fprint_options(FILE *, struct options *);
 void free_options(struct options *, int freeStruct);
 /*int local_putenv(char ***environ, const char *newVar);*/
@@ -109,18 +108,17 @@ int main(int argc, char **argv) {
     memset(&udiConfig, 0, sizeof(UdiRootConfig));
     memset(&imageData, 0, sizeof(ImageData));
 
-    if (parse_environment(&opts) != 0) {
+    if (parse_UdiRootConfig(CONFIG_FILE, &udiConfig, UDIROOT_VAL_ALL) != 0) {
+        fprintf(stderr, "FAILED to parse udiRoot configuration.\n");
+        exit(1);
+    }
+    if (parse_environment(&opts, &udiConfig) != 0) {
         fprintf(stderr, "FAILED to parse environment\n");
         exit(1);
     }
 
     /* destroy this environment */
     clearenv();
-
-    if (parse_UdiRootConfig(CONFIG_FILE, &udiConfig, UDIROOT_VAL_ALL) != 0) {
-        fprintf(stderr, "FAILED to parse udiRoot configuration.\n");
-        exit(1);
-    }
 
     /* parse config file and command line options */
     if (parse_options(argc, argv, &opts, &udiConfig) != 0) {
@@ -487,18 +485,38 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     return 0;
 }
 
-int parse_environment(struct options *opts) {
+int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
     char *envPtr = NULL;
+    char *type = NULL;
+    char *tag = NULL;
+    int allowSlash = 0;
 
+    /* read type and tag from the environment */
     if ((envPtr = getenv("SHIFTER_IMAGETYPE")) != NULL) {
-        opts->imageType = strdup(envPtr);
+        type = imageDesc_filterString(envPtr, NULL);
     } else if ((envPtr = getenv("SLURM_SPANK_SHIFTER_IMAGETYPE")) != NULL) {
-        opts->imageType = strdup(envPtr);
+        type = imageDesc_filterString(envPtr, NULL);
     }
     if ((envPtr = getenv("SHIFTER_IMAGE")) != NULL) {
-        opts->imageTag = strdup(envPtr);
+        tag = imageDesc_filterString(envPtr, type);
     } else if ((envPtr = getenv("SLURM_SPANK_SHIFTER_IMAGE")) != NULL) {
-        opts->imageTag = strdup(envPtr);
+        tag = imageDesc_filterString(envPtr, type);
+    }
+
+    /* validate type and tag */
+    if ((type && !tag) || (!type && tag)) {
+        if (type) {
+            free(type);
+            type = NULL;
+        }
+        if (tag) {
+            free(tag);
+            tag = NULL;
+        }
+    }
+    if (type && tag && strlen(type) > 0 && strlen(tag) > 0) {
+        opts->imageType = type;
+        opts->imageTag = tag;
     }
 
     if ((envPtr = getenv("SHIFTER")) != NULL) {
@@ -510,14 +528,17 @@ int parse_environment(struct options *opts) {
         char *ptr = NULL;
         /* if the the imageType and Tag weren't specified earlier, parse from here */
         if (opts->imageType == NULL && opts->imageTag == NULL) {
-            ptr = strchr(opts->request, ':');
-            if (ptr != NULL) {
-                *ptr++ = 0;
-                opts->imageType = strdup(opts->request); /* temporarily truncated at former ';' */
-                opts->imageTag = strdup(ptr);
-                /* put things back the way they were */
-                ptr--;
-                *ptr = ':';
+            if (parse_ImageData(opts->request, &(opts->imageType),
+                    &(opts->imageTag), udiConfig) != 0) {
+
+                if (opts->imageType != NULL) {
+                    free(opts->imageType);
+                    opts->imageType = NULL;
+                }
+                if (opts->imageTag != NULL) {
+                    free(opts->imageTag);
+                    opts->imageTag = NULL;
+                }
             }
         }
     }
@@ -596,32 +617,6 @@ char **copyenv(void) {
     }
     *wptr = NULL;
     return outenv;
-}
-
-char *_shifter_filterString(const char *input, int allowSlash) {
-    ssize_t len = 0;
-    char *ret = NULL;
-    const char *rptr = NULL;
-    char *wptr = NULL;
-    if (input == NULL) return NULL;
-
-    len = strlen(input) + 1;
-    ret = (char *) malloc(sizeof(char) * len);
-    if (ret == NULL) return NULL;
-
-    rptr = input;
-    wptr = ret;
-    while (wptr - ret < len && *rptr != 0) {
-        if (isalnum(*rptr) || *rptr == '_' || *rptr == ':' || *rptr == '.' || *rptr == '+' || *rptr == '-') {
-            *wptr++ = *rptr;
-        }
-        if (allowSlash && *rptr == '/') {
-            *wptr++ = *rptr;
-        }
-        rptr++;
-    }
-    *wptr = 0;
-    return ret;
 }
 
 void free_options(struct options *opts, int freeStruct) {

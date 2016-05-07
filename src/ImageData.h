@@ -115,6 +115,30 @@ size_t fprint_ImageData(FILE *, ImageData *);
  */
 int parse_ImageDescriptor(char *userinput, char **imageType, char **imageTag, UdiRootConfig *);
 
+
+  if (isalnum(*rptr) || *rptr == '_' || *rptr == ':' || *rptr == '.' || *rptr == '+' || *rptr == '-') {
+                  *wptr++ = *rptr;
+                          }
+        if (allowSlash && *rptr == '/') {
+                        *wptr++ = *rptr;
+                                }
+
+
+
+/**
+  * imageDesc_filterString screens out disallowed characters from user input
+  *
+  * Allowed characters are [A-Za-z0-9_:.+-]
+  * Depending on image type '/' is sometimes allowed
+  *
+  * Any other characters are simply screened out (removed and skipped over)
+  *
+  * \param target the user-input to filter
+  * \param type if not-NULL can adjust the allowed characters based on avlue
+  * \returns newly allocated filtered string
+  */
+char *imageDesc_filterString(char *target, const char *type);
+
 #ifdef __cplusplus
 }
 #endif

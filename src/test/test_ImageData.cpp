@@ -46,7 +46,6 @@
 
 extern "C" {
 extern int _ImageData_assign(const char *key, const char *value, void *t_image);
-extern char *_ImageData_filterString(const char *input, int allowSlash);
 }
 
 TEST_GROUP(ImageDataTestGroup) {
@@ -68,6 +67,27 @@ TEST(ImageDataTestGroup, ConfigAssign_basic) {
 
     free_ImageData(&image, 0);
 
+}
+
+TEST(ImageDataTestGroup, FilterString_basic) {
+    CHECK(imageDesc_filterString(NULL, NULL) == NULL);
+    char *output = imageDesc_filterString("echo test; rm -rf thing1", NULL);
+    CHECK(strcmp(output, "echotestrm-rfthing1") == 0);
+    free(output);
+    output = imageDesc_filterString("V4l1d-str1ng.input", NULL);
+    CHECK(strcmp(output, "V4l1d-str1ng.input") == 0);
+    free(output);
+    output = imageDesc_filterString("", NULL);
+    CHECK(output != NULL);
+    CHECK(strlen(output) == 0);
+    free(output);
+
+    output = imageDesc_filterString("/this/is/not/allowed", NULL);
+    CHECK(strcmp(output, "thisisnotallowed") == 0);
+    free(output);
+    output = imageDesc_filterString("/this/is/allowed", "local");
+    CHECK(strcmp(output, "/this/is/allowed") == 0);
+    free(output);
 }
 
 TEST(ImageDataTestGroup, parseImageDescriptor) {

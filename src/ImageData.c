@@ -343,6 +343,8 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
             image->format = FORMAT_SQUASHFS;
         } else if (strcmp(value, "cramfs") == 0) {
             image->format = FORMAT_CRAMFS;
+        } else if (strcmp(value, "xfs") == 0) {
+            image->format = FORMAT_XFS;
         } else {
             image->format = FORMAT_INVALID;
         }
@@ -400,34 +402,17 @@ char *_ImageData_filterString(const char *input, int allowSlash) {
     return ret;
 }
 
-char *_filterString(const char *input, int allowSlash) {
-    ssize_t len = 0;
-    char *ret = NULL;
-    const char *rptr = NULL;
-    char *wptr = NULL;
-    if (input == NULL) return NULL;
+char *imageDesc_filterString(const char *input, const char *type) {
+    int allowSlash = 0;
+    if (type != NULL &&
+        (strcmp(type, "local") == 0 || strcmp(type, "docker") == 0)) {
 
-    len = strlen(input) + 1;
-    ret = (char *) malloc(sizeof(char) * len);
-    if (ret == NULL) return NULL;
-
-    rptr = input;
-    wptr = ret;
-    while (wptr - ret < len && *rptr != 0) {
-        if (isalnum(*rptr) || *rptr == '_' || *rptr == ':' || *rptr == '.' || *rptr == '+' || *rptr == '-') {
-            *wptr++ = *rptr;
-        }
-        if (allowSlash && *rptr == '/') {
-            *wptr++ = *rptr;
-        }
-        rptr++;
+        allowSlash = 1;
     }
-    *wptr = 0;
-    return ret;
+    return _ImageData_filterString(input, allowSlash);
 }
 
 int parse_ImageDescriptor(char *userinput, char **imageType, char **imageTag, UdiRootConfig *udiConfig) {
-    int isLocalOrDocker = 0;
     int foundType = 0;
     char *type = NULL;
     char *tag = NULL;
@@ -448,7 +433,7 @@ int parse_ImageDescriptor(char *userinput, char **imageType, char **imageTag, Ud
     if (ptr != NULL) {
         /* ptr might be an image type, or it might just be part of the tag */
         *ptr = 0;
-        tmp = _filterString(userinput, 0);
+        tmp = imageDesc_filterString(userinput, NULL);
         if (tmp == NULL) {
             fprintf(stderr, "ERROR: Failed to allocate filtered input string "
                     "when attempting to parse image descriptor.\n");
@@ -512,13 +497,7 @@ int parse_ImageDescriptor(char *userinput, char **imageType, char **imageTag, Ud
         goto _error;
     }
 
-    if (strcmp(type, "local") == 0 ||
-        strcmp(type, "docker") == 0) {
-
-        isLocalOrDocker = 1;
-    }
-
-    tag = _filterString(ptr, isLocalOrDocker);
+    tag = imageDesc_filterString(ptr, type);
     if (tag == NULL || strlen(tag) == 0) {
         fprintf(stderr, "FAILED To filter or copy image descriptor when "
                 "attempting to parse.  Out of memory or invalid input.\n");
@@ -544,4 +523,3 @@ _error:
     }
     return -1;
 }
-

@@ -33,33 +33,11 @@
 #include <CppUTest/CommandLineTestRunner.h>
 
 extern "C" {
-char *_shifter_filterString(const char *input, int allowSlash);
 char **copyenv(void);
 }
 
 TEST_GROUP(ShifterTestGroup) {
 };
-
-TEST(ShifterTestGroup, FilterString_basic) {
-    CHECK(_shifter_filterString(NULL, 0) == NULL);
-    char *output = _shifter_filterString("echo test; rm -rf thing1", 0);
-    CHECK(strcmp(output, "echotestrm-rfthing1") == 0);
-    free(output);
-    output = _shifter_filterString("V4l1d-str1ng.input", 0);
-    CHECK(strcmp(output, "V4l1d-str1ng.input") == 0);
-    free(output);
-    output = _shifter_filterString("", 0);
-    CHECK(output != NULL);
-    CHECK(strlen(output) == 0);
-    free(output);
-
-    output = _shifter_filterString("/this/is/not/allowed", 0);
-    CHECK(strcmp(output, "thisisnotallowed") == 0);
-    free(output);
-    output = _shifter_filterString("/this/is/allowed", 1);
-    CHECK(strcmp(output, "/this/is/allowed") == 0);
-    free(output);
-}
 
 TEST(ShifterTestGroup, CopyEnv_basic) {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();

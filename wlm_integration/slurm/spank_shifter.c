@@ -662,14 +662,20 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         return rc;
     }
 
+    int set_type = 0;
     ptr = getenv("SHIFTER_IMAGETYPE");
     if (ptr != NULL) {
-        snprintf(image_type, IMAGE_MAXLEN, "%s", ptr);
+        char *tmp = imageDesc_filterString(ptr, NULL);
+        snprintf(image_type, IMAGE_MAXLEN, "%s", tmp);
+        free(tmp);
+        set_type = 1;
     }
 
     ptr = getenv("SHIFTER_IMAGE");
     if (ptr != NULL) {
-        snprintf(image, IMAGE_MAXLEN, "%s", ptr);
+        char *tmp = imageDesc_filterString(ptr, set_type ? image_type : NULL);
+        snprintf(image, IMAGE_MAXLEN, "%s", tmp);
+        free(tmp);
     }
 
     ptr = getenv("SHIFTER_VOLUME");
