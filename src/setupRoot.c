@@ -178,7 +178,6 @@ static void _usage(int exitStatus) {
 
 int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
     int opt = 0;
-    int isLocal = 0;
     optind = 1;
 
     while ((opt = getopt(argc, argv, "v:s:u:U:G:N:V")) != -1) {

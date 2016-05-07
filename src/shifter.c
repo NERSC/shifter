@@ -489,7 +489,6 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
     char *envPtr = NULL;
     char *type = NULL;
     char *tag = NULL;
-    int allowSlash = 0;
 
     /* read type and tag from the environment */
     if ((envPtr = getenv("SHIFTER_IMAGETYPE")) != NULL) {
@@ -525,7 +524,6 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
         opts->request = strdup(envPtr);
     }
     if (opts->request != NULL) {
-        char *ptr = NULL;
         /* if the the imageType and Tag weren't specified earlier, parse from here */
         if (opts->imageType == NULL && opts->imageTag == NULL) {
             if (parse_ImageDescriptor(opts->request, &(opts->imageType),

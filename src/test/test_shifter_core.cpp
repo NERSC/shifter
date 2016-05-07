@@ -589,16 +589,20 @@ TEST(ShifterCoreTestGroup, _bindMount_basic) {
 
     /* make sure that the directory is writable */
     char *tmpFile = alloc_strgenf("%s/testFile.XXXXXX", tmpDir);
-    mkstemp(tmpFile);
+    int fd = mkstemp(tmpFile);
+    CHECK(fd >= 0);
     CHECK(stat(tmpFile, &statData) == 0);
+    close(fd);
     CHECK(unlink(tmpFile) == 0);
     free(tmpFile);
 
     /* remount with read-only set */
     CHECK(_shifterCore_bindMount(&config, &mounts, cwd, tmpDir, 1, 1) == 0);
     tmpFile = alloc_strgenf("%s/testFile.XXXXXX", tmpDir);
-    mkstemp(tmpFile);
+    fd = mkstemp(tmpFile);
+    CHECK(fd >= 0);
     CHECK(stat(tmpFile, &statData) != 0);
+    close(fd);
     free(tmpFile);
 
     /* clean up */
@@ -656,12 +660,12 @@ int main(int argc, char** argv) {
     if (getuid() == 0) {
 #ifndef NOTROOT
         char buffer[PATH_MAX];
-        getcwd(buffer, PATH_MAX);
+        CHECK(getcwd(buffer, PATH_MAX) != NULL);
         if (unshare(CLONE_NEWNS) != 0) {
             fprintf(stderr, "FAILED to unshare, test handler will exit in error.\n");
             exit(1);
         }
-        chdir(buffer);
+        CHECK(chdir(buffer) == 0);
 #endif
     }
     return CommandLineTestRunner::RunAllTests(argc, argv);
