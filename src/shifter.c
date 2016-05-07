@@ -528,7 +528,7 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
         char *ptr = NULL;
         /* if the the imageType and Tag weren't specified earlier, parse from here */
         if (opts->imageType == NULL && opts->imageTag == NULL) {
-            if (parse_ImageData(opts->request, &(opts->imageType),
+            if (parse_ImageDescriptor(opts->request, &(opts->imageType),
                     &(opts->imageTag), udiConfig) != 0) {
 
                 if (opts->imageType != NULL) {
