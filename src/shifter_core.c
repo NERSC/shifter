@@ -480,7 +480,7 @@ int prepareSiteModifications(const char *username,
             free(*argsPtr);
         }
         if (ret != 0) {
-            fprintf(stderr, "Site premount hook failed. Exiting.\n");
+            fprintf(stderr, "Site postmount hook failed. Exiting.\n");
             ret = 1;
             goto _prepSiteMod_unclean;
         }
