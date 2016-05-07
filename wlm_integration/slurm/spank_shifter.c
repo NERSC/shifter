@@ -35,6 +35,7 @@ static int nativeSlurm = IS_NATIVE_SLURM;
 static int ccmMode = 0;
 static int serialMode = 0;
 static int trustedImage = 1;
+static UdiRootConfig *udiConfig = NULL;
 
 static int _opt_image(int val, const char *optarg, int remote);
 static int _opt_imagevolume(int val, const char *optarg, int remote);
@@ -82,37 +83,23 @@ int _opt_image(int val, const char *optarg, int remote) {
     char *tmp = NULL;
     int rc = ESPANK_SUCCESS;
     if (optarg != NULL && strlen(optarg) > 0) {
+        char *type = NULL;
+        char *tag = NULL;
         tmp = strdup(optarg);
-        char *p = strchr(tmp, ':');
-        if (p == NULL) {
-            slurm_error("Invalid image input: must specify image type: %s", optarg);
+        if (parse_ImageDescriptor(tmp, &type, &tag, udiConfig) != 0) {
+            slurm_error("Invalid image input: could not determine image type: "
+                    "%s", optarg);
             rc = ESPANK_ERROR;
             goto _opt_image_exit;
         }
-        *p++ = 0;
-        snprintf(image_type, IMAGE_MAXLEN, "%s", tmp);
-        snprintf(image, IMAGE_MAXLEN, "%s", p);
+        snprintf(image_type, IMAGE_MAXLEN, "%s", type);
+        snprintf(image, IMAGE_MAXLEN, "%s", tag);
         free(tmp);
+        free(type);
+        free(tag);
         tmp = NULL;
-        p = trim(image);
-        if (p != image) memmove(image, p, strlen(p) + 1);
-        p = trim(image_type);
-        if (p != image_type) memmove(image_type, p, strlen(p) + 1);
-
-        for (p = image_type; *p != 0 && p-image_type < IMAGE_MAXLEN; ++p) {
-            if (!isalpha(*p)) {
-                slurm_error("Invalid image type - alphabetic characters only");
-                rc = ESPANK_ERROR;
-                goto _opt_image_exit;
-            }
-        }
-        for (p = image; *p != 0 && p-image < IMAGE_MAXLEN; ++p) {
-            if (!isalnum(*p) && (*p!=':') && (*p!='_') && (*p!='-') && (*p!='.') && (*p!='/')) {
-                slurm_error("Invalid image type - A-Za-z:-_./ characters only");
-                rc =  ESPANK_ERROR;
-                goto _opt_image_exit;
-            }
-        }
+        type = NULL;
+        tag = NULL;
         return ESPANK_SUCCESS;
     }
     slurm_error("Invalid image - must not be zero length");
@@ -311,7 +298,6 @@ generateSshKey_exit:
 
 UdiRootConfig *read_config(int argc, char **argv) {
     int idx = 0;
-    UdiRootConfig *udiConfig = NULL;
     char config_filename[PATH_MAX];
 
     for (idx = 0; idx < argc; ++idx) {
@@ -353,7 +339,7 @@ int doForceArgParse(spank_t sp) {
     return rc;
 }
 
-int doExternStepTaskSetup(spank_t sp, int argc, char **argv, UdiRootConfig *udiConfig) {
+int doExternStepTaskSetup(spank_t sp, int argc, char **argv) {
     int rc = ESPANK_SUCCESS;
     struct stat statData;
     char buffer[PATH_MAX];
@@ -403,13 +389,14 @@ int doExternStepTaskSetup(spank_t sp, int argc, char **argv, UdiRootConfig *udiC
     return rc;
 }
 
-char *lookup_ImageIdentifier(const char *imageType, const char *imageTag, int verbose, UdiRootConfig *);
-
 int slurm_spank_init(spank_t sp, int argc, char **argv) {
     spank_context_t context;
     int rc = ESPANK_SUCCESS;
     int i, j;
-    UdiRootConfig *udiConfig = NULL;
+    if (read_config(argc, argv) == NULL) {
+        slurm_error("FAILED to initialize shifter/slurm integration");
+        return  ESPANK_ERROR;
+    }
 
     context = spank_context();
 
@@ -439,14 +426,16 @@ int slurm_spank_task_post_fork(spank_t sp, int argc, char **argv) {
     /* if this is the slurmstepd for prologflags=contain, then do the
      * proper setup to finalize shifter setup */
     if (stepid == SLURM_EXTERN_CONT) {
-        UdiRootConfig *udiConfig = read_config(argc, argv);
+        if (udiConfig == NULL) {
+            read_config(argc, argv);
+        }
         if (udiConfig == NULL) {
             slurm_error("Failed to parse shifter config. Cannot use shifter.");
             return rc;
         }
 
         doForceArgParse(sp);
-        rc = doExternStepTaskSetup(sp, argc, argv, udiConfig);
+        rc = doExternStepTaskSetup(sp, argc, argv);
     }
 
     return rc;
@@ -456,11 +445,12 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     spank_context_t context;
     int rc = ESPANK_SUCCESS;
     int verbose_lookup = 0;
-    UdiRootConfig *udiConfig = NULL;
 
     context = spank_context();
 
-    udiConfig = read_config(argc, argv);
+    if (udiConfig == NULL) {
+        read_config(argc, argv);
+    }
     if (udiConfig == NULL) {
         slurm_error("Failed to parse shifter config. Cannot use shifter.");
         return rc;
@@ -647,22 +637,23 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     char *gid_str = NULL;
     char *sshPubKey = NULL;
     size_t tasksPerNode = 0;
-    UdiRootConfig *udiConfig = NULL;
     pid_t pid = 0;
+
+    /* parse udi configuration */
+    if (udiConfig == NULL) {
+        read_config(argc, argv);
+    }
+    if (udiConfig == NULL) {
+        PROLOG_ERROR("Failed to read/parse shifter configuration.\n", rc);
+    }
+
 
 #define PROLOG_ERROR(message, errCode) \
     slurm_error(message); \
     rc = errCode; \
     goto _prolog_exit_unclean;
 
-    for (i = 0; spank_option_array[i].name != NULL; ++i) {
-        char *optarg = NULL;
-        j = spank_option_getopt(sp, &spank_option_array[i], &optarg);
-        if (j != ESPANK_SUCCESS) {
-            continue;
-        }
-        (spank_option_array[i].cb)(spank_option_array[i].val, optarg, 1);
-    }
+    doForceArgParse(sp);
 
     slurm_debug("shifter prolog, id after looking at args: %s:%s", image_type, image);
 
@@ -686,12 +677,6 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         snprintf(imagevolume, IMAGEVOLUME_MAXLEN, "%s", ptr);
     }
     slurm_debug("shifter prolog, id after looking at env: %s:%s", image_type, image);
-
-    /* parse udi configuration */
-    udiConfig = read_config(argc, argv);
-    if (udiConfig == NULL) {
-        PROLOG_ERROR("Failed to read/parse shifter configuration.\n", rc);
-    }
 
     /* check and see if there is an existing configuration */
     struct stat statData;
@@ -841,7 +826,6 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     slurm_debug("shifter_prolog: sshd on pid %d\n", pid);
     
 _prolog_exit_unclean:
-    if (udiConfig != NULL) free_UdiRootConfig(udiConfig, 1);
     if (setupRootArgs != NULL) {
         char **ptr = setupRootArgs;
         for (ptr = setupRootArgs; ptr && *ptr; ptr++) {
@@ -864,7 +848,6 @@ _prolog_exit_unclean:
 int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     int rc = ESPANK_SUCCESS;
     spank_context_t context;
-    UdiRootConfig *udiConfig = NULL;
     char path[PATH_MAX];
     char *epilogueArgs[2];
     int i, j;
@@ -880,6 +863,13 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     rc = errCode; \
     goto _epilog_exit_unclean;
 
+    if (udiConfig == NULL) {
+        read_config(argc, argv);
+    }
+    if (udiConfig == NULL) {
+        EPILOG_ERROR("Failed to read/parse shifter configuration.\n", rc);
+    }
+
     context = spank_context();
     for (i = 0; spank_option_array[i].name != NULL; ++i) {
         char *optarg = NULL;
@@ -891,11 +881,6 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     }
     if (strlen(image) == 0) {
         return rc;
-    }
-
-    udiConfig = read_config(argc, argv);
-    if (udiConfig == NULL) {
-        EPILOG_ERROR("Failed to read/parse shifter configuration.\n", rc);
     }
 
     if (spank_get_item(sp, S_JOB_UID, &uid) != ESPANK_SUCCESS) {
@@ -916,16 +901,12 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     slurm_debug("shifter_epilog: done with unsetupRoot");
     
 _epilog_exit_unclean:
-    if (udiConfig != NULL) {
-        free_UdiRootConfig(udiConfig, 1);
-    }
     return rc;
 }
 
 int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     int rc = ESPANK_SUCCESS;
     int i = 0, j = 0;
-    UdiRootConfig *udiConfig = NULL;
     ImageData imageData;
 
     uid_t job_uid = 0;
@@ -947,6 +928,12 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     goto _taskInitPriv_exit_unclean;
 
     if (nativeSlurm == 0) return ESPANK_SUCCESS;
+    if (udiConfig == NULL) {
+        read_config(argc, argv);
+    }
+    if (udiConfig == NULL) {
+        TASKINITPRIV_ERROR("Failed to load udiRoot config!", ESPANK_ERROR);
+    }
     doForceArgParse(sp);
 
     if (strlen(image) == 0) {
@@ -954,10 +941,6 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     }
     if (strlen(image) == 0 || strlen(image_type) == 0) {
         return rc;
-    }
-    udiConfig = read_config(argc, argv);
-    if (udiConfig == NULL) {
-        TASKINITPRIV_ERROR("Failed to load udiRoot config!", ESPANK_ERROR);
     }
 
     /* if this is the slurmstepd for prologflags=contain, then do the
@@ -1081,7 +1064,5 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     }
 _taskInitPriv_exit_unclean:
     free_ImageData(&imageData, 0);
-    if (udiConfig != NULL)
-        free_UdiRootConfig(udiConfig, 1);
     return rc;
 }

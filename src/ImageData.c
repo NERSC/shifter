@@ -508,7 +508,7 @@ int parse_ImageDescriptor(char *userinput, char **imageType, char **imageTag, Ud
     if (foundType == 0) {
         fprintf(stderr, "ERROR: requested image type %s is invalid.  Please "
                 "check formatting or set defaultImageType in udiRoot.conf "
-                "correctly\n");
+                "correctly\n", type);
         goto _error;
     }
 

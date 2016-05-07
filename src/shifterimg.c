@@ -35,6 +35,7 @@
 
 #include "utility.h"
 #include "UdiRootConfig.h"
+#include "ImageData.h"
 
 enum ImageGwAction {
     MODE_LOOKUP = 0,
@@ -668,20 +669,20 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         CURL *curl = curl_easy_init();
         optind++;
 
-        char *type = argv[optind];
-        char *ptr = strchr(type, ':');
-        if (ptr == NULL) {
-            fprintf(stderr, "Must specify imageType:imageTag..., e.g., docker:ubuntu:latest\n");
+        char *type = NULL;
+        char *tag = NULL;
+
+        if (parse_ImageDescriptor(argv[optind], &type, &tag, udiConfig) != 0) {
+            fprintf(stderr, "FAILED to parse image descriptor. Try specifying "
+                    "both the type and descriptor, e.g., docker:ubuntu:latest"
+                    "\n");
             _usage(1);
         }
 
-        *ptr++ = 0;
         config->type = curl_easy_escape(curl, type, strlen(type));
-        config->rawtype = strdup(type);
-        config->tag = curl_easy_escape(curl, ptr, strlen(ptr));
-        config->rawtag = strdup(ptr);
-        ptr--;
-        *ptr = ':';
+        config->rawtype = type;
+        config->tag = curl_easy_escape(curl, tag, strlen(tag));
+        config->rawtag = strdup(tag);
 
         curl_easy_cleanup(curl);
     }

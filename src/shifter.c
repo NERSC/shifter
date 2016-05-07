@@ -314,8 +314,6 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         {"env", 0, 0, 'e'},
         {0, 0, 0, 0}
     };
-    char *ptr = NULL;
-
     if (config == NULL) {
         return 1;
     }
@@ -385,28 +383,20 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                 }
             case 'i':
                 {
-                    int isLocalOrDocker = 0;
-                    char *tmp = NULL;
-                    ptr = strchr(optarg, ':');
-                    if (ptr == NULL) {
-                        fprintf(stderr, "Incorrect format for image identifier:  need \"image_type:image_id\"\n");
+                    char *type = NULL;
+                    char *tag = NULL;
+
+                    if (parse_ImageDescriptor(optarg, &type, &tag, udiConfig)
+                        != 0) {
+
+                        fprintf(stderr, "Incorrect format for image "
+                                "identifier: need \"image_type:image_desc\", "
+                                "e.g., docker:ubuntu:14.04\n");
                         _usage(1);
                         break;
                     }
-                    *ptr++ = 0;
-                    tmp = _shifter_filterString(optarg, 0);
-                    if (config->imageType != NULL) free(config->imageType);
-                    config->imageType = tmp;
-                    if (strcmp(config->imageType, "local") == 0 || strcmp(config->imageType, "docker") == 0) {
-                        isLocalOrDocker = 1;
-                    }
-                    tmp = _shifter_filterString(ptr, isLocalOrDocker);
-                    if (config->imageTag != NULL) free(config->imageTag);
-                    config->imageTag = tmp;
-                    if (config->imageIdentifier != NULL) {
-                        free(config->imageIdentifier);
-                        config->imageIdentifier = NULL;
-                    }
+                    config->imageType = type;
+                    config->imageTag = tag;
                 }
                 break;
             case 'e':
