@@ -333,8 +333,6 @@ class dockerv2Handle():
                 buff = r1.read(readsz)
                 if buff is None:
                     break
-                if type(buff) != str:
-                    print buff
 
                 output_fp.write(buff)
                 nread += len(buff)
