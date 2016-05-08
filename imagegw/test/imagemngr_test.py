@@ -66,7 +66,7 @@ class ImageMngrTestCase(unittest.TestCase):
         # Start a celery worker.
         pid=os.fork()
         if pid==0:  # Child process
-            os.environ['CONFIG']='test.json'
+            os.environ['GWCONFIG']='test.json'
             #os.environ['TESTMODE']='%d'%(TESTMODE)
             os.execvp('celery',['celery','-A','shifter_imagegw.imageworker',
                 'worker','--quiet',

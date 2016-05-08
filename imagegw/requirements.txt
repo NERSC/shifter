@@ -3,3 +3,4 @@ pymongo
 flask
 pysocks
 redis
+gunicorn

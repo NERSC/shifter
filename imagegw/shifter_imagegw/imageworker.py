@@ -38,8 +38,8 @@ See LICENSE for full text.
 
 
 queue = None
-if 'CONFIG' in os.environ:
-    CONFIGFILE=os.environ['CONFIG']
+if 'GWCONFIG' in os.environ:
+    CONFIGFILE=os.environ['GWCONFIG']
 else:
     CONFIGFILE='%s/imagemanager.json' % (shifter_imagegw.configPath)
 
