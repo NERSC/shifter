@@ -109,6 +109,7 @@ def convert(format,expandedPath,imagePath):
     (dirname,fname) = os.path.split(imagePath)
     (imageTempFd,imageTempPath) = tempfile.mkstemp('.partial', fname, dirname)
     os.close(imageTempFd)
+    os.unlink(imageTempPath)
 
     try:
         success=False
