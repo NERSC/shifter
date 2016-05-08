@@ -3,6 +3,7 @@
 import os
 import subprocess
 import shutil
+import tempfile
 from shifter_imagegw.util import program_exists
 
 """
@@ -105,17 +106,24 @@ def convert(format,expandedPath,imagePath):
         print "file already exist"
         return True
 
-    imageTempPath=imagePath+'.partial'
+    (dirname,fname) = os.path.split(imagePath)
+    (imageTempFd,imageTempPath) = tempfile.mkstemp('.partial', fname, dirname)
+    os.close(imageTempFd)
 
-    success=False
-    if format=='squashfs':
-        success=generateSquashFSImage(expandedPath,imageTempPath)
-    elif format=='cramfs':
-        success=generateCramFSImage(expandedPath,imageTempPath)
-    elif format=='ext4':
-        success=generateExt4Image(expandedPath,imageTempPath)
-    else:
-        raise NotImplementedError("%s not a supported format"%format)
+    try:
+        success=False
+        if format=='squashfs':
+            success=generateSquashFSImage(expandedPath,imageTempPath)
+        elif format=='cramfs':
+            success=generateCramFSImage(expandedPath,imageTempPath)
+        elif format=='ext4':
+            success=generateExt4Image(expandedPath,imageTempPath)
+        else:
+            raise NotImplementedError("%s not a supported format"%format)
+    except:
+        os.unlink(imageTempPath)
+        raise
+
     if not success:
         return False
     try:

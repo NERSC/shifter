@@ -1,5 +1,5 @@
 import os
-os.environ['CONFIG']='test.json'
+os.environ['GWCONFIG']='test.json'
 from shifter_imagegw import imageworker
 import unittest
 import tempfile
