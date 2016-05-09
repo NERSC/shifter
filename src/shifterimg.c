@@ -35,12 +35,14 @@
 
 #include "utility.h"
 #include "UdiRootConfig.h"
+#include "ImageData.h"
 
 enum ImageGwAction {
     MODE_LOOKUP = 0,
     MODE_PULL,
     MODE_IMAGES,
     MODE_LOGIN,
+    MODE_PULL_NONBLOCK,
     MODE_INVALID
 };
 
@@ -49,6 +51,8 @@ struct options {
     enum ImageGwAction mode;
     char *type;
     char *tag;
+    char *rawtype;
+    char *rawtag;
 };
 
 typedef struct _ImageGwState {
@@ -73,7 +77,6 @@ typedef struct _ImageGwImageRec {
     char **tag;
     char **userAcl;
 } ImageGwImageRec;
-
 
 void _usage(int ret) {
     FILE *output = stdout;
@@ -399,11 +402,42 @@ ImageGwImageRec *parseLookupResponse(ImageGwState *imageGw) {
     return image;
 }
 
+ImageGwImageRec *parsePullResponse(ImageGwState *imageGw) {
+    if (imageGw == NULL || !imageGw->isJsonMessage || !imageGw->messageComplete) {
+        return NULL;
+    }
+    json_object *jObj = json_tokener_parse(imageGw->message);
+    ImageGwImageRec *image = NULL;
+
+    if (jObj == NULL) {
+        return NULL;
+    }
+    image = parseImageJson(jObj);
+
+    json_object_put(jObj);  /* apparently this weirdness frees the json object */
+    return image;
+}
+
+int imgCompare(const void *ta, const void *tb) {
+    const ImageGwImageRec *a = (const ImageGwImageRec *) ta;
+    const ImageGwImageRec *b = (const ImageGwImageRec *) tb;
+    if (!a && !b) return 0;
+    if (!a && b) return 1;
+    if (a && !b) return -1;
+    if (!(a->tag) && !(b->tag)) return 0;
+    if (!(a->tag) && (b->tag)) return 1;
+    if ((a->tag) && !(b->tag)) return -1;
+    if (!(a->tag[0]) && !(b->tag[0])) return 0;
+    if (!(a->tag[0]) && (b->tag[0])) return 1;
+    if ((a->tag[0]) && !(b->tag[0])) return -1;
+    return strcmp(a->tag[0], b->tag[0]);
+}
+
 ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options *config, UdiRootConfig *udiConfig) {
     const char *modeStr = NULL;
     if (config->mode == MODE_LOOKUP) {
         modeStr = "lookup";
-    } else if (config->mode == MODE_PULL) {
+    } else if (config->mode == MODE_PULL || config->mode == MODE_PULL_NONBLOCK) {
         modeStr = "pull";
     } else if (config->mode == MODE_IMAGES) {
         modeStr = "list";
@@ -413,8 +447,6 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
     const char *url = NULL;
     if (tag != NULL) {
         url = alloc_strgenf("%s/api/%s/%s/%s/%s/", baseUrl, modeStr, udiConfig->system, type, tag);
-        free(type);
-        free(tag);
     } else {
         url = alloc_strgenf("%s/api/%s/%s/", baseUrl, modeStr, udiConfig->system);
     }
@@ -447,7 +479,7 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, handleResponseData);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, imageGw);
 
-    if (config->mode == MODE_PULL) {
+    if (config->mode == MODE_PULL || config->mode == MODE_PULL_NONBLOCK) {
         curl_easy_setopt(curl, CURLOPT_POST, 1);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "");
     }
@@ -476,29 +508,91 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
                     printf("%s\n", image->identifier);
                 }
                 free_ImageGwImageRec(image, 1);
+            } else if (config->mode == MODE_PULL_NONBLOCK) {
+                time_t curr_timet = time(NULL);
+                struct tm *curr = localtime(&curr_timet);
+                char timebuf[128];
+                strftime(timebuf, 128, "%Y-%m-%dT%H:%M:%S", curr);
+                ImageGwImageRec *image = parsePullResponse(imageGw);
+                if (image != NULL) {
+
+                    printf("%s%s Pulling Image: %s:%s, status: %s%s",
+                            config->verbose ? "" : "\r\x1b[2K",
+                            timebuf, config->rawtype, config->rawtag, image->status,
+                            config->verbose ? "\n" : "");
+                    fflush(stdout);
+                    if (strcmp(image->status, "MISSING") == 0 ||
+                        strcmp(image->status, "INIT") == 0 ||
+                        strcmp(image->status, "PULLING") == 0 ||
+                        strcmp(image->status, "EXAMINATION") == 0 ||
+                        strcmp(image->status, "CONVERSION") == 0 || 
+                        strcmp(image->status, "TRANSFER") == 0) {
+                        free_ImageGwImageRec(image, 1);
+                        return imageGw;
+                    } else {
+                        printf("\n");
+                        free_ImageGwImageRec(image, 1);
+                        free_ImageGwState(imageGw);
+                        return NULL;
+                    }
+                } else {
+                    free_ImageGwState(imageGw);
+                    return NULL;
+                }
             } else if (config->mode == MODE_PULL) {
+                ImageGwImageRec *image = parsePullResponse(imageGw);
+                if (image != NULL) {
+                    for ( ; ; ) {
+                        usleep(500000);
+                        config->mode = MODE_PULL_NONBLOCK;
+                        /* query again */
+                        ImageGwState *gwState = queryGateway(baseUrl, type, tag, config, udiConfig);
+                        if (gwState == NULL) break;
+                        free_ImageGwState(gwState);
+                        config->mode = MODE_PULL;
+                    }
+                }
             } else if (config->mode == MODE_IMAGES) {
                 ImageGwImageRec **images = parseImagesResponse(imageGw);
                 if (images != NULL && *images != NULL) {
+                    size_t count = 0;
+                    size_t lidx = 0;
                     ImageGwImageRec **ptr = images;
                     for (ptr = images; ptr != NULL && *ptr != NULL; ptr++) {
                         ImageGwImageRec *image = *ptr;
                         char **tagPtr = image->tag;
                         while (tagPtr && *tagPtr) {
-                            time_t pull_time = image->last_pull;
-                            struct tm time_struct;
-                            char time_str[100];
-                            memset(&time_struct, 0, sizeof(struct tm));
-                            if (localtime_r(&pull_time, &time_struct) == NULL) {
-                                /* if above generated an error, re-zero so we display obvious nonsense */
-                                memset(&time_struct, 0, sizeof(struct tm));
-                            }
-                            strftime(time_str, 100, "%Y-%m-%dT%H:%M:%S", &time_struct);
-
-                            printf("%-10s %-10s %-8s %-.10s   %s %-30s\n", image->system, image->type, image->status, image->identifier, time_str, *tagPtr);
+                            count++;
                             tagPtr++;
                         }
-                        free_ImageGwImageRec(image, 1);
+                    }
+                    ImageGwImageRec *limages = (ImageGwImageRec *) malloc(sizeof(ImageGwImageRec) * count);
+                    for (ptr = images; ptr != NULL && *ptr != NULL; ptr++) {
+                        ImageGwImageRec *image = *ptr;
+                        char **tagPtr = image->tag;
+                        while (tagPtr && *tagPtr) {
+                            memcpy(&(limages[lidx]), image, sizeof(ImageGwImageRec));
+                            limages[lidx].tag = (char **) malloc(sizeof(char *) * 1);
+                            limages[lidx].tag[0] = *tagPtr;
+                            lidx++;
+                            tagPtr++;
+                        }
+                    }
+                    qsort(limages, count, sizeof(ImageGwImageRec), imgCompare);
+                    for (lidx = 0; lidx < count; lidx++) {
+                        ImageGwImageRec *image = &(limages[lidx]);
+                        char *tag = image->tag[0];
+                        time_t pull_time = image->last_pull;
+                        struct tm time_struct;
+                        char time_str[100];
+                        memset(&time_struct, 0, sizeof(struct tm));
+                        if (localtime_r(&pull_time, &time_struct) == NULL) {
+                            /* if above generated an error, re-zero so we display obvious nonsense */
+                            memset(&time_struct, 0, sizeof(struct tm));
+                        }
+                        strftime(time_str, 100, "%Y-%m-%dT%H:%M:%S", &time_struct);
+
+                        printf("%-10s %-10s %-8s %-.10s   %s %-30s\n", image->system, image->type, image->status, image->identifier, time_str, tag);
                     }
                 }
                 if (images != NULL) {
@@ -559,6 +653,8 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         config->mode = MODE_LOOKUP;
     } else if (strcmp(argv[optind], "pull") == 0) {
         config->mode = MODE_PULL;
+    } else if (strcmp(argv[optind], "pullnb") == 0) {
+        config->mode = MODE_PULL_NONBLOCK;
     } else if (strcmp(argv[optind], "images") == 0) {
         config->mode = MODE_IMAGES;
     } else if (strcmp(argv[optind], "login") == 0) {
@@ -573,18 +669,20 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         CURL *curl = curl_easy_init();
         optind++;
 
-        char *type = argv[optind];
-        char *ptr = strchr(type, ':');
-        if (ptr == NULL) {
-            fprintf(stderr, "Must specify imageType:imageTag..., e.g., docker:ubuntu:latest\n");
+        char *type = NULL;
+        char *tag = NULL;
+
+        if (parse_ImageDescriptor(argv[optind], &type, &tag, udiConfig) != 0) {
+            fprintf(stderr, "FAILED to parse image descriptor. Try specifying "
+                    "both the type and descriptor, e.g., docker:ubuntu:latest"
+                    "\n");
             _usage(1);
         }
 
-        *ptr++ = 0;
         config->type = curl_easy_escape(curl, type, strlen(type));
-        config->tag = curl_easy_escape(curl, ptr, strlen(ptr));
-        ptr--;
-        *ptr = ':';
+        config->rawtype = type;
+        config->tag = curl_easy_escape(curl, tag, strlen(tag));
+        config->rawtag = strdup(tag);
 
         curl_easy_cleanup(curl);
     }
