@@ -1138,6 +1138,8 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
                     (readOnly ? ",ro" : ""),
                     (useAutoclear ? ",autoclear" : "")
             ),
+            "-t",
+            strdup(imgType),
             strdup(imagePath),
             strdup(loopMountPath),
             NULL
