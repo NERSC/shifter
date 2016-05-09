@@ -3,6 +3,7 @@ set -e
 
 unset CFLAGS
 unset CPPFLAGS
+unset LDFLAGS
 
 INST_PREFIX=${INST_PREFIX:-/opt/udiImage}
 SPRT_PREFIX=$( mktemp -d )
@@ -92,7 +93,7 @@ cd openssh
 ## the image is not infected with all kinds of silly paths (sshd sets PATH to
 ## very nearly the path it was built with)
 export PATH="/usr/bin:/bin"
-CC="${SPRT_PREFIX}/bin/musl-gcc" ./configure --without-pam "--with-ssl-dir=${SPRT_PREFIX}" --without-ssh1 --enable-static --disable-shared "--with-zlib=${SPRT_PREFIX}" "--prefix=${INST_PREFIX}"
+LDFLAGS="${SPRT_PREFIX}/lib ${SPRT_PREFIX}/lib64" CC="${SPRT_PREFIX}/bin/musl-gcc" ./configure --without-pam "--with-ssl-dir=${SPRT_PREFIX}" --without-ssh1 --enable-static --disable-shared "--with-zlib=${SPRT_PREFIX}" "--prefix=${INST_PREFIX}"
 make
 make install "DESTDIR=${PREFIX}"
 cd "${builddir}"
