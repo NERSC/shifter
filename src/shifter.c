@@ -142,6 +142,7 @@ int main(int argc, char **argv) {
             entry = imageData.entryPoint;
         } else {
             fprintf(stderr, "Image does not have a defined entrypoint.\n");
+            exit(1);
         }
 
         if (entry != NULL) {
