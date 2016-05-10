@@ -12,6 +12,7 @@ import struct
 import tempfile
 import socket
 import urllib2
+import shifter_imagegw
 
 ## Shifter, Copyright (c) 2015, The Regents of the University of California,
 ## through Lawrence Berkeley National Laboratory (subject to receipt of any
@@ -422,7 +423,13 @@ class dockerv2Handle():
         os.umask(022)
         devnull = open(os.devnull, 'w')
         tarfile=os.path.join(cachedir,'%s.tar'%(layer['fsLayer']['blobSum']))
-        command=['tar','xf', tarfile, '-C', basePath, '--exclude=dev/*', '--force-local']
+        command=[shifter_imagegw.tarPath,
+                'xf',
+                tarfile,
+                '-C',
+                basePath,
+                '--exclude=dev/*',
+                '--force-local']
         ret = subprocess.call(command, stdout=devnull, stderr=devnull)
         devnull.close()
         if ret>1:
