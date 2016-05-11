@@ -25,7 +25,7 @@ generated.
 
 If you want to contribute code or documentation, please join our slack chat channel at https://shifter-hpc.slack.com to
 coordinate efforts.  Code can be presented for inclusion with the shifter project by providing Pull Requests against the
-shifter master branch on bitbucket from your own forked repo.
+shifter master branch on github from your own forked repo.
 
 # Change Log
 
@@ -37,4 +37,4 @@ https://www.nersc.gov/research-and-development/user-defined-images/
 
 # Documentation
 
-https://bitbucket.org/berkeleylab/shifter/wiki/Home
+https://github.com/NERSC/shifter/wiki
