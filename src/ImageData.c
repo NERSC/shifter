@@ -58,6 +58,14 @@
 #define ENV_ALLOC_SIZE 512
 #define VOL_ALLOC_SIZE 256
 
+static const char *allowedImageTypes[] = {
+    "docker",
+    "custom",
+    "id",
+    "local",
+    NULL
+};
+
 int _ImageData_assign(const char *key, const char *value, void *t_imageData);
 char *_ImageData_filterString(const char *input, int allowSlash);
 
@@ -335,6 +343,8 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
             image->format = FORMAT_SQUASHFS;
         } else if (strcmp(value, "cramfs") == 0) {
             image->format = FORMAT_CRAMFS;
+        } else if (strcmp(value, "xfs") == 0) {
+            image->format = FORMAT_XFS;
         } else {
             image->format = FORMAT_INVALID;
         }
@@ -390,4 +400,126 @@ char *_ImageData_filterString(const char *input, int allowSlash) {
     }
     *wptr = 0;
     return ret;
+}
+
+char *imageDesc_filterString(const char *input, const char *type) {
+    int allowSlash = 0;
+    if (type != NULL &&
+        (strcmp(type, "local") == 0 || strcmp(type, "docker") == 0)) {
+
+        allowSlash = 1;
+    }
+    return _ImageData_filterString(input, allowSlash);
+}
+
+int parse_ImageDescriptor(char *userinput, char **imageType, char **imageTag, UdiRootConfig *udiConfig) {
+    int foundType = 0;
+    char *type = NULL;
+    char *tag = NULL;
+    char *tmp = NULL;
+    char *ptr = NULL;
+    const char **ref = allowedImageTypes;
+
+    if (imageType == NULL || imageTag == NULL ||
+        userinput == NULL || strlen(userinput) == 0 ||
+        udiConfig == NULL) {
+
+        fprintf(stderr, "ERROR: NULL input when attempting to parse "
+                "image descriptor\n");
+        goto _error;
+    }
+
+    ptr = strchr(userinput, ':');
+    if (ptr != NULL) {
+        /* ptr might be an image type, or it might just be part of the tag */
+        *ptr = 0;
+        tmp = imageDesc_filterString(userinput, NULL);
+        if (tmp == NULL) {
+            fprintf(stderr, "ERROR: Failed to allocate filtered input string "
+                    "when attempting to parse image descriptor.\n");
+            goto _error;
+        }
+
+        /* check to see if it is in the approved list of types */
+        for (ref = allowedImageTypes; ref && *ref; ref++) {
+            if (strcmp(*ref, tmp) == 0) {
+                foundType = 1;
+                break;
+            }
+        }
+
+        if (foundType) {
+            type = strdup(tmp);
+            if (type == NULL) {
+                fprintf(stderr, "ERROR: failed to copy type string (out of "
+                        "mem?) when attempting to parse image descriptor.\n");
+                goto _error;
+            }
+            *ptr = ':';
+            ptr++;
+        } else {
+            *ptr = ':';
+        }
+
+        free(tmp);
+        tmp = NULL;
+    }
+
+    /* if no type is found, then the whole userinput string must be the image
+     * descriptor, so assume default image type from udiRoot.conf */
+    if (!foundType && udiConfig->defaultImageType != NULL) {
+        type = strdup(udiConfig->defaultImageType);
+        if (type == NULL) {
+            fprintf(stderr, "ERROR: failed to copy type string (out of mem?) "
+                    "when attempting to parse image descriptor.\n");
+            goto _error;
+        }
+        ptr = userinput;
+    }
+
+    /* validate type */
+    if (type == NULL || strlen(type) == 0) {
+        fprintf(stderr, "FAILED to determine image type.  Either specify image "
+                "type or set defaultImageType in udiRoot.conf\n");
+        goto _error;
+    }
+    foundType = 0;
+    for (ref = allowedImageTypes; ref && *ref; ref++) {
+        if (strcmp(*ref, type) == 0) {
+            foundType = 1;
+            break;
+        }
+    }
+    if (foundType == 0) {
+        fprintf(stderr, "ERROR: requested image type %s is invalid.  Please "
+                "check formatting or set defaultImageType in udiRoot.conf "
+                "correctly\n", type);
+        goto _error;
+    }
+
+    tag = imageDesc_filterString(ptr, type);
+    if (tag == NULL || strlen(tag) == 0) {
+        fprintf(stderr, "FAILED To filter or copy image descriptor when "
+                "attempting to parse.  Out of memory or invalid input.\n");
+        goto _error;
+    }
+
+    *imageType = type;
+    *imageTag = tag;
+    return 0;
+
+_error:
+    if (tmp != NULL) {
+        free(tmp);
+        tmp = NULL;
+    }
+    if (type != NULL) {
+        free(type);
+        type = NULL;
+    }
+    if (tag != NULL) { 
+        free(tag);
+        tag = NULL;
+    }
+    return -1;
 }

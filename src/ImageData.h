@@ -80,6 +80,55 @@ int parse_ImageData(char *type, char *identifier, UdiRootConfig *, ImageData *);
 void free_ImageData(ImageData *, int);
 size_t fprint_ImageData(FILE *, ImageData *);
 
+
+/**
+ * parse_ImageDescriptor parses user-provided image descriptor strings
+ * The fully formalized format for this is:
+ *     imageType:imageIdentifyingTag
+ * for example:
+ *     docker:ubuntu:14.04
+ *     docker:privateRegistry/repo:latest
+ *     docker:someSpecificDockerUser/someRepo:1.4.2.3.4
+ *     id:23429387329872...
+ *     local:/
+ *
+ * or
+ *     ubuntu:14.04
+ * in which case no image type is specified which leads to the defaultImageType
+ * from udiRoot.conf to be assumed.
+ *
+ * Once parsed these data are useful to either fully determine which image to
+ * load (if type == id or type == local), or perform a lookup using from the
+ * image manager via shifterimg (if type is anything else, but particularly
+ * docker).
+ *
+ * The calling function will provide pointers to uninitialized char* instances
+ * which are used to store the resulting type and tag values.  The calling 
+ * function is responsible to free the stored strings for imageType and
+ * imageTag.
+ *
+ * \param userinput user-provided string in above format for desired image
+ * \param imageType string pointer to store calculated image type
+ * \param imageTag string pointer to store calucated image tag
+ * \param udiConfig UdiRootConfig configuration structure
+ * \returns 0 upon success, -1 upon error, any error should be fatal
+ */
+int parse_ImageDescriptor(char *userinput, char **imageType, char **imageTag, UdiRootConfig *);
+
+/**
+  * imageDesc_filterString screens out disallowed characters from user input
+  *
+  * Allowed characters are [A-Za-z0-9_:.+-]
+  * Depending on image type '/' is sometimes allowed
+  *
+  * Any other characters are simply screened out (removed and skipped over)
+  *
+  * \param target the user-input to filter
+  * \param type if not-NULL can adjust the allowed characters based on avlue
+  * \returns newly allocated filtered string
+  */
+char *imageDesc_filterString(const char *target, const char *type);
+
 #ifdef __cplusplus
 }
 #endif

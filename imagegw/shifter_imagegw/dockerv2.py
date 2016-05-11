@@ -12,6 +12,7 @@ import struct
 import tempfile
 import socket
 import urllib2
+import shifter_imagegw
 
 ## Shifter, Copyright (c) 2015, The Regents of the University of California,
 ## through Lawrence Berkeley National Laboratory (subject to receipt of any
@@ -288,6 +289,7 @@ class dockerv2Handle():
         """
         path = "/v2/%s/blobs/%s" % (self.repo, layer)
         url = self.url
+        output_fname = None
         while True:
             conn = self.setupHttpConn(url, self.cacert)
             if conn is None:
@@ -302,14 +304,21 @@ class dockerv2Handle():
             filename = '%s/%s.tar' % (cachedir,layer)
 
             if os.path.exists(filename):
-                self.checkLayerChecksum(layer, filename)
-                return True
+                try:
+                    return self.checkLayerChecksum(layer, filename)
+                except ValueError:
+                    # there was a checksum mismatch, nuke the file
+                    os.unlink(filename)
 
             conn.request("GET", path, None, headers)
             r1 = conn.getresponse()
             location = r1.getheader('location')
             if r1.status == 200:
                 break
+            elif r1.status == 401:
+                if self.authMethod == 'token':
+                    self.doTokenAuth(r1.getheader('WWW-Authenticate'))
+                    next
             elif location != None:
                 url = location
                 matchObj = re.match(r'(https?)://(.*?)(/.*)', location)
@@ -320,20 +329,25 @@ class dockerv2Handle():
                 return False
         maxlen = int(r1.getheader('content-length'))
         nread = 0
-        output = open(filename, "w")
-        readsz = 4 * 1024 * 1024 # read 4MB chunks
-        while nread < maxlen:
-            buff = r1.read(readsz)
-            if buff is None:
-                break
-            if type(buff) != str:
-                print buff
+        (output_fd, output_fname) = tempfile.mkstemp('.partial', layer, cachedir)
+        output_fp = os.fdopen(output_fd, 'w')
 
-            output.write(buff)
-            nread += len(buff)
-        output.close()
-        self.checkLayerChecksum(layer, filename)
+        try:
+            readsz = 4 * 1024 * 1024 # read 4MB chunks
+            while nread < maxlen:
+                buff = r1.read(readsz)
+                if buff is None:
+                    break
 
+                output_fp.write(buff)
+                nread += len(buff)
+            output_fp.close()
+            self.checkLayerChecksum(layer, output_fname)
+        except:
+            os.unlink(output_fname)
+            raise
+
+        os.rename(output_fname, filename)
         return True
 
     def checkLayerChecksum(self, layer, filename):
@@ -413,7 +427,13 @@ class dockerv2Handle():
         os.umask(022)
         devnull = open(os.devnull, 'w')
         tarfile=os.path.join(cachedir,'%s.tar'%(layer['fsLayer']['blobSum']))
-        command=['tar','xf', tarfile, '-C', basePath, '--exclude=dev/*', '--force-local']
+        command=[shifter_imagegw.tarPath,
+                'xf',
+                tarfile,
+                '-C',
+                basePath,
+                '--exclude=dev/*',
+                '--force-local']
         ret = subprocess.call(command, stdout=devnull, stderr=devnull)
         devnull.close()
         if ret>1:

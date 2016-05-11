@@ -2,6 +2,14 @@
 
 The image gateway handles creating, tracking, and cleaning up images.  It provides a RESTful interface for client interactions, a manager layer that manages and tracks the images, and workers that do most of the fetching, packing and transferring of images.
 
+To start the image gateway do something like:
+
+    ## May need to add something to PYTHONPATH depending on where shifter_imagegw
+    ## is installed
+    gunicorn -b 0.0.0.0:5000 --backlog 2048 \
+        --access-logfile=/var/log/shifter_imagegw/access.log \
+        --log-file=/var/log/shifter_imagegw/error.log \
+        shifter_imagegw.api:app
 
 ## Start Gateway with Docker and Docker-Compose
 
