@@ -315,6 +315,10 @@ class dockerv2Handle():
             location = r1.getheader('location')
             if r1.status == 200:
                 break
+            elif r1.status == 401:
+                if self.authMethod == 'token':
+                    self.doTokenAuth(r1.getheader('WWW-Authenticate'))
+                    next
             elif location != None:
                 url = location
                 matchObj = re.match(r'(https?)://(.*?)(/.*)', location)
