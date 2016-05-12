@@ -22,59 +22,90 @@ modification, are permitted provided that the following conditions are met:
 
 See LICENSE for full text.
 """
+def _shCmd(system, *args):
+    if len(args) == 0:
+        return None
+    return args
 
-def copy_remote(filename,system):
+def _cpCmd(system, localfile, targetfile):
+    return ['cp', localfile, targetfile]
+
+def _sshCmd(system, *args):
+    if len(args) == 0:
+        return None
+
+    ssh = ['ssh']
+
+    ### TODO think about if the host selection needs to be smarter
+    ### also, is this guaranteed to be an iterable object?
+    hostname = system['host'][0]
+    username = system['ssh']['username']
+    if 'key' in system['ssh']:
+        ssh.extend(['-i','%s' % system['ssh']['key']])
+    if 'sshCmdOptions' in system['ssh']:
+        ssh.extend(system['ssh']['sshCmdOptions'])
+    ssh.extend(['%s@%s' % (username, hostname)])
+    ssh.extend(args)
+    return ssh
+
+def _scpCmd(system, localfile, remotefile):
+    ssh = ['scp']
+
+    ### TODO think about if the host selection needs to be smarter
+    ### also, is this guaranteed to be an iterable object?
+    hostname = system['host'][0]
+    username = system['ssh']['username']
+    if 'key' in system['ssh']:
+        ssh.extend(['-i','%s' % system['ssh']['key']])
+    if 'scpCmdOptions' in system['ssh']:
+        ssh.extend(system['ssh']['scpCmdOptions'])
+    ssh.extend([localfile, '%s@%s:%s' % (username, hostname, remotefile)])
+    return ssh
+
+def copy_file(filename,system):
     (basePath,imageFilename) = os.path.split(filename)
-    ssh=system['ssh']
     remoteFilename = os.path.join(ssh['imageDir'], imageFilename)
-    scpCmd = ['scp']
-    if 'key' in ssh:
-        scpCmd.extend(['-i','%s'%ssh['key']])
-    if 'scpCmdOptions' in system:
-        scpCmd.extend(system['scpCmdOptions'])
-    hostname=system['host'][0]
-    # TODO: Add command to pre-create the file with the right striping
-    scpCmd.extend([filename,'%s@%s:%s' % (ssh['username'],hostname, remoteFilename)])
+    remoteTempFilename = os.path.join(ssh['imageDir'], '%s.XXXXXX.partial' % imageFilename)
+    shCmd = None
+    cpCmd = None
+    if system['accesstype'] == 'local':
+        shCmd = _shCmd
+        cpCmd = _cpCmd
+    elif system['accesstype'] == 'remote':
+        shCmd = _sshCmd
+        cpCmd = _scpCmd
+    else:
+        raise NotImplementedError('%s is not supported as a transfer type' % system['accesstype'])
+
+    # pre-create the file with a temporary name
+    # TODO: Add command to setup the file with the right striping
+    preCreate = shCmd(system, 'mktemp', remoteTempFilename)
+    proc = subprocess.Popen(preCreate, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    remoteTempFilename = None
+    if proc is not None:
+    	stdout,stderr = proc.communicate()
+        if proc.returncode == 0:
+            remoteTempFilename = stdout
+        else:
+            raise OSError('Failed to precreate transfer file, %s (%d)' % (stderr, proc.returncode))
+
+    if remoteTempFilename is None or not remoteTempFilename.startswith(ssh['imageDir']):
+        raise OSError('Got unexpected response back from tempfile precreation: %s' % stdout)
+    
+    copy = cpCmd(system, filename, remoteTempFilename)
     #print "DEBUG: %s"%(scpCmd.join(' '))
     fdnull=open('/dev/null','w')
 
-    ret = subprocess.call(scpCmd)#, stdout=fdnull, stderr=fdnull)
+    ret = subprocess.call(copy)#, stdout=fdnull, stderr=fdnull)
+    if ret == 0:
+        mvCmd = shCmd(system, 'mv', remoteTempFilename, remoteFilename)
+        ret = subprocess.call(mvCmd)
     return ret == 0
-
-def copy_local(filename,system):
-    (basePath,imageFilename) = os.path.split(filename)
-    local=system['local']
-    targetFilename = os.path.join(local['imageDir'], imageFilename)
-    cpCmd = ['cp']
-    if 'cpCmdOptions' in system:
-        cpCmd.extend(system['cpCmdOptions'])
-    # TODO: Add command to pre-create the file with the right striping
-    cpCmd.extend([filename, targetFilename])
-    #print "DEBUG: %s"%(scpCmd.join(' '))
-    fdnull=open('/dev/null','w')
-
-    ret = subprocess.call(cpCmd)#, stdout=fdnull, stderr=fdnull)
-    return ret == 0
-
 
 def transfer(system,imagePath,metadataPath=None):
-    atype=system['accesstype']
-    if atype=='remote':
-        if metadataPath is not None:
-            copy_remote(metadataPath, system)
-        if copy_remote(imagePath,system):
-            return True
-        else:
-            print "Copy failed"
-            return False
-    elif atype=='local':
-        if metadataPath is not None:
-            copy_local(metadataPath, system)
-        if copy_local(imagePath,system):
-            return True
-        else:
-            print "Copy failed"
-            return False
-    else:
-        raise NotImplementedError('%s is not supported as a transfer type'%atype)
+    if metadataPath is not None:
+        copy_file(metadataPath, system)
+    if copy_file(imagePath,system):
+        return True
+    print "Copy failed"
     return False
