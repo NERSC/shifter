@@ -62,50 +62,72 @@ def _scpCmd(system, localfile, remotefile):
     ssh.extend([localfile, '%s@%s:%s' % (username, hostname, remotefile)])
     return ssh
 
-def copy_file(filename,system):
-    (basePath,imageFilename) = os.path.split(filename)
-    remoteFilename = os.path.join(ssh['imageDir'], imageFilename)
-    remoteTempFilename = os.path.join(ssh['imageDir'], '%s.XXXXXX.partial' % imageFilename)
+def _execAndLog(cmd, logger):
+    if logger is not None:
+        logger.info("about to exec: %s" % ' '.join(cmd))
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if proc is None:
+        if logger is not None:
+            logger.error("Could not execute '%s'" % ' '.join(cmd))
+        return
+    stdout,stderr = proc.communicate()
+    if logger is not None:
+        if stdout is not None and len(stdout) > 0:
+            logger.debug("%s stdout: %s" % (cmd[0], stdout.strip()))
+        if stderr is not None and len(stderr) > 0:
+            logger.error("%s stderr: %s" % (cmd[0], stderr.strip()))
+    return proc.returncode
+
+def copy_file(filename, system, logger=None):
     shCmd = None
     cpCmd = None
+    baseRemotePath = None
     if system['accesstype'] == 'local':
         shCmd = _shCmd
         cpCmd = _cpCmd
+        baseRemotePath = system['local']['imageDir']
     elif system['accesstype'] == 'remote':
         shCmd = _sshCmd
         cpCmd = _scpCmd
+        baseRemotePath = system['ssh']['imageDir']
     else:
         raise NotImplementedError('%s is not supported as a transfer type' % system['accesstype'])
+
+    (basePath,imageFilename) = os.path.split(filename)
+    remoteFilename = os.path.join(baseRemotePath, imageFilename)
+    remoteTempFilename = os.path.join(baseRemotePath, '%s.XXXXXX.partial' % imageFilename)
 
     # pre-create the file with a temporary name
     # TODO: Add command to setup the file with the right striping
     preCreate = shCmd(system, 'mktemp', remoteTempFilename)
+    if logger is not None:
+        logger.info('about to exec: %s' % ' '.join(preCreate))
     proc = subprocess.Popen(preCreate, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     remoteTempFilename = None
     if proc is not None:
     	stdout,stderr = proc.communicate()
         if proc.returncode == 0:
-            remoteTempFilename = stdout
+            remoteTempFilename = stdout.strip()
         else:
             raise OSError('Failed to precreate transfer file, %s (%d)' % (stderr, proc.returncode))
+        if len(stderr) > 0 and logger is not None:
+            logger.error("%s stderr: %s" % (preCreate[0], stderr.strip()))
 
-    if remoteTempFilename is None or not remoteTempFilename.startswith(ssh['imageDir']):
+    if remoteTempFilename is None or not remoteTempFilename.startswith(baseRemotePath):
         raise OSError('Got unexpected response back from tempfile precreation: %s' % stdout)
     
     copy = cpCmd(system, filename, remoteTempFilename)
-    #print "DEBUG: %s"%(scpCmd.join(' '))
-    fdnull=open('/dev/null','w')
-
-    ret = subprocess.call(copy)#, stdout=fdnull, stderr=fdnull)
+    ret = _execAndLog(copy, logger)
     if ret == 0:
         mvCmd = shCmd(system, 'mv', remoteTempFilename, remoteFilename)
-        ret = subprocess.call(mvCmd)
+        ret = _execAndLog(mvCmd, logger)
     return ret == 0
 
-def transfer(system,imagePath,metadataPath=None):
+def transfer(system,imagePath,metadataPath=None,logger=None):
     if metadataPath is not None:
-        copy_file(metadataPath, system)
-    if copy_file(imagePath,system):
+        copy_file(metadataPath, system, logger)
+    if copy_file(imagePath,system, logger):
         return True
-    print "Copy failed"
+    if logger is not None:
+        logger.error("Transfer of %s failed" % imagePath)
     return False

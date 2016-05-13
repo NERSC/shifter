@@ -4,7 +4,7 @@ import unittest
 import tempfile
 
 """
-Shifter, Copyright (c) 2015, The Regents of the University of California,
+Shifter, Copyright (c) 2016, The Regents of the University of California,
 through Lawrence Berkeley National Laboratory (subject to receipt of any
 required approvals from the U.S. Dept. of Energy).  All rights reserved.
 
@@ -33,6 +33,10 @@ class TransferTestCase(unittest.TestCase):
         self.system['ssh'] = {
             'username': 'nobody',
             'key': 'somefile',
+            'imageDir': None
+        }
+        self.system['local'] = {
+            'imageDir': None
         }
         self.system['accesstype'] = 'local'
         pass
@@ -88,12 +92,118 @@ class TransferTestCase(unittest.TestCase):
         assert '|'.join(cmd) == 'scp|-i|somefile|-t|a|nobody@localhost:b'
         del self.system['ssh']['scpCmdOptions']
 
-    def test_copyfile(self):
-        tmpPath = tempfile.mkdtemp() 
-        tmpPath = os.path.join(tmpPath, 'asdf')
-        print tmpPath
-        transfer.copy_file(self.system, __file__)
+    def inodeCounter(self, ignore, dirname, fnames):
+        self.inodes += len(fnames)
 
+    def test_copyfile_local(self):
+        tmpPath = tempfile.mkdtemp() 
+        self.system['local']['imageDir'] = tmpPath
+        self.system['ssh']['imageDir'] = tmpPath
+       
+        self.system['accesstype'] = 'local'
+        transfer.copy_file(__file__, self.system)
+        dir,fname = os.path.split(__file__)
+        filePath = os.path.join(tmpPath, fname)
+        assert os.path.exists(filePath)
+
+        self.inodes = 0
+        os.path.walk(tmpPath, self.inodeCounter, None)
+        assert self.inodes == 1
+        os.unlink(filePath)
+
+        self.inodes = 0
+        os.path.walk(tmpPath, self.inodeCounter, None)
+        assert self.inodes == 0
+
+        os.rmdir(tmpPath)
+
+    def test_copyfile_remote(self):
+        """uses mock ssh/scp wrapper to pretend to do the remote
+           transfer, ensure it is in PATH prior to running test
+        """
+        tmpPath = tempfile.mkdtemp() 
+        self.system['local']['imageDir'] = tmpPath
+        self.system['ssh']['imageDir'] = tmpPath
+       
+        self.system['accesstype'] = 'remote'
+        transfer.copy_file(__file__, self.system)
+        dir,fname = os.path.split(__file__)
+        filePath = os.path.join(tmpPath, fname)
+        assert os.path.exists(filePath)
+
+        self.inodes = 0
+        os.path.walk(tmpPath, self.inodeCounter, None)
+        assert self.inodes == 1
+        os.unlink(filePath)
+
+        self.inodes = 0
+        os.path.walk(tmpPath, self.inodeCounter, None)
+        assert self.inodes == 0
+
+        os.rmdir(tmpPath)
+
+    def test_copyfile_invalid(self):
+        tmpPath = tempfile.mkdtemp() 
+        self.system['local']['imageDir'] = tmpPath
+        self.system['ssh']['imageDir'] = tmpPath
+       
+        self.system['accesstype'] = 'invalid'
+     
+        with self.assertRaises(NotImplementedError):
+            transfer.copy_file(__file__, self.system)
+
+        os.rmdir(tmpPath)
+
+    def test_copyfile_failtowrite(self):
+        tmpPath = tempfile.mkdtemp() 
+        self.system['local']['imageDir'] = tmpPath
+        self.system['ssh']['imageDir'] = tmpPath
+       
+        self.system['accesstype'] = 'local'
+
+        # make directory unwritable
+        os.chmod(tmpPath, 0555)
+        with self.assertRaises(OSError):
+            transfer.copy_file(__file__, self.system)
+
+        self.inodes = 0
+        os.path.walk(tmpPath, self.inodeCounter, None)
+        assert self.inodes == 0
+        os.rmdir(tmpPath)
+
+    def test_transfer_local(self):
+        tmpPath = tempfile.mkdtemp() 
+        self.system['local']['imageDir'] = tmpPath
+        self.system['ssh']['imageDir'] = tmpPath
+       
+        self.system['accesstype'] = 'local'
+
+        transfer.transfer(self.system, __file__)
+
+        ## make sure transferred file exists
+        dir,fname = os.path.split(__file__)
+        filePath = os.path.join(tmpPath, fname)
+        assert os.path.exists(filePath)
+
+        self.inodes = 0
+        os.path.walk(tmpPath, self.inodeCounter, None)
+        assert self.inodes == 1
+        os.unlink(filePath)
+
+        dname,fname = os.path.split(__file__)
+        meta = os.path.join(dname, '__init__.py')
+        
+        transfer.transfer(self.system, __file__, meta)
+        self.inodes = 0
+        os.path.walk(tmpPath, self.inodeCounter, None)
+        assert self.inodes == 2
+
+        filePath = os.path.join(tmpPath, fname)
+        metaPath = os.path.join(tmpPath, '__init__.py')
+
+        os.unlink(filePath)
+        os.unlink(metaPath)
+        os.rmdir(tmpPath)
 
 if __name__ == '__main__':
     unittest.main()
