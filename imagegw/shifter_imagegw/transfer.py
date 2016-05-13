@@ -116,12 +116,26 @@ def copy_file(filename, system, logger=None):
     if remoteTempFilename is None or not remoteTempFilename.startswith(baseRemotePath):
         raise OSError('Got unexpected response back from tempfile precreation: %s' % stdout)
     
-    copy = cpCmd(system, filename, remoteTempFilename)
-    ret = _execAndLog(copy, logger)
-    if ret == 0:
-        mvCmd = shCmd(system, 'mv', remoteTempFilename, remoteFilename)
-        ret = _execAndLog(mvCmd, logger)
-    return ret == 0
+    copyret = None
+    try:
+        copy = cpCmd(system, filename, remoteTempFilename)
+        copyret = _execAndLog(copy, logger)
+    except:
+        rmCmd = shCmd(system, 'rm', remoteTempFilename)
+        _execAndLog(rmCmd, logger)
+        raise
+
+    if copyret == 0:
+        try:
+            mvCmd = shCmd(system, 'mv', remoteTempFilename, remoteFilename)
+            ret = _execAndLog(mvCmd, logger)
+            return ret == 0
+        except:
+            ### we might also need to remove remoteFilename in this case
+            rmCmd = shCmd(system, 'rm', remoteTempFilename)
+            _execAndLog(rmCmd, logger)
+            raise
+    return False
 
 def transfer(system,imagePath,metadataPath=None,logger=None):
     if metadataPath is not None:
