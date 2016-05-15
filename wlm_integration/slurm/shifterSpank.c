@@ -57,19 +57,21 @@ static void _log(logLevel level, const char *format, ...) {
     }
 }
 
-
-int shifterSpank_init(int argc, char **argv, int getoptValues) {
+shifterSpank_config *shifterSpank_init(
+    void *spid, int argc, char **argv, int getoptValues)
+{
     int idx = 0;
     char buffer[PATH_MAX];
-    if (ssConfig != NULL) {
-        return ERROR;
-    }
+    shifterSpank_config *ssconfig = NULL;
+
     ssConfig = (shifterSpank_config *) malloc(sizeof(shifterSpank_config));
     if (ssConfig == NULL) {
         _log(LOG_ERROR, "FAILED to allocate memory for shifterSpank_config");
         return ERROR;
     }
     memset(ssConfig, 0, sizeof(shifterSpank_config));
+
+    ssconfig->id = spid;
 
     for (idx = 0; idx < argc; ++idx) {
         if (strncmp("shifter_config=", argv[idx], 15) == 0) {
@@ -95,14 +97,14 @@ int shifterSpank_init(int argc, char **argv, int getoptValues) {
     }
     if (ssConfig->shifter_config == NULL) {
         _log(LOG_ERROR, "shifterSlurm: failed to find config filename");
-        return ERROR;
+        goto error;
     }
 
     ssConfig->udiConfig = malloc(sizeof(UdiRootConfig));
     if (ssConfig->udiConfig == NULL) {
         _log(LOG_ERROR, "FAILED to allocate memory to read "
             "udiRoot configuration\n");
-        return ERROR;
+        goto error;
     }
     memset(udiConfig, 0, sizeof(UdiRootConfig));
 
@@ -110,23 +112,64 @@ int shifterSpank_init(int argc, char **argv, int getoptValues) {
         _log(LOG_ERROR, "FAILED to read udiRoot configuration file!\n");
         free(ssConfig->udiConfig);
         ssConfig->udiConfig = NULL;
-        return NULL;
+        goto error;
     }
 
+    return ssConfig;
+error:
+    if (ssConfig != NULL) {
+        shifterSpank_config_free(ssConfig);
+        ssConfig = NULL;
+    }
+    return NULL;
+}
+
+void shifterSpank_config_free(shifterSpank_config *ssconfig) {
+    if (ssconfig == NULL) return;
+    if (ssconfig->image != NULL) {
+        free(ssconfig->image);
+        ssconfig->image = NULL;
+    }
+    if (ssconfig->imageType != NULL) {
+        free(ssconfig->imageType);
+        ssconfig->imageType = NULL;
+    }
+    if (ssconfig->volume != NULL) {
+        free(ssconfig->volume);
+        ssconfig->volume = NULL;
+    }
+    if (ssconfig->udiConfig != NULL) {
+        UdiRootConfig_free(ssconfig->udiConfig, 1);
+        ssconfig->udiConfig = NULL;
+    }
+    if (ssconfig->shifter_config != NULL) {
+        free(ssconfig->shifter_config);
+        ssconfig->shifter_config = NULL;
+    }
+    if (ssconfig->memory_cgroup != NULL) {
+        free(ssconfig->memory_cgroup);
+        ssconfig->memory_cgroup = NULL;
+    }
+    if (ssconfig->extern_setup != NULL) {
+        free(ssconfig->extern_setup);
+        ssconfig->extern_setup = NULL;
+    }
+    memset(ssconfig, 0, sizeof(shifterSpank_config));
+    free(ssconfig);
+}
+
+int shifterSpank_process_option_ccm(
+    shifterSpank_config *ssconfig, int val, const char *optarg, int remote)
+{
+    if (ssconfig == NULL) return ERROR;
+
+    ssconfig->ccmMode = 1;
     return SUCCESS;
 }
 
-
-int _opt_ccm(int val, const char *optarg, int remote) {
-    if (strlen(image) == 0 && strlen(image_type) == 0) {
-        snprintf(image, IMAGE_MAXLEN, "/");
-        snprintf(image_type, IMAGE_MAXLEN, "local");
-    }
-    ccmMode = 1;
-    return SUCCESS;
-}
-
-int _opt_image(int val, const char *optarg, int remote) {
+int shifterSpank_process_option_image(
+    shifterSpank_config *ssconfig, int val, const char *optarg, int remote)
+{
     char *tmp = NULL;
     int rc = SUCCESS;
     if (optarg != NULL && strlen(optarg) > 0) {
@@ -139,14 +182,12 @@ int _opt_image(int val, const char *optarg, int remote) {
             rc = ERROR;
             goto _opt_image_exit;
         }
-        snprintf(image_type, IMAGE_MAXLEN, "%s", type);
-        snprintf(image, IMAGE_MAXLEN, "%s", tag);
+        if (ssconfig->imageType != NULL) free(ssconfig->imageType);
+        if (ssconfig->image != NULL) free(ssconfig->image);
+        ssconfig->imageType = type;
+        ssconfig->image = tag;
         free(tmp);
-        free(type);
-        free(tag);
         tmp = NULL;
-        type = NULL;
-        tag = NULL;
         return SUCCESS;
     }
     _log(LOG_ERROR, "Invalid image - must not be zero length");
@@ -157,11 +198,13 @@ _opt_image_exit:
     return rc;
 }
 
-int _opt_imagevolume(int val, const char *optarg, int remote) {
+int shifterSpank_process_option_volume(
+    shifterSpank_config *ssconfig, int val, const char *optarg, int remote)
+{
     if (optarg != NULL && strlen(optarg) > 0) {
         /* validate input */
+        char *tmpvol = NULL;
         VolumeMap *vmap = (VolumeMap *) malloc(sizeof(VolumeMap));
-        char *ptr = imagevolume + strlen(imagevolume);
         memset(vmap, 0, sizeof(VolumeMap));
 
         if (parseVolumeMap(optarg, vmap) != 0) {
@@ -170,16 +213,14 @@ int _opt_imagevolume(int val, const char *optarg, int remote) {
             exit(1);
         }
         free_VolumeMap(vmap, 1);
-
-        if (ptr != imagevolume) {
-            *ptr++ = ';';
+        if (ssconfig->volume != NULL) {
+            char *tmpvol = alloc_strgenf("%s;%s", ssconfig->volume, optarg);
+            free(ssconfig->volume);
+            ssconfig->volume = tmpvol;
+        } else {
+            ssconfig->volume = strdup(optarg);
         }
-        if (strlen(optarg) > IMAGEVOLUME_MAXLEN - (ptr - imagevolume)) {
-            _log(LOG_ERROR, "Failed to store volume map request, too big: %s", optarg);
-            exit(1);
-        }
 
-        snprintf(ptr, IMAGEVOLUME_MAXLEN - (ptr - imagevolume), "%s", optarg);
         return SUCCESS;
     }
     _log(LOG_ERROR, "Invalid image volume options - if specified, must not be zero length");
@@ -325,7 +366,7 @@ int generateSshKey(shifterSpank_config *ssconfig) {
         if (!feof(fp) && !ferror(fp)) {
             size_t nread = getline(&linePtr, &n_linePtr, fp);
             if (nread > 0 && linePtr != NULL) {
-                lgplSpank_job_control_setenv(ssconfig->id, "SHIFTER_SSH_PUBKEY", linePtr, 1);
+                wrap_spank_job_control_setenv(ssconfig, "SHIFTER_SSH_PUBKEY", linePtr, 1);
                 free(linePtr);
                 linePtr = NULL;
             }
@@ -361,9 +402,12 @@ int doExternStepTaskSetup(shifterSpank_config *ssconfig) {
     int rc = SUCCESS;
     struct stat statData;
     char buffer[PATH_MAX];
+
+    if (ssconfig == NULL || ssconfig->udiConfig == NULL) return ERROR;
+
     /* check and see if there is an existing configuration */
     memset(&statData, 0, sizeof(struct stat));
-    snprintf(buffer, 1024, "%s/var/shifterConfig.json", udiConfig->udiMountPoint);
+    snprintf(buffer, 1024, "%s/var/shifterConfig.json", ssconfig->udiConfig->udiMountPoint);
     if (stat(buffer, &statData) == 0) {
         int stepd_fd = 0;
         int i = 0;
@@ -371,7 +415,7 @@ int doExternStepTaskSetup(shifterSpank_config *ssconfig) {
         char *hostname = NULL;
         uint32_t jobid = 0;
         uint16_t protocol = 0;
-        if (wrap_spank_get_jobid(ssConfig->id, &jobid) == ERROR) {
+        if (wrap_spank_get_jobid(ssconfig, &jobid) == ERROR) {
             _log(LOG_ERROR, "Couldn't get job id");
             return ERROR;
         }
@@ -379,8 +423,8 @@ int doExternStepTaskSetup(shifterSpank_config *ssconfig) {
         /* move sshd into slurm proctrack */
         int sshd_pid = findSshd();
         if (sshd_pid > 0) {
-            stepd_fd = lgplSpank_stepd_connect(dir, hostname, jobid, SLURM_EXTERN_CONT, &protocol);
-            int ret = lgplSpank_stepd_add_extern_pid(stepd_fd, protocol, sshd_pid);
+            stepd_fd = wrap_spank_stepd_connect(ssconfig, dir, hostname, jobid, SLURM_EXTERN_CONT, &protocol);
+            int ret = wrap_spank_stepd_add_extern_pid(ssconfig, stepd_fd, protocol, sshd_pid);
             _log(LOG_INFO, "moved sshd (pid %d) into slurm controlled extern_step (ret: %d) via fd %d\n", sshd_pid, ret, stepd_fd);
         }
 
@@ -423,7 +467,7 @@ int shifterSpank_task_post_fork(void *id, int argc, char **argv) {
 void shifterSpank_validate_input(int allocator) {
     if (ssconfig == NULL) return;
     if (ssconfig->ccmMode == 1 &&
-        (strcmp(ssconfig->image_type, "local") != 0 ||
+        (strcmp(ssconfig->imageType, "local") != 0 ||
          strcmp(ssconfig->image, "/") != 0)
        )
     {
@@ -433,14 +477,14 @@ void shifterSpank_validate_input(int allocator) {
         }
         ssconfig->ccmMode = 0;
     }
-    if (ssconfig->imagevolume != NULL && strlen(ssconfig->imagevolume > 0)) {
+    if (ssconfig->volume != NULL && strlen(ssconfig->volume > 0)) {
         if (ssconfig->image == NULL || strlen(ssconfig->image) == 0) {
             if (allocator) {
                 _log(LOG_ERROR, "Cannot specify shifter volumes without specifying the image first!");
                 exit(-1);
             }
-            free(ssconfig->imagevolume);
-            ssconfig->imagevolume = NULL;
+            free(ssconfig->volume);
+            ssconfig->volume = NULL;
         }
     }
     if (ssconfig->image != NULL && strlen(ssconfig->image) == 0) {
@@ -451,27 +495,27 @@ void shifterSpank_validate_input(int allocator) {
 
 void shifterSpank_init_allocator_setup() {
     if (ssconfig == NULL ||
-        ssconfig->image_type == NULL ||
+        ssconfig->imageType == NULL ||
         ssconfig->image == NULL)
     {
         return;
     }
-    if (strcmp(ssconfig->image_type, "id") != 0 &&
-        strcmp(ssconfig->image_type, "local") != 0)
+    if (strcmp(ssconfig->imageType, "id") != 0 &&
+        strcmp(ssconfig->imageType, "local") != 0)
     {
         char *image_id = NULL;
         image_id = lookup_ImageIdentifier(
-            ssconfig->image_type, ssconfig->image, 0, ssconfig->udiConfig);
+            ssconfig->imageType, ssconfig->image, 0, ssconfig->udiConfig);
         if (image_id == NULL) {
             _log(LOG_ERROR, "Failed to lookup image.  Aborting.");
             exit(-1);
         }
         free(ssconfig->image);
-        free(ssconfig->image_type);
+        free(ssconfig->imageType);
         ssconfig->image = image_id;
-        ssconfig->image_type = strdup("id");
+        ssconfig->imageType = strdup("id");
     }
-    if (strlen(ssconfig->image) == 0) {
+    if (ssconfig->image == NULL || strlen(ssconfig->image) == 0) {
         return;
     }
 
@@ -479,15 +523,15 @@ void shifterSpank_init_allocator_setup() {
         /* for slurm native, generate ssh keys here */
         generateSshKey();
     }
-    wrap_spank_setenv("SHIFTER_IMAGE", image, 1);
-    wrap_spank_setenv("SHIFTER_IMAGETYPE", image_type, 1);
-    wrap_spank_job_control_setenv("SHIFTER_IMAGE", image, 1);
-    wrap_spank_job_control_setenv("SHIFTER_IMAGETYPE", image_type, 1);
+    wrap_spank_setenv(ssconfig, "SHIFTER_IMAGE", ssconfig->image, 1);
+    wrap_spank_setenv(ssconfig, "SHIFTER_IMAGETYPE", ssconfig->imageType, 1);
+    wrap_spank_job_control_setenv(ssconfig, "SHIFTER_IMAGE", ssconfig->image, 1);
+    wrap_spank_job_control_setenv(ssconfig, "SHIFTER_IMAGETYPE", ssconfig->imageType, 1);
 
     /* change the cached value of the user supplied arg to match
      * the looked-up value */
-    char *tmpval = alloc_strgenf("%s:%s", image_type, image);
-    wrap_spank_setenv("_SLURM_SPANK_OPTION_shifter_image", tmpval, 1);
+    char *tmpval = alloc_strgenf("%s:%s", ssconfig->imageType, ssconfig->image);
+    wrap_spank_setenv(ssconfig, "_SLURM_SPANK_OPTION_shifter_image", tmpval, 1);
     free(tmpval);
 }
 
@@ -499,24 +543,24 @@ int shifterSpank_init_setup() {
 
     verbose_lookup = 1;
     
-    if (ssconfig->imagevolume != NULL && strlen(ssconfig->imagevolume) > 0) {
-        wrap_spank_setenv("SHIFTER_VOLUME", ssconfig->imagevolume, 1);
-        wrap_spank_job_control_setenv("SHIFTER_VOLUME", ssconfig->imagevolume, 1);
+    if (ssconfig->volume != NULL && strlen(ssconfig->volume) > 0) {
+        wrap_spank_setenv(ssconfig, "SHIFTER_VOLUME", ssconfig->volume, 1);
+        wrap_spank_job_control_setenv(ssconfig, "SHIFTER_VOLUME", ssconfig->volume, 1);
     }
     if (getgid() != 0) {
         char buffer[128];
         snprintf(buffer, 128, "%d", getgid());
-        wrap_spank_setenv("SHIFTER_GID", buffer, 1);
-        wrap_spank_job_control_setenv("SHIFTER_GID", buffer, 1);
+        wrap_spank_setenv(ssconfig, "SHIFTER_GID", buffer, 1);
+        wrap_spank_job_control_setenv(ssconfig, "SHIFTER_GID", buffer, 1);
     }
     if (ccmMode != 0) {
-        wrap_spank_setenv("SHIFTER_CCM", "1", 1);
-        wrap_spank_job_control_setenv("SHIFTER_CCM", "1", 1);
+        wrap_spank_setenv(ssconfig, "SHIFTER_CCM", "1", 1);
+        wrap_spank_job_control_setenv(ssconfig, "SHIFTER_CCM", "1", 1);
 
         /* this is an irritating hack, but CCM needs to be propagated to all
          * sruns within the job allocation (even sruns within sruns) and this
          * achieves that */
-        wrap_spank_setenv("_SLURM_SPANK_OPTION_shifter_ccm", "", 1);
+        wrap_spank_setenv(ssconfig, "_SLURM_SPANK_OPTION_shifter_ccm", "", 1);
     }
     return rc;
 }
@@ -534,12 +578,12 @@ int read_data_from_job(spank_t sp, uint32_t *jobid, char **nodelist, size_t *tas
     size_t n_nodes = 0;
 
     /* load job data and fail if not possible */
-    if (wrap_spank_get_jobid(ssConfig->id, jobid) == ERROR) {
+    if (wrap_spank_get_jobid(ssconfig, jobid) == ERROR) {
         _log(LOG_ERROR, "Couldn't get job id");
         return ERROR;
     }
 
-    if(wrap_spank_extra_job_attributes(*jobid, &raw_host_string, &n_nodes, tasksPerNode, shared) == ERROR) {
+    if(wrap_spank_extra_job_attributes(ssconfig, *jobid, &raw_host_string, &n_nodes, tasksPerNode, shared) == ERROR) {
         _log(LOG_ERROR, "Failed to get job attributes");
     }
 
@@ -613,10 +657,11 @@ int shifterSpank_job_prolog() {
     rc = errCode; \
     goto _prolog_exit_unclean;
 
-    _log(LOG_DEBUG, "shifter prolog, id after looking at args: %s:%s", ssconfig->image_type, ssconfig->image);
+    _log(LOG_DEBUG, "shifter prolog, id after looking at args: %s:%s", ssconfig->imageType, ssconfig->image);
 
     /* if processing the user-specified options indicates no image, dump out */
-    if (strlen(ssconfig->image) == 0 || strlen(ssconfig->image_type) == 0) {
+    if (ssconfig->image == NULL || strlen(ssconfig->image) == 0 ||
+        ssconfig->imageType == NULL || strlen(ssconfig->imageType) == 0) {
         return rc;
     }
 
@@ -624,16 +669,16 @@ int shifterSpank_job_prolog() {
     ptr = getenv("SHIFTER_IMAGETYPE");
     if (ptr != NULL) {
         char *tmp = imageDesc_filterString(ptr, NULL);
-        if (ssconfig->image_type != NULL) {
-            free(ssconfig->image_type);
+        if (ssconfig->imageType != NULL) {
+            free(ssconfig->imageType);
         }
-        ssconfig->image_type = tmp;
+        ssconfig->imageType = tmp;
         set_type = 1;
     }
 
     ptr = getenv("SHIFTER_IMAGE");
     if (ptr != NULL) {
-        char *tmp = imageDesc_filterString(ptr, set_type ? ssconfig->image_type : NULL);
+        char *tmp = imageDesc_filterString(ptr, set_type ? ssconfig->imageType : NULL);
         if (ssconfig->image != NULL) {
             free(ssconfig->image);
         }
@@ -643,12 +688,12 @@ int shifterSpank_job_prolog() {
 
     ptr = getenv("SHIFTER_VOLUME");
     if (ptr != NULL) {
-        if (ssconfig->imagevolume != NULL) {
-            free(ssconfig->imagevolume);
+        if (ssconfig->volume != NULL) {
+            free(ssconfig->volume);
         }
-        ssconfig->imagevolume = strdup(ptr);
+        ssconfig->volume = strdup(ptr);
     }
-    _log(LOG_DEBUG, "shifter prolog, id after looking at env: %s:%s", ssconfig->image_type, image);
+    _log(LOG_DEBUG, "shifter prolog, id after looking at env: %s:%s", ssconfig->imageType, image);
 
     /* check and see if there is an existing configuration */
     struct stat statData;
@@ -662,7 +707,7 @@ int shifterSpank_job_prolog() {
         PROLOG_ERROR("shifterConfig.json already exists!", rc);
     }
 
-    for (ptr = ssconfig->image_type; ptr - ssconfig->image_type < strlen(ssconfig->image_type); ptr++) {
+    for (ptr = ssconfig->imageType; *ptr != 0; ptr++) {
         *ptr = tolower(*ptr);
     }
 
@@ -690,7 +735,7 @@ int shifterSpank_job_prolog() {
     if (uid_str != NULL) {
         uid = strtoul(uid_str, NULL, 10);
     } else {
-        if (wrap_spank_get_uid(ssConfig->id, &uid) == ERROR) {
+        if (wrap_spank_get_uid(ssconfig, &uid) == ERROR) {
             PROLOG_ERROR("FAILED to get job uid!", ERROR);
         }
     }
@@ -699,7 +744,7 @@ int shifterSpank_job_prolog() {
     if (gid_str != NULL) {
         gid = strtoul(gid_str, NULL, 10);
     } else {
-        if (wrap_spank_get_gid(ssConfig->id, &gid) == ERROR) {
+        if (wrap_spank_get_gid(ssconfig, &gid) == ERROR) {
             PROLOG_ERROR("FAILED to get job gid!", ERROR);
         }
     }
@@ -730,8 +775,8 @@ int shifterSpank_job_prolog() {
        /path/to/setupRoot <imageType> <imageIdentifier> -u <uid> -U <username>
             [-v volMap ...] -s <sshPubKey> -N <nodespec> NULL
      */
-    if (strlen(imagevolume) > 0) {
-        char *ptr = imagevolume;
+    if (ssconfig->volume != NULL && strlen(ssconfig->volume) > 0) {
+        char *ptr = ssconfig->volume;
         for ( ; ; ) {
             char *limit = strchr(ptr, ';');
             volArgs = (char **) realloc(volArgs,sizeof(char *) * (n_volArgs + 2));
@@ -774,8 +819,8 @@ int shifterSpank_job_prolog() {
         strncpy_StringArray("-v", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
         strncpy_StringArray(volArgs[idx], strlen(volArgs[idx]), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
-    strncpy_StringArray(ssconfig->image_type, strlen(ssconfig->image_type), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
-    strncpy_StringArray(image, strlen(image), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+    strncpy_StringArray(ssconfig->imageType, strlen(ssconfig->imageType), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+    strncpy_StringArray(ssconfig->image, strlen(ssconfig->image), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
 
     for (setupRootArgs_sv = setupRootArgs; setupRootArgs_sv && *setupRootArgs_sv; setupRootArgs_sv++) {
         _log(LOG_ERROR, "setupRoot arg %d: %s", (int)(setupRootArgs_sv - setupRootArgs), *setupRootArgs_sv);
@@ -817,7 +862,7 @@ _prolog_exit_unclean:
     return rc;
 } 
 
-int shifterSpank_job_epilog() {
+int shifterSpank_job_epilog(shifterSpank_config *ssconfig) {
     int rc = SUCCESS;
     char path[PATH_MAX];
     char *epilogueArgs[2];
@@ -834,18 +879,18 @@ int shifterSpank_job_epilog() {
     rc = errCode; \
     goto _epilog_exit_unclean;
 
-    if (strlen(image) == 0) {
+    if (ssconfig->image == NULL || strlen(ssconfig->image) == 0) {
         return rc;
     }
 
-    if (wrap_spank_get_uid(ssConfig->id, &uid) == ERROR) {
+    if (wrap_spank_get_uid(ssconfig, &uid) == ERROR) {
         EPILOG_ERROR("FAILED to get job uid!", ERROR);
     }
-    if (wrap_spank_get_jobid(ssConfig->id, &job) == ERROR) {
+    if (wrap_spank_get_jobid(ssconfig, &job) == ERROR) {
         EPILOG_ERROR("Couldnt get job id", ERROR);
     }
 
-    snprintf(path, PATH_MAX, "%s/sbin/unsetupRoot", udiConfig->udiRootPath);
+    snprintf(path, PATH_MAX, "%s/sbin/unsetupRoot", ssconfig->udiConfig->udiRootPath);
     epilogueArgs[0] = path;
     epilogueArgs[1] = NULL;
     int status = forkAndExecvLogToSlurm("unsetupRoot", epilogueArgs);
@@ -859,7 +904,7 @@ _epilog_exit_unclean:
     return rc;
 }
 
-int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
+int shifterSpank_task_init_privileged(shifterSpank_config *ssconfig) {
     int rc = SUCCESS;
     int i = 0, j = 0;
     ImageData imageData;
@@ -873,7 +918,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     uint32_t stepid = 0;
 
     memset(&imageData, 0, sizeof(ImageData));
-    if (wrap_spank_get_stepid(ssConfig->id, &stepid) == ERROR) {
+    if (wrap_spank_get_stepid(ssconfig, &stepid) == ERROR) {
         _log(LOG_ERROR, "FAILED to get stepid");
     }
 
@@ -882,19 +927,15 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
     rc = errCode; \
     goto _taskInitPriv_exit_unclean;
 
-    if (nativeSlurm == 0) return SUCCESS;
-    if (udiConfig == NULL) {
-        read_config(argc, argv);
-    }
-    if (udiConfig == NULL) {
+    if (ssconfig->nativeSlurm == 0) return SUCCESS;
+    if (ssconfig->udiConfig == NULL) {
         TASKINITPRIV_ERROR("Failed to load udiRoot config!", ERROR);
     }
-    doForceArgParse(sp);
 
-    if (strlen(image) == 0) {
+    if (ssconfig->image == NULL || strlen(ssconfig->image) == 0) {
         return rc;
     }
-    if (strlen(image) == 0 || strlen(image_type) == 0) {
+    if (ssconfig->imageType == NULL || strlen(ssconfig->imageType) == 0) {
         return rc;
     }
 
@@ -902,13 +943,12 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
      * proper setup to finalize shifter setup */
     if (stepid == SLURM_EXTERN_CONT) {
         return rc;
-    } else {
-#if 0
+    } else if (ssconfig->extern_setup != NULL) {
         /* need to ensure the extern step is setup */
         char buffer[PATH_MAX];
         struct stat statData;
         int tries = 0;
-        snprintf(buffer, PATH_MAX, "%s/var/shifterExtern.complete", udiConfig->udiMountPoint);
+        snprintf(buffer, PATH_MAX, "%s/var/shifterExtern.complete", ssconfig->udiConfig->udiMountPoint);
         for (tries = 0; tries < 10; tries++) {
             if (stat(buffer, &statData) == 0) {
                 break;
@@ -916,18 +956,17 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
                 sleep(1);
             }
         }
-#endif
     }
 
-    if (ccmMode == 0) return rc;
+    if (ssconfig->ccmMode == 0) return rc;
 
-    parse_ImageData(image_type, image, udiConfig, &imageData);
+    parse_ImageData(ssconfig->imageType, ssconfig->image, ssconfig->udiConfig, &imageData);
 
-    if (wrap_spank_get_uid(ssConfig->id, &job_uid) == ERROR) {
+    if (wrap_spank_get_uid(ssconfig, &job_uid) == ERROR) {
         TASKINITPRIV_ERROR("FAILED to get job uid!", ERROR);
     }
 
-    if (strlen(udiConfig->udiMountPoint) > 0) {
+    if (strlen(ssconfig->udiConfig->udiMountPoint) > 0) {
         char currcwd[PATH_MAX];
         char newcwd[PATH_MAX];
         gid_t *gids = NULL;
@@ -940,7 +979,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
         }
 
         // check to see if newcwd exists, if not, just chdir to the new chroot base
-        snprintf(newcwd, PATH_MAX, "%s", udiConfig->udiMountPoint);
+        snprintf(newcwd, PATH_MAX, "%s", ssconfig->udiConfig->udiMountPoint);
         if (stat(newcwd, &st_data) != 0) {
             char error[PATH_MAX];
             snprintf(error, PATH_MAX, "FAILED to stat UDI directory: %s", newcwd);
@@ -952,15 +991,15 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
             TASKINITPRIV_ERROR(error, ERROR);
         }
 
-        if (chroot(udiConfig->udiMountPoint) != 0) {
+        if (chroot(ssconfig->udiConfig->udiMountPoint) != 0) {
             TASKINITPRIV_ERROR("FAILED to chroot to designated image", ERROR);
         }
 
-        if (wrap_spank_get_supplementary_gids(ssConfig->id, &gids, &ngids) == ERROR) {
+        if (wrap_spank_get_supplementary_gids(ssconfig, &gids, &ngids) == ERROR) {
             TASKINITPRIV_ERROR("FAILED to obtain group ids", ERROR);
         }
 
-        if (wrap_spank_get_gid(ssConfig->id, &gid) == ERROR) {
+        if (wrap_spank_get_gid(ssconfig, &gid) == ERROR) {
             TASKINITPRIV_ERROR("FAILED to obtain job group id", ERROR);
         }
 
@@ -1013,7 +1052,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
             TASKINITPRIV_ERROR("FAILED to drop supplementary gids", ERROR);
         }
 
-        if (shifter_setupenv(&environ, &imageData, udiConfig) != 0) {
+        if (shifter_setupenv(&environ, &imageData, ssconfig->udiConfig) != 0) {
             TASKINITPRIV_ERROR("FAILED to setup shifter environment", ERROR);
         }
     }
