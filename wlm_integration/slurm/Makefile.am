@@ -7,7 +7,8 @@ pkglib_LTLIBRARIES = shifter_slurm.la
 PLUGIN_FLAGS = -module -avoid-version --export-dynamic
 
 SHIFTER_SO_SOURCES = \
-    spank_shifter.c \
+    shifterSpank.c \
+    wrapper.c \
     ../../src/UdiRootConfig.c \
     ../../src/utility.c \
     ../../src/shifter_core.c \
