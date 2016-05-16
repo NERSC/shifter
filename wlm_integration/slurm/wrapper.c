@@ -37,7 +37,7 @@ struct spank_option spank_option_array[] = {
     SPANK_OPTIONS_TABLE_END
 };
 
-static slurmShifter_config *ssconfig = NULL;
+static shifterSpank_config *ssconfig = NULL;
 
 
 /******************************************************************************
@@ -58,14 +58,15 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
         context == S_CTX_LOCAL ||
         context == S_CTX_REMOTE)
     {
+        int idx = 0;
+
         /* need to initialize ssconfig for callbacks */
         if (ssconfig == NULL)
-            ssconfig = shifterSlurm_init((void *) sp, argc, argv, 0);
+            ssconfig = shifterSpank_init((void *) sp, argc, argv, 0);
 
         /* register command line options */
-        struct spank_option **optPtr = spank_option_array;
-        for ( ; optPtr && *optPtr != SPANK_OPTIONS_TABLE_END; optPtr++) {
-            int lrc = spank_option_register(sp, *optPtr);
+        for (idx = 0; spank_option_array[idx] != SPANK_OPTIONS_TABLE_END; idx++) {
+            int lrc = spank_option_register(sp, &(spank_option_array[idx]));
             if (lrc != ESPANK_SUCCESS) {
                 rc = ESPANK_ERROR;
             }
@@ -124,6 +125,22 @@ int wrap_opt_image(int val, const char *optarg, int remote) {
 }
 int wrap_opt_volume(int val, const char *optarg, int remote) {
     return shifterSpank_process_option_volume(ssconfig, val, optarg, remote);
+}
+
+int wrap_force_arg_parse(shifterSpank_config *ssconfig) {
+    int i,j;
+    int rc = SUCCESS;
+    for (i = 0; spank_option_array[i].name != NULL; ++i) {
+        char *optarg = NULL;
+        j = spank_option_getopt(sp, &spank_option_array[i], &optarg);
+        if (j != ESPANK_SUCCESS) {
+            continue;
+        }
+        rc = (spank_option_array[i].cb)(spank_option_array[i].val, optarg, 1);
+        if (rc != ESPANK_SUCCESS) break;
+    }
+    if (rc == ESPANK_SUCCESS) return SUCCESS;
+    return ERROR;
 }
 
 /******************************************************************************

@@ -28,6 +28,11 @@ See LICENSE for full text.
 extern "C" {
 #endif
 
+#include <stdint.h>
+
+#include <slurm/slurm.h>
+#include <slurm/spank.h>
+
 int wrap_spank_setenv(shifterSpank_config *, const char *envname,
                       const char *value, int overwrite);
 
@@ -44,11 +49,18 @@ void wrap_spank_log_info(const char *msg);
 void wrap_spank_log_verbose(const char *msg);
 void wrap_spank_log_debug(const char *msg);
 
-void wrap_spank_extra_job_attributes(uint32_t *jobid,
-                                     char **nodelist,
-                                     size_t *nnodes,
-                                     size_t *tasksPerNode,
-                                     uint16_t *shared);
+int wrap_spank_stepd_connect(shifterSpank_config *ssconfig, char *dir,
+    char *hostname, uint32_t jobid, uint32_t stepid, uint16_t *protocol);
+int wrap_spank_stepd_add_extern_pid(shifterSpank_config *ssconfig,
+    uint32_t stepd_fd, uint16_t protocol, pid_t pid);
+int wrap_spank_extra_job_attributes(shifterSpank_config *ssconfig,
+                                    uint32_t *jobid,
+                                    char **nodelist,
+                                    size_t *nnodes,
+                                    size_t *tasksPerNode,
+                                    uint16_t *shared);
+
+int wrap_force_arg_parse(shifterSpank_config *ssconfig);
 
 #ifdef __cplusplus
 }

@@ -28,6 +28,8 @@ See LICENSE for full text.
 extern "C" {
 #endif
 
+#include "UdiRootConfig.h"
+
 typedef struct {
     /* config options from plugstack.conf */
     char *shifter_config;         /*! path to configuration file */
@@ -42,6 +44,7 @@ typedef struct {
 
     /* derived configurations */
     UdiRootConfig *udiConfig;     /*! udiroot configuration */
+    int args_parsed;              /*! flag once optars are parsed */
     void *id;                     /*! spank structure pointer */
 } shifterSpank_config;
 
