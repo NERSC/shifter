@@ -17,7 +17,9 @@
 See LICENSE for full text.
 */
 
+#include <stdint.h>
 #include <slurm/spank.h>
+#include <slurm/slurm.h>
 #include <shifterSpank.h>
 
 SPANK_PLUGIN(shifter, 1)
@@ -25,6 +27,12 @@ SPANK_PLUGIN(shifter, 1)
 int wrap_opt_ccm(int val, const char *optarg, int remote);
 int wrap_opt_image(int val, const char *optarg, int remote);
 int wrap_opt_volume(int val, const char *optarg, int remote);
+
+/* using a couple functions from libslurm that aren't prototyped in any
+   accessible header file */
+extern hostlist_t slurm_hostlist_create_dims(const char *hostlist, int dims);
+extern char *slurm_hostlist_deranged_string_malloc(hostlist_t hl);
+
 
 /* global variable used by spank to get plugin options */
 struct spank_option spank_option_array[] = {
@@ -53,6 +61,7 @@ static shifterSpank_config *ssconfig = NULL;
 
 int slurm_spank_init(spank_t sp, int argc, char **argv) {
     spank_context_t context = spank_context();
+    int rc = ESPANK_SUCCESS;
 
     if (context == S_CTX_ALLOCATOR ||
         context == S_CTX_LOCAL ||
@@ -65,7 +74,7 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
             ssconfig = shifterSpank_init((void *) sp, argc, argv, 0);
 
         /* register command line options */
-        for (idx = 0; spank_option_array[idx] != SPANK_OPTIONS_TABLE_END; idx++) {
+        for (idx = 0; spank_option_array[idx].name != NULL; idx++) {
             int lrc = spank_option_register(sp, &(spank_option_array[idx]));
             if (lrc != ESPANK_SUCCESS) {
                 rc = ESPANK_ERROR;
@@ -79,12 +88,12 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     spank_context_t context = spank_context();
     int rc = SUCCESS;
 
-    shifterSpank_validate_input(
+    shifterSpank_validate_input(ssconfig,
         context == S_CTX_ALLOCATOR | context == S_CTX_LOCAL
     );
 
     if (context == S_CTX_ALLOCATOR || context == S_CTX_LOCAL) {
-        rc = shifterSpank_init_allocator_setup();
+        shifterSpank_init_allocator_setup(ssconfig);
     }
     if (rc != SUCCESS) return ESPANK_ERROR;
     return ESPANK_SUCCESS;
@@ -96,20 +105,20 @@ int slurm_spank_task_post_fork(spank_t sp, int argc, char **argv) {
 
 int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     if (ssconfig == NULL)
-         ssconfig = shifterSlurm_init((void *) sp, argc, argv, 1);
+         ssconfig = shifterSpank_init((void *) sp, argc, argv, 1);
     if (ssconfig == NULL) return ESPANK_ERROR;
-    if (ssconfig->parsedOptions == 0)
-        if (_forceParseOptions() != SUCCESS)
+    if (ssconfig->args_parsed == 0)
+        if (wrap_force_arg_parse(ssconfig) != SUCCESS)
             return ESPANK_ERROR;
     return shifterSpank_prolog(ssconfig);
     
 }
 int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     if (ssconfig == NULL)
-         ssconfig = shifterSlurm_init((void *) sp, argc, argv, 1);
+         ssconfig = shifterSpank_init((void *) sp, argc, argv, 1);
     if (ssconfig == NULL) return ESPANK_ERROR;
-    if (ssconfig->parsedOptions == 0)
-        if (wrap_forceParseOptions() != SUCCESS)
+    if (ssconfig->args_parsed == 0)
+        if (wrap_force_arg_parse(ssconfig) != SUCCESS)
             return ESPANK_ERROR;
     return shifterSpank_epilog(ssconfig);
 }
@@ -132,7 +141,7 @@ int wrap_force_arg_parse(shifterSpank_config *ssconfig) {
     int rc = SUCCESS;
     for (i = 0; spank_option_array[i].name != NULL; ++i) {
         char *optarg = NULL;
-        j = spank_option_getopt(sp, &spank_option_array[i], &optarg);
+        j = spank_option_getopt((spank_t)ssconfig->id, &spank_option_array[i], &optarg);
         if (j != ESPANK_SUCCESS) {
             continue;
         }
@@ -154,7 +163,7 @@ int wrap_spank_setenv(
 }
 
 int wrap_spank_job_control_setenv(
-    shifterSlurm_config *ssconfig,
+    shifterSpank_config *ssconfig,
     const char *envname,
     const char *value,
     int overwrite)
@@ -164,7 +173,7 @@ int wrap_spank_job_control_setenv(
                 (spank_t) ssconfig->id, envname, value, overwrite);
 }
 
-int wrap_spank_get_jobid(shifterSlurm_config *ssconfig, uint32_t *job) {
+int wrap_spank_get_jobid(shifterSpank_config *ssconfig, uint32_t *job) {
     if (ssconfig == NULL || ssconfig->id == NULL) return ERROR;
     if (spank_get_item((spank_t) ssconfig->id, S_JOB_ID, job)
             != ESPANK_SUCCESS)
@@ -174,7 +183,7 @@ int wrap_spank_get_jobid(shifterSlurm_config *ssconfig, uint32_t *job) {
     return SUCCESS;
 }
 
-int wrap_spank_get_uid(shifterSlurm_config *ssconfig, uid_t *uid) {
+int wrap_spank_get_uid(shifterSpank_config *ssconfig, uid_t *uid) {
     if (ssconfig == NULL || ssconfig->id == NULL) return ERROR;
     if (spank_get_item((spank_t) ssconfig->id, S_JOB_UID, uid)
             != ESPANK_SUCCESS) {
@@ -183,7 +192,7 @@ int wrap_spank_get_uid(shifterSlurm_config *ssconfig, uid_t *uid) {
    return SUCCESS;
 }
 
-int wrap_spank_get_gid(shifterSlurm_config *ssconfig, gid_t *gid) {
+int wrap_spank_get_gid(shifterSpank_config *ssconfig, gid_t *gid) {
     if (ssconfig == NULL || ssconfig->id == NULL) return ERROR;
     if (spank_get_item((spank_t) ssconfig->id, S_JOB_GID, gid)
             != ESPANK_SUCCESS) {
@@ -192,7 +201,7 @@ int wrap_spank_get_gid(shifterSlurm_config *ssconfig, gid_t *gid) {
     return SUCCESS;
 }
 
-int wrap_spank_get_stepid(shifterSlurm_config *ssconfig, uint32_t *stepid) {
+int wrap_spank_get_stepid(shifterSpank_config *ssconfig, uint32_t *stepid) {
     if (ssconfig == NULL || ssconfig->id == NULL) return ERROR;
     if (spank_get_item((spank_t) ssconfig->id, S_JOB_STEPID, stepid)
              != ESPANK_SUCCESS) {
@@ -202,12 +211,12 @@ int wrap_spank_get_stepid(shifterSlurm_config *ssconfig, uint32_t *stepid) {
 }
 
 int wrap_spank_get_supplementary_gids(
-    shifterSlurm_config *ssconfig,
+    shifterSpank_config *ssconfig,
     gid_t **gids,
     int *ngids)
 {
     if (ssconfig == NULL || ssconfig->id == NULL) return ERROR;
-    if (spank_get_item((spank_t) spid, S_JOB_SUPPLEMENTARY_GIDS, gids, ngids)
+    if (spank_get_item((spank_t) ssconfig->id, S_JOB_SUPPLEMENTARY_GIDS, gids, ngids)
             != ESPANK_SUCCESS) {
         return ERROR;
     }
@@ -261,7 +270,7 @@ int wrap_spank_extra_job_attributes(
     char *raw_host_string = NULL;
 
     /* TODO dlopen libslurm here */
-    if (slurm_load_job(&job_buf, *jobid, SHOW_ALL) != 0) {
+    if (slurm_load_job(&job_buf, jobid, SHOW_ALL) != 0) {
         slurm_error("%s", "Couldn't load job data");
         return ERROR;
     }
