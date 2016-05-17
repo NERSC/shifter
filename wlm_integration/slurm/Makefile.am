@@ -1,5 +1,7 @@
 AUTOMAKE_OPTIONS=foreign
 
+SUBDIRS=test
+
 AM_CPPFLAGS = -DCONFIG_FILE=\"${sysconfdir}/udiRoot.conf\" -DLIBEXECDIR=\"${libexecdir}/shifter\" $(SLURM_CPPFLAGS) -I../../src/ -DIS_NATIVE_SLURM=$(SLURM_NATIVE_SLURM)
 
 pkglib_LTLIBRARIES = shifter_slurm.la

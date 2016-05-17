@@ -168,7 +168,7 @@ void shifterSpank_config_free(shifterSpank_config *ssconfig) {
         ssconfig->volume = NULL;
     }
     if (ssconfig->udiConfig != NULL) {
-        UdiRootConfig_free(ssconfig->udiConfig, 1);
+        free_UdiRootConfig(ssconfig->udiConfig, 1);
         ssconfig->udiConfig = NULL;
     }
     if (ssconfig->shifter_config != NULL) {
@@ -463,7 +463,7 @@ int shifterSpank_task_post_fork(void *id, int argc, char **argv) {
     uint32_t stepid = 0;
     int rc = SUCCESS;
 
-    if (wrapSpank_get_stepid(id, &stepid) == ERROR) {
+    if (wrap_spank_get_stepid(id, &stepid) == ERROR) {
         _log(LOG_ERROR, "FAILED to get stepid");
     }
 
@@ -472,7 +472,7 @@ int shifterSpank_task_post_fork(void *id, int argc, char **argv) {
     if (stepid == SLURM_EXTERN_CONT) {
         shifterSpank_config *ssconfig = shifterSpank_init(id, argc, argv, 1);
         rc = doExternStepTaskSetup(ssconfig);
-        shifterSpank_free(ssconfig);
+        shifterSpank_config_free(ssconfig);
         ssconfig = NULL;
     }
 
