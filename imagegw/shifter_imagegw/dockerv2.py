@@ -13,6 +13,8 @@ import tempfile
 import socket
 import urllib2
 import shifter_imagegw
+import stat
+import shutil
 
 ## Shifter, Copyright (c) 2015, The Regents of the University of California,
 ## through Lawrence Berkeley National Laboratory (subject to receipt of any
