@@ -18,4 +18,4 @@ SHIFTER_SO_SOURCES = \
     ../../src/VolumeMap.c
 
 shifter_slurm_la_SOURCES = $(SHIFTER_SO_SOURCES)
-shifter_slurm_la_LDFLAGS = $(SO_LDFLAGS) $(PLUGIN_FLAGS) $(SLURM_LDFLAGS)
+shifter_slurm_la_LDFLAGS = $(SO_LDFLAGS) $(PLUGIN_FLAGS)
