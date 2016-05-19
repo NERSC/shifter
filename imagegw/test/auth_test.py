@@ -29,7 +29,6 @@ class AuthTestCase(unittest.TestCase):
 
     def setUp(self):
         #os.environ['PATH']=os.environ['PATH']+":./test"
-        import munge
         self.encoded="xxxx\n"
         self.message="test"
         self.expired="expired"
