@@ -18,21 +18,16 @@ See LICENSE for full text.
 */
 
 #include <stdint.h>
+#include <dlfcn.h>
 #include <slurm/spank.h>
 #include <slurm/slurm.h>
-#include <shifterSpank.h>
+#include "shifterSpank.h"
 
 SPANK_PLUGIN(shifter, 1)
 
 int wrap_opt_ccm(int val, const char *optarg, int remote);
 int wrap_opt_image(int val, const char *optarg, int remote);
 int wrap_opt_volume(int val, const char *optarg, int remote);
-
-/* using a couple functions from libslurm that aren't prototyped in any
-   accessible header file */
-extern hostlist_t slurm_hostlist_create_dims(const char *hostlist, int dims);
-extern char *slurm_hostlist_deranged_string_malloc(hostlist_t hl);
-
 
 /* global variable used by spank to get plugin options */
 struct spank_option spank_option_array[] = {
@@ -104,12 +99,14 @@ int slurm_spank_task_post_fork(spank_t sp, int argc, char **argv) {
 }
 
 int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
-    if (ssconfig == NULL)
-         ssconfig = shifterSpank_init((void *) sp, argc, argv, 1);
+    if (ssconfig == NULL) {
+        ssconfig = shifterSpank_init((void *) sp, argc, argv, 1);
+    }
     if (ssconfig == NULL) return ESPANK_ERROR;
-    if (ssconfig->args_parsed == 0)
+    if (ssconfig->args_parsed == 0) {
         if (wrap_force_arg_parse(ssconfig) != SUCCESS)
             return ESPANK_ERROR;
+    }
     return shifterSpank_job_prolog(ssconfig);
     
 }
@@ -136,12 +133,13 @@ int wrap_opt_volume(int val, const char *optarg, int remote) {
     return shifterSpank_process_option_volume(ssconfig, val, optarg, remote);
 }
 
-int wrap_force_arg_parse(shifterSpank_config *ssconfig) {
+int wrap_force_arg_parse(shifterSpank_config *_ssconfig) {
     int i,j;
     int rc = SUCCESS;
+    if (ssconfig != _ssconfig) ssconfig = _ssconfig;
     for (i = 0; spank_option_array[i].name != NULL; ++i) {
         char *optarg = NULL;
-        j = spank_option_getopt((spank_t)ssconfig->id, &spank_option_array[i], &optarg);
+        j = spank_option_getopt((spank_t)ssconfig->id, &(spank_option_array[i]), &optarg);
         if (j != ESPANK_SUCCESS) {
             continue;
         }
@@ -243,18 +241,50 @@ void wrap_spank_log_debug(const char *msg) {
 * segment interfacing with libslurm beyond the spank interface
 ******************************************************************************/
 
+void *_libslurm_dlopen() {
+    void *ret = NULL;
+    char buffer[1024];
+#if 0
+    snprintf(buffer, 1024, "libslurm.so.%d.%d.%d", SLURM_API_CURRENT, SLURM_API_REVISION, SLURM_API_AGE);
+    ret = dlopen(buffer, RTLD_LAZY);
+    if (ret != NULL) return ret;
+
+    snprintf(buffer, 1024, "libslurm.so.%d", SLURM_API_CURRENT);
+    ret = dlopen(buffer, RTLD_LAZY);
+    if (ret != NULL) return ret;
+#endif
+    snprintf(buffer, 1024, "libslurm.so");
+    ret = dlopen(buffer, RTLD_LAZY);
+    if (ret != NULL) return ret;
+
+    return NULL;
+}
+
+int setup_libslurm() {
+    if (ssconfig == NULL) return ERROR;
+    if (ssconfig->libslurm_handle != NULL) return SUCCESS;
+
+    ssconfig->libslurm_handle = _libslurm_dlopen();
+    if (ssconfig->libslurm_handle != NULL) return SUCCESS;
+    return ERROR;
+}
+
 int wrap_spank_stepd_connect(shifterSpank_config *ssconfig, char *dir,
     char *hostname, uint32_t jobid, uint32_t stepid, uint16_t *protocol)
 {
-    /* TODO dlopen libslurm here */
-    return slurm_stepd_connect(dir, hostname, jobid, stepid, protocol);
+    int (*stepd_connect)(char *, char *, uint32_t, uint32_t, uint16_t*);
+    if (setup_libslurm() != SUCCESS) return -1;
+    *(void**) (&stepd_connect) = dlsym(ssconfig->libslurm_handle, "slurm_stepd_connect");
+    return (*stepd_connect)(dir, hostname, jobid, stepid, protocol);
 }
 
 int wrap_spank_stepd_add_extern_pid(shifterSpank_config *ssconfig,
     uint32_t stepd_fd, uint16_t protocol, pid_t pid)
 {
-    /* TODO dlopen libslurm here */
-    return slurm_stepd_add_extern_pid(stepd_fd, protocol, pid);
+    int (*stepd_add_extern_pid)(uint32_t, uint16_t, pid_t);
+    if (setup_libslurm() != SUCCESS) return ERROR;
+    *(void **) (&stepd_add_extern_pid) = dlsym(ssconfig->libslurm_handle, "slurm_stepd_add_extern_pid");
+    return (*stepd_add_extern_pid)(stepd_fd, protocol, pid);
 }
 
 int wrap_spank_extra_job_attributes(
@@ -267,16 +297,37 @@ int wrap_spank_extra_job_attributes(
 {
     job_info_msg_t *job_buf = NULL;
     hostlist_t hl;
+    char *error = NULL;
     char *raw_host_string = NULL;
+    int (*load_job)(job_info_msg_t **, uint32_t, uint16_t);
+    void (*free_job_info_msg)(job_info_msg_t *);
+    hostlist_t (*hostlist_create_dims)(const char *hostlist, int dims);
+    char * (*hostlist_deranged_string_malloc)(hostlist_t hl);
+    void (*hostlist_uniq)(hostlist_t);
+    void (*hostlist_destroy)(hostlist_t);
 
-    /* TODO dlopen libslurm here */
-    if (slurm_load_job(&job_buf, jobid, SHOW_ALL) != 0) {
-        slurm_error("%s", "Couldn't load job data");
+    if (setup_libslurm() != SUCCESS) {
+        slurm_error("FAILED to dlopen libslurm");
+        return ERROR;
+    }
+    *(void**) (&load_job) = dlsym(ssconfig->libslurm_handle, "slurm_load_job");
+    if ((error = dlerror()) != NULL) {
+        slurm_error("FAILED to lookup slurm_load_job!");
+        return ERROR;
+    }
+    *(void**) (&free_job_info_msg) = dlsym(ssconfig->libslurm_handle, "slurm_free_job_info_msg");
+    *(void**) (&hostlist_create_dims) = dlsym(ssconfig->libslurm_handle, "slurm_hostlist_create_dims");
+    *(void**) (&hostlist_deranged_string_malloc) = dlsym(ssconfig->libslurm_handle, "slurm_hostlist_deranged_string_malloc");
+    *(void**) (&hostlist_uniq) = dlsym(ssconfig->libslurm_handle, "slurm_hostlist_uniq");
+    *(void**) (&hostlist_destroy) = dlsym(ssconfig->libslurm_handle, "slurm_hostlist_destroy");
+
+    if ((*load_job)(&job_buf, jobid, SHOW_ALL) != 0) {
+        slurm_error("%s %u", "Couldn't load job data for jobid", jobid);
         return ERROR;
     }
     if (job_buf->record_count != 1) {
         slurm_error("%s", "Can't deal with this job!");
-        slurm_free_job_info_msg(job_buf);
+        (*free_job_info_msg)(job_buf);
         return ERROR;
     }
 
@@ -290,15 +341,15 @@ int wrap_spank_extra_job_attributes(
     *nnodes = job_buf->job_array->num_nodes;
 
     /* obtain the hostlist for this job */
-    hl = slurm_hostlist_create_dims(job_buf->job_array->nodes, 0);
-    slurm_hostlist_uniq(hl);
+    hl = (*hostlist_create_dims)(job_buf->job_array->nodes, 0);
+    (*hostlist_uniq)(hl);
 
     /* convert hostlist to exploded string */
     /* nid00[1-4] -> nid001,nid002,nid003,nid004 */
-    *nodelist = slurm_hostlist_deranged_string_malloc(hl);
+    *nodelist = (*hostlist_deranged_string_malloc)(hl);
 
-    slurm_free_job_info_msg(job_buf);
-    slurm_hostlist_destroy(hl);
+    (*free_job_info_msg)(job_buf);
+    (*hostlist_destroy)(hl);
 
     return SUCCESS;
 }

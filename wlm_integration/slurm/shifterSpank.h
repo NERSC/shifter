@@ -46,6 +46,7 @@ typedef struct {
     UdiRootConfig *udiConfig;     /*! udiroot configuration */
     int args_parsed;              /*! flag once optars are parsed */
     void *id;                     /*! spank structure pointer */
+    void *libslurm_handle;        /*! libslurm dlopen handle */
 } shifterSpank_config;
 
 #define ERROR 1
