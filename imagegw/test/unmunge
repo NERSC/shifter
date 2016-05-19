@@ -7,13 +7,20 @@
 IN=$(cat)
 MT=$(cat ./test/munge.test)
 EX=$(cat ./test/munge.expired)
+REP=$(cat ./test/munge.replay)
+
 if [ "$IN" == "$MT" ] ;then
   ST="Success (0)"
   RT=0
+  # Mimic unmunging the same thing twice
+  cat ./test/munge.test > ./test/munge.replay
+  echo "" > ./test/munge.test
 elif [ "$IN" == "$EX" ] ;then
   ST="Expired credential (15))"
   RT=15
-
+elif [ "$IN" == "$REP" ] ;then
+  ST="Replayed credential (17)"
+  RT=17
 else
   echo "unmunge: Error: Failed to match armor prefix"
   exit 8
