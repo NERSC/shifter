@@ -21,28 +21,19 @@
 
 #include <CppUTest/CommandLineTestRunner.h>
 
-TEST_GROUP(shifterSpankConfigGroup) {
+TEST_GROUP(shifterSpankPrologGroup) {
 };
 
-TEST(shifterSpankConfigGroup, BasicInitTest) {
+TEST(shifterSpankPrologGroup, prologInit) {
     shifterSpank_config *config = shifterSpank_init(NULL, 0, NULL, 0);
-    CHECK(config != NULL);
-    CHECK(config->udiConfig != NULL);
 
-    shifterSpank_config_free(config);
+    int ret = shifterSpank_job_prolog(config);
+    CHECK(ret == SUCCESS);
 
-    char *args[] = {
-        strdup("extern_setup=/usr/bin/echo"),
-        NULL
-    };
-    config = shifterSpank_init(NULL, 1, args, 0);
-    CHECK(config != NULL);
-    CHECK(config->extern_setup != NULL);
-    CHECK(strcmp(config->extern_setup, "/usr/bin/echo") == 0);
-    shifterSpank_config_free(config);
-
-    free(args[0]);
-    
+    config->imageType = strdup("local");
+    config->image = strdup("/");
+    ret = shifterSpank_job_prolog(config);
+    CHECK(ret == SUCCESS);
 }
 
 int main(int argc, char** argv) {

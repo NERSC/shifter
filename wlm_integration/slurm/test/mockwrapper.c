@@ -58,14 +58,17 @@ int wrap_spank_job_control_setenv(
 }
 
 int wrap_spank_get_jobid(shifterSpank_config *ssconfig, uint32_t *job) {
+    *job = 1;
     return SUCCESS;
 }
 
 int wrap_spank_get_uid(shifterSpank_config *ssconfig, uid_t *uid) {
+    *uid = getuid();
     return SUCCESS;
 }
 
 int wrap_spank_get_gid(shifterSpank_config *ssconfig, gid_t *gid) {
+    *gid = getgid();
     return SUCCESS;
 }
 
@@ -82,19 +85,19 @@ int wrap_spank_get_supplementary_gids(
 }
 
 void wrap_spank_log_error(const char *msg) {
-     fprintf(stderr, "MockLogError: %s", msg);
+     fprintf(stderr, "MockLogError: %s\n", msg);
 }
 
 void wrap_spank_log_info(const char *msg) {
-     fprintf(stderr, "MockLogInfo: %s", msg);
+     fprintf(stderr, "MockLogInfo: %s\n", msg);
 }
 
 void wrap_spank_log_verbose(const char *msg) {
-     fprintf(stderr, "MockLogVerbose: %s", msg);
+     fprintf(stderr, "MockLogVerbose: %s\n", msg);
 }
 
 void wrap_spank_log_debug(const char *msg) {
-     fprintf(stderr, "MockLogDebug: %s", msg);
+     fprintf(stderr, "MockLogDebug: %s\n", msg);
 }
 
 /******************************************************************************

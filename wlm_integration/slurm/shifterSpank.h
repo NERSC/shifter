@@ -98,23 +98,23 @@ void shifterSpank_init_allocator_setup(shifterSpank_config *ssconfig);
  */
 int shifterSpank_task_post_fork(void *ptr, int argc, char **argv);
 
-/** shifterSpank_prolog
+/** shifterSpank_job_prolog
  *
  * Performs all the required setup to stage the image on the compute node
  * prior to job initialization
  * @param ssconfig configuration structure
  * @returns SUCCESS for success or FAILURE for failure
  */
-int shifterSpank_prolog(shifterSpank_config *ssconfig);
+int shifterSpank_job_prolog(shifterSpank_config *ssconfig);
 
-/** shifterSpank_epilog
+/** shifterSpank_job_epilog
  *
  * Performs all the required setup to teardown the image on the compute node
  * following job completion
  * @param ssconfig configuration structure
  * @returns SUCCESS for success or FAILURE for failure
  */
-int shifterSpank_epilog(shifterSpank_config *ssconfig);
+int shifterSpank_job_epilog(shifterSpank_config *ssconfig);
 
 int shifterSpank_process_option_ccm(
     shifterSpank_config *ssconfig, int val, const char *optarg, int remote);

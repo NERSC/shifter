@@ -110,7 +110,7 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
     if (ssconfig->args_parsed == 0)
         if (wrap_force_arg_parse(ssconfig) != SUCCESS)
             return ESPANK_ERROR;
-    return shifterSpank_prolog(ssconfig);
+    return shifterSpank_job_prolog(ssconfig);
     
 }
 int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
@@ -120,7 +120,7 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     if (ssconfig->args_parsed == 0)
         if (wrap_force_arg_parse(ssconfig) != SUCCESS)
             return ESPANK_ERROR;
-    return shifterSpank_epilog(ssconfig);
+    return shifterSpank_job_epilog(ssconfig);
 }
 
 /******************************************************************************

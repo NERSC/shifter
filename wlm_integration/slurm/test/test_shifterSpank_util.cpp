@@ -21,28 +21,23 @@
 
 #include <CppUTest/CommandLineTestRunner.h>
 
-TEST_GROUP(shifterSpankConfigGroup) {
+TEST_GROUP(shifterSpankUtilGroup) {
 };
 
-TEST(shifterSpankConfigGroup, BasicInitTest) {
-    shifterSpank_config *config = shifterSpank_init(NULL, 0, NULL, 0);
-    CHECK(config != NULL);
-    CHECK(config->udiConfig != NULL);
+extern "C" {
+    extern int forkAndExecvLogToSlurm(const char *name, const char *args[]);
+};
 
-    shifterSpank_config_free(config);
-
-    char *args[] = {
-        strdup("extern_setup=/usr/bin/echo"),
+TEST(shifterSpankUtilGroup, ForkExecvLog) {
+    const char *args[] = {
+        "/usr/bin/echo",
+        "this is a test",
         NULL
     };
-    config = shifterSpank_init(NULL, 1, args, 0);
-    CHECK(config != NULL);
-    CHECK(config->extern_setup != NULL);
-    CHECK(strcmp(config->extern_setup, "/usr/bin/echo") == 0);
-    shifterSpank_config_free(config);
+    int ret = 0;
 
-    free(args[0]);
-    
+    ret = forkAndExecvLogToSlurm("echoTest", args);
+    CHECK(ret == 0);
 }
 
 int main(int argc, char** argv) {
