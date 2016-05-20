@@ -523,7 +523,7 @@ class ImageMngrTestCase(unittest.TestCase):
         er={'system':system,'tag':self.tag,'itype':self.itype}
         rec=self.m.expire(session,er,TESTMODE=1)#,delay=False)
         assert rec is not None
-        time.sleep(1)
+        time.sleep(2)
         state=self.m.get_state(id)
         assert state=='EXPIRED'
         assert os.path.exists(file) is False
@@ -543,7 +543,7 @@ class ImageMngrTestCase(unittest.TestCase):
         er={'system':system,'tag':self.tag,'itype':self.itype}
         rec=self.m.expire(session,er)#,delay=False)
         assert rec is not None
-        time.sleep(1)
+        time.sleep(2)
         state=self.m.get_state(id)
         print state
         assert state=='EXPIRED'
@@ -563,7 +563,7 @@ class ImageMngrTestCase(unittest.TestCase):
         er={'system':self.system,'tag':self.tag,'itype':self.itype}
         rec=self.m.expire(session,er,TESTMODE=1)#,delay=False)
         assert rec is not None
-        time.sleep(1)
+        time.sleep(2)
         state=self.m.get_state(id)
         assert state=='READY'
         assert os.path.exists(file) is True

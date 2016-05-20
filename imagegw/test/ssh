@@ -1,0 +1,6 @@
+#!/bin/sh
+
+#
+# Mock ssh
+#
+echo "$@"|sed 's/.* localhost //'|sh
