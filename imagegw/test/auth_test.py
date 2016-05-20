@@ -49,6 +49,7 @@ class AuthTestCase(unittest.TestCase):
         try:
           resp=self.auth.authenticate(self.encoded,self.system)
         except:
+          raise
           assert False
         assert resp is not None
         assert len(resp)==3
