@@ -2,19 +2,19 @@
 #
 # Mock unmunge command - For testing purposes only
 #
-
+T=$(dirname $0)
 
 IN=$(cat)
-MT=$(cat ./test/munge.test)
-EX=$(cat ./test/munge.expired)
-REP=$(cat ./test/munge.replay)
+MT=$(cat $T/munge.test)
+EX=$(cat $T/munge.expired)
+REP=$(cat $T/munge.replay)
 
 if [ "$IN" == "$MT" ] ;then
   ST="Success (0)"
   RT=0
   # Mimic unmunging the same thing twice
-  cat ./test/munge.test > ./test/munge.replay
-  echo "" > ./test/munge.test
+  cat $T/munge.test > $T/munge.replay
+  echo "" > $T/munge.test
 elif [ "$IN" == "$EX" ] ;then
   ST="Expired credential (15))"
   RT=15

@@ -5,7 +5,8 @@ def setup():
   print "Module setup"
   os.environ['GWCONFIG']='test.json'
   os.environ['CONFIG']='test.json'
-  os.environ['PATH']='%s/test:%s'%(os.curdir,os.environ['PATH'])
+  test_dir=os.path.dirname(os.path.abspath(__file__))+"/../test/"
+  os.environ['PATH']='%s:%s'%(test_dir,os.environ['PATH'])
   # Create __init__
 
 def teardown():

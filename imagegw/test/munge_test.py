@@ -29,15 +29,15 @@ class MungeTestCase(unittest.TestCase):
 
     def setUp(self):
         #os.environ['PATH']=os.environ['PATH']+":./test"
-        import munge
+        self.test_dir=os.path.dirname(os.path.abspath(__file__))+"/../test/"
         self.encoded="xxxx\n"
         self.message="test"
         self.expired="expired"
-        with open("./test/munge.test",'w') as f:
+        with open(self.test_dir+"munge.test",'w') as f:
           f.write(self.encoded)
 
     def tearDown(self):
-        with open("./test/munge.expired",'w') as f:
+        with open(self.test_dir+"munge.expired",'w') as f:
             f.write('')
 
     def test_munge(self):
@@ -49,7 +49,7 @@ class MungeTestCase(unittest.TestCase):
         assert resp['MESSAGE']==self.message
 
     def test_unmunge_expired(self):
-        with open("./test/munge.expired",'w') as f:
+        with open(self.test_dir+"munge.expired",'w') as f:
             f.write(self.expired)
         try:
             resp=munge.unmunge(self.expired)

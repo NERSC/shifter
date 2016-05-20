@@ -29,10 +29,11 @@ class AuthTestCase(unittest.TestCase):
 
     def setUp(self):
         #os.environ['PATH']=os.environ['PATH']+":./test"
+        self.test_dir=os.path.dirname(os.path.abspath(__file__))+"/../test/"
         self.encoded="xxxx\n"
         self.message="test"
         self.expired="expired"
-        with open("./test/munge.test",'w') as f:
+        with open(self.test_dir+"munge.test",'w') as f:
           f.write(self.encoded)
         self.system='systema'
         self.config={"Authentication":"munge",
@@ -40,7 +41,7 @@ class AuthTestCase(unittest.TestCase):
         self.auth=auth.authentication(self.config)
 
     def tearDown(self):
-        with open("./test/munge.expired",'w') as f:
+        with open(self.test_dir+"munge.expired",'w') as f:
             f.write('')
 
     def test_auth(self):
