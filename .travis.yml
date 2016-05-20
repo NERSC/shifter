@@ -24,11 +24,11 @@ before_script:
   - rm imagegw/test/sha256sum
   - find /tmp/
 script:
-  - export PATH=$PWD/imagegw/test:$PATH
-  - PYTHONPATH=$PWD/imagegw nosetests -s --with-coverage imagegw/test
   - export PROC_COUNT=$(cat /proc/cpuinfo  | egrep '^processor' | wc -l)
   - ./autogen.sh
   - ./configure --prefix=/usr --sysconfdir=/etc/shifter
+  - export PATH=$PWD/imagegw/test:$PATH
+  - PYTHONPATH=$PWD/imagegw nosetests -s --with-coverage imagegw/test
   - MAKEFLAGS="-j$PROC_COUNT" make
   - MAKEFLAGS="-j$PROC_COUNT" make check
   - sudo make install 
