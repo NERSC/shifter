@@ -1,6 +1,4 @@
 import os
-os.environ['GWCONFIG']='test.json'
-from shifter_imagegw import imageworker
 import unittest
 import tempfile
 import time
@@ -34,6 +32,8 @@ class ImageWorkerTestCase(unittest.TestCase):
     def setUp(self):
         cwd=os.path.dirname(os.path.realpath(__file__))
         os.environ['PATH']=cwd+':'+os.environ['PATH']
+        from shifter_imagegw import imageworker
+        self.imageworker=imageworker
         self.configfile='test.json'
         with open(self.configfile) as config_file:
             self.config = json.load(config_file)
@@ -62,7 +62,7 @@ class ImageWorkerTestCase(unittest.TestCase):
 
     def test0_pull_image(self):
         request={'system':self.system,'itype':self.itype,'tag':self.tag}
-        status=imageworker.pull_image(request)
+        status=self.imageworker.pull_image(request)
         print status
         assert status is True
         assert 'meta' in request
@@ -76,17 +76,19 @@ class ImageWorkerTestCase(unittest.TestCase):
 
     def test1_convert_image(self):
         request={'system':self.system,'itype':self.itype,'tag':self.tag}
-        status=imageworker.pull_image(request)
+        status=self.imageworker.pull_image(request)
         assert status is True
-        status=imageworker.convert_image(request)
+        status=self.imageworker.convert_image(request)
         assert status==True
         return
 
     def test2_transfer_image(self):
         print self.imagefile
         request={'system':self.system,'itype':self.itype,'tag':self.tag,'imagefile':self.imagefile}
+        with open(self.imagefile,'w') as f:
+          f.write('bogus')
         assert os.path.exists(self.imagefile)
-        status=imageworker.transfer_image(request)
+        status=self.imageworker.transfer_image(request)
         assert status==True
         return
 

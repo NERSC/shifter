@@ -35,7 +35,6 @@ def copy_remote(filename,system):
     hostname=system['host'][0]
     # TODO: Add command to pre-create the file with the right striping
     scpCmd.extend([filename,'%s@%s:%s' % (ssh['username'],hostname, remoteFilename)])
-    #print "DEBUG: %s"%(scpCmd.join(' '))
     fdnull=open('/dev/null','w')
 
     ret = subprocess.call(scpCmd)#, stdout=fdnull, stderr=fdnull)
@@ -50,12 +49,30 @@ def copy_local(filename,system):
         cpCmd.extend(system['cpCmdOptions'])
     # TODO: Add command to pre-create the file with the right striping
     cpCmd.extend([filename, targetFilename])
-    #print "DEBUG: %s"%(scpCmd.join(' '))
     fdnull=open('/dev/null','w')
 
     ret = subprocess.call(cpCmd)#, stdout=fdnull, stderr=fdnull)
     return ret == 0
 
+def remove_remote(filename,system):
+    (basePath,imageFilename) = os.path.split(filename)
+    ssh=system['ssh']
+    remoteFilename = os.path.join(ssh['imageDir'], imageFilename)
+    sshCmd = ['ssh']
+    if 'key' in ssh:
+        sshCmd.extend(['-i','%s'%ssh['key']])
+    if 'sshCmdOptions' in system:
+        sshCmd.extend(system['scpCmdOptions'])
+    hostname=system['host'][0]
+    sshCmd.extend([hostname,'rm', remoteFilename])
+    ret = subprocess.call(sshCmd)
+    return ret == 0
+
+def remove_local(filename,system):
+    (basePath,imageFilename) = os.path.split(filename)
+    targetFilename = os.path.join(system['local']['imageDir'], imageFilename)
+    os.unlink(targetFilename)
+    return True
 
 def transfer(system,imagePath,metadataPath=None):
     atype=system['accesstype']
@@ -77,4 +94,26 @@ def transfer(system,imagePath,metadataPath=None):
             return False
     else:
         raise NotImplementedError('%s is not supported as a transfer type'%atype)
+    return False
+
+def remove(system,imagePath,metadataPath=None):
+    atype=system['accesstype']
+    if atype=='remote':
+        if metadataPath is not None:
+            remove_remote(metadataPath, system)
+        if remove_remote(imagePath,system):
+            return True
+        else:
+            print "Remove failed"
+            return False
+    elif atype=='local':
+        if metadataPath is not None:
+            remove_local(metadataPath, system)
+        if remove_local(imagePath,system):
+            return True
+        else:
+            print "Remove failed"
+            return False
+    else:
+        raise NotImplementedError('%s is not supported as a remove transfer type'%atype)
     return False
