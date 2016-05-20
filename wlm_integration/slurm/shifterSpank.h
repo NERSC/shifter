@@ -89,6 +89,7 @@ void shifterSpank_validate_input(shifterSpank_config *ssconfig, int allocator);
  * @param ssconfig configuration structure
  */ 
 void shifterSpank_init_allocator_setup(shifterSpank_config *ssconfig);
+void shifterSpank_init_setup(shifterSpank_config *ssconfig);
 
 
 /** shifterSpank_test_post_fork used to do final setup in the extern step

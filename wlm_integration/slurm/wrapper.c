@@ -82,6 +82,8 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
 int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     spank_context_t context = spank_context();
     int rc = SUCCESS;
+    ssconfig->id = sp;
+    
 
     shifterSpank_validate_input(ssconfig,
         context == S_CTX_ALLOCATOR | context == S_CTX_LOCAL
@@ -90,6 +92,7 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     if (context == S_CTX_ALLOCATOR || context == S_CTX_LOCAL) {
         shifterSpank_init_allocator_setup(ssconfig);
     }
+    shifterSpank_init_setup(ssconfig);
     if (rc != SUCCESS) return ESPANK_ERROR;
     return ESPANK_SUCCESS;
 }
@@ -107,6 +110,8 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
         if (wrap_force_arg_parse(ssconfig) != SUCCESS)
             return ESPANK_ERROR;
     }
+    ssconfig->id = (void *) sp;
+
     return shifterSpank_job_prolog(ssconfig);
     
 }
@@ -156,8 +161,10 @@ int wrap_force_arg_parse(shifterSpank_config *_ssconfig) {
 int wrap_spank_setenv(
     shifterSpank_config *ssconfig, const char *envname, const char *value, int overwrite)
 {
+    int ret = 0;
     if (ssconfig == NULL || ssconfig->id == NULL) return ERROR;
-    return spank_setenv((spank_t) ssconfig->id, envname, value, overwrite);
+    ret = spank_setenv((spank_t) ssconfig->id, envname, value, overwrite);
+    return ret == ESPANK_SUCCESS ? SUCCESS : ERROR;
 }
 
 int wrap_spank_job_control_setenv(
@@ -166,9 +173,11 @@ int wrap_spank_job_control_setenv(
     const char *value,
     int overwrite)
 {
+    int ret = 0;
     if (ssconfig == NULL || ssconfig->id == NULL) return ERROR;
-    return spank_job_control_setenv(
+    ret =  spank_job_control_setenv(
                 (spank_t) ssconfig->id, envname, value, overwrite);
+    return ret == ESPANK_SUCCESS ? SUCCESS : ERROR;
 }
 
 int wrap_spank_get_jobid(shifterSpank_config *ssconfig, uint32_t *job) {

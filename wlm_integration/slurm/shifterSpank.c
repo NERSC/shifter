@@ -549,15 +549,12 @@ void shifterSpank_init_allocator_setup(shifterSpank_config *ssconfig) {
     free(tmpval);
 }
 
-int shifterSpank_init_setup(shifterSpank_config *ssconfig) {
-    int rc = SUCCESS;
-    if (ssconfig == NULL) return ERROR;
+
+void shifterSpank_init_setup(shifterSpank_config *ssconfig) {
     if (ssconfig->image != NULL && strlen(ssconfig->image) == 0) {
-        return SUCCESS;
+        return;
     }
 
-    int verbose_lookup = 1;
-    
     if (ssconfig->volume != NULL && strlen(ssconfig->volume) > 0) {
         wrap_spank_setenv(ssconfig, "SHIFTER_VOLUME", ssconfig->volume, 1);
         wrap_spank_job_control_setenv(ssconfig, "SHIFTER_VOLUME", ssconfig->volume, 1);
@@ -577,7 +574,7 @@ int shifterSpank_init_setup(shifterSpank_config *ssconfig) {
          * achieves that */
         wrap_spank_setenv(ssconfig, "_SLURM_SPANK_OPTION_shifter_ccm", "", 1);
     }
-    return rc;
+    return;
 }
 
 /**
@@ -598,7 +595,7 @@ int read_data_from_job(shifterSpank_config *ssconfig, uint32_t *jobid, char **no
         return ERROR;
     }
 
-    if(wrap_spank_extra_job_attributes(ssconfig, jobid, &raw_host_string, &n_nodes, tasksPerNode, shared) == ERROR) {
+    if(wrap_spank_extra_job_attributes(ssconfig, *jobid, &raw_host_string, &n_nodes, tasksPerNode, shared) == ERROR) {
         _log(LOG_ERROR, "Failed to get job attributes");
     }
 
@@ -666,6 +663,7 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     char *sshPubKey = NULL;
     size_t tasksPerNode = 0;
     pid_t pid = 0;
+    int rcstatus = 0;
 
 #define PROLOG_ERROR(message, errCode) \
     _log(LOG_ERROR, "%s", message); \
@@ -680,6 +678,14 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
         return rc;
     }
 
+#if 0
+    extern char **environ;
+    char **envPtr = NULL;
+    for (envPtr = environ; envPtr && *envPtr; envPtr++) {
+        slurm_error("env: %s\n", *envPtr);
+    }
+#endif
+
     int set_type = 0;
     ptr = getenv("SHIFTER_IMAGETYPE");
     if (ptr != NULL) {
@@ -691,6 +697,7 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
         set_type = 1;
     }
 
+    slurm_error("about to lookup image in prolog env");
     ptr = getenv("SHIFTER_IMAGE");
     if (ptr != NULL) {
         char *tmp = imageDesc_filterString(ptr, set_type ? ssconfig->imageType : NULL);
@@ -698,7 +705,6 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
             free(ssconfig->image);
         }
         ssconfig->image = tmp;
-        free(tmp);
     }
 
     ptr = getenv("SHIFTER_VOLUME");

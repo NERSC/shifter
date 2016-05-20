@@ -54,7 +54,7 @@ int wrap_spank_stepd_connect(shifterSpank_config *ssconfig, char *dir,
 int wrap_spank_stepd_add_extern_pid(shifterSpank_config *ssconfig,
     uint32_t stepd_fd, uint16_t protocol, pid_t pid);
 int wrap_spank_extra_job_attributes(shifterSpank_config *ssconfig,
-                                    uint32_t *jobid,
+                                    uint32_t jobid,
                                     char **nodelist,
                                     size_t *nnodes,
                                     size_t *tasksPerNode,
