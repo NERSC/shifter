@@ -26,7 +26,7 @@ before_script:
 script:
   - export PATH=$PWD/imagegw/test:$PATH
   - export PYTHONPATH=$PWD/imagegw
-  - nosetests -x -s --with-coverage imagegw/test
+  - nosetests -s --with-coverage imagegw/test
   - export PROC_COUNT=$(cat /proc/cpuinfo  | egrep '^processor' | wc -l)
   - ./autogen.sh
   - ./configure --prefix=/usr --sysconfdir=/etc/shifter
