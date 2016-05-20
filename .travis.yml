@@ -25,8 +25,7 @@ before_script:
   - find /tmp/
 script:
   - export PATH=$PWD/imagegw/test:$PATH
-  - export PYTHONPATH=$PWD/imagegw
-  - nosetests -s --with-coverage imagegw/test
+  - PYTHONPATH=$PWD/imagegw nosetests -s --with-coverage imagegw/test
   - export PROC_COUNT=$(cat /proc/cpuinfo  | egrep '^processor' | wc -l)
   - ./autogen.sh
   - ./configure --prefix=/usr --sysconfdir=/etc/shifter
