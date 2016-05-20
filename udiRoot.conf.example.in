@@ -274,3 +274,15 @@ imageGateway=http://imagegwapi:5000
 # which system it is representing.
 #
 system=mycluster
+
+#defaultImageType (required)
+#
+# Default image type for lookups and user input parsing.  This should almost
+# certainly be set to "docker" for most systems.
+#
+defaultImageType=docker
+
+#allowedImageTypes (required)
+#
+# Exhaustive list of all the image types allowed
+allowedImageTypes=docker custom

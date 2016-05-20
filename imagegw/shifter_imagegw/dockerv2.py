@@ -12,6 +12,7 @@ import struct
 import tempfile
 import socket
 import urllib2
+import shifter_imagegw
 
 ## Shifter, Copyright (c) 2015, The Regents of the University of California,
 ## through Lawrence Berkeley National Laboratory (subject to receipt of any
@@ -314,6 +315,10 @@ class dockerv2Handle():
             location = r1.getheader('location')
             if r1.status == 200:
                 break
+            elif r1.status == 401:
+                if self.authMethod == 'token':
+                    self.doTokenAuth(r1.getheader('WWW-Authenticate'))
+                    next
             elif location != None:
                 url = location
                 matchObj = re.match(r'(https?)://(.*?)(/.*)', location)
@@ -422,7 +427,13 @@ class dockerv2Handle():
         os.umask(022)
         devnull = open(os.devnull, 'w')
         tarfile=os.path.join(cachedir,'%s.tar'%(layer['fsLayer']['blobSum']))
-        command=['tar','xf', tarfile, '-C', basePath, '--exclude=dev/*', '--force-local']
+        command=[shifter_imagegw.tarPath,
+                'xf',
+                tarfile,
+                '-C',
+                basePath,
+                '--exclude=dev/*',
+                '--force-local']
         ret = subprocess.call(command, stdout=devnull, stderr=devnull)
         devnull.close()
         if ret>1:

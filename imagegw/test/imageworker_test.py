@@ -42,13 +42,14 @@ class ImageWorkerTestCase(unittest.TestCase):
         self.tag='registry.services.nersc.gov/nersc-py:latest'
         self.tag='ubuntu:latest'
         self.tag='scanon/shanetest:latest'
-        self.hash='c6afa7300a4cf6e717c92dd057b8be12e36a586cc8b66f952be8a901a7d8ba57'
+        self.hash='b3491cdefcdb79a31ab7ddf1bbcf7c8eeff9b4f00cb83a0be513fb800623f9cf'
         if not os.path.exists(self.config['CacheDirectory']):
             os.mkdir(self.config['CacheDirectory'])
         self.expandedpath=os.path.join(self.config['CacheDirectory'],
             '%s_%s'%(self.itype,self.tag.replace('/','_')))
         self.imagefile=os.path.join(self.config['ExpandDirectory'],
             '%s.%s'%(self.hash,'squashfs'))
+        print "imagefile", self.imagefile
         idir=self.config['Platforms']['systema']['ssh']['imageDir']
         if not os.path.exists(idir):
             os.makedirs(idir)
@@ -82,6 +83,7 @@ class ImageWorkerTestCase(unittest.TestCase):
         return
 
     def test2_transfer_image(self):
+        print self.imagefile
         request={'system':self.system,'itype':self.itype,'tag':self.tag,'imagefile':self.imagefile}
         with open(self.imagefile,'w') as f:
           f.write('bogus')

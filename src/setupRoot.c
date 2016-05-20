@@ -86,7 +86,6 @@ typedef struct _SetupRootConfig {
 } SetupRootConfig;
 
 static void _usage(int);
-static char *_filterString(char *input, int allowSlash);
 int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config);
 void free_SetupRootConfig(SetupRootConfig *config);
 void fprint_SetupRootConfig(FILE *, SetupRootConfig *config);
@@ -179,7 +178,6 @@ static void _usage(int exitStatus) {
 
 int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
     int opt = 0;
-    int isLocal = 0;
     optind = 1;
 
     while ((opt = getopt(argc, argv, "v:s:u:U:G:N:V")) != -1) {
@@ -221,11 +219,8 @@ int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
         fprintf(stderr, "Must specify image type and image identifier\n");
         _usage(1);
     }
-    config->imageType = _filterString(argv[optind++], 0);
-    if (strcmp(config->imageType, "local") == 0) {
-        isLocal = 1;
-    }
-    config->imageIdentifier = _filterString(argv[optind++], isLocal);
+    config->imageType = imageDesc_filterString(argv[optind++], NULL);
+    config->imageIdentifier = imageDesc_filterString(argv[optind++], config->imageType);
     return 0;
 }
 
@@ -265,31 +260,5 @@ void fprint_SetupRootConfig(FILE *fp, SetupRootConfig *config) {
 
 int getImage(ImageData *imageData, SetupRootConfig *config, UdiRootConfig *udiConfig) {
     int ret = parse_ImageData(config->imageType, config->imageIdentifier, udiConfig, imageData);
-    return ret;
-}
-
-static char *_filterString(char *input, int allowSlash) {
-    ssize_t len = 0;
-    char *ret = NULL;
-    char *rptr = NULL;
-    char *wptr = NULL;
-    if (input == NULL) return NULL;
-
-    len = strlen(input) + 1;
-    ret = (char *) malloc(sizeof(char) * len);
-    if (ret == NULL) return NULL;
-
-    rptr = input;
-    wptr = ret;
-    while (wptr - ret < len && *rptr != 0) {
-        if (isalnum(*rptr) || *rptr == '_' || *rptr == ':' || *rptr == '.' || *rptr == '+' || *rptr == '-') {
-            *wptr++ = *rptr;
-        }
-        if (allowSlash && *rptr == '/') {
-            *wptr++ = *rptr;
-        }
-        rptr++;
-    }
-    *wptr = 0;
     return ret;
 }

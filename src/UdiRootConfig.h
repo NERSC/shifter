@@ -77,6 +77,7 @@ typedef struct _UdiRootConfig {
     char *udiMountPoint;
     char *loopMountPoint;
     char *batchType;
+    char *defaultImageType;
     char *system;
     char *imageBasePath;
     char *udiRootPath;

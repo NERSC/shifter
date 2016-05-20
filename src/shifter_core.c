@@ -480,7 +480,7 @@ int prepareSiteModifications(const char *username,
             free(*argsPtr);
         }
         if (ret != 0) {
-            fprintf(stderr, "Site premount hook failed. Exiting.\n");
+            fprintf(stderr, "Site postmount hook failed. Exiting.\n");
             ret = 1;
             goto _prepSiteMod_unclean;
         }
@@ -1138,6 +1138,8 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
                     (readOnly ? ",ro" : ""),
                     (useAutoclear ? ",autoclear" : "")
             ),
+            strdup("-t"),
+            strdup(imgType),
             strdup(imagePath),
             strdup(loopMountPath),
             NULL
@@ -1705,8 +1707,16 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
             goto _setupImageSsh_unclean;
         }
     }
-    chown(sshdConfigPath, 0, 0);
-    chmod(sshdConfigPath, S_IRUSR);
+    if (chown(sshdConfigPath, 0, 0) != 0) {
+        fprintf(stderr, "FAILED to chown sshd config path %s\n", sshdConfigPath);
+        perror("   errno: ");
+        goto _setupImageSsh_unclean;
+    }
+    if (chmod(sshdConfigPath, S_IRUSR) != 0) {
+        fprintf(stderr, "FAILED to set sshd config permissions to 0600\n");
+        perror("   errno: ");
+        goto _setupImageSsh_unclean;
+    }
 
     if (sshPubKey != NULL && strlen(sshPubKey) > 0) {
         char buffer[PATH_MAX];
@@ -1720,9 +1730,16 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
         fprintf(outputFile, "%s\n", sshPubKey);
         fclose(outputFile);
         outputFile = NULL;
-        chown(buffer, uid, 0);
-        chmod(buffer, S_IRUSR); /* user read only */
-
+        if (chown(buffer, uid, 0) != 0) {
+            fprintf(stderr, "FAILED to chown ssh pub key to uid %d\n", uid);
+            perror("   errno: ");
+            goto _setupImageSsh_unclean;
+        }
+        if (chmod(buffer, S_IRUSR) != 0) {
+            fprintf(stderr, "FAILED to set ssh pub key permissions to 0600\n");
+            perror("   errno: ");
+            goto _setupImageSsh_unclean;
+        }
     }
 
     {
