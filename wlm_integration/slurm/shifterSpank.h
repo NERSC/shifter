@@ -28,6 +28,7 @@ See LICENSE for full text.
 extern "C" {
 #endif
 
+#include <stdint.h>
 #include "UdiRootConfig.h"
 
 typedef struct {
@@ -127,6 +128,25 @@ int shifterSpank_process_option_image(
 int shifterSpank_process_option_volume(
     shifterSpank_config *ssconfig, int val, const char *optarg, int remote);
 
+/** setup_memory_cgroup
+ * generates each component of the shifter memory cgroup path and calls the
+ * parameterized "action" function for each component of the path (if not
+ * NULL). This allows the setup_memory_cgroup function to be used either
+ * in calculating the path to the cgroup, or in creating it, destrying it
+ * or otherwise.
+ * generates the path and calls action with data like:
+        /path/to/cgroup/shifter                      # call 1
+        /path/to/cgroup/shifter/uid_XXXX             # call 2
+        /path/to/cgroup/shifter/uid_XXXX/job_YYYY    # call 3
+ * @param ssconfig configuration structure
+ * @param job the job id
+ * @param uid the uid
+ * @param action function to be called for each component of the cgroup path
+ * @param data abstract pointer to be passed to the function call
+ */
+char *setup_memory_cgroup(shifterSpank_config *ssconfig, uint32_t job,
+     uid_t uid, int (*action)(shifterSpank_config *, const char *, void *),
+     void *data);
 
 #ifdef __cplusplus
 }

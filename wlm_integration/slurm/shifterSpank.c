@@ -637,6 +637,73 @@ int read_data_from_job(shifterSpank_config *ssconfig, uint32_t *jobid, char **no
     return SUCCESS;
 }
 
+int create_cgroup_dir(shifterSpank_config *ssconfig, const char *path, void *data) {
+   int ret = mkdir(path, 0755);
+   if (ret != 0 && errno == EEXIST) return SUCCESS;
+   if (ret == 0) return SUCCESS;
+   return ERROR;
+}
+
+int cgroup_record_components(shifterSpank_config *ssconfig, const char *path, void *data) {
+    char ***comp_ptr = (char ***) data;
+    char **ptr = *comp_ptr;
+    size_t sz = 1;
+    size_t diff = 0;
+    while (ptr && *ptr) ptr++;
+    if (ptr != NULL) {
+        diff = ptr - *comp_ptr;
+        sz = diff;
+    }
+    sz += 1;
+    *comp_ptr = (char **) realloc(*comp_ptr, sizeof(char*) * sz);
+    ptr = *comp_ptr + diff;
+    *ptr = strdup(path);
+    ptr++;
+    *ptr = NULL;
+    return 0;
+}
+
+char *setup_memory_cgroup(
+    shifterSpank_config *ssconfig,
+    uint32_t job,
+    uid_t uid,
+    int (*action)(shifterSpank_config *, const char *, void *),
+    void *data)
+{
+    struct stat st;
+
+    if (ssconfig == NULL || ssconfig->memory_cgroup == NULL) {
+        return NULL;
+    }
+
+    if (stat(ssconfig->memory_cgroup, &st) != 0) {
+        /* base cgroup does not exist */
+        return NULL;
+    }
+
+    char *components[] = {
+        strdup("shifter"),
+        alloc_strgenf("uid_%d", uid),
+        alloc_strgenf("job_%u", job),
+        NULL
+    };
+    char *cgroup_path = NULL;
+    size_t cgroup_path_sz = 0;
+    size_t cgroup_path_cap = 0;
+    char **cptr = components;
+
+    cgroup_path = alloc_strcatf(cgroup_path, &cgroup_path_sz, &cgroup_path_cap, "%s", ssconfig->memory_cgroup);
+
+    for (cptr = components; cptr && *cptr; cptr++) {
+        cgroup_path = alloc_strcatf(cgroup_path, &cgroup_path_sz, &cgroup_path_cap, "/%s", *cptr);
+        if (action != NULL) {
+            int local = action(ssconfig, cgroup_path, data);
+        }
+        free(*cptr);
+    }
+    return cgroup_path;
+}
+
 int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     int rc = SUCCESS;
 
@@ -697,7 +764,7 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
         set_type = 1;
     }
 
-    slurm_error("about to lookup image in prolog env");
+    _log(LOG_ERROR, "about to lookup image in prolog env");
     ptr = getenv("SHIFTER_IMAGE");
     if (ptr != NULL) {
         char *tmp = imageDesc_filterString(ptr, set_type ? ssconfig->imageType : NULL);
@@ -847,6 +914,25 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
         _log(LOG_ERROR, "setupRoot arg %d: %s", (int)(setupRootArgs_sv - setupRootArgs), *setupRootArgs_sv);
     }
 
+    /* setup memory cgroup if necessary */
+    char *memory_cgroup_path = NULL;
+    if (ssconfig->memory_cgroup) {
+        memory_cgroup_path = setup_memory_cgroup(ssconfig, job, uid, create_cgroup_dir, NULL);
+    }
+
+    /* if the cgroup exists, put this process onto it (which will result in
+       setupRoot and any sshd process it execs being in the cgroup */
+    if (memory_cgroup_path != NULL) {
+        char *tasks = alloc_strgenf("%s/tasks", memory_cgroup_path);
+        FILE *fp = fopen(tasks, "w");
+        if (fp != NULL) {
+            fprintf(fp, "%d\n", getpid());
+            fclose(fp);
+        }
+        free(tasks);
+        free(memory_cgroup_path);
+    }
+
     int status = forkAndExecvLogToSlurm("setupRoot", setupRootArgs);
 
     _log(LOG_ERROR, "after setupRoot");
@@ -909,6 +995,37 @@ int shifterSpank_job_epilog(shifterSpank_config *ssconfig) {
     }
     if (wrap_spank_get_jobid(ssconfig, &job) == ERROR) {
         EPILOG_ERROR("Couldnt get job id", ERROR);
+    }
+
+    /* see if memory cgroup exists */
+    char *memory_cgroup_path = NULL;
+    char **cgroup_components = NULL;
+    if (ssconfig->memory_cgroup) {
+        memory_cgroup_path = setup_memory_cgroup(ssconfig, job, uid, cgroup_record_components, (void *) &cgroup_components);
+    }
+    if (memory_cgroup_path != NULL) {
+        char **ptr = NULL;
+        size_t extent = 0;
+        char *line = NULL;
+        size_t line_sz = 0;
+        ssize_t bytes = 0;
+        char *tasks = alloc_strgenf("%s/tasks", memory_cgroup_path);
+        FILE *fp = fopen(tasks, "w");
+
+        /* kill all the processes in the cgroup tasks */
+        fp = fopen(tasks, "r");
+        while ((bytes = getline(&line, &line_sz, fp)) >= 0) {
+            pid_t pid = atoi(line);
+            if (pid == 0) continue;
+            kill(pid, 9); 
+        }
+
+        /* remove the empty cgroups */
+        for (ptr = cgroup_components; ptr && *ptr; ptr++) { }
+        for (ptr-- ; ptr && *ptr && ptr > cgroup_components; ptr--) {
+            rmdir(*ptr);
+        }
+        
     }
 
     snprintf(path, PATH_MAX, "%s/sbin/unsetupRoot", ssconfig->udiConfig->udiRootPath);
