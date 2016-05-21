@@ -23,7 +23,7 @@ udiRoot_dep.tar:
 
 install-data-hook:
 	mkdir -p $(DESTDIR)/$(libexecdir)/shifter/opt
-	tar xf udiRoot_dep.tar -C $(DESTDIR)$(libexecdir)/shifter/opt --strip-components=2 -p --no-same-owner
+	if [[ -e udiRoot_dep.tar ]]; then tar xf udiRoot_dep.tar -C $(DESTDIR)$(libexecdir)/shifter/opt --strip-components=2 -p --no-same-owner; fi
 
 clean-local: clean-local-check
 clean-local-check:

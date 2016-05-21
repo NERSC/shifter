@@ -26,7 +26,7 @@ before_script:
 script:
   - export PROC_COUNT=$(cat /proc/cpuinfo  | egrep '^processor' | wc -l)
   - ./autogen.sh
-  - ./configure --prefix=/usr --sysconfdir=/etc/shifter
+  - ./configure --prefix=/usr --sysconfdir=/etc/shifter --disable-staticsshd
   - MAKEFLAGS="-j$PROC_COUNT" make
   - MAKEFLAGS="-j$PROC_COUNT" make check
   - sudo make install 
