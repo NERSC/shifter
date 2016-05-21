@@ -137,7 +137,6 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-#ifdef ALLOW_STATICSSHD
     if (config.sshPubKey != NULL && strlen(config.sshPubKey) > 0
             && config.user != NULL && strlen(config.user) > 0
             && config.uid != 0) {
@@ -150,7 +149,6 @@ int main(int argc, char **argv) {
             exit(1);
         }
     }
-#endif
 
     if (setupUserMounts(&(config.volumeMap), &udiConfig) != 0) {
         fprintf(stderr, "FAILED to setup user-requested mounts.\n");
