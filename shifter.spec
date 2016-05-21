@@ -93,6 +93,7 @@ image manager
 %{_libdir}/python2.*/site-packages/shifter_imagegw
 %{_libexecdir}/shifter/imagecli.py*
 %{_libexecdir}/shifter/imagegwapi.py*
+%{_libexecdir}/shifter/tar.sh
 %{_datadir}/shifter/requirements.txt
 %{_sysconfdir}/imagemanager.json.example
 %defattr(-,root,root)

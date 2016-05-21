@@ -12,6 +12,9 @@ import struct
 import tempfile
 import socket
 import urllib2
+import shifter_imagegw
+import stat
+import shutil
 
 ## Shifter, Copyright (c) 2015, The Regents of the University of California,
 ## through Lawrence Berkeley National Laboratory (subject to receipt of any
@@ -314,6 +317,10 @@ class dockerv2Handle():
             location = r1.getheader('location')
             if r1.status == 200:
                 break
+            elif r1.status == 401:
+                if self.authMethod == 'token':
+                    self.doTokenAuth(r1.getheader('WWW-Authenticate'))
+                    next
             elif location != None:
                 url = location
                 matchObj = re.match(r'(https?)://(.*?)(/.*)', location)
@@ -422,12 +429,53 @@ class dockerv2Handle():
         os.umask(022)
         devnull = open(os.devnull, 'w')
         tarfile=os.path.join(cachedir,'%s.tar'%(layer['fsLayer']['blobSum']))
-        command=['tar','xf', tarfile, '-C', basePath, '--exclude=dev/*', '--force-local']
+
+        # check for symlinks in tar and see if they used to be directories
+        # if so, the directory needs to be deleted ahead of time, so the
+        # symlink can replace it
+        cmd = ['tar', 'tvf', tarfile, '--exclude=dev/*', '--force-local']
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        stdout,stderr = proc.communicate()
+        for line in stdout.split('\n'):
+            if not line.startswith('l'):
+                continue
+            filename = line.split()[5]
+            tgtpath = os.path.join(basePath, filename)
+            if os.path.exists(tgtpath):
+                st = os.lstat(tgtpath)
+                if stat.S_ISDIR(st.st_mode):
+                    shutil.rmtree(tgtpath)
+
+        # extract the layer
+        command=['tar',
+                'xf',
+                tarfile,
+                '-C',
+                basePath,
+                '--exclude=dev/*',
+                '--force-local']
         ret = subprocess.call(command, stdout=devnull, stderr=devnull)
         devnull.close()
         if ret>1:
             raise OSError("Extraction of layer (%s) to %s failed %d"%(tarfile,basePath,ret))
         # ignore errors since some things like mknod are expected to fail
+
+        # adjust permissions of the extracted files
+        command=['tar','tf', tarfile, '--force-local']
+        proc = subprocess.Popen(command, stdout=subprocess.PIPE)
+        stdout,stderr = proc.communicate()
+        for line in stdout.split('\n'):
+            fname = line.strip()
+            path = os.path.join(basePath, fname)
+            if os.path.exists(path):
+                statdata = os.lstat(path)
+                if stat.S_ISLNK(statdata.st_mode):
+                    continue
+                newmode = statdata.st_mode | stat.S_IWUSR | stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH
+                if statdata.st_mode & stat.S_IXUSR:
+                    newmode = newmode | stat.S_IXGRP | stat.S_IXOTH
+                os.chmod(path, newmode)
+
         self.extractDockerLayers(basePath, layer['child'], cachedir=cachedir)
 
 def pullImage(options, baseUrl, repo, tag, cachedir='./', expanddir='./', cacert=None, username=None, password=None):
@@ -476,10 +524,7 @@ def pullImage(options, baseUrl, repo, tag, cachedir='./', expanddir='./', cacert
     return resp
 
 if __name__ == '__main__':
-  #pullImage(None, 'https://index.docker.io', 'redis', 'latest')
-  #pullImage(None, 'https://registry.services.nersc.gov', 'lcls_xfel_edison', '201509081609',cacert='local.crt')
   dir=os.getcwd()
   cdir=os.environ['TMPDIR']
+  #pullImage(None, 'https://registry.services.nersc.gov', 'ana', 'cctbx',cachedir=cdir,expanddir=cdir,cacert=dir+'/local.crt')
   pullImage(None, 'https://registry-1.docker.io', 'ubuntu', 'latest', cachedir=cdir, expanddir=cdir)
-#pullImage(None, 'https://registry.services.nersc.gov', 'nersc-py', 'latest',cachedir=cdir,cacert=dir+'/local.crt')
-#pullImage(None, 'https://registry.services.nersc.gov', 'psana', 'latest',cachedir=cdir,expanddir=cdir,cacert=dir+'/local.crt')

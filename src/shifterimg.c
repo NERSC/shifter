@@ -523,6 +523,7 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
                     fflush(stdout);
                     if (strcmp(image->status, "MISSING") == 0 ||
                         strcmp(image->status, "INIT") == 0 ||
+                        strcmp(image->status, "PENDING") == 0 ||
                         strcmp(image->status, "PULLING") == 0 ||
                         strcmp(image->status, "EXAMINATION") == 0 ||
                         strcmp(image->status, "CONVERSION") == 0 || 
