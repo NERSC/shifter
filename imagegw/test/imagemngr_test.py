@@ -461,7 +461,7 @@ class ImageMngrTestCase(unittest.TestCase):
         # Cause a failure
         self.images.drop()
         rec=self.m.pull(session,pr,TESTMODE=2)
-        time.sleep(1)
+        time.sleep(10)
         assert rec is not None
         id=rec['_id']
         state=self.m.get_state(id)
