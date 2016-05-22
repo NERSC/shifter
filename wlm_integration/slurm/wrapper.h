@@ -43,6 +43,7 @@ int wrap_spank_get_jobid(shifterSpank_config *, uint32_t *job);
 int wrap_spank_get_uid(shifterSpank_config *, uid_t *uid);
 int wrap_spank_get_gid(shifterSpank_config *, gid_t *gid);
 int wrap_spank_get_stepid(shifterSpank_config *, uint32_t *stepid);
+int wrap_spank_get_stepid_noconfig(void *, uint32_t *stepid);
 int wrap_spank_get_supplementary_gids(shifterSpank_config *, gid_t **gids, int *ngids);
 void wrap_spank_log_error(const char *msg);
 void wrap_spank_log_info(const char *msg);

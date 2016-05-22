@@ -36,6 +36,9 @@ typedef struct {
     char *shifter_config;         /*! path to configuration file */
     char *extern_setup;           /*! path to extern setup script */
     char *memory_cgroup;          /*! path to memory cgroup mount */
+    int extern_cgroup;            /*! flag if the memory_cgroup processes
+                                      should be moved into extern step control
+                                      during job setup */
 
     /* config options from user */
     char *image;                  /*! user requested image identifier */

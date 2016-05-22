@@ -98,7 +98,8 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
 }
     
 int slurm_spank_task_post_fork(spank_t sp, int argc, char **argv) {
-    return shifterSpank_task_post_fork((void *) sp, argc, argv);
+    int ret = shifterSpank_task_post_fork((void *) sp, argc, argv);
+    return ret == SUCCESS ? ESPANK_SUCCESS : ESPANK_ERROR;
 }
 
 int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
@@ -111,18 +112,20 @@ int slurm_spank_job_prolog(spank_t sp, int argc, char **argv) {
             return ESPANK_ERROR;
     }
     ssconfig->id = (void *) sp;
-
-    return shifterSpank_job_prolog(ssconfig);
+    return shifterSpank_job_prolog(ssconfig) == SUCCESS ? ESPANK_SUCCESS : ESPANK_ERROR;
     
 }
 int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
-    if (ssconfig == NULL)
+    if (ssconfig == NULL) {
          ssconfig = shifterSpank_init((void *) sp, argc, argv, 1);
+    }
     if (ssconfig == NULL) return ESPANK_ERROR;
-    if (ssconfig->args_parsed == 0)
+    if (ssconfig->args_parsed == 0) {
         if (wrap_force_arg_parse(ssconfig) != SUCCESS)
             return ESPANK_ERROR;
-    return shifterSpank_job_epilog(ssconfig);
+    }
+    ssconfig->id = (void *) sp;
+    return shifterSpank_job_epilog(ssconfig) == SUCCESS ? ESPANK_SUCCESS : ESPANK_ERROR;
 }
 
 /******************************************************************************
@@ -210,7 +213,12 @@ int wrap_spank_get_gid(shifterSpank_config *ssconfig, gid_t *gid) {
 
 int wrap_spank_get_stepid(shifterSpank_config *ssconfig, uint32_t *stepid) {
     if (ssconfig == NULL || ssconfig->id == NULL) return ERROR;
-    if (spank_get_item((spank_t) ssconfig->id, S_JOB_STEPID, stepid)
+    return wrap_spank_get_stepid_noconfig(ssconfig->id, stepid);
+}
+
+int wrap_spank_get_stepid_noconfig(void *id, uint32_t *stepid) {
+    if (id == NULL) return ERROR;
+    if (spank_get_item((spank_t) id, S_JOB_STEPID, stepid)
              != ESPANK_SUCCESS) {
         return ERROR;
     }
@@ -263,7 +271,9 @@ void *_libslurm_dlopen() {
     if (ret != NULL) return ret;
 #endif
     snprintf(buffer, 1024, "libslurm.so");
-    ret = dlopen(buffer, RTLD_LAZY);
+    /* have to load all symbols globally or the static data structures in
+       libslurm do not get loaded properly */
+    ret = dlopen(buffer, RTLD_NOW | RTLD_GLOBAL);
     if (ret != NULL) return ret;
 
     return NULL;
@@ -278,12 +288,17 @@ int setup_libslurm() {
     return ERROR;
 }
 
+extern int slurm_stepd_connect(const char *dir, const char *node, uint32_t job, uint32_t step, uint16_t *protocol);
+extern int slurm_stepd_add_extern_pid(uint32_t, uint16_t, pid_t);
+extern hostlist_t slurm_hostlist_create_dims(const char *hostlist, int dims);
+extern char * slurm_hostlist_deranged_string_malloc(hostlist_t hl);
+
 int wrap_spank_stepd_connect(shifterSpank_config *ssconfig, char *dir,
     char *hostname, uint32_t jobid, uint32_t stepid, uint16_t *protocol)
 {
-    int (*stepd_connect)(char *, char *, uint32_t, uint32_t, uint16_t*);
+    int (*stepd_connect)(const char *, const char *, uint32_t, uint32_t, uint16_t*);
     if (setup_libslurm() != SUCCESS) return -1;
-    *(void**) (&stepd_connect) = dlsym(ssconfig->libslurm_handle, "slurm_stepd_connect");
+    stepd_connect = slurm_stepd_connect;
     return (*stepd_connect)(dir, hostname, jobid, stepid, protocol);
 }
 
@@ -292,7 +307,7 @@ int wrap_spank_stepd_add_extern_pid(shifterSpank_config *ssconfig,
 {
     int (*stepd_add_extern_pid)(uint32_t, uint16_t, pid_t);
     if (setup_libslurm() != SUCCESS) return ERROR;
-    *(void **) (&stepd_add_extern_pid) = dlsym(ssconfig->libslurm_handle, "slurm_stepd_add_extern_pid");
+    stepd_add_extern_pid = slurm_stepd_add_extern_pid;
     return (*stepd_add_extern_pid)(stepd_fd, protocol, pid);
 }
 
@@ -319,16 +334,17 @@ int wrap_spank_extra_job_attributes(
         slurm_error("FAILED to dlopen libslurm");
         return ERROR;
     }
-    *(void**) (&load_job) = dlsym(ssconfig->libslurm_handle, "slurm_load_job");
+    load_job = slurm_load_job;
     if ((error = dlerror()) != NULL) {
         slurm_error("FAILED to lookup slurm_load_job!");
         return ERROR;
     }
-    *(void**) (&free_job_info_msg) = dlsym(ssconfig->libslurm_handle, "slurm_free_job_info_msg");
-    *(void**) (&hostlist_create_dims) = dlsym(ssconfig->libslurm_handle, "slurm_hostlist_create_dims");
-    *(void**) (&hostlist_deranged_string_malloc) = dlsym(ssconfig->libslurm_handle, "slurm_hostlist_deranged_string_malloc");
-    *(void**) (&hostlist_uniq) = dlsym(ssconfig->libslurm_handle, "slurm_hostlist_uniq");
-    *(void**) (&hostlist_destroy) = dlsym(ssconfig->libslurm_handle, "slurm_hostlist_destroy");
+
+    free_job_info_msg = slurm_free_job_info_msg;
+    hostlist_create_dims = slurm_hostlist_create_dims;
+    hostlist_deranged_string_malloc = slurm_hostlist_deranged_string_malloc;
+    hostlist_uniq = slurm_hostlist_uniq;
+    hostlist_destroy = slurm_hostlist_destroy;
 
     if ((*load_job)(&job_buf, jobid, SHOW_ALL) != 0) {
         slurm_error("%s %u", "Couldn't load job data for jobid", jobid);

@@ -107,6 +107,9 @@ shifterSpank_config *shifterSpank_init(
             snprintf(buffer, PATH_MAX, "%s", ptr);
             ptr = shifter_trim(buffer);
             ssconfig->extern_setup = strdup(ptr);
+        } else if (strncasecmp("extern_cgroup=", argv[idx], 14) == 0) {
+            char *ptr = argv[idx] + 14;
+            ssconfig->extern_cgroup = atoi(ptr);
         } else if (strncasecmp("memory_cgroup=", argv[idx], 14) == 0) {
             char *ptr = argv[idx] + 14;
             snprintf(buffer, PATH_MAX, "%s", ptr);
@@ -423,39 +426,72 @@ int doExternStepTaskSetup(shifterSpank_config *ssconfig) {
     /* check and see if there is an existing configuration */
     memset(&statData, 0, sizeof(struct stat));
     snprintf(buffer, 1024, "%s/var/shifterConfig.json", ssconfig->udiConfig->udiMountPoint);
-    if (stat(buffer, &statData) == 0) {
-        int stepd_fd = 0;
-        int i = 0;
-        char *dir = NULL;
-        char *hostname = NULL;
-        uint32_t jobid = 0;
-        uint16_t protocol = 0;
-        if (wrap_spank_get_jobid(ssconfig, &jobid) == ERROR) {
-            _log(LOG_ERROR, "Couldn't get job id");
-            return ERROR;
-        }
+    if (stat(buffer, &statData) != 0) {
+        _log(LOG_ERROR, "Couldn't find shifterConfig.json, cannot do extern step processing.");
+        return ERROR;
+    }
 
-        /* move sshd into slurm proctrack */
-        int sshd_pid = findSshd();
-        if (sshd_pid > 0) {
-            stepd_fd = wrap_spank_stepd_connect(ssconfig, dir, hostname, jobid, SLURM_EXTERN_CONT, &protocol);
-            int ret = wrap_spank_stepd_add_extern_pid(ssconfig, stepd_fd, protocol, sshd_pid);
-            _log(LOG_INFO, "moved sshd (pid %d) into slurm controlled extern_step (ret: %d) via fd %d\n", sshd_pid, ret, stepd_fd);
+    int stepd_fd = 0;
+    int i = 0;
+    char *dir = NULL;
+    char *hostname = NULL;
+    uint32_t jobid = 0;
+    uid_t uid = 0;
+    uint16_t protocol = 0;
+    if (wrap_spank_get_jobid(ssconfig, &jobid) == ERROR) {
+        _log(LOG_ERROR, "Couldn't get job id");
+        return ERROR;
+    }
+    if (wrap_spank_get_uid(ssconfig, &uid) == ERROR) {
+        _log(LOG_ERROR, "Couldn't get uid");
+        return ERROR;
+    }
+
+    _log(LOG_INFO, "shifterSpank: about to do extern step setup: %d", ssconfig->extern_cgroup);
+   
+    if (ssconfig->extern_cgroup) {
+        char *memory_cgroup_path = NULL;
+        if (ssconfig->memory_cgroup) {
+             memory_cgroup_path = setup_memory_cgroup(ssconfig, jobid, uid, NULL, NULL);
         }
+        if (memory_cgroup_path) {
+            char buffer[PATH_MAX];
+            ssize_t bytes = 0;
+            char *tasks = alloc_strgenf("%s/tasks", memory_cgroup_path);
+            FILE *fp = fopen(tasks, "r");
+            stepd_fd = wrap_spank_stepd_connect(ssconfig, dir, hostname, jobid, SLURM_EXTERN_CONT, &protocol);
+            while (fgets(buffer, PATH_MAX, fp) != NULL) {
+                pid_t pid = atoi(buffer);
+                if (pid == 0) continue;
+                _log(LOG_INFO, "shifterSpank: moving pid %d to extern step via fd %d\n", pid, stepd_fd);
+                int ret = wrap_spank_stepd_add_extern_pid(ssconfig, stepd_fd, protocol, pid);
+            }
+            free(tasks);
+            fclose(fp);
+        } else {
+            /* move sshd into slurm proctrack */
+            int sshd_pid = findSshd();
+            if (sshd_pid > 0) {
+                stepd_fd = wrap_spank_stepd_connect(ssconfig, dir, hostname, jobid, SLURM_EXTERN_CONT, &protocol);
+                int ret = wrap_spank_stepd_add_extern_pid(ssconfig, stepd_fd, protocol, sshd_pid);
+                _log(LOG_INFO, "shifterSpank: moved sshd (pid %d) into slurm controlled extern_step (ret: %d) via fd %d\n", sshd_pid, ret, stepd_fd);
+            }
+        }
+    }
 
         /* see if an extern step is defined, if so, run it */
-        if (ssconfig->extern_setup != NULL) {
-            char *externScript[2];
-            externScript[0] = ssconfig->extern_setup;
-            externScript[1] = NULL;
-            int status = forkAndExecvLogToSlurm("extern_setup", externScript);
-            if (status == 0) rc = SUCCESS;
-            else rc = ERROR;
-        }
-        snprintf(buffer, PATH_MAX, "%s/var/shifterExtern.complete", ssconfig->udiConfig->udiMountPoint);
-        int fd = open(buffer, O_CREAT|O_WRONLY|O_TRUNC, 0644);
-        close(fd);
+    if (ssconfig->extern_setup != NULL) {
+        char *externScript[2];
+        externScript[0] = ssconfig->extern_setup;
+        externScript[1] = NULL;
+        int status = forkAndExecvLogToSlurm("extern_setup", externScript);
+        if (status == 0) rc = SUCCESS;
+        else rc = ERROR;
     }
+    _log(LOG_INFO, "shifterSpank: done with extern step setup");
+    snprintf(buffer, PATH_MAX, "%s/var/shifterExtern.complete", ssconfig->udiConfig->udiMountPoint);
+    int fd = open(buffer, O_CREAT|O_WRONLY|O_TRUNC, 0644);
+    close(fd);
     return rc;
 }
 
@@ -463,7 +499,7 @@ int shifterSpank_task_post_fork(void *id, int argc, char **argv) {
     uint32_t stepid = 0;
     int rc = SUCCESS;
 
-    if (wrap_spank_get_stepid(id, &stepid) == ERROR) {
+    if (wrap_spank_get_stepid_noconfig(id, &stepid) == ERROR) {
         _log(LOG_ERROR, "FAILED to get stepid");
     }
 
@@ -471,7 +507,9 @@ int shifterSpank_task_post_fork(void *id, int argc, char **argv) {
      * proper setup to finalize shifter setup */
     if (stepid == SLURM_EXTERN_CONT) {
         shifterSpank_config *ssconfig = shifterSpank_init(id, argc, argv, 1);
-        rc = doExternStepTaskSetup(ssconfig);
+        if (ssconfig->extern_cgroup || ssconfig->extern_setup) {
+            rc = doExternStepTaskSetup(ssconfig);
+        }
         shifterSpank_config_free(ssconfig);
         ssconfig = NULL;
     }
@@ -647,14 +685,17 @@ int create_cgroup_dir(shifterSpank_config *ssconfig, const char *path, void *dat
 int cgroup_record_components(shifterSpank_config *ssconfig, const char *path, void *data) {
     char ***comp_ptr = (char ***) data;
     char **ptr = *comp_ptr;
-    size_t sz = 1;
+    size_t sz = 0;
     size_t diff = 0;
     while (ptr && *ptr) ptr++;
     if (ptr != NULL) {
         diff = ptr - *comp_ptr;
         sz = diff;
     }
-    sz += 1;
+    sz += 2;
+#if 0
+    _log(LOG_DEBUG, "sz: %lu, diff: %lu, *comp_ptr=%lu, %s", sz, diff, *comp_ptr, path);
+#endif 
     *comp_ptr = (char **) realloc(*comp_ptr, sizeof(char*) * sz);
     ptr = *comp_ptr + diff;
     *ptr = strdup(path);
@@ -1080,7 +1121,7 @@ int shifterSpank_task_init_privileged(shifterSpank_config *ssconfig) {
      * proper setup to finalize shifter setup */
     if (stepid == SLURM_EXTERN_CONT) {
         return rc;
-    } else if (ssconfig->extern_setup != NULL) {
+    } else if (ssconfig->extern_setup != NULL || ssconfig->extern_cgroup) {
         /* need to ensure the extern step is setup */
         char buffer[PATH_MAX];
         struct stat statData;
