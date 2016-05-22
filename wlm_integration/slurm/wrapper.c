@@ -127,6 +127,18 @@ int slurm_spank_job_epilog(spank_t sp, int argc, char **argv) {
     ssconfig->id = (void *) sp;
     return shifterSpank_job_epilog(ssconfig) == SUCCESS ? ESPANK_SUCCESS : ESPANK_ERROR;
 }
+int slurm_spank_task_init_privileged(spank_t sp, int argc, char **argv) {
+    if (ssconfig == NULL) {
+         ssconfig = shifterSpank_init((void *) sp, argc, argv, 1);
+    }
+    if (ssconfig == NULL) return ESPANK_ERROR;
+    if (ssconfig->args_parsed == 0) {
+        if (wrap_force_arg_parse(ssconfig) != SUCCESS)
+            return ESPANK_ERROR;
+    }
+    ssconfig->id = (void *) sp;
+    return shifterSpank_task_init_privileged(ssconfig) == SUCCESS ? ESPANK_SUCCESS : ESPANK_ERROR;
+}
 
 /******************************************************************************
 * wrapper interfaces into shifterSpank

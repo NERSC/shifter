@@ -196,6 +196,8 @@ int shifterSpank_process_option_ccm(
     if (ssconfig == NULL) return ERROR;
 
     ssconfig->ccmMode = 1;
+    if (ssconfig->image == NULL) ssconfig->image = strdup("/");
+    if (ssconfig->imageType == NULL) ssconfig->imageType = strdup("local");
     return SUCCESS;
 }
 
@@ -520,8 +522,8 @@ int shifterSpank_task_post_fork(void *id, int argc, char **argv) {
 void shifterSpank_validate_input(shifterSpank_config *ssconfig, int allocator) {
     if (ssconfig == NULL) return;
     if (ssconfig->ccmMode == 1 &&
-        (strcmp(ssconfig->imageType, "local") != 0 ||
-         strcmp(ssconfig->image, "/") != 0)
+        ((ssconfig->imageType != NULL && strcmp(ssconfig->imageType, "local") != 0) ||
+         (ssconfig->image != NULL && strcmp(ssconfig->image, "/") != 0))
        )
     {
         if (allocator) {
