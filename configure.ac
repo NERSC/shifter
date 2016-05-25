@@ -104,6 +104,7 @@ AC_CONFIG_FILES([Makefile
                  dep/Makefile
                  extra/Makefile
                  wlm_integration/slurm/Makefile
+                 wlm_integration/slurm/test/Makefile
                  imagegw/Makefile
                  imagegw/shifter_imagegw/Makefile
                  imagegw/shifter_imagegw/api/Makefile
