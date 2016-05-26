@@ -21,7 +21,7 @@ testprep: test/config/redis.conf test/config/ssh.key test/config/munge.key
 
 starttest: testprep
 	docker build -t imagegwapi .
-	docker build -t shifter-test ../../
+	docker build -t shifter-test ..
 	docker-compose up -d
 
 
