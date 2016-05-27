@@ -7,3 +7,4 @@ if WITH_SLURM
 endif WITH_SLURM
 
 sysconf_DATA=udiRoot.conf.example
+EXTRA_DIST = AUTHORS LICENSE NEWS README.md autogen.sh config.h shifter.spec
