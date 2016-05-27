@@ -17,6 +17,11 @@
         "index.docker.io": {
             "remotetype": "dockerv2",
             "authentication": "http"
+        },
+        "urltest": {
+            "remotetype": "dockerv2",
+            "url": "https://index.docker.io/",
+            "authentication": "http"
         }
     },
 
