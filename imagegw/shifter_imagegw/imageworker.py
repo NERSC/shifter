@@ -120,8 +120,11 @@ def pull_image(request):
     else:
         raise KeyError('%s not found in configuration'%(location))
     if rtype=='dockerv2':
+        url='https://%s'%(location)
+        if 'url' in params:
+          url=params['url']
         try:
-            resp=dockerv2.pullImage(None, 'https://%s'%(location),
+            resp=dockerv2.pullImage(None, url,
                 repo, tag,
                 cachedir=cdir,expanddir=edir,
                 cacert=cacert)

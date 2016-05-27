@@ -74,6 +74,20 @@ class ImageWorkerTestCase(unittest.TestCase):
 
         return
 
+    def test_pull_image_url(self):
+        request={'system':self.system,'itype':self.itype,'tag':'testurl/ubuntu:latest'}
+        status=imageworker.pull_image(request)
+        print status
+        assert status is True
+        assert 'meta' in request
+        print request
+        meta=request['meta']
+        assert 'id' in meta
+        assert meta['entrypoint'][0]=="/bin/sh"
+        assert os.path.exists(request['expandedpath'])
+
+        return
+
     def test1_convert_image(self):
         request={'system':self.system,'itype':self.itype,'tag':self.tag}
         status=imageworker.pull_image(request)
