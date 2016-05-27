@@ -93,19 +93,22 @@ def pull_image(request):
     dir=os.getcwd()
     cdir=config['CacheDirectory']
     edir=config['ExpandDirectory']
-    parts=re.split('[:/]',request['tag'])
-    if len(parts)==3:
-        (location,repo,tag)=parts
-        if location.find('.')<0:
-            # This is a dockerhub repo with a username
-            repo='%s/%s'%(location,repo)
-            location=config['DefaultImageLocation']
-    elif len(parts)==2:
+    # See if there is a location specified
+    location=config['DefaultImageLocation']
+    tag=request['tag']
+    if tag.find('/')>0:
+      parts=tag.split('/')
+      if parts[0] in config['Locations']:
+        # This is a location
+        location=parts[0]
+        tag='/'.join(parts[1:])
+       
+    parts=tag.split(':')
+    if len(parts)==2:
         (repo,tag)=parts
-        location=config['DefaultImageLocation']
     else:
         raise OSError('Unable to parse tag %s'%request['tag'])
-    logging.debug("doing image pull for %s %s %s"%(location,repo,tag))
+    logging.debug("doing image pull for loc=%s repo=%s tag=%s"%(location,repo,tag))
     cacert=None
     if location in config['Locations']:
         params=config['Locations'][location]
