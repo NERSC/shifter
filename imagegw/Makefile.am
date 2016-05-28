@@ -1,10 +1,10 @@
 SUBDIRS = shifter_imagegw
 
-pkglibexec_SCRIPTS = imagecli.py \
-                     imagegwapi.py \
-                     tar.sh
+dist_pkglibexec_SCRIPTS = imagecli.py \
+                          imagegwapi.py \
+                          tar.sh
 
-sysconf_DATA  = imagemanager.json.example
+dist_sysconf_DATA  = imagemanager.json.example
 
 shifterdatadir=$(datadir)/$(PACKAGE_NAME)
-shifterdata_DATA = requirements.txt
+dist_shifterdata_DATA = requirements.txt
