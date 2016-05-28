@@ -15,45 +15,64 @@ bin_PROGRAMS = shifter shifterimg
 
 SHIFTER_SOURCES = \
     shifter.c \
+    UdiRootConfig.h \
     UdiRootConfig.c \
+    utility.h \
     utility.c \
-    config.h \
+    shifter_core.h \
     shifter_core.c \
+    ImageData.h \
     ImageData.c \
+    VolumeMap.h \
     VolumeMap.c \
+    MountList.h \
     MountList.c
 
 SETUPROOT_SOURCES = \
     setupRoot.c \
+    UdiRootConfig.h \
     UdiRootConfig.c \
+    utility.h \
     utility.c \
-    config.h \
+    shifter_core.h \
     shifter_core.c \
+    ImageData.h \
     ImageData.c \
+    VolumeMap.h \
     VolumeMap.c \
+    MountList.h \
     MountList.c
 
 UNSETUPROOT_SOURCES = \
     unsetupRoot.c \
+    UdiRootConfig.h \
     UdiRootConfig.c \
+    utility.h \
     utility.c \
-    config.h \
+    shifter_core.h \
     shifter_core.c \
+    ImageData.h \
     ImageData.c \
+    VolumeMap.h \
     VolumeMap.c \
+    MountList.h \
     MountList.c
 
 SHIFTERIMG_SOURCES = \
     shifterimg.c \
+    ImageData.h \
     ImageData.c \
+    utility.h \
     utility.c \
+    UdiRootConfig.h \
     UdiRootConfig.c \
+    VolumeMap.h \
 	VolumeMap.c
 
 
 shifter_SOURCES = $(SHIFTER_SOURCES)
 setupRoot_SOURCES = $(SETUPROOT_SOURCES)
-setupRoot_CPPFLAGS = $(SSH_CPPFLAGS)
+setupRoot_CPPFLAGS = $(AM_CPPFLAGS) $(SSH_CPPFLAGS)
 unsetupRoot_SOURCES = $(UNSETUPROOT_SOURCES)
 shifterimg_SOURCES = $(SHIFTERIMG_SOURCES)
 shifterimg_LDFLAGS = $(MUNGE_LDFLAGS) $(JSON_LDFLAGS) $(LIBCURL) $(MUNGE_LDFLAGS)

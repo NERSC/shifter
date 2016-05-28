@@ -7,6 +7,7 @@ AC_CONFIG_SRCDIR([src/shifter_core.h])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_AUX_DIR([auxdir])
 AM_INIT_AUTOMAKE
+AC_PROG_LIBTOOL
 
 # Checks for programs.
 AC_PROG_CXX
@@ -49,22 +50,20 @@ AS_IF([test "x$enable_cray" == "xyes"], [
         ROOTFS_TYPE=ramfs
         USE_GETPWUID=0
 ])
-AC_SUBST(ROOTFS_TYPE)
-AC_SUBST(USE_GETPWUID)
+AC_SUBST([ROOTFS_TYPE])
+AC_SUBST([USE_GETPWUID])
 
-AC_ARG_ENABLE([staticsshd], AS_HELP_STRING([--disable-staticsshd], [Turn off support for starting a staticly-linked sshd to within the container]))
+AC_ARG_ENABLE([staticsshd], AS_HELP_STRING([--disable-staticsshd], [Turn off support for starting a staticly-linked sshd within the container]))
 AM_CONDITIONAL([BUILD_STATICSSHD], [test "x$enable_staticsshd" != "xno"])
 AM_CONDITIONAL([ALLOW_STATICSSHD], [test "x$enable_staticsshd" != "xno"])
-
-AS_VAR_SET(shifter_etc_files, $sysconfdir/shifter_etc_files)
-AC_SUBST(shifter_etc_files)
 
 AC_DEFINE_DIR(SHIFTER_PREFIX, prefix, [fully expanded prefix])
 AC_DEFINE_DIR(SHIFTER_LIBEXECDIR, libexecdir, [fully expanded libexecdir])
 AC_DEFINE_DIR(SHIFTER_SYSCONFDIR, sysconfdir, [fully expanded sysconfdir])
 AC_DEFINE_DIR(SHIFTER_ETC_FILESDIR, shifter_etc_files, [fully expanded shifter_etc_files])
 
-AC_PROG_LIBTOOL
+AS_VAR_SET([shifter_etc_files], [$sysconfdir/shifter_etc_files])
+AC_SUBST([shifter_etc_files])
 
 ## get path for slurm
 #AC_ARG_WITH([slurm], AS_HELP_STRING([--with-slurm], [Path to slurm]))
