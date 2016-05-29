@@ -2755,6 +2755,31 @@ static char **_shifter_findenv(char ***env, char *var, size_t n, size_t *nElemen
     return NULL;
 }
 
+static int _shifter_unsetenv(char ***env, char *var) {
+    size_t namelen = 0;
+    size_t envsize = 0;
+    char **pptr = NULL;
+    if (env == NULL || *env == NULL || var == NULL) {
+        return 1;
+    }
+
+    namelen = strlen(var);
+
+    /* find the needed environment variable */
+    pptr = _shifter_findenv(env, var, namelen, &envsize);
+
+    /* if it is found, remove the entry by shifting the array */
+    /* this relies on the env array being NULL terminated */
+    /* TODO decide if the original *pptr should be freed */
+    if (pptr != NULL) {
+        char **nptr = NULL;
+        for (nptr = pptr + 1; pptr && *pptr; nptr++, pptr++) {
+            *pptr = *nptr;
+        }
+    }
+    return 0;
+}
+
 static int _shifter_putenv(char ***env, char *var, int mode) {
     size_t namelen = 0;
     size_t envsize = 0;
@@ -2828,6 +2853,10 @@ int shifter_prependenv(char ***env, char *var) {
     return _shifter_putenv(env, var, 1);
 }
 
+int shifter_unsetenv(char ***env, char *var) {
+    return _shifter_unsetenv(env, var);
+}
+
 int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
     char **envPtr = NULL;
     if (env == NULL || *env == NULL || image == NULL || udiConfig == NULL) {
@@ -2844,6 +2873,9 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
     }
     for (envPtr = udiConfig->siteEnvPrepend; envPtr && *envPtr; envPtr++) {
         shifter_prependenv(env, *envPtr);
+    }
+    for (envPtr = udiConfig->siteEnvUnset; envPtr && *envPtr; envPtr++) {
+        shifter_unsetenv(env, *envPtr);
     }
     return 0;
 }
