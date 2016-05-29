@@ -430,21 +430,28 @@ class dockerv2Handle():
         devnull = open(os.devnull, 'w')
         tarfile=os.path.join(cachedir,'%s.tar'%(layer['fsLayer']['blobSum']))
 
-        # check for symlinks in tar and see if they used to be directories
-        # if so, the directory needs to be deleted ahead of time, so the
-        # symlink can replace it
-        cmd = ['tar', 'tvf', tarfile, '--exclude=dev/*', '--force-local']
+        # check for whiteouts in tar and remove the path from the current
+        # expansion
+        cmd = ['tar', 'tf', tarfile, '--exclude=dev/*', '--force-local']
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
         stdout,stderr = proc.communicate()
+        whiteouts = []
         for line in stdout.split('\n'):
-            if not line.startswith('l'):
-                continue
-            filename = line.split()[5]
-            tgtpath = os.path.join(basePath, filename)
-            if os.path.exists(tgtpath):
-                st = os.lstat(tgtpath)
-                if stat.S_ISDIR(st.st_mode):
-                    shutil.rmtree(tgtpath)
+            fullpath = line.strip()
+            (dirpath,endpt) = os.path.split(fullpath)
+            if endpt.startswith('.wh.'):
+                whiteouts.append(fullpath)
+                delpath = os.path.join(dirpath, endpt[4:])
+                print "found whiteout: %s, will delete %s" % (fullpath, delpath)
+                if dirpath == delpath:
+                    continue
+                delpath = os.path.join(basePath, delpath)
+                if os.path.exists(delpath):
+                    st = os.lstat(delpath)
+                    if stat.S_ISDIR(st.st_mode):
+                        shutil.rmtree(delpath)
+                    else:
+                        os.unlink(delpath)
 
         # extract the layer
         command=['tar',
@@ -453,6 +460,7 @@ class dockerv2Handle():
                 '-C',
                 basePath,
                 '--exclude=dev/*',
+                '--exclude=.wh.*',
                 '--force-local']
         ret = subprocess.call(command, stdout=devnull, stderr=devnull)
         devnull.close()
@@ -461,7 +469,7 @@ class dockerv2Handle():
         # ignore errors since some things like mknod are expected to fail
 
         # adjust permissions of the extracted files
-        command=['tar','tf', tarfile, '--force-local']
+        command=['tar','tf', tarfile, '--force-local', '--exclude=dev/*', '--exclude=.wh.*']
         proc = subprocess.Popen(command, stdout=subprocess.PIPE)
         stdout,stderr = proc.communicate()
         for line in stdout.split('\n'):
