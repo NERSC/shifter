@@ -154,13 +154,14 @@ def pull(system,type,tag):
 @app.route('/api/expire/<system>/<type>/<tag>/<id>/', methods=["GET"])
 def expire(system,type,tag,id):
     auth=request.headers.get(AUTH_HEADER)
+    i={'system':system,'itype':type,'tag':tag}
     app.logger.debug("expire system=%s type=%s tag=%s"%(system,type,tag))
     try:
         session=mgr.new_session(auth,system)
-        resp=mgr.expire(session,system,type,tag,id)
+        resp=mgr.expire(session,i)
     except:
         app.logger.exception('Exception in expire')
         return not_found()
-    return jsonify(resp)
+    return jsonify({'status':resp})
 
 

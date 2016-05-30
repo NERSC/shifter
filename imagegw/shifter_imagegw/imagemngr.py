@@ -3,7 +3,7 @@
 from pymongo import MongoClient
 import pymongo
 import json
-from imageworker import dopull,initqueue
+from imageworker import dopull,initqueue,doexpire
 import bson
 import celery
 import sys, os
@@ -57,6 +57,7 @@ class imagemngr:
           raise NameError('Platforms not defined')
       self.systems=[]
       self.tasks=[]
+      self.expire_requests=dict()
       self.task_image_id=dict()
       # This is not intended to provide security, but just
       # provide a basic check that a session object is correct
@@ -92,6 +93,19 @@ class imagemngr:
           return False
       return True
 
+  def isadmin(self,session,system=None):
+      """
+      Check if this is an admin user.
+      Returns true if is an admin or false if not.
+      """
+      if 'admins' not in self.config['Platforms'][system]:
+          return False
+      admins=dict()
+      for ad in self.config['Platforms'][system]['admins'].split():
+          if session['uid']==ad:
+              return True
+      return False
+
   def isasystem(self,system):
       """Check if system is a valid platform."""
       if system in self.systems:
@@ -104,7 +118,7 @@ class imagemngr:
       return True
 
   def resetexpire(self,id):
-      """Reset the expire time.  (Not Implemented)."""
+      """Reset the expire time.  (Not fully implemented)."""
       # Change expire time for image
       (days,hours,minutes,secs)=self.config['ImageExpirationTimeout'].split(':')
       expire=time()+int(secs)+60*(int(minutes)+60*(int(hours)+24*int(days)))
@@ -407,6 +421,7 @@ class imagemngr:
       #logger.debug("Update_states called")
       i=0
       tasks=self.tasks
+
       for req in tasks:
           state='PENDING'
 
@@ -414,16 +429,23 @@ class imagemngr:
               state=req.state
           elif isinstance(req,bson.objectid.ObjectId):
               print "Non-Async"
+          if req in self.expire_requests and state=='SUCCESS':
+              self.expire_requests.pop(req)
+              state='EXPIRED'
+          elif req in self.expire_requests and state=='FAILURE':
+              self.logger.warn("Expire request failed for %s"%(req))
+              self.expire_requests.pop(req)
+              continue
+          elif state=="FAILURE":
+              self.logger.warn("Pull failed for %s"%(req))
           self.update_mongo_state(self.task_image_id[req],state)
           if state=="READY" or state=="SUCCESS":
-              self.logger.debug("Completing request %d"%i)
+              self.logger.debug("Completing pull request %d"%i)
               response=req.get()
               self.complete_pull(self.task_image_id[req],response)
               self.logger.debug('meta=%s'%(str(response)))
               # Now save the response
               self.tasks.remove(req)
-          if state=="FAILURE":
-              self.logger.warn("Pull failed for %s"%(req))
           i+=1
       # Look for failed pulls
       for rec in self.images_find({'status':'FAILURE'}):
@@ -433,11 +455,26 @@ class imagemngr:
               self.images_remove({'_id':rec['_id']})
 
 
-  def expire(self,session,system,type,tag,id):
+  def expire(self,session,image,TESTMODE=0):
       """Expire an image.  (Not Implemented)"""
-      # Do lookup
-      resp=dict()
-      return resp
+      if not self.isadmin(session,image['system']):
+          return False
+      q={'system':image['system'],
+        'itype':image['itype'],
+        'tag':{'$in':[image['tag']]}}
+      rec=self.images.find_one(q)
+      if rec is None:
+          return None
+      id=rec.pop('_id')
+      self.logger.debug("Calling do expire with queue=%s id=%s TM=%d"%(image['system'],id,TESTMODE))
+      req=doexpire.apply_async([rec],queue=image['system'],
+                kwargs={'TESTMODE':TESTMODE})
+      self.logger.info("expire request queued s=%s t=%s"%(image['system'],image['tag']))
+      self.task_image_id[req]=id
+      self.expire_requests[req]=id
+      self.tasks.append(req)
+
+      return True
 
   ## decorator function to re-attempt any mongo operation that may have failed
   ## owing to AutoReconnect (e.g., mongod coming back, etc).  This may increase
