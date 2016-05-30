@@ -66,12 +66,44 @@ class ImageWorkerTestCase(unittest.TestCase):
         print status
         assert status is True
         assert 'meta' in request
-        print request
         meta=request['meta']
         assert 'id' in meta
         assert meta['entrypoint'][0]=="/bin/sh"
         assert os.path.exists(request['expandedpath'])
 
+        return
+
+    # Pull the image but explicitly specify dockerhub
+    def test_pull_image_dockerhub(self):
+        request={'system':self.system,'itype':self.itype,'tag':'index.docker.io/ubuntu:latest'}
+        status=self.imageworker.pull_image(request)
+        assert status is True
+        assert 'meta' in request
+        meta=request['meta']
+        assert 'id' in meta
+        assert os.path.exists(request['expandedpath'])
+        return
+
+    # Use the URL format of the location, like an alias
+    def test_pull_image_url(self):
+        request={'system':self.system,'itype':self.itype,'tag':'urltest/ubuntu:latest'}
+        status=self.imageworker.pull_image(request)
+        assert status is True
+        assert 'meta' in request
+        meta=request['meta']
+        assert 'id' in meta
+        assert os.path.exists(request['expandedpath'])
+        return
+
+    # Use the URL format of the location and pull a nested image (e.g. with an org)
+    def test_pull_image_url_org(self):
+        request={'system':self.system,'itype':self.itype,'tag':'urltest/%s'%(self.tag)}
+        status=self.imageworker.pull_image(request)
+        assert status is True
+        assert 'meta' in request
+        meta=request['meta']
+        assert 'id' in meta
+        assert os.path.exists(request['expandedpath'])
         return
 
     def test1_convert_image(self):

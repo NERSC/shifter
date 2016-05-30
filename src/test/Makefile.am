@@ -1,11 +1,12 @@
 AUTOMAKE_OPTIONS=foreign
 
 AM_CPPFLAGS = -DCONFIG_FILE=\"test_udiRoot.conf\" -DLIBEXECDIR=\"${libexecdir}/shifter\"
-CPPUTEST_CFLAGS = -I../../dep/cpputest/include
-CPPUTEST_LDFLAGS = ../../dep/cpputest/lib/libCppUTest.a
-TEST_CFLAGS = -fprofile-arcs -ftest-coverage -O0 -ggdb -I.. $(AM_CPPFLAGS) $(CPPUTEST_CFLAGS) -DNO_ROOT_OWN_CHECK=1 -DROOTFS_TYPE="\"$(ROOTFS_TYPE)\""
+CPPUTEST_CFLAGS = -I$(top_builddir)/dep/cpputest/include
+CPPUTEST_LDFLAGS = $(top_builddir)/dep/cpputest/lib/libCppUTest.a
+TEST_CFLAGS = -fprofile-arcs -ftest-coverage -O0 -ggdb -I$(top_srcdir)/src $(AM_CPPFLAGS) $(CPPUTEST_CFLAGS) -DNO_ROOT_OWN_CHECK=1 -DROOTFS_TYPE="\"$(ROOTFS_TYPE)\""
 TEST_LDFLAGS = $(CPPUTEST_LDFLAGS)
 
+EXTRA_DIST      = test_udiRoot.conf.in
 noinst_DATA     = test_udiRoot.conf
 check_PROGRAMS = test_utility test_VolumeMap test_UdiRootConfig test_MountList test_shifter_core test_shifter_core_AsRoot test_shifter_core_AsRootDangerous test_ImageData test_shifter
 TESTS = test_utility test_VolumeMap test_UdiRootConfig test_MountList test_shifter_core test_ImageData test_shifter
@@ -17,57 +18,57 @@ test_udiRoot.conf: test_udiRoot.conf.in
 
 test_utility_SOURCES = \
     test_utility.cpp \
-    ../utility.c
+    $(top_srcdir)/src/utility.c
 test_utility_CXXFLAGS = $(TEST_CFLAGS)
 test_utility_CFLAGS = $(TEST_CFLAGS)
 test_utility_LDFLAGS = $(TEST_LDFLAGS)
 
 test_VolumeMap_SOURCES = \
     test_VolumeMap.cpp \
-    ../VolumeMap.c \
-    ../utility.c
+    $(top_srcdir)/src/VolumeMap.c \
+    $(top_srcdir)/src/utility.c
 test_VolumeMap_CXXFLAGS = $(TEST_CFLAGS)
 test_VolumeMap_CFLAGS = $(TEST_CFLAGS)
 test_VolumeMap_LDFLAGS = $(TEST_LDFLAGS)
 
 test_UdiRootConfig_SOURCES = \
     test_UdiRootConfig.cpp \
-    ../UdiRootConfig.c \
-    ../utility.c \
-	../VolumeMap.c
+    $(top_srcdir)/src/UdiRootConfig.c \
+    $(top_srcdir)/src/utility.c \
+	$(top_srcdir)/src/VolumeMap.c
 test_UdiRootConfig_CXXFLAGS = $(TEST_CFLAGS)
 test_UdiRootConfig_CFLAGS = $(TEST_CFLAGS)
 test_UdiRootConfig_LDFLAGS = $(TEST_LDFLAGS)
 
 test_shifter_SOURCES = \
     test_shifter.cpp \
-    ../shifter.c \
-    ../shifter_core.c \
-    ../UdiRootConfig.c \
-    ../utility.c \
-    ../ImageData.c \
-    ../VolumeMap.c \
-    ../MountList.c
+    $(top_srcdir)/src/shifter.c \
+    $(top_srcdir)/src/shifter_core.c \
+    $(top_srcdir)/src/UdiRootConfig.c \
+    $(top_srcdir)/src/utility.c \
+    $(top_srcdir)/src/ImageData.c \
+    $(top_srcdir)/src/VolumeMap.c \
+    $(top_srcdir)/src/MountList.c
 test_shifter_CXXFLAGS = $(TEST_CFLAGS) -D_TESTHARNESS_SHIFTER
 test_shifter_CFLAGS = $(TEST_CFLAGS) -D_TESTHARNESS_SHIFTER
 test_shifter_LDFLAGS = $(TEST_LDFLAGS)
 
 test_ImageData_SOURCES = \
     test_ImageData.cpp \
-    ../ImageData.c \
-    ../utility.c
+    $(top_srcdir)/src/ImageData.c \
+    $(top_srcdir)/src/utility.c
 test_ImageData_CXXFLAGS = $(TEST_CFLAGS)
 test_ImageData_CFLAGS = $(TEST_CFLAGS)
 test_ImageData_LDFLAGS = $(TEST_LDFLAGS)
 
 test_shifter_core_SOURCES = \
     test_shifter_core.cpp \
-    ../shifter_core.c \
-    ../utility.c \
-    ../UdiRootConfig.c \
-    ../VolumeMap.c \
-    ../MountList.c \
-    ../ImageData.c
+    $(top_srcdir)/src/shifter_core.c \
+    $(top_srcdir)/src/utility.c \
+    $(top_srcdir)/src/UdiRootConfig.c \
+    $(top_srcdir)/src/VolumeMap.c \
+    $(top_srcdir)/src/MountList.c \
+    $(top_srcdir)/src/ImageData.c
 test_shifter_core_CXXFLAGS = $(TEST_CFLAGS) -DNOTROOT
 test_shifter_core_CFLAGS = $(TEST_CFLAGS)
 test_shifter_core_LDFLAGS = $(TEST_LDFLAGS)
@@ -84,8 +85,8 @@ test_shifter_core_AsRootDangerous_LDFLAGS = $(TEST_LDFLAGS)
 
 test_MountList_SOURCES = \
     test_MountList.cpp \
-    ../MountList.c \
-    ../utility.c
+    $(top_srcdir)/src/MountList.c \
+    $(top_srcdir)/src/utility.c
 test_MountList_CXXFLAGS = $(TEST_CFLAGS)
 test_MountList_CFLAGS = $(TEST_CFLAGS)
 test_MountList_LDFLAGS = $(TEST_LDFLAGS)

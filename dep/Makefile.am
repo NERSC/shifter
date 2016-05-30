@@ -7,17 +7,18 @@ OPT =
 endif
 
 pkglibexec_SCRIPTS = mount
+dist_noinst_SCRIPTS = build_mount.sh build_ssh.sh cpputest.sh
 check_DATA = cpputest/include/CppUTest/CppUTestConfig.h
 noinst_DATA = $(OPT)
 
 mount:
-	+./build_mount.sh > build_mount.log
+	+$(srcdir)/build_mount.sh > build_mount.log
 
 cpputest/include/CppUTest/CppUTestConfig.h:
-	+./cpputest.sh > build_cpputest.log
+	+$(srcdir)/cpputest.sh > build_cpputest.log
 
 udiRoot_dep.tar:
-	+./build_ssh.sh > build_ssh.log
+	+$(srcdir)/build_ssh.sh > build_ssh.log
 
 .PHONY: clean-local-check
 
@@ -27,9 +28,9 @@ install-data-hook:
 
 clean-local: clean-local-check
 clean-local-check:
-	-rm -rf build
-	-rm -rf build_mount
-	-rm -rf cpputest
+	-rm -rf build build_ssh.log
+	-rm -rf build_mount build_mount.log
+	-rm -rf cpputest build_cpputest.log
 	-rm udiRoot_dep.tar
 	-rm mount
 
