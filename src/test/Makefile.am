@@ -2,7 +2,7 @@ AUTOMAKE_OPTIONS=foreign
 
 AM_CPPFLAGS = -DCONFIG_FILE=\"test_udiRoot.conf\" -DLIBEXECDIR=\"${libexecdir}/shifter\"
 CPPUTEST_CFLAGS = -I$(top_builddir)/dep/cpputest/include
-CPPUTEST_LDFLAGS = $(top_builddir)/dep/cpputest/lib/libCppUTest.a
+CPPUTEST_LDFLAGS = -L$(top_builddir)/dep/cpputest/lib -lCppUTest
 TEST_CFLAGS = -fprofile-arcs -ftest-coverage -O0 -ggdb -I$(top_srcdir)/src $(AM_CPPFLAGS) $(CPPUTEST_CFLAGS) -DNO_ROOT_OWN_CHECK=1 -DROOTFS_TYPE="\"$(ROOTFS_TYPE)\""
 TEST_LDFLAGS = $(CPPUTEST_LDFLAGS)
 

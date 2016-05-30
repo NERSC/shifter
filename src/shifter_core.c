@@ -2738,6 +2738,7 @@ _validateUnmounted_error:
 
 static char **_shifter_findenv(char ***env, char *var, size_t n, size_t *nElement) {
     char **ptr = NULL;
+    char **ret = NULL;
     if (env == NULL || *env == NULL || var == NULL || n == 0) {
         return NULL;
     }
@@ -2746,13 +2747,13 @@ static char **_shifter_findenv(char ***env, char *var, size_t n, size_t *nElemen
     }
     for (ptr = *env; ptr && *ptr; ptr++) {
         if (strncmp(*ptr, var, n) == 0) {
-            return ptr;
+            ret = ptr;
         }
         if (nElement != NULL) {
             (*nElement)++;
         }
     }
-    return NULL;
+    return ret;
 }
 
 static int _shifter_unsetenv(char ***env, char *var) {
@@ -2798,19 +2799,19 @@ static int _shifter_putenv(char ***env, char *var, int mode) {
         char *value = strchr(*pptr, '=');
         if (value != NULL) {
             value++;
-        }
-        if (*value == 0) {
-            value = NULL;
+            if (*value == 0) {
+                value = NULL;
+            }
         }
         if (mode == 0) {
             /* replace */
-            *pptr = var;
+            *pptr = strdup(var);
             return 0;
         } else if (mode == 1) {
             /* prepend */
             char *newptr = NULL;
             if (value == NULL) {
-                *pptr = var;
+                *pptr = strdup(var);
                 return 0;
             }
 
@@ -2822,7 +2823,7 @@ static int _shifter_putenv(char ***env, char *var, int mode) {
             char *newptr = NULL;
 
             if (value == NULL) {
-                *pptr = var;
+                *pptr = strdup(var);
                 return 0;
             }
             newptr = alloc_strgenf("%s:%s", *pptr, (var + namelen + 1));
@@ -2836,9 +2837,31 @@ static int _shifter_putenv(char ***env, char *var, int mode) {
     if (tmp != NULL) {
         *env = tmp;
     }
-    tmp[envsize] = var;
+    tmp[envsize] = strdup(var);
     tmp[envsize+1] = NULL;
     return 0;
+}
+
+extern char **environ;
+char **shifter_copyenv(void) {
+    char **outenv = NULL;
+    char **ptr = NULL;
+    char **wptr = NULL;
+
+    if (environ == NULL) {
+        return NULL;
+    }
+
+    for (ptr = environ; *ptr != NULL; ++ptr) {
+    }
+    outenv = (char **) malloc(sizeof(char*) * ((ptr - environ) + 1));
+    ptr = environ;
+    wptr = outenv;
+    for ( ; *ptr != NULL; ptr++) {
+        *wptr++ = strdup(*ptr);
+    }
+    *wptr = NULL;
+    return outenv;
 }
 
 int shifter_putenv(char ***env, char *var) {

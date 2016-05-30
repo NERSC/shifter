@@ -619,6 +619,191 @@ IGNORE_TEST(ShifterCoreTestGroup, mountDangerousImage) {
 
 }
 
+TEST(ShifterCoreTestGroup, copyenv_test) {
+    char **copied_env = NULL;
+    char **eptr = NULL;
+    char **cptr = NULL;
+    setenv("ABCD", "DCBA", 1);
+
+    copied_env = shifter_copyenv();
+    CHECK(copied_env != NULL);
+
+    /* environment variables should be identical and in
+       same order, but in different memory segments */
+    for (eptr = environ, cptr = copied_env;
+         eptr && *eptr && cptr && *cptr;
+         eptr++, cptr++)
+    {
+        CHECK(strcmp(*eptr, *cptr) == 0);
+        CHECK(*eptr != *cptr);
+    } 
+    CHECK(*eptr == NULL && *cptr == NULL);
+
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        free(*cptr);
+    }
+    free(copied_env);
+}
+
+TEST(ShifterCoreTestGroup, setenv_test) {
+    char **copied_env = NULL;
+    char **cptr = NULL;
+    char *tmpvar = strdup("FAKE_ENV_VAR_FOR_TEST=3");
+    int ret = 0;
+    int found = 0;
+    size_t cnt = 0;
+    size_t newcnt = 0;
+
+    unsetenv("FAKE_ENV_VAR_FOR_TEST");
+    copied_env = shifter_copyenv();
+    CHECK(copied_env != NULL);
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        cnt++;
+    }
+
+    ret = shifter_putenv(&copied_env, tmpvar);
+    CHECK(ret == 0);
+    
+    /* make sure we cannot compare against original string */
+    tmpvar[0] = 0;
+    free(tmpvar);
+
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        if (strcmp(*cptr, "FAKE_ENV_VAR_FOR_TEST=3") == 0) {
+            found = 1;
+        }
+        newcnt++;
+    }
+    CHECK(found == 1);
+    CHECK(newcnt == cnt + 1);
+
+
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        free(*cptr);
+    }
+    free(copied_env);
+}
+
+TEST(ShifterCoreTestGroup, appendenv_test) {
+    char **copied_env = NULL;
+    char **cptr = NULL;
+    char *tmpvar = strdup("FAKE_ENV_VAR_FOR_TEST=3");
+    int ret = 0;
+    int found = 0;
+    size_t cnt = 0;
+    size_t newcnt = 0;
+
+    setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
+    copied_env = shifter_copyenv();
+    CHECK(copied_env != NULL);
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        cnt++;
+    }
+
+    ret = shifter_appendenv(&copied_env, tmpvar);
+    CHECK(ret == 0);
+    
+    /* make sure we cannot compare against original string */
+    tmpvar[0] = 0;
+    free(tmpvar);
+
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        if (strcmp(*cptr, "FAKE_ENV_VAR_FOR_TEST=4:5:3") == 0) {
+            found = 1;
+        }
+        newcnt++;
+    }
+    CHECK(found == 1);
+    CHECK(cnt == newcnt);
+
+
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        free(*cptr);
+    }
+    free(copied_env);
+    unsetenv("FAKE_ENV_VAR_FOR_TEST");
+}
+
+TEST(ShifterCoreTestGroup, prependenv_test) {
+    char **copied_env = NULL;
+    char **cptr = NULL;
+    char *tmpvar = strdup("FAKE_ENV_VAR_FOR_TEST=3");
+    int ret = 0;
+    int found = 0;
+    size_t cnt = 0;
+    size_t newcnt = 0;
+
+    setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
+    copied_env = shifter_copyenv();
+    CHECK(copied_env != NULL);
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        cnt++;
+    }
+
+    ret = shifter_prependenv(&copied_env, tmpvar);
+    CHECK(ret == 0);
+    
+    /* make sure we cannot compare against original string */
+    tmpvar[0] = 0;
+    free(tmpvar);
+
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        if (strcmp(*cptr, "FAKE_ENV_VAR_FOR_TEST=3:4:5") == 0) {
+            found = 1;
+        }
+        newcnt++;
+    }
+    CHECK(found == 1);
+    CHECK(cnt == newcnt);
+
+
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        free(*cptr);
+    }
+    free(copied_env);
+    unsetenv("FAKE_ENV_VAR_FOR_TEST");
+}
+
+TEST(ShifterCoreTestGroup, unsetenv_test) {
+    char **copied_env = NULL;
+    char **cptr = NULL;
+    char *tmpvar = strdup("FAKE_ENV_VAR_FOR_TEST");
+    int ret = 0;
+    int found = 0;
+    size_t cnt = 0;
+    size_t newcnt = 0;
+
+    setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
+    copied_env = shifter_copyenv();
+    CHECK(copied_env != NULL);
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        cnt++;
+    }
+
+    ret = shifter_unsetenv(&copied_env, tmpvar);
+    CHECK(ret == 0);
+    
+    /* make sure we cannot compare against original string */
+    tmpvar[0] = 0;
+    free(tmpvar);
+
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        if (strncmp(*cptr, "FAKE_ENV_VAR_FOR_TEST=", 22) == 0) {
+            found = 1;
+        }
+        newcnt++;
+    }
+    CHECK(found == 0);
+    CHECK(newcnt + 1 == cnt);
+
+
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        free(*cptr);
+    }
+    free(copied_env);
+    unsetenv("FAKE_ENV_VAR_FOR_TEST");
+}
+
 #if ISROOT
 TEST(ShifterCoreTestGroup, destructUDI_test) {
 #else
