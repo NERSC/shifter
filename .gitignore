@@ -34,6 +34,7 @@ auxdir/ltoptions.m4
 auxdir/ltsugar.m4
 auxdir/ltversion.m4
 auxdir/lt~obsolete.m4
+auxdir/py-compile
 aclocal.m4
 config.h
 config.h.in
@@ -52,3 +53,6 @@ test_shifter_core_AsRootDangerous
 test_utility
 *.gcno
 *.gcda
+imagegw/shifter_imagegw/__init__.py
+udiRoot.conf.example
+shifter*.tar.*z*
