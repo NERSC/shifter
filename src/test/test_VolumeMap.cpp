@@ -226,6 +226,7 @@ TEST(VolumeMapTestGroup, VolumeMapParse_basic) {
     size_t nbytes = fprint_VolumeMap(tempfp, &volMap);
     CHECK(nbytes == 167);
     fclose(tempfp);
+    unlink(tempfname);
 
     free_VolumeMap(&volMap, 0);
 }
