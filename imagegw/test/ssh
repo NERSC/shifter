@@ -1,0 +1,32 @@
+#!/bin/bash
+# Mock ssh
+# if the target host is localhost, then just exec the command
+#
+
+function getCmd {
+    host=
+    while [[ -n $1 ]]; do
+        if [[ "$1" == *@* ]]; then
+    	     host=$(echo $1 | sed 's|.*@||')
+             shift
+             break
+        fi
+        shift
+    done
+    if [[ "$host" != "localhost" ]]; then
+        return 1
+    fi
+    while [[ -n $1 ]]; do
+        echo -n "$1 "
+        shift
+    done
+    return 0
+}
+
+localCmd=$(getCmd "$@")
+retStatus=$?
+if [[ -z "$localCmd" ]]; then
+    exec /usr/bin/ssh "$@"
+else
+    exec $localCmd
+fi

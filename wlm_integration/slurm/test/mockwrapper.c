@@ -76,6 +76,10 @@ int wrap_spank_get_stepid(shifterSpank_config *ssconfig, uint32_t *stepid) {
     return SUCCESS;
 }
 
+int wrap_spank_get_stepid_noconfig(void *sp, uint32_t *stepid) {
+    return SUCCESS;
+}
+
 int wrap_spank_get_supplementary_gids(
     shifterSpank_config *ssconfig,
     gid_t **gids,

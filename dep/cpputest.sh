@@ -22,6 +22,3 @@ make
 make install
 cd ..
 rm -rf cpputest_src
-if [[ -e lib64 ]]; then
-    ln -s lib64 lib
-fi
