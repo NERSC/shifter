@@ -663,6 +663,8 @@ TEST(ShifterCoreTestGroup, setenv_test) {
     char **copied_env = NULL;
     char **cptr = NULL;
     char *tmpvar = strdup("FAKE_ENV_VAR_FOR_TEST=3");
+    const char *pathenv = getenv("PATH");
+    int pathok = 0;
     int ret = 0;
     int found = 0;
     size_t cnt = 0;
@@ -686,10 +688,17 @@ TEST(ShifterCoreTestGroup, setenv_test) {
         if (strcmp(*cptr, "FAKE_ENV_VAR_FOR_TEST=3") == 0) {
             found = 1;
         }
+        if (strncmp(*cptr, "PATH=", 5) == 0) {
+            char *ptr = *cptr + 5;
+            if (strcmp(ptr, pathenv) == 0) {
+                pathok = 1;
+            }
+        }
         newcnt++;
     }
     CHECK(found == 1);
     CHECK(newcnt == cnt + 1);
+    CHECK(pathok == 1);
 
 
     for (cptr = copied_env; cptr && *cptr; cptr++) {
@@ -702,6 +711,8 @@ TEST(ShifterCoreTestGroup, appendenv_test) {
     char **copied_env = NULL;
     char **cptr = NULL;
     char *tmpvar = strdup("FAKE_ENV_VAR_FOR_TEST=3");
+    const char *pathenv = getenv("PATH");
+    int pathok = 0;
     int ret = 0;
     int found = 0;
     size_t cnt = 0;
@@ -725,10 +736,17 @@ TEST(ShifterCoreTestGroup, appendenv_test) {
         if (strcmp(*cptr, "FAKE_ENV_VAR_FOR_TEST=4:5:3") == 0) {
             found = 1;
         }
+        if (strncmp(*cptr, "PATH=", 5) == 0) {
+            char *ptr = *cptr + 5;
+            if (strcmp(ptr, pathenv) == 0) {
+                pathok = 1;
+            }
+        }
         newcnt++;
     }
     CHECK(found == 1);
     CHECK(cnt == newcnt);
+    CHECK(pathok == 1);
 
 
     for (cptr = copied_env; cptr && *cptr; cptr++) {
@@ -742,6 +760,8 @@ TEST(ShifterCoreTestGroup, prependenv_test) {
     char **copied_env = NULL;
     char **cptr = NULL;
     char *tmpvar = strdup("FAKE_ENV_VAR_FOR_TEST=3");
+    const char *pathenv = getenv("PATH");
+    int pathok = 0;
     int ret = 0;
     int found = 0;
     size_t cnt = 0;
@@ -765,10 +785,17 @@ TEST(ShifterCoreTestGroup, prependenv_test) {
         if (strcmp(*cptr, "FAKE_ENV_VAR_FOR_TEST=3:4:5") == 0) {
             found = 1;
         }
+        if (strncmp(*cptr, "PATH=", 5) == 0) {
+            char *ptr = *cptr + 5;
+            if (strcmp(ptr, pathenv) == 0) {
+                pathok = 1;
+            }
+        }
         newcnt++;
     }
     CHECK(found == 1);
     CHECK(cnt == newcnt);
+    CHECK(pathok == 1);
 
 
     for (cptr = copied_env; cptr && *cptr; cptr++) {
@@ -782,6 +809,8 @@ TEST(ShifterCoreTestGroup, unsetenv_test) {
     char **copied_env = NULL;
     char **cptr = NULL;
     char *tmpvar = strdup("FAKE_ENV_VAR_FOR_TEST");
+    const char *pathenv = getenv("PATH");
+    int pathok = 0;
     int ret = 0;
     int found = 0;
     size_t cnt = 0;
@@ -805,10 +834,17 @@ TEST(ShifterCoreTestGroup, unsetenv_test) {
         if (strncmp(*cptr, "FAKE_ENV_VAR_FOR_TEST=", 22) == 0) {
             found = 1;
         }
+        if (strncmp(*cptr, "PATH=", 5) == 0) {
+            char *ptr = *cptr + 5;
+            if (strcmp(ptr, pathenv) == 0) {
+                pathok = 1;
+            }
+        }
         newcnt++;
     }
     CHECK(found == 0);
     CHECK(newcnt + 1 == cnt);
+    CHECK(pathok == 1);
 
 
     for (cptr = copied_env; cptr && *cptr; cptr++) {
