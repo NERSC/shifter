@@ -58,6 +58,11 @@ int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const cha
     *config = (UdiRootConfig *) malloc(sizeof(UdiRootConfig));
     *image = (ImageData *) malloc(sizeof(ImageData));
 
+    const char *basePath = getenv("srcdir");
+    if (basePath == NULL) {
+        basePath = cwd;
+    }
+
     memset(*config, 0, sizeof(UdiRootConfig));
     memset(*image, 0, sizeof(ImageData));
 
@@ -65,7 +70,7 @@ int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const cha
     (*image)->identifier = strdup("/");
     (*config)->udiMountPoint = strdup(tmpDir);
     (*config)->rootfsType = strdup(ROOTFS_TYPE);
-    (*config)->etcPath = alloc_strgenf("%s/%s", getenv("srcdir"), "etc");
+    (*config)->etcPath = alloc_strgenf("%s/%s", basePath, "etc");
     (*config)->cpPath = strdup("/bin/cp");
     (*config)->mvPath = strdup("/bin/mv");
     (*config)->ddPath = strdup("/bin/dd");
@@ -265,8 +270,12 @@ TEST(ShifterCoreTestGroup, ParseGroupFile) {
     size_t grmembuf_sz = 0;
     struct group grbuf;
     int cnt = 0;
+    const char *basePath = getenv("srcdir");
+    if (basePath == NULL) {
+        basePath = ".";
+    }
 
-    smallGroupPath = alloc_strgenf("%s/etc_small/group", getenv("srcdir"));
+    smallGroupPath = alloc_strgenf("%s/etc_small/group", basePath);
     smallGroup = fopen(smallGroupPath, "r");
     memset(&grbuf, 0, sizeof(struct group));
 
@@ -305,9 +314,13 @@ TEST(ShifterCoreTestGroup, TestGetGroupList) {
     UdiRootConfig config;
     gid_t *groups = NULL;
     size_t ngroups = 0;
+    const char *basePath = getenv("srcdir");
+    if (basePath == NULL) {
+        basePath = ".";
+    }
 
     memset(&config, 0, sizeof(UdiRootConfig));
-    config.etcPath = alloc_strgenf("%s/etc_small", getenv("srcdir"));
+    config.etcPath = alloc_strgenf("%s/etc_small", basePath);
 
     CHECK(shifter_getgrouplist("user1", 100, &groups, &ngroups, &config) == 0);
     CHECK(ngroups == 3);
