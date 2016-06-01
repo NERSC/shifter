@@ -123,6 +123,10 @@ rm -f $RPM_BUILD_ROOT/%{_libexecdir}/shifter/shifter_slurm_dws_support
 %endif
 
 
+%check
+%{__make} check
+
+
 %post runtime
 getent passwd > %{_sysconfdir}/shifter_etc_files/passwd
 getent group > %{_sysconfdir}/shifter_etc_files/group
