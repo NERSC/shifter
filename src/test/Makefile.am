@@ -6,13 +6,13 @@ CPPUTEST_LDFLAGS = $(top_builddir)/dep/cpputest/lib/libCppUTest.a
 TEST_CFLAGS = -fprofile-arcs -ftest-coverage -O0 -ggdb -I$(top_srcdir)/src $(AM_CPPFLAGS) $(CPPUTEST_CFLAGS) -DNO_ROOT_OWN_CHECK=1 -DROOTFS_TYPE="\"$(ROOTFS_TYPE)\""
 TEST_LDFLAGS = $(CPPUTEST_LDFLAGS)
 
-EXTRA_DIST      = test_udiRoot.conf.in
-noinst_DATA     = test_udiRoot.conf
+dist_noinst_DATA = test_udiRoot.conf.in etc etc_small data_config1.conf data_config2.conf data_config3.conf data_config4.conf
+noinst_DATA = test_udiRoot.conf
 check_PROGRAMS = test_utility test_VolumeMap test_UdiRootConfig test_MountList test_shifter_core test_shifter_core_AsRoot test_shifter_core_AsRootDangerous test_ImageData test_shifter
 TESTS = test_utility test_VolumeMap test_UdiRootConfig test_MountList test_shifter_core test_ImageData test_shifter
 
 test_udiRoot.conf: test_udiRoot.conf.in
-	cat test_udiRoot.conf.in | sed "s|@@@PREFIX@@@|./|g" | sed "s|@@@CONFIG_DIR@@@|./|g" | sed "s|@@@ROOTFSTYPE@@@|$(ROOTFS_TYPE)|g"  > test_udiRoot.conf
+	cat $(srcdir)/test_udiRoot.conf.in | sed "s|@@@PREFIX@@@|./|g" | sed "s|@@@CONFIG_DIR@@@|./|g" | sed "s|@@@ROOTFSTYPE@@@|$(ROOTFS_TYPE)|g"  > test_udiRoot.conf
 	chmod 644 test_udiRoot.conf
 
 

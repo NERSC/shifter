@@ -29,6 +29,7 @@
 #include <iostream>
 
 #include <grp.h>
+#include <stdlib.h>
 
 #include "ImageData.h"
 #include "UdiRootConfig.h"
@@ -64,7 +65,7 @@ int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const cha
     (*image)->identifier = strdup("/");
     (*config)->udiMountPoint = strdup(tmpDir);
     (*config)->rootfsType = strdup(ROOTFS_TYPE);
-    (*config)->etcPath = alloc_strgenf("%s/%s", cwd, "etc");
+    (*config)->etcPath = alloc_strgenf("%s/%s", getenv("srcdir"), "etc");
     (*config)->cpPath = strdup("/bin/cp");
     (*config)->mvPath = strdup("/bin/mv");
     (*config)->ddPath = strdup("/bin/dd");
@@ -255,8 +256,8 @@ TEST(ShifterCoreTestGroup, CheckSupportedFilesystems) {
 }
 
 TEST(ShifterCoreTestGroup, ParseGroupFile) {
-    const char *smallGroupPath = "./etc_small/group";
-    FILE *smallGroup = fopen(smallGroupPath, "r");
+    char *smallGroupPath;
+    FILE *smallGroup;
 
     char *linebuf = NULL;
     size_t linebuf_sz = 0;
@@ -265,6 +266,8 @@ TEST(ShifterCoreTestGroup, ParseGroupFile) {
     struct group grbuf;
     int cnt = 0;
 
+    smallGroupPath = alloc_strgenf("%s/etc_small/group", getenv("srcdir"));
+    smallGroup = fopen(smallGroupPath, "r");
     memset(&grbuf, 0, sizeof(struct group));
 
 
@@ -292,6 +295,7 @@ TEST(ShifterCoreTestGroup, ParseGroupFile) {
     }
     CHECK(cnt == 4);
     fclose(smallGroup);
+    free(smallGroupPath);
     free(linebuf);
     free(grmembuf);
     smallGroup = NULL;
@@ -303,7 +307,7 @@ TEST(ShifterCoreTestGroup, TestGetGroupList) {
     size_t ngroups = 0;
 
     memset(&config, 0, sizeof(UdiRootConfig));
-    config.etcPath = strdup("./etc_small");
+    config.etcPath = alloc_strgenf("%s/etc_small", getenv("srcdir"));
 
     CHECK(shifter_getgrouplist("user1", 100, &groups, &ngroups, &config) == 0);
     CHECK(ngroups == 3);
@@ -316,10 +320,7 @@ TEST(ShifterCoreTestGroup, TestGetGroupList) {
     CHECK(ngroups == 2);
 
     free(groups);
-
-
     free_UdiRootConfig(&config, 0);
-
 }
 
 #ifdef NOTROOT

@@ -38,6 +38,7 @@
 ## form.
 */
 
+#include <stdlib.h>
 #include "UdiRootConfig.h"
 #include "utility.h"
 #include <CppUTest/CommandLineTestRunner.h>
@@ -68,6 +69,7 @@ TEST(UdiRootConfigTestGroup, ParseUdiRootConfig_display) {
     CHECK(nwrite > 0);
     fclose(output);
     free_UdiRootConfig(&config, 0);
+    unlink("ParseUdiRootConfig_display.out");
 }
 
 int main(int argc, char** argv) {
