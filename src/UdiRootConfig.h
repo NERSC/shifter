@@ -98,6 +98,8 @@ typedef struct _UdiRootConfig {
     char **siteEnvAppend;
     char **siteEnvPrepend;
     int allowLocalChroot;
+    int allowLibcPwdCalls;
+    int populateEtcDynamically;
     int autoLoadKernelModule;
     int mountUdiRootWritable;
     size_t maxGroupCount;

@@ -258,6 +258,10 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->etcPath != NULL ? config->etcPath : ""));
     written += fprintf(fp, "allowLocalChroot = %d\n",
             config->allowLocalChroot);
+    written += fprintf(fp, "allowLibcPwdCalls = %d\n",
+            config->allowLibcPwdCalls);
+    written += fprintf(fp, "populateEtcDynamically = %d\n",
+            config->populateEtcDynamically);
     written += fprintf(fp, "autoLoadKernelModule = %d\n",
         config->autoLoadKernelModule);
     written += fprintf(fp, "mountPropagationStyle = %s\n",
@@ -449,6 +453,10 @@ static int _assign(const char *key, const char *value, void *t_config) {
         if (config->etcPath == NULL) return 1;
     } else if (strcmp(key, "allowLocalChroot") == 0) {
         config->allowLocalChroot = atoi(value) != 0;
+    } else if (strcmp(key, "allowLibcPwdCalls") == 0) {
+        config->allowLibcPwdCalls = atoi(value) != 0;
+    } else if (strcmp(key, "populateEtcDynamically") == 0) {
+        config->populateEtcDynamically = atoi(value) != 0;
     } else if (strcmp(key, "autoLoadKernelModule") == 0) {
         config->autoLoadKernelModule = atoi(value);
     } else if (strcmp(key, "mountPropagationStyle") == 0) {
