@@ -854,6 +854,64 @@ TEST(ShifterCoreTestGroup, unsetenv_test) {
     unsetenv("FAKE_ENV_VAR_FOR_TEST");
 }
 
+TEST(ShifterCoreTestGroup, setupenv_test) {
+    UdiRootConfig *config = (UdiRootConfig *) malloc(sizeof(UdiRootConfig));
+    ImageData *image = (ImageData *) malloc(sizeof(ImageData));
+    char **ptr = NULL;
+    char **local_env = NULL;
+
+    memset(config, 0, sizeof(UdiRootConfig));
+    memset(image, 0, sizeof(ImageData));
+   
+    /* initialize empty environment */
+    local_env = (char **) malloc(sizeof(char *) * 2);
+    local_env[0] = strdup("PATH=/incorrect");
+    local_env[1] = NULL;
+
+    /* copy arrays into config */
+    config->siteEnv = (char **) malloc(sizeof(char *) * 3);
+    config->siteEnv[0] = strdup("SHIFTER_RUNTIME=1");
+    config->siteEnv[1] = strdup("NEW_VAR=abcd");
+    config->siteEnv[2] = NULL;
+
+    config->siteEnvAppend = (char **) malloc(sizeof(char *) * 2);
+    config->siteEnvAppend[0] = strdup("PATH=/opt/udiImage/bin");
+    config->siteEnvAppend[1] = NULL;
+
+    config->siteEnvPrepend = (char **) malloc(sizeof(char *) * 2);
+    config->siteEnvPrepend[0] = strdup("PATH=/sbin");
+    config->siteEnvPrepend[1] = NULL;
+
+    config->siteEnvUnset = (char **) malloc(sizeof(char *) * 2);
+    config->siteEnvUnset[0] = strdup("NEW_VAR");
+    config->siteEnvUnset[1] = NULL;
+
+    /* setup image environment */
+    image->env = (char **) malloc(sizeof(char *) * 2);
+    image->env[0] = strdup("PATH=/usr/bin");
+    image->env[1] = NULL;
+
+    /* test target */
+    int ret = shifter_setupenv(&local_env, image, config);
+
+    CHECK(ret == 0);
+
+    int found = 0;
+    for (ptr = local_env ; ptr && *ptr; ptr++) {
+        if (strcmp(*ptr, "PATH=/sbin:/usr/bin:/opt/udiImage/bin") == 0) {
+            found++;
+        }
+        if (strcmp(*ptr, "SHIFTER_RUNTIME=1") == 0) {
+            found++;
+        }
+    }
+    CHECK(found == 2);
+    CHECK(ptr - local_env == 2);
+
+    free_ImageData(image, 1);
+    free_UdiRootConfig(config, 1);
+}
+
 #if ISROOT
 TEST(ShifterCoreTestGroup, destructUDI_test) {
 #else
