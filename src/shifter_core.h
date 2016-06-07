@@ -83,9 +83,18 @@ int unmountTree(MountList *mounts, const char *base);
 int validateUnmounted(const char *path, int subtree);
 int isSharedMount(const char *);
 int writeHostFile(const char *minNodeSpec, UdiRootConfig *udiConfig);
+
+/** shifter_copyenv
+  * copy current process environ into a newly allocated array with newly
+  * allocated strings
+  *
+  * @return copy of the environment, caller is responsible to deal with memory
+  */
+char **shifter_copyenv(void);
 int shifter_putenv(char ***env, char *var);
 int shifter_appendenv(char ***env, char *var);
 int shifter_prependenv(char ***env, char *var);
+int shifter_unsetenv(char ***env, char *var);
 int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig);
 struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config);
 struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config);

@@ -633,6 +633,285 @@ IGNORE_TEST(ShifterCoreTestGroup, mountDangerousImage) {
 
 }
 
+TEST(ShifterCoreTestGroup, copyenv_test) {
+    char **copied_env = NULL;
+    char **eptr = NULL;
+    char **cptr = NULL;
+    setenv("ABCD", "DCBA", 1);
+
+    copied_env = shifter_copyenv();
+    CHECK(copied_env != NULL);
+
+    /* environment variables should be identical and in
+       same order, but in different memory segments */
+    for (eptr = environ, cptr = copied_env;
+         eptr && *eptr && cptr && *cptr;
+         eptr++, cptr++)
+    {
+        CHECK(strcmp(*eptr, *cptr) == 0);
+        CHECK(*eptr != *cptr);
+    } 
+    CHECK(*eptr == NULL && *cptr == NULL);
+
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        free(*cptr);
+    }
+    free(copied_env);
+}
+
+TEST(ShifterCoreTestGroup, setenv_test) {
+    char **copied_env = NULL;
+    char **cptr = NULL;
+    char *tmpvar = strdup("FAKE_ENV_VAR_FOR_TEST=3");
+    const char *pathenv = getenv("PATH");
+    int pathok = 0;
+    int ret = 0;
+    int found = 0;
+    size_t cnt = 0;
+    size_t newcnt = 0;
+
+    unsetenv("FAKE_ENV_VAR_FOR_TEST");
+    copied_env = shifter_copyenv();
+    CHECK(copied_env != NULL);
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        cnt++;
+    }
+
+    ret = shifter_putenv(&copied_env, tmpvar);
+    CHECK(ret == 0);
+    
+    /* make sure we cannot compare against original string */
+    tmpvar[0] = 0;
+    free(tmpvar);
+
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        if (strcmp(*cptr, "FAKE_ENV_VAR_FOR_TEST=3") == 0) {
+            found = 1;
+        }
+        if (strncmp(*cptr, "PATH=", 5) == 0) {
+            char *ptr = *cptr + 5;
+            if (strcmp(ptr, pathenv) == 0) {
+                pathok = 1;
+            }
+        }
+        newcnt++;
+    }
+    CHECK(found == 1);
+    CHECK(newcnt == cnt + 1);
+    CHECK(pathok == 1);
+
+
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        free(*cptr);
+    }
+    free(copied_env);
+}
+
+TEST(ShifterCoreTestGroup, appendenv_test) {
+    char **copied_env = NULL;
+    char **cptr = NULL;
+    char *tmpvar = strdup("FAKE_ENV_VAR_FOR_TEST=3");
+    const char *pathenv = getenv("PATH");
+    int pathok = 0;
+    int ret = 0;
+    int found = 0;
+    size_t cnt = 0;
+    size_t newcnt = 0;
+
+    setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
+    copied_env = shifter_copyenv();
+    CHECK(copied_env != NULL);
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        cnt++;
+    }
+
+    ret = shifter_appendenv(&copied_env, tmpvar);
+    CHECK(ret == 0);
+    
+    /* make sure we cannot compare against original string */
+    tmpvar[0] = 0;
+    free(tmpvar);
+
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        if (strcmp(*cptr, "FAKE_ENV_VAR_FOR_TEST=4:5:3") == 0) {
+            found = 1;
+        }
+        if (strncmp(*cptr, "PATH=", 5) == 0) {
+            char *ptr = *cptr + 5;
+            if (strcmp(ptr, pathenv) == 0) {
+                pathok = 1;
+            }
+        }
+        newcnt++;
+    }
+    CHECK(found == 1);
+    CHECK(cnt == newcnt);
+    CHECK(pathok == 1);
+
+
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        free(*cptr);
+    }
+    free(copied_env);
+    unsetenv("FAKE_ENV_VAR_FOR_TEST");
+}
+
+TEST(ShifterCoreTestGroup, prependenv_test) {
+    char **copied_env = NULL;
+    char **cptr = NULL;
+    char *tmpvar = strdup("FAKE_ENV_VAR_FOR_TEST=3");
+    const char *pathenv = getenv("PATH");
+    int pathok = 0;
+    int ret = 0;
+    int found = 0;
+    size_t cnt = 0;
+    size_t newcnt = 0;
+
+    setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
+    copied_env = shifter_copyenv();
+    CHECK(copied_env != NULL);
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        cnt++;
+    }
+
+    ret = shifter_prependenv(&copied_env, tmpvar);
+    CHECK(ret == 0);
+    
+    /* make sure we cannot compare against original string */
+    tmpvar[0] = 0;
+    free(tmpvar);
+
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        if (strcmp(*cptr, "FAKE_ENV_VAR_FOR_TEST=3:4:5") == 0) {
+            found = 1;
+        }
+        if (strncmp(*cptr, "PATH=", 5) == 0) {
+            char *ptr = *cptr + 5;
+            if (strcmp(ptr, pathenv) == 0) {
+                pathok = 1;
+            }
+        }
+        newcnt++;
+    }
+    CHECK(found == 1);
+    CHECK(cnt == newcnt);
+    CHECK(pathok == 1);
+
+
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        free(*cptr);
+    }
+    free(copied_env);
+    unsetenv("FAKE_ENV_VAR_FOR_TEST");
+}
+
+TEST(ShifterCoreTestGroup, unsetenv_test) {
+    char **copied_env = NULL;
+    char **cptr = NULL;
+    char *tmpvar = strdup("FAKE_ENV_VAR_FOR_TEST");
+    const char *pathenv = getenv("PATH");
+    int pathok = 0;
+    int ret = 0;
+    int found = 0;
+    size_t cnt = 0;
+    size_t newcnt = 0;
+
+    setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
+    copied_env = shifter_copyenv();
+    CHECK(copied_env != NULL);
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        cnt++;
+    }
+
+    ret = shifter_unsetenv(&copied_env, tmpvar);
+    CHECK(ret == 0);
+    
+    /* make sure we cannot compare against original string */
+    tmpvar[0] = 0;
+    free(tmpvar);
+
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        if (strncmp(*cptr, "FAKE_ENV_VAR_FOR_TEST=", 22) == 0) {
+            found = 1;
+        }
+        if (strncmp(*cptr, "PATH=", 5) == 0) {
+            char *ptr = *cptr + 5;
+            if (strcmp(ptr, pathenv) == 0) {
+                pathok = 1;
+            }
+        }
+        newcnt++;
+    }
+    CHECK(found == 0);
+    CHECK(newcnt + 1 == cnt);
+    CHECK(pathok == 1);
+
+
+    for (cptr = copied_env; cptr && *cptr; cptr++) {
+        free(*cptr);
+    }
+    free(copied_env);
+    unsetenv("FAKE_ENV_VAR_FOR_TEST");
+}
+
+TEST(ShifterCoreTestGroup, setupenv_test) {
+    UdiRootConfig *config = (UdiRootConfig *) malloc(sizeof(UdiRootConfig));
+    ImageData *image = (ImageData *) malloc(sizeof(ImageData));
+    char **ptr = NULL;
+    char **local_env = NULL;
+
+    memset(config, 0, sizeof(UdiRootConfig));
+    memset(image, 0, sizeof(ImageData));
+   
+    /* initialize empty environment */
+    local_env = (char **) malloc(sizeof(char *) * 2);
+    local_env[0] = strdup("PATH=/incorrect");
+    local_env[1] = NULL;
+
+    /* copy arrays into config */
+    config->siteEnv = (char **) malloc(sizeof(char *) * 3);
+    config->siteEnv[0] = strdup("SHIFTER_RUNTIME=1");
+    config->siteEnv[1] = strdup("NEW_VAR=abcd");
+    config->siteEnv[2] = NULL;
+
+    config->siteEnvAppend = (char **) malloc(sizeof(char *) * 2);
+    config->siteEnvAppend[0] = strdup("PATH=/opt/udiImage/bin");
+    config->siteEnvAppend[1] = NULL;
+
+    config->siteEnvPrepend = (char **) malloc(sizeof(char *) * 2);
+    config->siteEnvPrepend[0] = strdup("PATH=/sbin");
+    config->siteEnvPrepend[1] = NULL;
+
+    config->siteEnvUnset = (char **) malloc(sizeof(char *) * 2);
+    config->siteEnvUnset[0] = strdup("NEW_VAR");
+    config->siteEnvUnset[1] = NULL;
+
+    /* setup image environment */
+    image->env = (char **) malloc(sizeof(char *) * 2);
+    image->env[0] = strdup("PATH=/usr/bin");
+    image->env[1] = NULL;
+
+    /* test target */
+    int ret = shifter_setupenv(&local_env, image, config);
+
+    CHECK(ret == 0);
+
+    int found = 0;
+    for (ptr = local_env ; ptr && *ptr; ptr++) {
+        if (strcmp(*ptr, "PATH=/sbin:/usr/bin:/opt/udiImage/bin") == 0) {
+            found++;
+        }
+        if (strcmp(*ptr, "SHIFTER_RUNTIME=1") == 0) {
+            found++;
+        }
+    }
+    CHECK(found == 2);
+    CHECK(ptr - local_env == 2);
+
+    free_ImageData(image, 1);
+    free_UdiRootConfig(config, 1);
+}
+
 #if ISROOT
 TEST(ShifterCoreTestGroup, destructUDI_test) {
 #else
