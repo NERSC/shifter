@@ -1231,10 +1231,6 @@ int shifterSpank_task_init_privileged(shifterSpank_config *ssconfig) {
         if (setgroups(n_existing_suppl_gids, existing_suppl_gids) != 0) {
             TASKINITPRIV_ERROR("FAILED to drop supplementary gids", ERROR);
         }
-
-        if (shifter_setupenv(&environ, &imageData, ssconfig->udiConfig) != 0) {
-            TASKINITPRIV_ERROR("FAILED to setup shifter environment", ERROR);
-        }
     }
 _taskInitPriv_exit_unclean:
     free_ImageData(&imageData, 0);

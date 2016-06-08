@@ -49,8 +49,6 @@
 #include "utility.h"
 #include "VolumeMap.h"
 
-extern char **environ;
-
 #define VOLUME_ALLOC_BLOCK 10
 
 #ifndef VERSION
@@ -78,12 +76,10 @@ struct options {
 
 
 static void _usage(int);
-char **copyenv(void);
 int parse_options(int argc, char **argv, struct options *opts, UdiRootConfig *);
 int parse_environment(struct options *opts, UdiRootConfig *);
 int fprint_options(FILE *, struct options *);
 void free_options(struct options *, int freeStruct);
-/*int local_putenv(char ***environ, const char *newVar);*/
 int isImageLoaded(ImageData *, struct options *, UdiRootConfig *);
 int loadImage(ImageData *, struct options *, UdiRootConfig *);
 
@@ -91,7 +87,7 @@ int loadImage(ImageData *, struct options *, UdiRootConfig *);
 int main(int argc, char **argv) {
 
     /* save a copy of the environment for the exec */
-    char **environ_copy = copyenv();
+    char **environ_copy = shifter_copyenv();
 
     /* declare needed variables */
     char wd[PATH_MAX];
@@ -595,27 +591,6 @@ static void _usage(int status) {
 "\n"
         );
     exit(status);
-}
-
-char **copyenv(void) {
-    char **outenv = NULL;
-    char **ptr = NULL;
-    char **wptr = NULL;
-
-    if (environ == NULL) {
-        return NULL;
-    }
-
-    for (ptr = environ; *ptr != NULL; ++ptr) {
-    }
-    outenv = (char **) malloc(sizeof(char*) * ((ptr - environ) + 1));
-    ptr = environ;
-    wptr = outenv;
-    for ( ; *ptr != NULL; ptr++) {
-        *wptr++ = strdup(*ptr);
-    }
-    *wptr = NULL;
-    return outenv;
 }
 
 void free_options(struct options *opts, int freeStruct) {

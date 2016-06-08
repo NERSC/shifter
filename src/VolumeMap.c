@@ -612,6 +612,20 @@ int _validateVolumeMap(
 
     if (from == NULL || to == NULL) return 1;
 
+    /* prevent bind mounts using relative paths */
+    if (strstr(from, "..") != NULL) {
+        return 1;
+    }
+    if (strstr(to, "..") != NULL) {
+        return 1;
+    }
+    if (from[0] != '/') {
+        return 1;
+    }
+    if (to[0] != '/') {
+        return 1;
+    }
+
     /* verify that the specified flags are acceptable */
     size_t alreadySeenFlags = 0;
     if (flags != NULL) {

@@ -226,6 +226,7 @@ TEST(VolumeMapTestGroup, VolumeMapParse_basic) {
     size_t nbytes = fprint_VolumeMap(tempfp, &volMap);
     CHECK(nbytes == 167);
     fclose(tempfp);
+    unlink(tempfname);
 
     free_VolumeMap(&volMap, 0);
 }
@@ -269,7 +270,7 @@ TEST(VolumeMapTestGroup, ValidateVolumeMap_basic) {
     ret = validateVolumeMap_userRequest("/test1Loc", "etc", NULL);
     CHECK(ret != 0);
 
-    ret = validateVolumeMap_userRequest("/testLoc", "mnt", NULL);
+    ret = validateVolumeMap_userRequest("/testLoc", "/mnt", NULL);
     CHECK(ret == 0);
 
     ret = validateVolumeMap_userRequest("/test1Loc", "/opt/myStuff", NULL);

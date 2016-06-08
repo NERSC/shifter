@@ -1,4 +1,4 @@
-/* Shifter, Copyright (c) 2015, The Regents of the University of California,
+/* Shifter, Copyright (c) 2016, The Regents of the University of California,
 ## through Lawrence Berkeley National Laboratory (subject to receipt of any
 ## required approvals from the U.S. Dept. of Energy).  All rights reserved.
 ## 
@@ -201,6 +201,7 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         config->siteEnv,
         config->siteEnvAppend,
         config->siteEnvPrepend,
+        config->siteEnvUnset,
         NULL
     };
     char ***arrayPtr = NULL;
@@ -536,6 +537,18 @@ static int _assign(const char *key, const char *value, void *t_config) {
             char **siteEnvPrependPtr = config->siteEnvPrepend + config->siteEnvPrepend_size;
             strncpy_StringArray(ptr, strlen(ptr), &siteEnvPrependPtr, &(config->siteEnvPrepend), &(config->siteEnvPrepend_capacity), SITEFS_ALLOC_BLOCK);
             config->siteEnvPrepend_size++;
+            search = NULL;
+        }
+        free(valueDup);
+    } else if (strcmp(key, "siteEnvUnset") == 0) {
+        char *valueDup = strdup(value);
+        char *search = valueDup;
+        char *svPtr = NULL;
+        char *ptr = NULL;
+        while ((ptr = strtok_r(search, " ", &svPtr)) != NULL) {
+            char **siteEnvUnsetPtr = config->siteEnvUnset + config->siteEnvUnset_size;
+            strncpy_StringArray(ptr, strlen(ptr), &siteEnvUnsetPtr, &(config->siteEnvUnset), &(config->siteEnvUnset_capacity), SITEFS_ALLOC_BLOCK);
+            config->siteEnvUnset_size++;
             search = NULL;
         }
         free(valueDup);
