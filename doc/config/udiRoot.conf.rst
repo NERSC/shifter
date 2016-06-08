@@ -201,10 +201,8 @@ siteEnv
 Space seperated list of environment variables to automatically set (or
 add, or replace) when a shifter container is setup.
 
-Example:
-```
-siteEnv=SHIFTER_RUNTIME=1
-```
+Example::
+    siteEnv=SHIFTER_RUNTIME=1
 
 This can be useful if network home directories are mounted into the 
 container and you users want a way to prevent their localized dotfiles
@@ -216,10 +214,8 @@ Space seperated list of environment variables to automatically append (or
 add) when a shifter container is setup.  This only makes sense for colon
 seperated environment variables, .e.g, PATH.
 
-Example:
-```
-siteEnvAppend=PATH=/opt/udiImage/bin
-```
+Example::
+    siteEnvAppend=PATH=/opt/udiImage/bin
 
 This can be used if your site patches in a path that you want to appear in
 the path.  Recommend that all binaries are compatible with all containers,
@@ -230,14 +226,21 @@ Space seperated list of environment variables to automatically prepend (or
 add) when a shifter container is setup.  This only makes sense for colon
 seperated environment variables, e.g., PATH.
 
-Example:
-```
-siteEnvPrepend=PATH=/opt/udiImage/bin
-```
+Example::
+    siteEnvPrepend=PATH=/opt/udiImage/bin
 
 This can be used if your site patches in a path that you want to appear in
 the path.  Recommend that all binaries are compatible with all containers,
 i.e., are statically linked, to ensure they work.
+
+siteEnvUnset
+------------
+Space separated list of environment variables to be unset when a shifter
+container is setup.  This only makes sense for bare environmental variable
+names.
+
+Example::
+    siteEnvUnset=LOADEDMODULES _LMFILES_
 
 imageGateway
 ------------
