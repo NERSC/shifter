@@ -42,6 +42,7 @@
 #include "utility.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 
 TEST_GROUP(UtilityTestGroup) {
 };
@@ -108,42 +109,63 @@ static int _assignTestConfig(const char *key, const char *value, void *_testConf
 }
 
 TEST(UtilityTestGroup, ShifterParseConfig_Basic) {
-    const char *filename = "data_config1.conf";
+    char *filename = NULL;
+    const char *basePath = getenv("srcdir");
     struct testConfig config;
     int ret = 0;
     memset(&config, 0, sizeof(struct testConfig));
-   
+
+    if (basePath == NULL) {
+        basePath = ".";
+    }
+
+    filename = alloc_strgenf("%s/%s", basePath, "data_config1.conf");
     ret = shifter_parseConfig(filename, ':', &config, _assignTestConfig);
     CHECK(ret == 0);
     CHECK(config.second == 10);
     CHECK(config.third == 3.14159);
     CHECK(strcmp(config.first, "abcdefg") == 0);
     free(config.first);
+    free(filename);
 }
 
 TEST(UtilityTestGroup, ShifterParseConfig_InvalidKey) {
-    const char *filename = "data_config2.conf";
+    char *filename = NULL;
+    const char *basePath = getenv("srcdir");
     struct testConfig config;
     int ret = 0;
     memset(&config, 0, sizeof(struct testConfig));
+
+    if (basePath == NULL) {
+        basePath = ".";
+    }
    
+    filename = alloc_strgenf("%s/%s", basePath, "data_config2.conf");
     ret = shifter_parseConfig(filename, ':', &config, _assignTestConfig);
     CHECK(ret == 1);
     free(config.first);
+    free(filename);
 }
 
 TEST(UtilityTestGroup, ShifterParseConfig_MultiLine) {
-    const char *filename = "data_config3.conf";
+    char *filename = NULL;
+    const char *basePath = getenv("srcdir");
     struct testConfig config;
     int ret = 0;
     memset(&config, 0, sizeof(struct testConfig));
+
+    if (basePath == NULL) {
+        basePath = ".";
+    }
    
+    filename = alloc_strgenf("%s/%s", basePath, "data_config3.conf");
     ret = shifter_parseConfig(filename, ':', &config, _assignTestConfig);
     CHECK(ret == 0);
     CHECK(strcmp(config.first, "abcdefg qed feg") == 0);
     CHECK(config.second == 10);
     CHECK(config.third == 3.14159);
     free(config.first);
+    free(filename);
 }
 
 TEST(UtilityTestGroup, ShifterParseConfig_InvalidFilename) {
@@ -160,25 +182,39 @@ TEST(UtilityTestGroup, ShifterParseConfig_InvalidFilename) {
 }
 
 TEST(UtilityTestGroup, ShifterParseConfig_NullKey) {
-    const char *filename = "data_config4.conf";
+    char *filename = NULL;
+    const char *basePath = getenv("srcdir");
     struct testConfig config;
     memset(&config, 0, sizeof(struct testConfig));
     int ret = 0;
 
+    if (basePath == NULL) {
+        basePath = ".";
+    }
+
+    filename = alloc_strgenf("%s/%s", basePath, "data_config4.conf");
     ret = shifter_parseConfig(filename, ':', &config, _assignTestConfig);
     CHECK(ret == 1);
     CHECK(config.second == 10);
     CHECK(config.third == 3.14159);
     CHECK(strcmp(config.first, "abcdefg qed feg") == 0);
     free(config.first);
+    free(filename);
 }
 
 TEST(UtilityTestGroup, ShifterParseConfig_NullConfig) {
-    const char *filename = "data_config4.conf";
+    char *filename = NULL;
+    const char *basePath = getenv("srcdir");
     int ret = 0;
 
+    if (basePath == NULL) {
+        basePath = ".";
+    }
+
+    filename = alloc_strgenf("%s/%s", basePath, "data_config4.conf");
     ret = shifter_parseConfig(filename, ':', NULL, _assignTestConfig);
     CHECK(ret == 1);
+    free(filename);
 }
 
 TEST(UtilityTestGroup, strncpyStringArray_basic) {

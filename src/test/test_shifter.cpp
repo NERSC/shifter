@@ -32,9 +32,6 @@
 
 #include <CppUTest/CommandLineTestRunner.h>
 
-extern "C" {
-char **copyenv(void);
-}
 
 TEST_GROUP(ShifterTestGroup) {
 };
@@ -42,7 +39,7 @@ TEST_GROUP(ShifterTestGroup) {
 TEST(ShifterTestGroup, CopyEnv_basic) {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();
     setenv("TESTENV0", "gfedcba", 1);
-    char **origEnv = copyenv();
+    char **origEnv = shifter_copyenv();
     CHECK(origEnv != NULL);
     clearenv();
     setenv("TESTENV1", "abcdefg", 1);

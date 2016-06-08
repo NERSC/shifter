@@ -97,6 +97,7 @@ typedef struct _UdiRootConfig {
     char **siteEnv;
     char **siteEnvAppend;
     char **siteEnvPrepend;
+    char **siteEnvUnset;
     int allowLocalChroot;
     int autoLoadKernelModule;
     int mountUdiRootWritable;
@@ -116,11 +117,13 @@ typedef struct _UdiRootConfig {
     size_t siteEnv_capacity;
     size_t siteEnvAppend_capacity;
     size_t siteEnvPrepend_capacity;
+    size_t siteEnvUnset_capacity;
     size_t gwUrl_capacity;
     size_t gwUrl_size;
     size_t siteEnv_size;
     size_t siteEnvAppend_size;
     size_t siteEnvPrepend_size;
+    size_t siteEnvUnset_size;
     size_t perNodeCacheAllowedFsType_capacity;
     size_t perNodeCacheAllowedFsType_size;
 

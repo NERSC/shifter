@@ -2738,6 +2738,7 @@ _validateUnmounted_error:
 
 static char **_shifter_findenv(char ***env, char *var, size_t n, size_t *nElement) {
     char **ptr = NULL;
+    char **ret = NULL;
     if (env == NULL || *env == NULL || var == NULL || n == 0) {
         return NULL;
     }
@@ -2746,13 +2747,38 @@ static char **_shifter_findenv(char ***env, char *var, size_t n, size_t *nElemen
     }
     for (ptr = *env; ptr && *ptr; ptr++) {
         if (strncmp(*ptr, var, n) == 0) {
-            return ptr;
+            ret = ptr;
         }
         if (nElement != NULL) {
             (*nElement)++;
         }
     }
-    return NULL;
+    return ret;
+}
+
+static int _shifter_unsetenv(char ***env, char *var) {
+    size_t namelen = 0;
+    size_t envsize = 0;
+    char **pptr = NULL;
+    if (env == NULL || *env == NULL || var == NULL) {
+        return 1;
+    }
+
+    namelen = strlen(var);
+
+    /* find the needed environment variable */
+    pptr = _shifter_findenv(env, var, namelen, &envsize);
+
+    /* if it is found, remove the entry by shifting the array */
+    /* this relies on the env array being NULL terminated */
+    /* TODO decide if the original *pptr should be freed */
+    if (pptr != NULL) {
+        char **nptr = NULL;
+        for (nptr = pptr + 1; pptr && *pptr; nptr++, pptr++) {
+            *pptr = *nptr;
+        }
+    }
+    return 0;
 }
 
 static int _shifter_putenv(char ***env, char *var, int mode) {
@@ -2773,19 +2799,19 @@ static int _shifter_putenv(char ***env, char *var, int mode) {
         char *value = strchr(*pptr, '=');
         if (value != NULL) {
             value++;
-        }
-        if (*value == 0) {
-            value = NULL;
+            if (*value == 0) {
+                value = NULL;
+            }
         }
         if (mode == 0) {
             /* replace */
-            *pptr = var;
+            *pptr = strdup(var);
             return 0;
         } else if (mode == 1) {
             /* prepend */
             char *newptr = NULL;
             if (value == NULL) {
-                *pptr = var;
+                *pptr = strdup(var);
                 return 0;
             }
 
@@ -2797,7 +2823,7 @@ static int _shifter_putenv(char ***env, char *var, int mode) {
             char *newptr = NULL;
 
             if (value == NULL) {
-                *pptr = var;
+                *pptr = strdup(var);
                 return 0;
             }
             newptr = alloc_strgenf("%s:%s", *pptr, (var + namelen + 1));
@@ -2811,9 +2837,31 @@ static int _shifter_putenv(char ***env, char *var, int mode) {
     if (tmp != NULL) {
         *env = tmp;
     }
-    tmp[envsize] = var;
+    tmp[envsize] = strdup(var);
     tmp[envsize+1] = NULL;
     return 0;
+}
+
+extern char **environ;
+char **shifter_copyenv(void) {
+    char **outenv = NULL;
+    char **ptr = NULL;
+    char **wptr = NULL;
+
+    if (environ == NULL) {
+        return NULL;
+    }
+
+    for (ptr = environ; *ptr != NULL; ++ptr) {
+    }
+    outenv = (char **) malloc(sizeof(char*) * ((ptr - environ) + 1));
+    ptr = environ;
+    wptr = outenv;
+    for ( ; *ptr != NULL; ptr++) {
+        *wptr++ = strdup(*ptr);
+    }
+    *wptr = NULL;
+    return outenv;
 }
 
 int shifter_putenv(char ***env, char *var) {
@@ -2826,6 +2874,10 @@ int shifter_appendenv(char ***env, char *var) {
 
 int shifter_prependenv(char ***env, char *var) {
     return _shifter_putenv(env, var, 1);
+}
+
+int shifter_unsetenv(char ***env, char *var) {
+    return _shifter_unsetenv(env, var);
 }
 
 int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
@@ -2844,6 +2896,9 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
     }
     for (envPtr = udiConfig->siteEnvPrepend; envPtr && *envPtr; envPtr++) {
         shifter_prependenv(env, *envPtr);
+    }
+    for (envPtr = udiConfig->siteEnvUnset; envPtr && *envPtr; envPtr++) {
+        shifter_unsetenv(env, *envPtr);
     }
     return 0;
 }
