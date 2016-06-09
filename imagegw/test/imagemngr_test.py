@@ -114,6 +114,20 @@ class ImageMngrTestCase(unittest.TestCase):
             f.write('')
         return file,metafile
 
+    def good_pullrecord(self):
+        return {'system':self.system,
+                    'itype':self.itype,
+                    'id':self.id,
+                    'pulltag':self.tag,
+                    'status':'READY',
+                    'userACL':[],
+                    'groupACL':[],
+                    'ENV':[],
+                    'ENTRY':'',
+                    'last_pull':time.time()
+                    }
+
+
     def good_record(self):
         return {'system':self.system,
             'itype':self.itype,
@@ -545,7 +559,6 @@ class ImageMngrTestCase(unittest.TestCase):
         assert rec is not None
         time.sleep(2)
         state=self.m.get_state(id)
-        print state
         assert state=='EXPIRED'
         assert os.path.exists(file) is False
         assert os.path.exists(metafile) is False
@@ -568,6 +581,81 @@ class ImageMngrTestCase(unittest.TestCase):
         assert state=='READY'
         assert os.path.exists(file) is True
         assert os.path.exists(metafile) is True
+
+    def test_autoexpire_stuckpull(self):
+        record=self.good_pullrecord()
+        record['status']='ENQUEUED'
+        record['last_pull']=time.time()-3000
+        id=self.images.insert(record)
+        assert id is not None
+        session=self.m.new_session(self.auth,self.system)
+        self.m.autoexpire(session,self.system,TESTMODE=1)
+        state=self.m.get_state(id)
+        assert state is None
+
+    def test_autoexpire_recentpull(self):
+        record=self.good_pullrecord()
+        record['status']='ENQUEUED'
+        id=self.images.insert(record)
+        assert id is not None
+        session=self.m.new_session(self.auth,self.system)
+        self.m.autoexpire(session,self.system,TESTMODE=1)
+        state=self.m.get_state(id)
+        assert state=='ENQUEUED'
+
+    def test_autoexpire(self):
+        record=self.good_record()
+
+        # Make it a candidate for expiration (10 secs too old)
+        record['expiration']=time.time()-10
+        self.start_worker()
+        id=self.images.insert(record)
+        assert id is not None
+        # Create a bogus image file
+        file,metafile=self.create_fakeimage(self.system,record['id'],self.format)
+        session=self.m.new_session(self.auth,self.system)
+        self.m.autoexpire(session,self.system,TESTMODE=1)#,delay=False)
+        time.sleep(2)
+        state=self.m.get_state(id)
+        assert state=='EXPIRED'
+        assert os.path.exists(file) is False
+        assert os.path.exists(metafile) is False
+
+    def test_autoexpire_dontexpire(self):
+        # A new image shouldn't expire
+        record=self.good_record()
+        record['expiration']=time.time()+1000
+        self.start_worker()
+        id=self.images.insert(record)
+        assert id is not None
+        # Create a bogus image file
+        file,metafile=self.create_fakeimage(self.system,record['id'],self.format)
+        session=self.m.new_session(self.auth,self.system)
+        self.m.autoexpire(session,self.system,TESTMODE=1)#,delay=False)
+        time.sleep(2)
+        state=self.m.get_state(id)
+        assert state=='READY'
+        assert os.path.exists(file) is True
+        assert os.path.exists(metafile) is True
+
+    def test_autoexpire_othersystem(self):
+        # A new image shouldn't expire
+        record=self.good_record()
+        record['expiration']=time.time()-10
+        record['system']='other'
+        self.start_worker()
+        id=self.images.insert(record)
+        assert id is not None
+        # Create a bogus image file
+        file,metafile=self.create_fakeimage(self.system,record['id'],self.format)
+        session=self.m.new_session(self.auth,self.system)
+        self.m.autoexpire(session,self.system,TESTMODE=1)#,delay=False)
+        time.sleep(2)
+        state=self.m.get_state(id)
+        assert state=='READY'
+        assert os.path.exists(file) is True
+        assert os.path.exists(metafile) is True
+
 
 if __name__ == '__main__':
     unittest.main()

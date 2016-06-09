@@ -101,7 +101,7 @@ def pull_image(request):
         # This is a location
         location=parts[0]
         tag='/'.join(parts[1:])
-       
+
     parts=tag.split(':')
     if len(parts)==2:
         (repo,tag)=parts
@@ -135,7 +135,7 @@ def pull_image(request):
             return True
         except:
             logging.warn(sys.exc_value)
-            return False
+            raise
     elif rtype=='dockerhub':
         logging.warning("Use of depcreated dockerhub type")
         raise NotImplementedError('dockerhub type is depcreated.  Use dockverv2')

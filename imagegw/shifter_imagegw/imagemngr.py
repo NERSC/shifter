@@ -410,7 +410,12 @@ class imagemngr:
       """
       Lookup the state of the image with _id==id in Mongo.  Returns the state."""
       self.update_states()
-      return self.images_find_one({'_id':id},{'status':1})['status']
+      rec=self.images_find_one({'_id':id},{'status':1})
+      if rec is None:
+          return None
+      elif 'status' not in rec:
+          return None
+      return rec['status']
 
 
   def update_states(self):
@@ -428,7 +433,7 @@ class imagemngr:
           if isinstance(req,celery.result.AsyncResult):
               state=req.state
           elif isinstance(req,bson.objectid.ObjectId):
-              print "Non-Async"
+              self.logger.debug("Non-Async")
           if req in self.expire_requests and state=='SUCCESS':
               self.expire_requests.pop(req)
               state='EXPIRED'
@@ -453,6 +458,47 @@ class imagemngr:
           # It it has been a while then let's clean up
           if (time()>nextpull):
               self.images_remove({'_id':rec['_id']})
+
+  def autoexpire(self,session,system,TESTMODE=0):
+      """Auto expire images and do cleanup"""
+      # Cleanup - Lookup for things stuck in non-READY state
+      self.update_states()
+      pulltimeout=time()-self.config['PullUpdateTimeout']*10
+      removed=[]
+      for rec in self.images.find({'status':{'$ne':'READY'},'system':system}):
+          self.logger.debug(rec)
+          if 'last_pull' not in rec:
+              self.logger.warning('image missing last_pull '+rec['_id'])
+              continue
+          if rec['last_pull']<pulltimeout:
+              removed.append(rec['_id'])
+              self.images_remove({'_id':rec['_id']})
+
+      expired=[]
+      # Look for READY images that haven't been pulled recently
+      for rec in self.images.find({'status':'READY','system':system}):
+              self.logger.debug(rec)
+              if 'expiration' not in rec:
+                  continue
+              elif rec['expiration']<time():
+                  self.logger.debug("expiring %s"%(rec['id']))
+                  id=rec.pop('_id')
+                  self.expire_id(rec,id)
+                  if 'id' in rec:
+                      expired.append(rec['id'])
+                  else:
+                      expired.append('unknown')
+              self.logger.debug(rec['expiration']>time())
+      return expired
+
+
+  def expire_id(self,rec,id,TESTMODE=0):
+    self.logger.debug("Calling do expire with queue=%s id=%s TM=%d"%(rec['system'],id,TESTMODE))
+    req=doexpire.apply_async([rec],queue=rec['system'])
+    self.logger.info("expire request queued s=%s t=%s"%(rec['system'],id))
+    self.task_image_id[req]=id
+    self.expire_requests[req]=id
+    self.tasks.append(req)
 
 
   def expire(self,session,image,TESTMODE=0):
@@ -496,7 +542,7 @@ class imagemngr:
   @mongo_reconnect_reattempt
   def images_remove(self, *args, **kwargs):
       return self.images.remove(*args, **kwargs)
-        
+
   @mongo_reconnect_reattempt
   def images_update(self, *args, **kwargs):
       return self.images.update(*args, **kwargs)
