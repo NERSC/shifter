@@ -1712,7 +1712,7 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
         perror("   errno: ");
         goto _setupImageSsh_unclean;
     }
-    if (chmod(sshdConfigPath, S_IRUSR) != 0) {
+    if (chmod(sshdConfigPath, S_IRUSR | S_IROTH) != 0) {
         fprintf(stderr, "FAILED to set sshd config permissions to 0600\n");
         perror("   errno: ");
         goto _setupImageSsh_unclean;
@@ -1825,6 +1825,9 @@ int startSshd(UdiRootConfig *udiConfig) {
             fprintf(stderr, "FAILED to chroot to %s while attempting to start sshd\n", chrootPath);
             /* no goto, this is the child, we want it to end if this failed */
         } else  {
+            setgroups(1, &(udiConfig->target_gid));
+            setresgid(udiConfig->target_gid, udiConfig->target_gid, udiConfig->target_gid);
+            setresuid(udiConfig->target_uid, udiConfig->target_uid, udiConfig->target_uid);
             char *sshdArgs[2] = {
                 strdup("/opt/udiImage/sbin/sshd"),
                 NULL
