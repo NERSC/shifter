@@ -876,7 +876,21 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
         gid = strtoul(gid_str, NULL, 10);
     } else {
         if (wrap_spank_get_gid(ssconfig, &gid) == ERROR) {
-            PROLOG_ERROR("FAILED to get job gid!", ERROR);
+            _log(LOG_DEBUG, "shifter prolog: failed to get gid from environment, trying getpwuid_r on %d", uid);
+            char buffer[4096];
+            struct passwd pw, *result;
+            while (1) {
+                rc = getpwuid_r(uid, &pw, buffer, 4096, &result);
+                if (rc == EINTR) continue;
+                if (rc != 0) result = NULL;
+                break;
+            }
+            if (result != NULL) {
+                gid = result->pw_gid;
+                _log(LOG_DEBUG, "shifter prolog: got gid from getpwuid_r: %s", username);
+            } else {
+                PROLOG_ERROR("FAILED to get job gid!", ERROR);
+            }
         }
     }
 
@@ -1053,14 +1067,16 @@ int shifterSpank_job_epilog(shifterSpank_config *ssconfig) {
         size_t line_sz = 0;
         ssize_t bytes = 0;
         char *tasks = alloc_strgenf("%s/tasks", memory_cgroup_path);
-        FILE *fp = fopen(tasks, "w");
+        FILE *fp = NULL;
 
         /* kill all the processes in the cgroup tasks */
         fp = fopen(tasks, "r");
-        while ((bytes = getline(&line, &line_sz, fp)) >= 0) {
-            pid_t pid = atoi(line);
-            if (pid == 0) continue;
-            kill(pid, 9); 
+        if (fp != NULL) {
+            while ((bytes = getline(&line, &line_sz, fp)) >= 0) {
+                pid_t pid = atoi(line);
+                if (pid == 0) continue;
+                kill(pid, 9); 
+            }
         }
 
         /* remove the empty cgroups */
