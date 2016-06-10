@@ -4,7 +4,6 @@ import os
 import time
 import shifter_imagegw
 import dockerv2
-import dockerhub
 import converters
 import transfer
 import re
@@ -102,7 +101,7 @@ def pull_image(request):
         # This is a location
         location=parts[0]
         tag='/'.join(parts[1:])
-       
+
     parts=tag.split(':')
     if len(parts)==2:
         (repo,tag)=parts
@@ -136,24 +135,14 @@ def pull_image(request):
             return True
         except:
             logging.warn(sys.exc_value)
-            return False
-    elif rtype=='dockerhub':
-        logging.debug("pulling from docker hub %s %s"%(repo,tag))
-        try:
-            resp=dockerhub.pullImage(None, None,
-                repo, tag,
-                cachedir=cdir,expanddir=edir,
-                cacert=cacert)
-            request['meta']=resp
-            request['expandedpath']=resp['expandedpath']
-            return True
-        except:
-            logging.warn(sys.exc_value)
             raise
-
+    elif rtype=='dockerhub':
+        logging.warning("Use of depcreated dockerhub type")
+        raise NotImplementedError('dockerhub type is depcreated.  Use dockverv2')
     else:
         raise NotImplementedError('Unsupported remote type %s'%(rtype))
     return False
+
 
 def examine_image(request):
     """
@@ -214,6 +203,23 @@ def transfer_image(request):
     if 'metafile' in request:
         meta=request['metafile']
     return transfer.transfer(sys,request['imagefile'],meta)
+
+def remove_image(request):
+    """
+    Remove the image to the target system based on the configuration.
+
+    Returns True on success
+    """
+    system=request['system']
+    if system not in config['Platforms']:
+        raise KeyError('%s is not in the configuration'%system)
+    sys=config['Platforms'][system]
+    imagefile=request['id']+'.'+request['format']
+    meta=request['id']+'.meta'
+    if 'metafile' in request:
+        meta=request['metafile']
+    return transfer.remove(sys,imagefile,meta)
+
 
 def cleanup_temporary(request):
     items = ('expandedpath', 'imagefile', 'metafile')
@@ -289,4 +295,25 @@ def dopull(self,request,TESTMODE=0):
         logging.error("ERROR: dopull failed system=%s tag=%s"%(request['system'],request['tag']))
         self.update_state(state='FAILURE')
         cleanup_temporary(request)
+        raise
+
+
+@queue.task(bind=True)
+def doexpire(self,request,TESTMODE=0):
+    """
+    Celery task to do the full workflow of pulling an image and transferring it
+    """
+    logging.debug("do expire system=%s tag=%s TM=%d"%(request['system'],request['tag'],TESTMODE))
+    print request
+    try:
+        self.update_state(state='EXPIRING')
+        if not remove_image(request):
+            logging.info("Worker: Expire failed")
+            raise OSError('Expire failed')
+
+        self.update_state(state='EXPIRED')
+        return True
+
+    except:
+        logging.error("ERROR: doexpire failed system=%s tag=%s"%(request['system'],request['tag']))
         raise

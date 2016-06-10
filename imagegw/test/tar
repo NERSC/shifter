@@ -5,5 +5,14 @@
 # So, let's just ignore tar errors for now.
 #
 
-/bin/tar "$@"
+if [ -e /bin/tar ] ; then
+  TAR=/bin/tar
+elif [ -e /usr/bin/tar ] ; then
+  TAR=/usr/bin/tar
+else
+  echo "tar not found" 1>&2
+  exit 1
+fi
+
+$TAR $(echo "$@"|sed 's/--force-local//')
 exit 0
