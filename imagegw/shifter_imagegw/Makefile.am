@@ -1,7 +1,6 @@
 SUBDIRS = api
 shifter_imagegw_PYTHON = auth.py \
 				converters.py \
-				dockerhub.py \
 				dockerv2.py \
 				imagemngr.py \
 				imageworker.py \
