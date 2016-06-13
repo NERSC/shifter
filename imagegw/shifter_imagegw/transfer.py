@@ -137,6 +137,28 @@ def copy_file(filename, system, logger=None):
             raise
     return False
 
+#def remove_local(filename,system):
+#    (basePath,imageFilename) = os.path.split(filename)
+#    targetFilename = os.path.join(system['local']['imageDir'], imageFilename)
+#    os.unlink(targetFilename)
+#    return True
+
+def remove_file(filename, system, logger=None):
+    shCmd = None
+    baseRemotePath = None
+    if system['accesstype'] == 'local':
+        shCmd = _shCmd
+        baseRemotePath = system['local']['imageDir']
+    elif system['accesstype'] == 'remote':
+        shCmd = _sshCmd
+        baseRemotePath = system['ssh']['imageDir']
+    (basePath,imageFilename) = os.path.split(filename)
+    remoteFilename = os.path.join(baseRemotePath, imageFilename)
+    rmCmd = shCmd(system, 'rm','-f', remoteFilename)
+    _execAndLog(rmCmd, logger)
+    return True
+
+
 def transfer(system,imagePath,metadataPath=None,logger=None):
     if metadataPath is not None:
         copy_file(metadataPath, system, logger)
@@ -144,4 +166,13 @@ def transfer(system,imagePath,metadataPath=None,logger=None):
         return True
     if logger is not None:
         logger.error("Transfer of %s failed" % imagePath)
+    return False
+
+def remove(system,imagePath,metadataPath=None,logger=None):
+    if metadataPath is not None:
+        remove_file(metadataPath, system)
+    if remove_file(imagePath,system):
+        return True
+    if logger is not None:
+        logger.error("Remove of %s failed" % imagePath)
     return False

@@ -45,7 +45,9 @@ class ImageMngrTestCase(unittest.TestCase):
         self.tag='test'
         self.id='fakeid'
         self.tag2='test2'
+        self.format='squashfs'
         self.auth='good:1:1'
+        self.authadmin='good:0:0'
         self.badauth='bad:1:1'
         self.logfile='/tmp/worker.log'
         self.pid=0
@@ -71,7 +73,7 @@ class ImageMngrTestCase(unittest.TestCase):
             os.execvp('celery',['celery','-A','shifter_imagegw.imageworker',
                 'worker','--quiet',
                 '-Q','%s'%(system),
-                '--loglevel=WARNING',
+                '--loglevel=INFO',
                 '-c','2',
                 '-f',self.logfile])
         else:
@@ -86,15 +88,63 @@ class ImageMngrTestCase(unittest.TestCase):
             except:
                 pass
 
-    def time_wait(self,id,TIMEOUT=30):
+    def time_wait(self,id,wstate='READY',TIMEOUT=30):
         poll_interval=0.5
         count=TIMEOUT/poll_interval
         state='UNKNOWN'
-        while (state!='READY' and count>0):
+        while (state!=wstate and count>0):
             state=self.m.get_state(id)
             count-=1
             time.sleep(poll_interval)
         return state
+
+    def create_fakeimage(self,system,id,format):
+        if self.config['Platforms'][system]['accesstype']=='remote':
+          idir=self.config['Platforms'][system]['ssh']['imageDir']
+        else:
+          idir=self.config['Platforms'][system]['local']['imageDir']
+
+        if os.path.exists(idir) is False:
+          os.makedirs(idir)
+        file = os.path.join(idir, '%s.%s'%(id,format))
+        with open(file,'w') as f:
+            f.write('')
+        metafile = os.path.join(idir, '%s.meta'%(id))
+        with open(metafile,'w') as f:
+            f.write('')
+        return file,metafile
+
+    def good_pullrecord(self):
+        return {'system':self.system,
+                    'itype':self.itype,
+                    'id':self.id,
+                    'pulltag':self.tag,
+                    'status':'READY',
+                    'userACL':[],
+                    'groupACL':[],
+                    'ENV':[],
+                    'ENTRY':'',
+                    'last_pull':time.time()
+                    }
+
+
+    def good_record(self):
+        return {'system':self.system,
+            'itype':self.itype,
+            'id':self.id,
+            'tag':[self.tag],
+            'format':self.format,
+            'status':'READY',
+            'userACL':[],
+            'groupACL':[],
+            'last_pull':time.time(),
+            'ENV':[],
+            'ENTRY':'',
+            }
+
+#
+#  Tests
+#
 
     def test_session(self):
         s=self.m.new_session(self.auth,self.system)
@@ -104,21 +154,25 @@ class ImageMngrTestCase(unittest.TestCase):
         except:
             pass
 
+    def test_noadmin(self):
+        s=self.m.new_session(self.auth,self.system)
+        assert s is not None
+        resp=self.m.isadmin(s,self.system)
+        assert resp is False
+
+    def test_admin(self):
+        s=self.m.new_session(self.authadmin,self.system)
+        assert s is not None
+        resp=self.m.isadmin(s,self.system)
+        assert resp is True
+
+
 # Create an image and tag with a new tag.
 # Make sure both tags show up.
 # Remove the tag and make sure the original tags
 # doesn't also get removed.
     def test_0add_remove_tag(self):
-        record={'system':self.system,
-            'itype':self.itype,
-            'id':self.id,
-            'tag':[self.tag],
-            'status':'READY',
-            'userACL':[],
-            'groupACL':[],
-            'ENV':[],
-            'ENTRY':'',
-            }
+        record=self.good_record()
         # Create a fake record in mongo
         id=self.images.insert(record)
 
@@ -141,16 +195,8 @@ class ImageMngrTestCase(unittest.TestCase):
 
     # Similar to above but just test the adding part
     def test_0add_remove_tagitem(self):
-        record={'system':self.system,
-            'itype':self.itype,
-            'id':self.id,
-            'tag':self.tag,
-            'status':'READY',
-            'userACL':[],
-            'groupACL':[],
-            'ENV':[],
-            'ENTRY':'',
-            }
+        record=self.good_record()
+        record['tag']=self.tag
         # Create a fake record in mongo
         id=self.images.insert(record)
 
@@ -164,16 +210,7 @@ class ImageMngrTestCase(unittest.TestCase):
     # Same as above but use the lookup instead of a directory
     # direct mongo lookup
     def test_0add_remove_withtag(self):
-        record={'system':self.system,
-            'itype':self.itype,
-            'id':self.id,
-            'tag':[self.tag],
-            'status':'READY',
-            'userACL':[],
-            'groupACL':[],
-            'ENV':[],
-            'ENTRY':'',
-            }
+        record=self.good_record()
         # Create a fake record in mongo
         id=self.images.insert(record)
 
@@ -188,16 +225,7 @@ class ImageMngrTestCase(unittest.TestCase):
 
     # Test if tag isn't a list
     def test_0add_remove_two(self):
-        record={'system':self.system,
-            'itype':self.itype,
-            'id':self.id,
-            'tag':[self.tag],
-            'status':'READY',
-            'userACL':[],
-            'groupACL':[],
-            'ENV':[],
-            'ENTRY':'',
-            }
+        record=self.good_record()
         # Create a fake record in mongo
         id1=self.images.insert(record.copy())
         record['id']='fakeid2'
@@ -216,16 +244,8 @@ class ImageMngrTestCase(unittest.TestCase):
 
     # Similar to above but just test the adding part
     def test_0add_same_image_two_system(self):
-        record={'system':self.system,
-            'itype':self.itype,
-            'id':self.id,
-            'tag':self.tag,
-            'status':'READY',
-            'userACL':[],
-            'groupACL':[],
-            'ENV':[],
-            'ENTRY':'',
-            }
+        record=self.good_record()
+        record['tag']=self.tag
         # Create a fake record in mongo
         id1=self.images.insert(record.copy())
         # add testtag for systema
@@ -319,17 +339,9 @@ class ImageMngrTestCase(unittest.TestCase):
 
     def test_0update_states(self):
         # Test a repull
-        record={'system':self.system,
-            'itype':self.itype,
-            'id':self.id,
-            'tag':[self.tag],
-            'status':'FAILURE',
-            'userACL':[],
-            'groupACL':[],
-            'ENV':[],
-            'ENTRY':'',
-            'last_pull':0
-            }
+        record=self.good_record()
+        record['last_pull']=0
+        record['status']='FAILURE'
         # Create a fake record in mongo
         id=self.images.insert(record)
         assert id is not None
@@ -339,16 +351,7 @@ class ImageMngrTestCase(unittest.TestCase):
 
 
     def test_lookup(self):
-        record={'system':self.system,
-            'itype':self.itype,
-            'id':self.id,
-            'tag':self.tag,
-            'status':'READY',
-            'userACL':[],
-            'groupACL':[],
-            'ENV':[],
-            'ENTRY':'',
-            }
+        record=self.good_record()
         # Create a fake record in mongo
         self.images.insert(record)
         i=self.query.copy()
@@ -366,17 +369,7 @@ class ImageMngrTestCase(unittest.TestCase):
         assert l==None
 
     def test_list(self):
-        record={'system':self.system,
-            'itype':self.itype,
-            'id':self.id,
-            'tag':self.tag,
-            'last_pull':time.time(),
-            'status':'READY',
-            'userACL':[],
-            'groupACL':[],
-            'ENV':[],
-            'ENTRY':'',
-            }
+        record=self.good_record()
         # Create a fake record in mongo
         id1=self.images.insert(record.copy())
         # rec2 is a failed pull, it shouldn't be listed
@@ -393,17 +386,8 @@ class ImageMngrTestCase(unittest.TestCase):
 
     def test_repull(self):
         # Test a repull
-        record={'system':self.system,
-            'itype':self.itype,
-            'id':self.id,
-            'tag':[self.tag],
-            'status':'READY',
-            'userACL':[],
-            'groupACL':[],
-            'ENV':[],
-            'ENTRY':'',
-            'last_pull':time.time()
-            }
+        record=self.good_record()
+
         # Create a fake record in mongo
         id=self.images.insert(record)
         assert id is not None
@@ -540,10 +524,138 @@ class ImageMngrTestCase(unittest.TestCase):
         self.stop_worker()
 
 
-    def test_expire(self):
-        pass
-        #    assert rv.status_code==200
-        #    assert rv.data.rfind(self.service)
+    def test_expire_remote(self):
+        system=self.system
+        record=self.good_record()
+        # Create a fake record in mongo
+        self.start_worker()
+        id=self.images.insert(record)
+        assert id is not None
+        # Create a bogus image file
+        file,metafile=self.create_fakeimage(system,record['id'],self.format)
+        session=self.m.new_session(self.authadmin,system)
+        er={'system':system,'tag':self.tag,'itype':self.itype}
+        rec=self.m.expire(session,er,TESTMODE=1)#,delay=False)
+        assert rec is not None
+        time.sleep(2)
+        state=self.m.get_state(id)
+        assert state=='EXPIRED'
+        assert os.path.exists(file) is False
+        assert os.path.exists(metafile) is False
+
+    def test_expire_local(self):
+        record=self.good_record()
+        system='systemb'
+        record['system']=system
+        # Create a fake record in mongo
+        self.start_worker(system=system)
+        id=self.images.insert(record)
+        assert id is not None
+        # Create a bogus image file
+        file,metafile=self.create_fakeimage(system,record['id'],self.format)
+        session=self.m.new_session(self.authadmin,system)
+        er={'system':system,'tag':self.tag,'itype':self.itype}
+        rec=self.m.expire(session,er)#,delay=False)
+        assert rec is not None
+        time.sleep(2)
+        state=self.m.get_state(id)
+        assert state=='EXPIRED'
+        assert os.path.exists(file) is False
+        assert os.path.exists(metafile) is False
+
+
+    def test_expire_noadmin(self):
+        record=self.good_record()
+        # Create a fake record in mongo
+        self.start_worker()
+        id=self.images.insert(record)
+        assert id is not None
+        # Create a bogus image file
+        file,metafile=self.create_fakeimage(self.system,record['id'],self.format)
+        session=self.m.new_session(self.auth,self.system)
+        er={'system':self.system,'tag':self.tag,'itype':self.itype}
+        rec=self.m.expire(session,er,TESTMODE=1)#,delay=False)
+        assert rec is not None
+        time.sleep(2)
+        state=self.m.get_state(id)
+        assert state=='READY'
+        assert os.path.exists(file) is True
+        assert os.path.exists(metafile) is True
+
+    def test_autoexpire_stuckpull(self):
+        record=self.good_pullrecord()
+        record['status']='ENQUEUED'
+        record['last_pull']=time.time()-3000
+        id=self.images.insert(record)
+        assert id is not None
+        session=self.m.new_session(self.auth,self.system)
+        self.m.autoexpire(session,self.system,TESTMODE=1)
+        state=self.m.get_state(id)
+        assert state is None
+
+    def test_autoexpire_recentpull(self):
+        record=self.good_pullrecord()
+        record['status']='ENQUEUED'
+        id=self.images.insert(record)
+        assert id is not None
+        session=self.m.new_session(self.auth,self.system)
+        self.m.autoexpire(session,self.system,TESTMODE=1)
+        state=self.m.get_state(id)
+        assert state=='ENQUEUED'
+
+    def test_autoexpire(self):
+        record=self.good_record()
+
+        # Make it a candidate for expiration (10 secs too old)
+        record['expiration']=time.time()-10
+        self.start_worker()
+        id=self.images.insert(record)
+        assert id is not None
+        # Create a bogus image file
+        file,metafile=self.create_fakeimage(self.system,record['id'],self.format)
+        session=self.m.new_session(self.auth,self.system)
+        self.m.autoexpire(session,self.system,TESTMODE=1)#,delay=False)
+        time.sleep(2)
+        state=self.m.get_state(id)
+        assert state=='EXPIRED'
+        assert os.path.exists(file) is False
+        assert os.path.exists(metafile) is False
+
+    def test_autoexpire_dontexpire(self):
+        # A new image shouldn't expire
+        record=self.good_record()
+        record['expiration']=time.time()+1000
+        self.start_worker()
+        id=self.images.insert(record)
+        assert id is not None
+        # Create a bogus image file
+        file,metafile=self.create_fakeimage(self.system,record['id'],self.format)
+        session=self.m.new_session(self.auth,self.system)
+        self.m.autoexpire(session,self.system,TESTMODE=1)#,delay=False)
+        time.sleep(2)
+        state=self.m.get_state(id)
+        assert state=='READY'
+        assert os.path.exists(file) is True
+        assert os.path.exists(metafile) is True
+
+    def test_autoexpire_othersystem(self):
+        # A new image shouldn't expire
+        record=self.good_record()
+        record['expiration']=time.time()-10
+        record['system']='other'
+        self.start_worker()
+        id=self.images.insert(record)
+        assert id is not None
+        # Create a bogus image file
+        file,metafile=self.create_fakeimage(self.system,record['id'],self.format)
+        session=self.m.new_session(self.auth,self.system)
+        self.m.autoexpire(session,self.system,TESTMODE=1)#,delay=False)
+        time.sleep(2)
+        state=self.m.get_state(id)
+        assert state=='READY'
+        assert os.path.exists(file) is True
+        assert os.path.exists(metafile) is True
+
 
 if __name__ == '__main__':
     unittest.main()

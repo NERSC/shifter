@@ -1,19 +1,26 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Mock unmunge command - For testing purposes only
 #
-
+T=$(dirname $0)
 
 IN=$(cat)
-MT=$(cat ./test/munge.test)
-EX=$(cat ./test/munge.expired)
+MT=$(cat $T/munge.test)
+EX=$(cat $T/munge.expired 2>/dev/null)
+REP=$(cat $T/munge.replay 2>/dev/null)
+
 if [ "$IN" == "$MT" ] ;then
   ST="Success (0)"
   RT=0
+  # Mimic unmunging the same thing twice
+  cat $T/munge.test > $T/munge.replay
+  echo "" > $T/munge.test
 elif [ "$IN" == "$EX" ] ;then
   ST="Expired credential (15))"
   RT=15
-
+elif [ "$IN" == "$REP" ] ;then
+  ST="Replayed credential (17)"
+  RT=17
 else
   echo "unmunge: Error: Failed to match armor prefix"
   exit 8

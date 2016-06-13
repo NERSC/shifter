@@ -5,6 +5,7 @@ munge.key
 test.json
 munge.test
 munge.expired
+munge.replay
 depcomp
 install-sh
 libtool.m4
