@@ -202,7 +202,7 @@ def transfer_image(request):
     meta=None
     if 'metafile' in request:
         meta=request['metafile']
-    return transfer.transfer(sys,request['imagefile'],meta)
+    return transfer.transfer(sys,request['imagefile'],meta, logging)
 
 def remove_image(request):
     """
@@ -218,7 +218,7 @@ def remove_image(request):
     meta=request['id']+'.meta'
     if 'metafile' in request:
         meta=request['metafile']
-    return transfer.remove(sys,imagefile,meta)
+    return transfer.remove(sys,imagefile,meta, logging)
 
 
 def cleanup_temporary(request):
