@@ -430,7 +430,6 @@ class dockerv2Handle():
         while layer is not None:
             tfname = os.path.join(cachedir,'%s.tar'%(layer['fsLayer']['blobSum']))
             tfp = tarfile.open(tfname, 'r:gz')
-            print tfname
 
             ## get directory of tar contents
             layerMembers = tfp.getmembers()
@@ -439,21 +438,14 @@ class dockerv2Handle():
             layerMembers = filterLayer(layerMembers, 'dev/')
             layerMembers = filterLayer(layerMembers, '/')
             layerMembers = [ x for x in layerMembers if not x.name.find('..') >= 0 ]
-            print "have %d members left" % len(layerMembers)
 
             ## find all whiteouts
             whiteouts = [ x for x in layerMembers if (x.name.find('/.wh.') >= 0
                     or x.name.startswith('.wh.')) ]
 
-            print whiteouts
-
             ## remove the whiteout tags from this layer
-            print "len before whiteouts: %d" % len(layerMembers)
             for wh in whiteouts:
                 layerMembers.remove(wh)
-            print "len after whiteouts: %d" % len(layerMembers)
-            if len(layerMembers) < 100:
-                print layerMembers
 
             ## remove the whiteout targets from all ancestral layers
             for idx,ancsLayer in enumerate(layerPaths):
@@ -486,10 +478,7 @@ class dockerv2Handle():
         while layer is not None:
             tfname = os.path.join(cachedir,'%s.tar' % (layer['fsLayer']['blobSum']))
             tfp = tarfile.open(tfname, 'r:gz')
-            print tfname
             members = layerPaths[layerIdx]
-            if len(members) < 100:
-                print members
             tfp.extractall(path=basePath,members=members)
 
             layerIdx += 1
