@@ -16,6 +16,11 @@ import shifter_imagegw
 import stat
 import shutil
 
+
+import sys
+reload(sys)
+sys.setdefaultencoding("utf-8")
+
 ## Shifter, Copyright (c) 2015, The Regents of the University of California,
 ## through Lawrence Berkeley National Laboratory (subject to receipt of any
 ## required approvals from the U.S. Dept. of Energy).  All rights reserved.
