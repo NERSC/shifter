@@ -15,6 +15,7 @@ import urllib2
 import shifter_imagegw
 import stat
 import shutil
+from time import time
 
 ## Shifter, Copyright (c) 2015, The Regents of the University of California,
 ## through Lawrence Berkeley National Laboratory (subject to receipt of any
@@ -72,7 +73,7 @@ class dockerv2Handle():
     allowAuthenticated = True
     checkLayerChecksums = True
 
-    def __init__(self, imageIdent, options = None):
+    def __init__(self, imageIdent, options = None, updater=None):
         """
         Initialize an instance of the dockerv2 class.
         imageIdent is a tagged repo (e.g., ubuntu:14.04)
@@ -94,6 +95,7 @@ class dockerv2Handle():
             options = {}
         if type(options) is not dict:
             raise ValueError('Invalid type for dockerv2 options')
+        self.updater=updater
 
         if 'baseUrl' in options:
             baseUrlStr = options['baseUrl']
@@ -152,6 +154,15 @@ class dockerv2Handle():
         self.authMethod = 'token'
         if 'authMethod' in options:
             self.authMethod = options['authMethod']
+        self.eldest=None
+        self.youngest=None
+
+    def get_eldest(self):
+        return self.eldest
+
+    def log(self,state,message=''):
+        if self.updater is not None:
+            self.updater.update_status(state,message)
 
     def setupHttpConn(self, url, cacert=None):
         (protocol, url) = url.split('://', 1)
@@ -185,7 +196,7 @@ class dockerv2Handle():
         authLocStr is a string returned in the "WWW-Authenticate" response header
         It contains:
             <mode> realm=<authUrl>,service=<service>,scope=<scope>
-            The mode will typically be "bearer", service and scope are the repo and 
+            The mode will typically be "bearer", service and scope are the repo and
             capabilities being requested respectively.  For shifter, the scope will
             only be pull.
 
@@ -285,6 +296,29 @@ class dockerv2Handle():
             raise e
         return jdata
 
+    def pull_layers(self,manifest,cachedir):
+            self.log("PULLING",'Constructing manifest')
+            (eldest,youngest) = self.constructImageMetadata(manifest)
+            layer = eldest
+            while layer is not None:
+                self.log("PULLING","Pulling layer %s"%layer['fsLayer']['blobSum'])
+                self.saveLayer(layer['fsLayer']['blobSum'], cachedir)
+                layer = layer['child']
+
+            self.eldest=eldest
+            self.youngest=youngest
+            meta=youngest
+            resp={'id':meta['id']}
+            if 'config' in meta:
+                c=meta['config']
+                if 'Env' in c:
+                    resp['env']=c['Env']
+                if 'Entrypoint' in c:
+                    resp['entrypoint']=c['Entrypoint']
+            return resp
+
+
+
     def saveLayer(self, layer, cachedir='./'):
         """
         saveLayer - Save a layer and verify with the digest
@@ -355,7 +389,7 @@ class dockerv2Handle():
     def checkLayerChecksum(self, layer, filename):
         if self.checkLayerChecksums is False:
             return True
-            
+
         (hashType,value) = layer.split(':', 1)
         execName = '%s%s' % (hashType, 'sum')
         process = subprocess.Popen([execName, filename], stdout=subprocess.PIPE)
@@ -486,6 +520,7 @@ class dockerv2Handle():
 
         self.extractDockerLayers(basePath, layer['child'], cachedir=cachedir)
 
+# Deprecated: Just use the object above
 def pullImage(options, baseUrl, repo, tag, cachedir='./', expanddir='./', cacert=None, username=None, password=None):
     """
     pullImage - Uber function to pull the manifest, layers, and extract the layers

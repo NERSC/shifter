@@ -59,12 +59,19 @@ class imagemngr:
       self.tasks=[]
       self.expire_requests=dict()
       self.task_image_id=dict()
+      # TIme before another pull can be attempted
+      self.pullupdatetimeout=300
+      if 'PullUpdateTime' in self.config:
+          self.pullupdatetimeout=self.config['PullUpdateTimeout']
+      # Max amount of time to allow for a pull
+      self.pulltimeout=self.pullupdatetimeout*10
       # This is not intended to provide security, but just
       # provide a basic check that a session object is correct
       self.magic='imagemngrmagic'
       if 'Authentication' not in self.config:
           self.config['Authentication']="munge"
       self.auth=auth.authentication(self.config)
+      self.platforms=self.config['Platforms']
 
       for system in self.config['Platforms']:
           self.systems.append(system)
@@ -98,10 +105,10 @@ class imagemngr:
       Check if this is an admin user.
       Returns true if is an admin or false if not.
       """
-      if 'admins' not in self.config['Platforms'][system]:
+      if 'admins' not in self.platforms[system]:
           return False
       admins=dict()
-      for ad in self.config['Platforms'][system]['admins'].split():
+      for ad in self.platforms[system]['admins'].split():
           if session['uid']==ad:
               return True
       return False
@@ -222,7 +229,7 @@ class imagemngr:
     # Need to deal with last_pull for a READY record
     if 'last_pull' not in rec:
         return True
-    nextpull=self.config['PullUpdateTimeout']+rec['last_pull']
+    nextpull=self.pullupdatetimeout+rec['last_pull']
     # It has been a while, so re-pull to see if it is fresh
     if status=='READY' and (time()>nextpull):
         return True
@@ -231,9 +238,12 @@ class imagemngr:
     if status=='FAILURE' and (time()>nextpull):
         return True
     # Last thing... What if the pull somehow got hung or died in the middle
-    # TODO: add pull timeout.  For now use the same one
-    if time()>nextpull:
-        return True
+    # See if heartbeat is old
+    # TODO: add pull timeout.  For now use 1 hour
+    if 'last_heartbeat' in rec:
+        if (time()-rec['last_heartbeat'])>3600:
+            return True
+
     return False
 
 
@@ -318,13 +328,19 @@ class imagemngr:
 
       return rec
 
-  def update_mongo_state(self,id,state):
+  def update_mongo_state(self,id,state,info=None):
       """
       Helper function to set the mongo state for an image with _id==id to state=state.
       """
       if state=='SUCCESS':
           state='READY'
-      self.images_update({'_id':id},{'$set':{'status':state}})
+      set_list={'status':state,'status_message':''}
+      if info is not None and isinstance(info, dict):
+          if 'heartbeat' in info:
+              set_list['last_heartbeat']=info['heartbeat']
+          if 'message' in info:
+              set_list['status_message']=info['message']
+      self.images_update({'_id':id},{'$set':set_list})
 
   def add_tag(self,id,system,tag):
       """
@@ -432,18 +448,23 @@ class imagemngr:
 
           if isinstance(req,celery.result.AsyncResult):
               state=req.state
+              info=req.info
           elif isinstance(req,bson.objectid.ObjectId):
               self.logger.debug("Non-Async")
+
           if req in self.expire_requests and state=='SUCCESS':
               self.expire_requests.pop(req)
+              self.tasks.remove(req)
               state='EXPIRED'
           elif req in self.expire_requests and state=='FAILURE':
               self.logger.warn("Expire request failed for %s"%(req))
               self.expire_requests.pop(req)
+              self.tasks.remove(req)
               continue
           elif state=="FAILURE":
               self.logger.warn("Pull failed for %s"%(req))
-          self.update_mongo_state(self.task_image_id[req],state)
+
+          self.update_mongo_state(self.task_image_id[req],state,info)
           if state=="READY" or state=="SUCCESS":
               self.logger.debug("Completing pull request %d"%i)
               response=req.get()
@@ -454,7 +475,7 @@ class imagemngr:
           i+=1
       # Look for failed pulls
       for rec in self.images_find({'status':'FAILURE'}):
-          nextpull=self.config['PullUpdateTimeout']+rec['last_pull']
+          nextpull=self.pullupdatetimeout+rec['last_pull']
           # It it has been a while then let's clean up
           if (time()>nextpull):
               self.images_remove({'_id':rec['_id']})
@@ -463,7 +484,7 @@ class imagemngr:
       """Auto expire images and do cleanup"""
       # Cleanup - Lookup for things stuck in non-READY state
       self.update_states()
-      pulltimeout=time()-self.config['PullUpdateTimeout']*10
+      pulltimeout=time()-self.pullupdatetimeout*10
       removed=[]
       for rec in self.images.find({'status':{'$ne':'READY'},'system':system}):
           self.logger.debug(rec)

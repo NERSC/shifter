@@ -1,7 +1,7 @@
 from celery import Celery
 import json
 import os
-import time
+from time import time,sleep
 import shifter_imagegw
 import dockerv2
 import converters
@@ -12,8 +12,9 @@ import sys
 import subprocess
 from pymongo import MongoClient
 from bson.objectid import ObjectId
-import logging
 from random import randint
+import logging
+
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
@@ -62,6 +63,16 @@ queue.conf.update(CELERY_ACCEPT_CONTENT = ['json'])
 queue.conf.update(CELERY_TASK_SERIALIZER = 'json')
 queue.conf.update(CELERY_RESULT_SERIALIZER = 'json')
 
+class updater():
+    def __init__(self,update_state):
+        self.update_state=update_state
+
+    def update_status(self,state,message):
+        if self.update_state is not None:
+            self.update_state(state=state,meta={'heartbeat':time(),'message':message})
+
+defupdater=updater(None)
+
 def initqueue(newconfig):
     """
     This is mainly used by the manager to configure the broker
@@ -83,7 +94,11 @@ def normalized_name(request):
     return '%s_%s'%(request['itype'],request['tag'].replace('/','_'))
     #return request['meta']['id']
 
-def pull_image(request):
+
+def already_processed(request):
+    return False
+
+def pull_image(request,updater=defupdater):
     """
     pull the image down and extract the contents
 
@@ -126,12 +141,26 @@ def pull_image(request):
         if 'url' in params:
           url=params['url']
         try:
-            resp=dockerv2.pullImage(None, url,
-                repo, tag,
-                cachedir=cdir,expanddir=edir,
-                cacert=cacert)
+            #resp=dockerv2.pullImage(None, url,
+            #    repo, tag,
+            #    cachedir=cdir,expanddir=edir,
+            #    cacert=cacert,logger=logger)
+            options={}
+            if cacert is not None:
+                options['cacert'] = cacert
+            options['baseUrl'] = url
+            imageident = '%s:%s' % (repo, tag)
+            dh = dockerv2.dockerv2Handle(imageident, options,updater=updater)
+            updater.update_status("PULLING",'Getting manifest')
+            manifest = dh.getImageManifest()
+            resp=dh.pull_layers(manifest,cdir)
+            expandedpath=os.path.join(edir,str(resp['id']))
+            if not os.path.exists(expandedpath):
+                os.mkdir(expandedpath)
+            updater.update_status("PULLING",'Extracting Layers')
+            dh.extractDockerLayers(expandedpath, dh.get_eldest(), cachedir=cdir)
             request['meta']=resp
-            request['expandedpath']=resp['expandedpath']
+            request['expandedpath']=expandedpath
             return True
         except:
             logging.warn(sys.exc_value)
@@ -245,8 +274,11 @@ def cleanup_temporary(request):
                 else:
                     os.unlink(cleanitem)
             except:
-                logging.error("Worker: caught exception while trying to clean up %s." % cleanitem)
-                logging.warn(sys.exc_value)
+                logging.error("Worker: caught exception while trying to clean up (%s) %s." % (item,cleanitem))
+                #logging.warn(sys.exc_value)
+                pass
+
+
 
 @queue.task(bind=True)
 def dopull(self,request,TESTMODE=0):
@@ -254,11 +286,12 @@ def dopull(self,request,TESTMODE=0):
     Celery task to do the full workflow of pulling an image and transferring it
     """
     logging.debug("dopull system=%s tag=%s"%(request['system'],request['tag']))
+    us=updater(self.update_state)
     if TESTMODE==1:
         for state in ('PULLING','EXAMINATION','CONVERSION','TRANSFER','READY'):
             logging.info("Worker: TESTMODE Updating to %s"%(state))
-            self.update_state(state=state)
-            time.sleep(1)
+            us.update_status(state,state)
+            sleep(1)
         id='%x'%(randint(0,100000))
         return {'id':id,'entrypoint':['./blah'],'workdir':'/root','env':['FOO=bar','BAZ=boz']}
     elif TESTMODE==2:
@@ -266,35 +299,42 @@ def dopull(self,request,TESTMODE=0):
         raise OSError('task failed')
     try:
         # Step 1 - Do the pull
-        self.update_state(state='PULLING')
-        if not pull_image(request):
+        us.update_status('PULLING','PULLING')
+        print "pulling image %s"%(request['tag'])
+        if not pull_image(request,updater=us):
+            print "pull_image failed"
             logging.info("Worker: Pull failed")
             raise OSError('Pull failed')
         if 'meta' not in request:
             raise OSError('Metadata not populated')
         # Step 2 - Check the image
-        self.update_state(state='EXAMINATION')
+        us.update_status('EXAMINATION','Examining image')
+        print "Worker: examining image %s"%(request['tag'])
         if not examine_image(request):
             raise OSError('Examine failed')
         # Step 3 - Convert
-        self.update_state(state='CONVERSION')
+        us.update_status('CONVERSION','Converting image')
+        print "Worker: converting image %s"%(request['tag'])
         if not convert_image(request):
             raise OSError('Conversion failed')
         if not write_metadata(request):
             raise OSError('Metadata creation failed')
         # Step 4 - TRANSFER
-        self.update_state(state='TRANSFER')
+        us.update_status('TRANSFER','Transferring image')
+        logging.info("Worker: transferring image %s"%(request['tag']))
+        print "Worker: transferring image %s"%(request['tag'])
         if not transfer_image(request):
             raise OSError('Transfer failed')
         # Done
-        self.update_state(state='READY')
+        us.update_status('READY','Image ready')
         cleanup_temporary(request)
         return request['meta']
 
     except:
         logging.error("ERROR: dopull failed system=%s tag=%s"%(request['system'],request['tag']))
+        print sys.exc_value
         self.update_state(state='FAILURE')
-        cleanup_temporary(request)
+        #cleanup_temporary(request)
         raise
 
 
@@ -304,7 +344,6 @@ def doexpire(self,request,TESTMODE=0):
     Celery task to do the full workflow of pulling an image and transferring it
     """
     logging.debug("do expire system=%s tag=%s TM=%d"%(request['system'],request['tag'],TESTMODE))
-    print request
     try:
         self.update_state(state='EXPIRING')
         if not remove_image(request):
