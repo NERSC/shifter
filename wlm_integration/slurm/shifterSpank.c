@@ -115,6 +115,9 @@ shifterSpank_config *shifterSpank_init(
             snprintf(buffer, PATH_MAX, "%s", ptr);
             ptr = shifter_trim(buffer);
             ssconfig->memory_cgroup = strdup(ptr);
+        } else if (strncasecmp("enable_ccm=", argv[idx], 11) == 0) {
+            char *ptr = argv[idx] + 11;
+            ssconfig->ccmEnabled = atoi(ptr);
         } 
     }
 
@@ -195,7 +198,9 @@ int shifterSpank_process_option_ccm(
 {
     if (ssconfig == NULL) return ERROR;
 
-    ssconfig->ccmMode = 1;
+    if (ssconfig->ccmEnabled) {
+        ssconfig->ccmMode = 1;
+    }
     if (ssconfig->image == NULL) ssconfig->image = strdup("/");
     if (ssconfig->imageType == NULL) ssconfig->imageType = strdup("local");
     return SUCCESS;
