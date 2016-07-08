@@ -280,6 +280,18 @@ TEST(VolumeMapTestGroup, ValidateVolumeMap_basic) {
     CHECK(ret == 0);
 }
 
+TEST(VolumeMapTestGroup, TestMultipleMountsWithFlags) {
+    int ret = 0;
+    VolumeMap volMap;
+
+    memset(&volMap, 0, sizeof(VolumeMap));
+    ret = parseVolumeMapSiteFs("/a:/b;/c:/d:rec;/e:/f:rec;/none:/tmp:perNodeCache=size=100M:ro;/qq:/uu", &volMap);
+    CHECK(ret == 0);
+    CHECK(volMap.n == 5);
+
+    free_VolumeMap(&volMap, 0);
+}
+
 TEST(VolumeMapTestGroup, GetVolumeMapSignature_basic) {
     int ret = 0;
     VolumeMap volMap;
