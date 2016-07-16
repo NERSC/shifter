@@ -82,18 +82,7 @@ int fprint_options(FILE *, struct options *);
 void free_options(struct options *, int freeStruct);
 int isImageLoaded(ImageData *, struct options *, UdiRootConfig *);
 int loadImage(ImageData *, struct options *, UdiRootConfig *);
-
-int adoptPATH(char **environ) {
-    char **ptr = environ;
-    for ( ; ptr && *ptr; ptr++) {
-        if (strncmp(*ptr, "PATH=", 5) == 0) {
-            char *path = *ptr + 5;
-            setenv("PATH", path, 1);
-            return 0;
-        }
-    }
-    return 1;
-}
+int adoptPATH(char **environ);
 
 #ifndef _TESTHARNESS_SHIFTER
 int main(int argc, char **argv) {
@@ -246,7 +235,11 @@ int main(int argc, char **argv) {
 
     /* source the environment variables from the image */
     shifter_setupenv(&environ_copy, &imageData, &udiConfig);
+
+    /* immediately set PATH to container PATH to get search right */
     adoptPATH(environ_copy);
+
+    /* attempt to execute user-requested exectuable */
     execvpe(opts.args[0], opts.args, environ_copy);
     return 127;
 }
@@ -756,3 +749,16 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
 _loadImage_error:
     return 1;
 }
+
+int adoptPATH(char **environ) {
+    char **ptr = environ;
+    for ( ; ptr && *ptr; ptr++) {
+        if (strncmp(*ptr, "PATH=", 5) == 0) {
+            char *path = *ptr + 5;
+            setenv("PATH", path, 1);
+            return 0;
+        }
+    }
+    return 1;
+}
+
