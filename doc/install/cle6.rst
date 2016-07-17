@@ -23,6 +23,7 @@ Configuring udiRoot with custom ansible play
    - templates/udiRoot.conf.j2
    - files/premount.sh
    - files/postmount.sh
+   - vars/cluster.yaml
 3. Ensure the tasks/main.yaml is appropriate for your site
 
 
@@ -45,3 +46,35 @@ ansible role.
 
 Configuration considerations for MPI
 ++++++++++++++++++++++++++++++++++++
+To enable Cray-native MPI in shifter containers, there are a few needed changes
+to the container environment.
+
+1. Need to patch /var/opt/cray/alps and /etc/opt/cray/wlm_detect into the 
+   container environment. /etc/opt/cray/wlm_detect is a NEW requirement in CLE6
+2. To enable override of libmpi.so for client containers, run
+   extra/prep_cray_mpi_libs.py from the shifter distribution (also installed in
+   the %libexec% path if shifter-runtime RPM is used).
+
+   """
+   mkdir -p /tmp/cray/lib64
+   python /path/to/extra/prep_cray_mpi_libs.py /tmp/cray/lib64
+   """
+
+   Copy /tmp/cray to a path within the udiImage directory (by default
+   /usr/lib/shifter/opt/udiImage)
+3. To automate override of libmpi.so modify siteEnvAppend to add:
+      LD_LIBRARY_PATH=/opt/udiImage/cray/lib64
+
+
+prep_cray_mpi_libs.py copies the shared libraries from the CrayPE cray-mpich
+and cray-mpich-abi modules (for both PrgEnv-gnu and PrgEnv-intel), into the
+target path.  It then recursively identifies dependencies for those shared
+libraries and copies those to target/dep.  Finally it rewrites the RPATH entry
+for all the shared libraries to /opt/udiImage/cray/lib64/dep; this allows the
+target libraries to exist in /opt/udiImage/cray/lib64, and ONLY have that path
+in LD_LIBRARY_PATH, minimizing search time.  Also, since none of the dependency
+libraries are copies to /opt/udiImage/cray/lib64, but to
+/opt/udiImage/cray/lib64/dep, and those are accessed via the modified RPATH,
+there is minimal bleedthrough of the dependency libraries into the container
+environment.
+prep_cray_mpi_libs.py requires patchelf (https://nixos.org/patchelf.html).
