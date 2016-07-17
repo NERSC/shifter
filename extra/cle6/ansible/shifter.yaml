@@ -1,0 +1,26 @@
+---
+
+- name: shifter
+  hosts: localhost
+
+  vars:
+    run_after:
+    - early
+    - persistent_data
+    - service_node
+    - ssh
+
+    run_before:
+    - slurm
+
+  tasks:
+  - set_fact:
+    shifterConfigure: True
+    when: ((ansible_local.cray_system_elogin is defined) or
+          (ansible_local.cray_system.platform == "compute") or
+          ('mom' in ansible_local.cray_system.node_groups)) and
+          (not ansible_local.cray_system.in_init)
+
+  roles:
+  - role: shifter
+    when: shifterConfigure is defined and shifterConfigure
