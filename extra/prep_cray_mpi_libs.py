@@ -207,6 +207,19 @@ def module_avail(name):
 if __name__ == "__main__":
     files = {}
 
+    cmd = ['patchelf', '--help']
+    try:
+        pfp = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        pfp.communicate()
+    except:
+        print "Failed to find patchelf command.  Please get patchelf into PATH before proceeding"
+        sys.exit(1)
+
+    if len(sys.argv) != 2:
+        print "No destination path specified"
+        sys.exit(1)
+
+
     copyTgtPath = sys.argv[1]
     destTgtPath = '/opt/udiImage/cray/lib64'
 
