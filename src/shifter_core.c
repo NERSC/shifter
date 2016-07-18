@@ -2574,7 +2574,7 @@ int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname,
             counter++;
             if (foundUsername && gid != 0) break;
         }
-        if (group_name != NULL) {
+        if (group_name != NULL && gid != 0) {
             if (foundUsername == 1 && foundGroups < maxGroups) {
                 fprintf(output, "%s:x:%d:%s\n", group_name, gid, username);
                 foundGroups++;
