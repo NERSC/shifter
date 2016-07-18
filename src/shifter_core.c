@@ -618,6 +618,17 @@ int prepareSiteModifications(const char *username,
         fp = NULL;
     }
 
+    /* no valid reason for a user to provide their own /etc/shadow */
+    /* populate /etc/shadow with an empty file */
+    snprintf(srcBuffer, PATH_MAX, "%s/etc/shadow", udiRoot);
+    FILE *fp = fopen(srcBuffer, "w");
+    if (fp == NULL) {
+        fprintf(stderr, "Couldn't open shadow file for writing\n");
+        goto _prepSiteMod_unclean;
+    }
+    fclose(fp);
+    fp = NULL;
+
     /* validate that the mandatorySiteEtcFiles now exist */
     for (fnamePtr = mandatorySiteEtcFiles; *fnamePtr != NULL; fnamePtr++) {
         char path[PATH_MAX];
