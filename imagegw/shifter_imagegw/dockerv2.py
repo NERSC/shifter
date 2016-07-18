@@ -420,72 +420,74 @@ class dockerv2Handle():
         """
         return tempfile.mkdtemp()
 
-    def extractDockerLayers(self, basePath, layer, cachedir='./'):
-        """
-        extractDockerLayers - Recusrively Untar the layers
-        """
-        if layer is None:
-            return
-        os.umask(022)
-        devnull = open(os.devnull, 'w')
-        tarfile=os.path.join(cachedir,'%s.tar'%(layer['fsLayer']['blobSum']))
+    def extractDockerLayers(self, basePath, baseLayer, cachedir='./'):
+        import tarfile
+        def filterLayer(layerMembers, toRemove):
+            prefixToRemove = '%s%s' % (toRemove, '/' if not toRemove.endswith('/') else '')
+            return [ x for x in layerMembers if not x.name == toRemove and not x.name.startswith(prefixToRemove) ]
 
-        # check for whiteouts in tar and remove the path from the current
-        # expansion
-        cmd = ['tar', 'tf', tarfile, '--exclude=dev/*', '--force-local']
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        stdout,stderr = proc.communicate()
-        whiteouts = []
-        for line in stdout.split('\n'):
-            fullpath = line.strip()
-            (dirpath,endpt) = os.path.split(fullpath)
-            if endpt.startswith('.wh.'):
-                whiteouts.append(fullpath)
-                delpath = os.path.join(dirpath, endpt[4:])
-                print "found whiteout: %s, will delete %s" % (fullpath, delpath)
-                if dirpath == delpath:
-                    continue
-                delpath = os.path.join(basePath, delpath)
-                if os.path.exists(delpath):
-                    st = os.lstat(delpath)
-                    if stat.S_ISDIR(st.st_mode):
-                        shutil.rmtree(delpath)
-                    else:
-                        os.unlink(delpath)
+        layerPaths = []
+        layer = baseLayer
+        while layer is not None:
+            tfname = os.path.join(cachedir,'%s.tar'%(layer['fsLayer']['blobSum']))
+            tfp = tarfile.open(tfname, 'r:gz')
 
-        # extract the layer
-        command=['tar',
-                'xf',
-                tarfile,
-                '-C',
-                basePath,
-                '--exclude=dev/*',
-                '--exclude=.wh.*',
-                '--force-local']
-        ret = subprocess.call(command, stdout=devnull, stderr=devnull)
-        devnull.close()
-        if ret>1:
-            raise OSError("Extraction of layer (%s) to %s failed %d"%(tarfile,basePath,ret))
-        # ignore errors since some things like mknod are expected to fail
+            ## get directory of tar contents
+            layerMembers = tfp.getmembers()
+     
+            ## remove all illegal files
+            layerMembers = filterLayer(layerMembers, 'dev/')
+            layerMembers = filterLayer(layerMembers, '/')
+            layerMembers = [ x for x in layerMembers if not x.name.find('..') >= 0 ]
 
-        # adjust permissions of the extracted files
-        command=['tar','tf', tarfile, '--force-local', '--exclude=dev/*', '--exclude=.wh.*']
-        proc = subprocess.Popen(command, stdout=subprocess.PIPE)
-        stdout,stderr = proc.communicate()
-        for line in stdout.split('\n'):
-            fname = line.strip()
-            path = os.path.join(basePath, fname)
-            if os.path.exists(path):
-                statdata = os.lstat(path)
-                if stat.S_ISLNK(statdata.st_mode):
-                    continue
-                newmode = statdata.st_mode | stat.S_IWUSR | stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH
-                if statdata.st_mode & stat.S_IXUSR:
-                    newmode = newmode | stat.S_IXGRP | stat.S_IXOTH
-                os.chmod(path, newmode)
+            ## find all whiteouts
+            whiteouts = [ x for x in layerMembers if (x.name.find('/.wh.') >= 0
+                    or x.name.startswith('.wh.')) ]
 
-        self.extractDockerLayers(basePath, layer['child'], cachedir=cachedir)
+            ## remove the whiteout tags from this layer
+            for wh in whiteouts:
+                layerMembers.remove(wh)
 
+            ## remove the whiteout targets from all ancestral layers
+            for idx,ancsLayer in enumerate(layerPaths):
+                for wh in whiteouts:
+                    path = wh.name.replace('/.wh.', '/')
+                    if path.startswith('.wh.'):
+                        path = path[4:]
+                    ancsLayerIter = (x for x in ancsLayer if x.name == path)
+                    ancsMember = next(ancsLayerIter, None)
+                    if ancsMember:
+                        ancsLayer = filterLayer(ancsLayer, path)
+                layerPaths[idx] = ancsLayer
+
+            ## remove identical paths (not dirs) from all ancestral layers
+            notdirs = [ x.name for x in layerMembers if not x.isdir() ]
+            for idx,ancsLayer in enumerate(layerPaths):
+                ancsLayer = [ x for x in ancsLayer if not x.name in notdirs ]
+                layerPaths[idx] = ancsLayer
+            
+            ## push this layer into the collection
+            layerPaths.append(layerMembers)
+            tfp.close()
+
+            layer = layer['child']
+
+
+        ## extract the selected files
+        layerIdx = 0
+        layer = baseLayer
+        while layer is not None:
+            tfname = os.path.join(cachedir,'%s.tar' % (layer['fsLayer']['blobSum']))
+            tfp = tarfile.open(tfname, 'r:gz')
+            members = layerPaths[layerIdx]
+            tfp.extractall(path=basePath,members=members)
+
+            layerIdx += 1
+            layer = layer['child']
+
+        ## fix permissions on the extracted files
+        subprocess.call(['chmod', '-R', 'a+rX,u+w', basePath])
+            
 def pullImage(options, baseUrl, repo, tag, cachedir='./', expanddir='./', cacert=None, username=None, password=None):
     """
     pullImage - Uber function to pull the manifest, layers, and extract the layers
@@ -535,4 +537,6 @@ if __name__ == '__main__':
   dir=os.getcwd()
   cdir=os.environ['TMPDIR']
   #pullImage(None, 'https://registry.services.nersc.gov', 'ana', 'cctbx',cachedir=cdir,expanddir=cdir,cacert=dir+'/local.crt')
-  pullImage(None, 'https://registry-1.docker.io', 'ubuntu', 'latest', cachedir=cdir, expanddir=cdir)
+  #pullImage(None, 'https://registry-1.docker.io', 'ubuntu', 'latest', cachedir=cdir, expanddir=cdir)
+  #pullImage(None, 'https://registry-1.docker.io', 'tensorflow/tensorflow', 'latest', cachedir=cdir, expanddir=cdir)
+  pullImage(None, 'https://registry-1.docker.io', 'dmjacobsen/ltp-test', 'latest', cachedir=cdir, expanddir=cdir)

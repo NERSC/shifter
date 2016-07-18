@@ -15,7 +15,7 @@
 
     "Locations": {
         "index.docker.io": {
-            "remotetype": "dockerhub",
+            "remotetype": "dockerv2",
             "authentication": "http"
         },
         "registry.services.nersc.gov": {

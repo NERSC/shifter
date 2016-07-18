@@ -33,7 +33,7 @@ def munge(text,socket=None):
         if socket is not None:
             com.extend(['-S',socket])
         proc = Popen(com, stdout=PIPE, stderr=PIPE);
-        (stdout,stderr) = p.communicate()
+        (stdout,stderr) = proc.communicate()
         return stdout.replace('\n','')
     except:
         return None
@@ -53,8 +53,9 @@ def unmunge(encoded,socket=None):
         output=p.communicate(input=encoded)[0]
         if p.returncode==15:
             raise OSError("Expired Credential")
-
-        if p.returncode!=0:
+        if p.returncode==17:
+            raise OSError("Replayed Credential")
+        elif p.returncode!=0:
             raise OSError("Unknown munge error %d %s"%(p.returncode,socket))
 
         resp=dict()

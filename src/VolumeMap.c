@@ -550,6 +550,7 @@ int _parseVolumeMap(
         
         *flagPtr++ = flags;
         *flagPtr = NULL;
+        flagsCapacity = 0;
 
         if (ret != 0) goto _parseVolumeMap_unclean;
 

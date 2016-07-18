@@ -3,7 +3,7 @@ REDIS_PASSWORD=mypassword
 
 all:
 
-test/config/redis.conf: Makefile
+test/config/redis.conf: Makefile.test
 	echo "requirepass $(REDIS_PASSWORD)" > test/config/redis.conf
 	echo 'rename-command CONFIG ""' >> test/config/redis.conf
 	sed -i -e 's/redis:\/\/:.*@/redis:\/\/:$(REDIS_PASSWORD)@/' ./test/config/imagemanager.json
@@ -21,7 +21,7 @@ testprep: test/config/redis.conf test/config/ssh.key test/config/munge.key
 
 starttest: testprep
 	docker build -t imagegwapi .
-	docker build -t shifter-test ../../
+	docker build -t shifter-test ..
 	docker-compose up -d
 
 
