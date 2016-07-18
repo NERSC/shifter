@@ -1,14 +1,14 @@
 /**
  *  @file ImageGWConnect.c
  *  @brief utility to perform image lookups
- * 
+ *
  * @author Douglas M. Jacobsen <dmjacobsen@lbl.gov>
  */
 
 /* Shifter, Copyright (c) 2015, The Regents of the University of California,
  * through Lawrence Berkeley National Laboratory (subject to receipt of any
  * required approvals from the U.S. Dept. of Energy).  All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *  1. Redistributions of source code must retain the above copyright notice,
@@ -20,7 +20,7 @@
  *     National Laboratory, U.S. Dept. of Energy nor the names of its
  *     contributors may be used to endorse or promote products derived from this
  *     software without specific prior written permission.
- * 
+ *
  * See LICENSE for full text.
  */
 
@@ -757,6 +757,7 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
     curl_easy_setopt(curl, CURLOPT_URL, url);
 
     munge_ctx_t ctx = munge_ctx_create();
+
     char *cred_message = constructAuthMessage(config, udiConfig);
     if (cred_message == NULL) {
         munge_encode(&cred, ctx, "", 0); 
@@ -767,6 +768,7 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
         free(cred_message);
         cred_message = NULL;
     }
+
     authstr = alloc_strgenf("authentication:%s", cred);
     if (authstr == NULL) {
         exit(1);
@@ -794,7 +796,11 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
 
     err = curl_easy_perform(curl);
     if (err) {
-        printf("err %d\n", err);
+        if (err == 7) { // 7 means Failed to connect to host.
+          printf("ERROR: it's not possible to contact the image gateway.\n");
+        } else {
+          printf("err %d\n", err);
+        }
         return NULL;
     }
     long http_code = 0;
@@ -830,7 +836,7 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
                         strcmp(image->status, "PENDING") == 0 ||
                         strcmp(image->status, "PULLING") == 0 ||
                         strcmp(image->status, "EXAMINATION") == 0 ||
-                        strcmp(image->status, "CONVERSION") == 0 || 
+                        strcmp(image->status, "CONVERSION") == 0 ||
                         strcmp(image->status, "TRANSFER") == 0) {
                         free_ImageGwImageRec(image, 1);
                         return imageGw;

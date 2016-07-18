@@ -53,7 +53,8 @@ class GWTestCase(unittest.TestCase):
         self.url="/api"
         self.system="systema"
         self.type="docker"
-        self.tag=urllib.quote("ubuntu:14.04")
+        self.itag="ubuntu:14.04"
+        self.tag=urllib.quote(self.itag)
         self.urlreq="%s/%s/%s"%(self.system,self.type,self.tag)
         # Need to switch to real munge tokens
         self.auth="good:1:1"
@@ -100,6 +101,22 @@ class GWTestCase(unittest.TestCase):
             count-=1
             time.sleep(poll_interval)
         return state
+
+
+    def good_record(self):
+        return {'system':self.system,
+            'itype':self.type,
+            'id':'bogus',
+            'tag':[self.itag],
+            'format':'squashfs',
+            'status':'READY',
+            'userACL':[],
+            'groupACL':[],
+            'last_pull':time.time(),
+            'ENV':[],
+            'ENTRY':'',
+            }
+
 
 
     def test_pull(self):
@@ -149,6 +166,24 @@ class GWTestCase(unittest.TestCase):
         uri='%s/expire/%s/%s/%s/%s/'%(self.url,self.system,self.type,self.tag,self.id)
         rv = self.app.get(uri, headers={AUTH_HEADER:self.auth})
         assert rv.status_code==200
+
+
+    def test_autoexpire(self):
+        record=self.good_record()
+        record['expiration']=time.time()-100
+        print record
+        id=self.images.insert(record)
+        uri='%s/autoexpire/%s/'%(self.url,self.system)
+        rv = self.app.get(uri, headers={AUTH_HEADER:self.auth})
+        assert rv.status_code==200
+        assert rv.data.count('bogus')>0
+        time.sleep(2)
+        # Run again to trigger db update
+        rv = self.app.get(uri, headers={AUTH_HEADER:self.auth})
+        assert rv.status_code==200
+        r=self.images.find_one({'_id':id})
+
+        assert r['status']=='EXPIRED'
         #    assert rv.status_code==200
         #    assert rv.data.rfind(self.service)
     #def test_list(self):

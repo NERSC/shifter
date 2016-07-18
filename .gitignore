@@ -5,6 +5,7 @@ munge.key
 test.json
 munge.test
 munge.expired
+munge.replay
 depcomp
 install-sh
 libtool.m4
@@ -56,3 +57,16 @@ test_utility
 imagegw/shifter_imagegw/__init__.py
 udiRoot.conf.example
 shifter*.tar.*z*
+auxdir/compile
+auxdir/test-driver
+dep/build/
+dep/build_mount/
+dep/mount
+dep/udiRoot_dep.tar
+etc_files/group
+etc_files/passwd
+extra/modules.tar
+extra/shifter_slurm_dws_support
+src/test/test_udiRoot.conf
+wlm_integration/slurm/test/test_udiRoot.conf
+

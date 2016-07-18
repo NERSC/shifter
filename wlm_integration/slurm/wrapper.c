@@ -70,6 +70,11 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
 
         /* register command line options */
         for (idx = 0; spank_option_array[idx].name != NULL; idx++) {
+            if (strcmp(spank_option_array[idx].name, "ccm") == 0
+                && !(ssconfig->ccmEnabled)) {
+
+                continue;
+            }
             int lrc = spank_option_register(sp, &(spank_option_array[idx]));
             if (lrc != ESPANK_SUCCESS) {
                 rc = ESPANK_ERROR;
