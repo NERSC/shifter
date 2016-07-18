@@ -17,11 +17,10 @@ tags
 *.la
 *~
 Makefile
-unsetupRoot
-setupRoot
-shifter
-shifterimg
-imageGWConnect
+src/unsetupRoot
+src/setupRoot
+src/shifter
+src/shifterimg
 *.swp
 .cache
 *.log

@@ -32,6 +32,9 @@
 
 #include <CppUTest/CommandLineTestRunner.h>
 
+extern "C" {
+extern int adoptPATH(char **env);
+}
 
 TEST_GROUP(ShifterTestGroup) {
 };
@@ -54,6 +57,28 @@ TEST(ShifterTestGroup, CopyEnv_basic) {
     CHECK(getenv("TESTENV0") != NULL);
     CHECK(strcmp(getenv("TESTENV0"), "gfedcba") == 0);
     MemoryLeakWarningPlugin::turnOnNewDeleteOverloads();
+}
+
+TEST(ShifterTestGroup, adoptPATH_test) {
+
+    CHECK(adoptPATH(NULL) != 0);
+
+    char **tmpenv = (char **) malloc(sizeof(char *) * 4);
+    tmpenv[0] = strdup("fakeEnv=1");
+    tmpenv[1] = strdup("LD_LIBRARY_PATH=/test");
+    tmpenv[2] = strdup("PATH=/usr/bin:/usr/sbin:/fakePath");
+    tmpenv[3] = NULL;
+    char *savepath = strdup(getenv("PATH"));
+
+    CHECK(adoptPATH(tmpenv) == 0);
+    CHECK(strcmp(getenv("PATH"), "/usr/bin:/usr/sbin:/fakePath") == 0);
+
+    setenv("PATH", savepath, 1);
+    free(savepath);
+    free(tmpenv[0]);
+    free(tmpenv[1]);
+    free(tmpenv[2]);
+    free(tmpenv);
 }
 
 #if 0

@@ -1,0 +1,29 @@
+---
+shifterImagePath: /lus/peel/shifter/images
+shifterRuntimePrefix: /usr
+shifterEtcPathByType:
+  compute: /local/shifter/etcFiles
+  elogin:  /opt/shifter/etcFiles
+  mom:     /non_volatile/local/shifter/etcFiles
+  default: /invalid
+shifterRootfsTypeByType:
+  compute: ramfs
+  default: tmpfs
+shifterOptUdiImagePathByType:
+  compute: /lus/peel/shifter/udiImage
+  default: /invalid
+shifterSystem: cluster
+shifterPerNodeCachePath: /lus/peel/shifter/backingStore
+
+shifterBaseSiteFs:
+- "/homes:/homes"
+- "/lus/peel:/lus/peel"
+
+shifterSiteFsByType:
+  compute:
+  - "/var/opt/cray/dws:/var/opt/cray/dws:rec:slave"
+  - "/var/opt/cray/alps:/var/opt/cray/alps:rec:slave"
+  - "/var/run/munge:/var/run/munge"
+  - "/etc/opt/cray/wlm_detect:/etc/opt/cray/wlm_detect"
+#  - "/var/spool/slurmd:/var/spool/slurmd"
+  default: []
