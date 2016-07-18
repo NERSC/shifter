@@ -422,8 +422,9 @@ class dockerv2Handle():
 
     def extractDockerLayers(self, basePath, baseLayer, cachedir='./'):
         import tarfile
-        def filterLayer(layerMembers, prefixToRemove):
-            return [ x for x in layerMembers if not x.name.startswith(prefixToRemove) ]
+        def filterLayer(layerMembers, toRemove):
+            prefixToRemove = '%s%s' % (toRemove, '/' if not toRemove.endswith('/') else '')
+            return [ x for x in layerMembers if not x.name == toRemove and not x.name.startswith(prefixToRemove) ]
 
         layerPaths = []
         layer = baseLayer
@@ -537,4 +538,5 @@ if __name__ == '__main__':
   cdir=os.environ['TMPDIR']
   #pullImage(None, 'https://registry.services.nersc.gov', 'ana', 'cctbx',cachedir=cdir,expanddir=cdir,cacert=dir+'/local.crt')
   #pullImage(None, 'https://registry-1.docker.io', 'ubuntu', 'latest', cachedir=cdir, expanddir=cdir)
-  pullImage(None, 'https://registry-1.docker.io', 'tensorflow/tensorflow', 'latest', cachedir=cdir, expanddir=cdir)
+  #pullImage(None, 'https://registry-1.docker.io', 'tensorflow/tensorflow', 'latest', cachedir=cdir, expanddir=cdir)
+  pullImage(None, 'https://registry-1.docker.io', 'dmjacobsen/ltp-test', 'latest', cachedir=cdir, expanddir=cdir)
