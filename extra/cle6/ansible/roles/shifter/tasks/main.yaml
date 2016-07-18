@@ -1,0 +1,44 @@
+---
+- include_vars: "cluster.yaml"
+
+## determine nodetype
+- set_fact:
+    nodetype: default
+- set_fact:
+    nodetype: compute
+  when: ansible_local.cray_system.platform == "compute"
+- set_fact:
+    nodetype: login
+  when: (ansible_local.cray_system.hostid in cray_login.settings.login_nodes.data.members)
+- set_fact:
+    nodetype: elogin
+  when: (ansible_local.cray_system_elogin is defined)
+
+- set_fact:
+    _shifterBaseSiteFs: "{{ shifterBaseSiteFs|default([]) }}"
+    _shifterTypeSiteFs: "{{ shifterSiteFsByType[nodetype]|default(shifterSiteFsByType['default']) }}"
+- set_fact:
+    shifterAllSiteFs: >-
+      {%- set _l = _shifterBaseSiteFs %}
+      {%- set _ = _l.extend(_shifterTypeSiteFs) %}
+      {{- _l -}}
+
+- set_fact:
+    shifterEtcPath: "{{ shifterEtcPathByType[nodetype]|default(shifterEtcPathByType['default']) }}"
+    shifterRootfsType: "{{ shifterRootfsTypeByType[nodetype]|default(shifterRootfsTypeByType['default']) }}"
+    shifterOptUdiImagePath: "{{ shifterOptUdiImagePathByType[nodetype]|default(shifterOptUdiImagePathByType['default']) }}"
+
+- file: path=/etc/shifter state=directory owner=root group=root mode=0755
+
+- template: src="udiRoot.conf.j2" dest="/etc/shifter/udiRoot.conf" owner=root group=root mode=0644
+- copy: src="{{item}}" dest="/etc/shifter/{{item}}" owner=root group=root mode=0755
+  with_items:
+  - premount.sh
+  - postmount.sh
+
+- command: depmod -a
+- modprobe: name="{{item}}" state=present
+  with_items:
+  - ext4
+  - xfs
+  ignore_errors: True
