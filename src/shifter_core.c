@@ -500,7 +500,6 @@ int prepareSiteModifications(const char *username,
         }
     }
 
-
     /* validate that the mandatorySiteEtcFiles do not exist yet */
     for (fnamePtr = mandatorySiteEtcFiles; *fnamePtr != NULL; fnamePtr++) {
         char path[PATH_MAX];
@@ -511,60 +510,124 @@ int prepareSiteModifications(const char *username,
         }
     }
 
-    /* --> loop over everything in site etc-files and copy into image etc */
-    if (udiConfig->etcPath == NULL || strlen(udiConfig->etcPath) == 0) {
-        fprintf(stderr, "UDI etcPath source directory not defined.\n");
-        goto _prepSiteMod_unclean;
-    }
-    snprintf(srcBuffer, PATH_MAX, "%s", udiConfig->etcPath);
-    srcBuffer[PATH_MAX-1] = 0;
-    memset(&statData, 0, sizeof(struct stat));
-    if (stat(srcBuffer, &statData) == 0) {
-        DIR *etcDir = opendir(srcBuffer);
-        struct dirent *entry = NULL;
-        while ((entry = readdir(etcDir)) != NULL) {
-            char *filename = NULL;
-            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-                continue;
-            }
-            filename = userInputPathFilter(entry->d_name, 0);
-            if (filename == NULL) {
-                fprintf(stderr, "FAILED to allocate filename string.\n");
-                goto _prepSiteMod_unclean;
-            }
-            snprintf(srcBuffer, PATH_MAX, "%s/%s", udiConfig->etcPath, filename);
-            srcBuffer[PATH_MAX-1] = 0;
-            snprintf(mntBuffer, PATH_MAX, "%s/etc/%s", udiRoot, filename);
-            mntBuffer[PATH_MAX-1] = 0;
-            free(filename);
-
-            if (lstat(srcBuffer, &statData) != 0) {
-                fprintf(stderr, "Couldn't find source file, check if there are illegal characters: %s\n", srcBuffer);
-                goto _prepSiteMod_unclean;
-            }
-
-            if (lstat(mntBuffer, &statData) == 0) {
-                fprintf(stderr, "Couldn't copy %s because file already exists.\n", mntBuffer);
-                goto _prepSiteMod_unclean;
-            } else {
-                char *args[] = { strdup(udiConfig->cpPath), strdup("-p"), strdup(srcBuffer), strdup(mntBuffer), NULL };
-                char **argsPtr = NULL;
-                int ret = forkAndExecv(args);
-                for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
-                    free(*argsPtr);
+    if (udiConfig->populateEtcDynamically == 0) {
+        /* --> loop over everything in site etc-files and copy into image etc */
+        if (udiConfig->etcPath == NULL || strlen(udiConfig->etcPath) == 0) {
+            fprintf(stderr, "UDI etcPath source directory not defined.\n");
+            goto _prepSiteMod_unclean;
+        }
+        snprintf(srcBuffer, PATH_MAX, "%s", udiConfig->etcPath);
+        srcBuffer[PATH_MAX-1] = 0;
+        memset(&statData, 0, sizeof(struct stat));
+        if (stat(srcBuffer, &statData) == 0) {
+            DIR *etcDir = opendir(srcBuffer);
+            struct dirent *entry = NULL;
+            while ((entry = readdir(etcDir)) != NULL) {
+                char *filename = NULL;
+                if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+                    continue;
                 }
-                if (ret != 0) {
-                    fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
+                filename = userInputPathFilter(entry->d_name, 0);
+                if (filename == NULL) {
+                    fprintf(stderr, "FAILED to allocate filename string.\n");
                     goto _prepSiteMod_unclean;
                 }
+                snprintf(srcBuffer, PATH_MAX, "%s/%s", udiConfig->etcPath, filename);
+                srcBuffer[PATH_MAX-1] = 0;
+                snprintf(mntBuffer, PATH_MAX, "%s/etc/%s", udiRoot, filename);
+                mntBuffer[PATH_MAX-1] = 0;
+                free(filename);
+
+                if (lstat(srcBuffer, &statData) != 0) {
+                    fprintf(stderr, "Couldn't find source file, check if there are illegal characters: %s\n", srcBuffer);
+                    goto _prepSiteMod_unclean;
+                }
+
+                if (lstat(mntBuffer, &statData) == 0) {
+                    fprintf(stderr, "Couldn't copy %s because file already exists.\n", mntBuffer);
+                    goto _prepSiteMod_unclean;
+                } else {
+                    char *args[] = { strdup(udiConfig->cpPath), strdup("-p"), strdup(srcBuffer), strdup(mntBuffer), NULL };
+                    char **argsPtr = NULL;
+                    int ret = forkAndExecv(args);
+                    for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
+                        free(*argsPtr);
+                    }
+                    if (ret != 0) {
+                        fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
+                        goto _prepSiteMod_unclean;
+                    }
+                }
             }
+            closedir(etcDir);
+        } else {
+            fprintf(stderr, "Couldn't stat udiRoot etc dir: %s\n", srcBuffer);
+            ret = 1;
+            goto _prepSiteMod_unclean;
         }
-        closedir(etcDir);
-    } else {
-        fprintf(stderr, "Couldn't stat udiRoot etc dir: %s\n", srcBuffer);
-        ret = 1;
+    } else if (udiConfig->target_uid != 0 && udiConfig->target_gid != 0) {
+        /* udiConfig->populateEtcDynamically == 1 */
+        struct passwd *pwd = shifter_getpwuid(udiConfig->target_uid, udiConfig);
+        struct group *grp = getgrgid(udiConfig->target_gid);
+        FILE *fp = NULL;
+        if (pwd == NULL) {
+            fprintf(stderr, "Couldn't get user properties for uid %d\n", udiConfig->target_uid);
+            goto _prepSiteMod_unclean;
+        }
+        if (grp == NULL) {
+            fprintf(stderr, "Couldn't get group properties for gid %d\n", udiConfig->target_gid);
+            goto _prepSiteMod_unclean;
+        }
+
+        /* write out container etc/passwd */
+        snprintf(srcBuffer, PATH_MAX, "%s/etc/passwd", udiRoot);
+        fp = fopen(srcBuffer, "w");
+        if (fp == NULL) {
+            fprintf(stderr, "Couldn't open passwd file for writing\n");
+            goto _prepSiteMod_unclean;
+        }
+        fprintf(fp, "%s:x:%d:%d:%s:%s:%s\n", pwd->pw_name, pwd->pw_uid,
+                pwd->pw_gid, pwd->pw_gecos, pwd->pw_dir, pwd->pw_shell);
+        fclose(fp);
+        fp = NULL;
+
+        /* write out container etc/group */
+        snprintf(srcBuffer, PATH_MAX, "%s/etc/group", udiRoot);
+        fp = fopen(srcBuffer, "w");
+        if (fp == NULL) {
+            fprintf(stderr, "Couldn't open group file for writing\n");
+            goto _prepSiteMod_unclean;
+        }
+        fprintf(fp, "%s:x:%d:\n", grp->gr_name, grp->gr_gid);
+        fclose(fp);
+        fp = NULL;
+
+        /* write out container etc/nsswitch.conf */
+        snprintf(srcBuffer, PATH_MAX, "%s/etc/nsswitch.conf", udiRoot);
+        fp = fopen(srcBuffer, "w");
+        if (fp == NULL) {
+            fprintf(stderr, "Couldn't open nsswitch.conf for writing\n");
+            goto _prepSiteMod_unclean;
+        }
+        fprintf(fp, "passwd: files\ngroup: files\nhosts: files dns\n"
+                "networks:   files dns\nservices: files\nprotocols: files\n"
+                "rpc: files\nethers: files\nnetmasks: files\nnetgroup: files\n"
+                "publickey: files\nbootparams: files\nautomount: files\n"
+                "aliases: files\n");
+        fclose(fp);
+        fp = NULL;
+    }
+
+    /* no valid reason for a user to provide their own /etc/shadow */
+    /* populate /etc/shadow with an empty file */
+    snprintf(srcBuffer, PATH_MAX, "%s/etc/shadow", udiRoot);
+    FILE *fp = fopen(srcBuffer, "w");
+    if (fp == NULL) {
+        fprintf(stderr, "Couldn't open shadow file for writing\n");
         goto _prepSiteMod_unclean;
     }
+    fclose(fp);
+    fp = NULL;
 
     /* validate that the mandatorySiteEtcFiles now exist */
     for (fnamePtr = mandatorySiteEtcFiles; *fnamePtr != NULL; fnamePtr++) {
@@ -2189,6 +2252,9 @@ _loadKrnlMod_unclean:
  *  or other systems where access to LDAP may be slow, difficult, or impossible
  *  on compute nodes.
  *
+ *  If UdiRootConfig parameter allowLibcPwdCalls is set to 1, this function
+ *  will simply call the regular getpwuid
+ *
  */
 struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config) {
     FILE *input = NULL;
@@ -2198,6 +2264,10 @@ struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config) {
 
     if (config == NULL) {
         return NULL;
+    }
+
+    if (config->allowLibcPwdCalls == 1) {
+        return getpwuid(tgtuid);
     }
 
     snprintf(buffer, PATH_MAX, "%s/passwd", config->etcPath);
@@ -2404,6 +2474,9 @@ struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config) {
     if (config == NULL) {
         return NULL;
     }
+    if (config->allowLibcPwdCalls == 1) {
+        return getpwnam(tgtnam);
+    }
 
     snprintf(buffer, PATH_MAX, "%s/passwd", config->etcPath);
     input = fopen(buffer, "r");
@@ -2501,7 +2574,7 @@ int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname,
             counter++;
             if (foundUsername && gid != 0) break;
         }
-        if (group_name != NULL) {
+        if (group_name != NULL && gid != 0) {
             if (foundUsername == 1 && foundGroups < maxGroups) {
                 fprintf(output, "%s:x:%d:%s\n", group_name, gid, username);
                 foundGroups++;
