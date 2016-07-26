@@ -299,10 +299,14 @@ class ImageMngrTestCase(unittest.TestCase):
         assert self.m.pullable(rec) is False
 
         # A hung pull
-        rec={'last_pull':0,'status':'PULLING'}
+        rec={'last_pull':0,'last_heartbeat':time.time()-7200,'status':'PULLING'}
         assert self.m.pullable(rec) is True
         # recent pull
         rec={'last_pull':time.time(),'status':'PULLING'}
+        assert self.m.pullable(rec) is False
+
+        # A hung pull
+        rec={'last_pull':0,'last_heartbeat':time.time(),'status':'PULLING'}
         assert self.m.pullable(rec) is False
 
     def test_0complete_pull(self):
