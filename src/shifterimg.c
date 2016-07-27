@@ -36,6 +36,8 @@
 #include <munge.h>
 #include <curl/curl.h>
 #include <json-c/json.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include "utility.h"
 #include "UdiRootConfig.h"
@@ -292,8 +294,16 @@ int doLogin(struct options *options, UdiRootConfig *udiConfig) {
     /* write out credentials */
     struct passwd *pwd = getpwuid(getuid());
     if (pwd != NULL) {
+        char *creddir = alloc_strgenf("%s/.udiRoot", pwd->pw_dir);
         char *path = alloc_strgenf("%s/.udiRoot/.cred", pwd->pw_dir);
-        if (access(path, F_OK | W_OK) == 0) {
+        struct stat statData;
+        if (stat(creddir, &statData) != 0) {
+            if (mkdir(creddir, 0700) != 0) {
+                fprintf(stderr, "FAILED to create directory %s\n", creddir);
+                goto _error;
+            }
+        }
+        if (stat(creddir, &statData) == 0) {
             FILE *out = fopen(path, "w");
             if (out == NULL) {
                 fprintf(stderr, "FAILED to open credentials for writing!\n");
@@ -304,7 +314,14 @@ int doLogin(struct options *options, UdiRootConfig *udiConfig) {
                 fprintf(out, "%s:%s=%s\n", (*lcptr)->system, (*lcptr)->location, (*lcptr)->cred);
             }
             fclose(out);
-        } 
+            if (chmod(path, 0600) != 0) {
+                fprintf(stderr, "FAILED to correctly set permissions on %s\n", path);
+                goto _error;
+            }
+        } else {
+            fprintf(stderr, "FAILED to stat %s\n", creddir);
+            goto _error;
+        }
     }
 
     return 0;
