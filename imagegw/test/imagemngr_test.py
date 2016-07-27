@@ -46,9 +46,9 @@ class ImageMngrTestCase(unittest.TestCase):
         self.id='fakeid'
         self.tag2='test2'
         self.format='squashfs'
-        self.auth='good:1:1'
-        self.authadmin='good:0:0'
-        self.badauth='bad:1:1'
+        self.auth='good:user:user'
+        self.authadmin='good:root:root'
+        self.badauth='bad:user:user'
         self.logfile='/tmp/worker.log'
         self.pid=0
         self.query={'system':self.system,'itype':self.itype,'tag':self.tag}

@@ -57,8 +57,8 @@ class GWTestCase(unittest.TestCase):
         self.tag=urllib.quote(self.itag)
         self.urlreq="%s/%s/%s"%(self.system,self.type,self.tag)
         # Need to switch to real munge tokens
-        self.auth="good:1:1"
-        self.auth_bad="bad:1:1"
+        self.auth="good:user:user"
+        self.auth_bad="bad:user:user"
         self.auth_header='authentication'
         self.logfile='/tmp/worker.log'
         self.pid=0

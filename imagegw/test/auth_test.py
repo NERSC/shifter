@@ -46,33 +46,19 @@ class AuthTestCase(unittest.TestCase):
 
     def test_auth(self):
         """ Test success """
-        try:
-          resp=self.auth.authenticate(self.encoded,self.system)
-        except:
-          raise
-          assert False
+        resp=self.auth.authenticate(self.encoded,self.system)
         assert resp is not None
-        assert len(resp)==3
+        self.assertIsInstance(resp,dict)
 
     def test_auth_replay(self):
-        try:
-          resp=self.auth.authenticate(self.encoded,self.system)
-        except:
-          assert False
+        resp=self.auth.authenticate(self.encoded,self.system)
         assert resp is not None
-        try:
+        with self.assertRaises(OSError) as cm:
           resp=self.auth.authenticate(self.encoded,self.system)
-          assert False
-        except:
-          assert True
 
     def test_auth_bad(self):
-        try:
-          # This should raise an error
+        with self.assertRaises(OSError) as cm:
           self.auth.authenticate("bad",self.system)
-          assert False
-        except:
-          assert True
 
 
 if __name__ == '__main__':
