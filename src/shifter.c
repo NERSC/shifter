@@ -305,6 +305,7 @@ int local_prependenv(char ***environ, const char *prepvar) {
 
 int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *udiConfig) {
     int opt = 0;
+    int volOptCount = 0;
     static struct option long_options[] = {
         {"help", 0, 0, 'h'},
         {"volume", 1, 0, 'V'},
@@ -374,12 +375,23 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                     if (optarg == NULL) break;
                     size_t raw_capacity = 0;
                     size_t new_capacity = strlen(optarg);
+
+                    /* if the user is specifying command-line volumes, want to
+                     * get rid of anything coming from the environment
+                     */
+                    if (volOptCount == 0 && config->rawVolumes != NULL) {
+                        free(config->rawVolumes);
+                        config->rawVolumes = NULL;
+                    }
+
                     if (config->rawVolumes != NULL) {
                         raw_capacity = strlen(config->rawVolumes);
                     }
                     config->rawVolumes = (char *) realloc(config->rawVolumes, sizeof(char) * (raw_capacity + new_capacity + 2));
                     char *ptr = config->rawVolumes + raw_capacity;
-                    snprintf(ptr, new_capacity + 2, "%s;", optarg);
+                    snprintf(ptr, new_capacity + 2, ";%s", optarg);
+
+                    volOptCount++;
                     break;
                 }
             case 'i':
