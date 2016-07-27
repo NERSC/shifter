@@ -30,6 +30,7 @@
             "mungeSocketPath": "/var/run/munge/systema.socket",
             "usergroupService": "ldap",
             "accesstype": "remote",
+            "admins": "root",
             "mountCommand": "/bin/mount",
             "host": [
                 "systema"

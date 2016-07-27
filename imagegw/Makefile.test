@@ -24,6 +24,9 @@ starttest: testprep
 	docker build -t shifter-test ..
 	docker-compose up -d
 
+restartgw:
+	docker build -t imagegwapi .
+	docker-compose up -d
 
 getssh:
 	$(eval IP=$(shell docker-machine ip $(shell docker-machine active)))

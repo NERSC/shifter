@@ -107,9 +107,11 @@ class imagemngr:
       """
       if 'admins' not in self.platforms[system]:
           return False
-      admins=dict()
-      for ad in self.platforms[system]['admins'].split():
-          if session['uid']==ad:
+      admins=self.platforms[system]['admins'].split()
+      user=session['user']
+      for ad in admins:
+          if user==ad:
+              self.logger.info('user %s is an admin'%(user))
               return True
       return False
 
@@ -141,22 +143,14 @@ class imagemngr:
       Returns a context that can be used for subsequent operations.
       """
       arec=self.auth.authenticate(authString,system)
-      if arec is None:
+      if arec is None and isinstance(arec,dict):
           raise OSError("Authenication returned None")
       else:
-          session=dict()
-          if len(arec)==3:
-              (uid,gid,token)=arec
-          elif len(arec)==2:
-              (uid,gid)=arec
-              token=''
-          else:
+          if 'user' not in arec:
               raise OSError("Authentication returned invalid response")
+          session=arec
           session['magic']=self.magic
           session['system']=system
-          session['uid']=uid
-          session['gid']=gid
-          session['token']=token
           return session
 
   def lookup(self,session,image):
@@ -225,6 +219,10 @@ class imagemngr:
     if 'status' not in rec:
         return True
     status=rec['status']
+
+    # EXPIRED images can be pulled
+    if status=='EXPIRED':
+        return True
 
     # Need to deal with last_pull for a READY record
     if 'last_pull' not in rec:
