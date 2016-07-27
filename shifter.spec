@@ -3,7 +3,7 @@
 
 Summary:  shifter
 Name:     shifter
-Version:  16.04.0pre1
+Version:  16.08.0pre1
 Release:  1
 License:  BSD (LBNL-modified)
 Group:    System Environment/Base
