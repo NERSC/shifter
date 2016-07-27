@@ -59,24 +59,32 @@ class authentication():
             response=munge.unmunge(authString,socket=self.sockets[system])
             if response is None:
                 raise OSError('Authentication Failed')
-            uid=response['UID']
-            gid=response['GID']
-            token=response['MESSAGE']
-            return (uid,gid,token)
+            rv=dict()
+            (user,uid)=response['UID'].replace(' ','').rstrip(')').split('(')
+            (group,gid)=response['GID'].replace(' ','').rstrip(')').split('(')
+            rv={'user':user,'uid':uid,'group':group,'gid':gid,'tokens':''}
+            message_json=response['MESSAGE']
+            try:
+                rv['tokens']=json.loads(message_json)['authorized_locations']
+            except:
+                pass
+            return rv
         elif self.type=='mock':
+            rv=dict()
             if authString is None:
                 raise KeyError("No Auth String Provided")
             list=authString.split(':')
             if len(list)==3:
-                (status,uid,gid)=list
-                token=''
+                (status,user,group)=list
+                rv={'user':user,'group':group,'tokens':''}
             elif len(list)==4:
-                (status,uid,gid,token)=list
+                (status,user,gid,token)=list
+                rv={'user':user,'group':group,'tokens':token}
             else:
                 raise OSError('Bad AuthString')
 
             if status=='good':
-                return (uid,gid,token)
+                return rv
             else:
                 raise OSError('Auth Failed st=%s'%status)
         else:

@@ -20,6 +20,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /usr/src/app
 
+RUN echo "configPath='/config'" >> /usr/src/app/shifter_imagegw/__init__.py
+
 ENTRYPOINT [ "./entrypoint.sh" ]
 CMD [ ]
 
