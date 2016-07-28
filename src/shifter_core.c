@@ -395,6 +395,7 @@ int prepareSiteModifications(const char *username,
     const char **fnamePtr = NULL;
     int ret = 0;
     struct stat statData;
+    dev_t udiMountDev = 0;
     MountList mountCache;
 
     const char *mandatorySiteEtcFiles[4] = {
@@ -407,6 +408,16 @@ int prepareSiteModifications(const char *username,
     memset(&mountCache, 0, sizeof(MountList));
     snprintf(udiRoot, PATH_MAX, "%s", udiConfig->udiMountPoint);
     udiRoot[PATH_MAX-1] = 0;
+
+    /* get udiMount device id */
+    if (stat(udiRoot, &statData) != 0) {
+        fprintf(stderr, "FAILED to stat udiRoot %s.\n", udiRoot);
+        return 1;
+    }
+    udiMountDev = statData.st_dev;
+
+    /* ensure any upcoming relative path operations are done with correct
+       working directory */
     if (chdir(udiRoot) != 0) {
         fprintf(stderr, "FAILED to chdir to %s. Exiting.\n", udiRoot);
         return 1;
@@ -463,8 +474,7 @@ int prepareSiteModifications(const char *username,
     }
 
     /* do site-defined mount activities */
-
-    if (setupVolumeMapMounts(&mountCache, udiConfig->siteFs, "", udiRoot, 1, udiConfig) != 0) {
+    if (setupVolumeMapMounts(&mountCache, udiConfig->siteFs, "", udiRoot, udiMountDev, udiConfig) != 0) {
         fprintf(stderr, "FAILED to mount siteFs volumes\n");
         goto _prepSiteMod_unclean;
     }
@@ -894,6 +904,11 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
         fprintf(stderr, "FAILED to chmod \"%s\" to 0755.\n", udiRoot);
         goto _mountImgVfs_unclean;
     }
+    if (stat(udiRoot, &statData) != 0) {
+        fprintf(stderr, "FAILED to stat %s\n", udiRoot);
+        goto _mountImgVfs_unclean;
+    }
+    udiRootDev = statData.st_dev;
 
     /* get our needs injected first */
     if (prepareSiteModifications(username, minNodeSpec, udiConfig) != 0) {
@@ -1244,11 +1259,19 @@ _loopMount_unclean:
 int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig) {
     char udiRoot[PATH_MAX];
     MountList mountCache;
+    struct stat statData;
     int ret = 0;
+    dev_t udiMountDev = 0;
 
     memset(&mountCache, 0, sizeof(MountList));
     snprintf(udiRoot, PATH_MAX, "%s", udiConfig->udiMountPoint);
     udiRoot[PATH_MAX-1] = 0;
+
+    if (stat(udiRoot, &statData) != 0) {
+        fprintf(stderr, "FAILED to stat udiRoot %s\n", udiRoot);
+        return 1;
+    }
+    udiMountDev = statData.st_dev;
 
     /* get list of current mounts for this namespace */
     if (parse_MountList(&mountCache) != 0) {
@@ -1256,7 +1279,7 @@ int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig) {
         return 1;
     }
 
-    ret = setupVolumeMapMounts(&mountCache, map, udiRoot, udiRoot, 1, udiConfig);
+    ret = setupVolumeMapMounts(&mountCache, map, udiRoot, udiRoot, udiMountDev, udiConfig);
     free_MountList(&mountCache, 0);
     return ret;
 }
@@ -1378,7 +1401,7 @@ int setupVolumeMapMounts(
         VolumeMap *map,
         const char *fromPrefix,
         const char *toPrefix,
-        int createTo,
+        dev_t createTo,
         UdiRootConfig *udiConfig
 ) {
     char *filtered_from = NULL;
@@ -1466,9 +1489,36 @@ int setupVolumeMapMounts(
         }
         if (stat(to_buffer, &statData) != 0) {
             if (createTo) {
-                mkdir(to_buffer, 0755);
-                if (stat(to_buffer, &statData) != 0) {
-                    fprintf(stderr, "FAILED to find volume \"to\": %s\n", to_buffer);
+                int okToMkdir = 0;
+
+                char *ptr = strrchr(to_buffer, '/');
+                if (ptr) {
+                    /* get parent path of intended dir */
+                    *ptr = '\0';
+
+                    /* if parent path is on the same device as is authorized by createTo
+                       then ok the mkdir operation */
+                    if (stat(to_buffer, &statData) == 0) {
+                        if (statData.st_dev == createTo) {
+                            okToMkdir = 1;
+                        }
+                    }
+
+                    /* reset to target path */
+                    *ptr = '/';
+                }
+
+                if (okToMkdir) {
+                    mkdir(to_buffer, 0755);
+                    if (stat(to_buffer, &statData) != 0) {
+                        fprintf(stderr, "FAILED to find volume \"to\": %s\n",
+                                to_buffer);
+                        goto _handleVolMountError;
+                    }
+                } else {
+                    fprintf(stderr, "FAILED to create volume \"to\": %s, cannot"
+                            " create mount points in that location\n",
+                            to_buffer);
                     goto _handleVolMountError;
                 }
             } else {
