@@ -37,4 +37,21 @@ The format of --image or the SHIFTER environment variable are the same:
    imageType:imageSpecifier
 
 where imageType is typically "docker" but could be other, site-defined types.
-imageSpecifier is somewhat dependent on the imageType, however, for docker it
+imageSpecifier is somewhat dependent on the imageType, however, for docker, the
+image gateway typically assigns the sha256 hash of the image manifest to be
+the specifier.
+
+shifter will attempt to see if the global environment already has a shifter
+image configured matching the users arguments.  If a compatible image is already
+setup on the system the existing environment will be used to launch the 
+requested process.  If not, shifter will generate a new mount namespace, and
+setup a new shifter environment.  This ensures that multiple shifter instances
+can be used simultaneously on the same node.  Note that each shifter instance
+will consume at least one loop device, thus it is recommended that sites allow
+for at least two available loop devices per shifter instance that might be
+reasonably started on a compute node.  At NERSC, we allow up to 128 loop
+devices per compute node.
+
+User-Specified Volume Mounts
+----------------------------
+
