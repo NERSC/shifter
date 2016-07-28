@@ -904,11 +904,11 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
         fprintf(stderr, "FAILED to chmod \"%s\" to 0755.\n", udiRoot);
         goto _mountImgVfs_unclean;
     }
+
     if (stat(udiRoot, &statData) != 0) {
         fprintf(stderr, "FAILED to stat %s\n", udiRoot);
         goto _mountImgVfs_unclean;
     }
-    udiRootDev = statData.st_dev;
 
     /* get our needs injected first */
     if (prepareSiteModifications(username, minNodeSpec, udiConfig) != 0) {
