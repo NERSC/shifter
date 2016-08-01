@@ -12,6 +12,7 @@ PermissionsStartOnly=true
 ExecStartPre=/usr/bin/mkdir -p /var/log/shifter_imagegw_worker
 ExecStartPre=/usr/bin/chown shifter:shifter /var/log/shifter_imagegw_worker
 ExecStart=/usr/bin/celery -A shifter_imagegw.imageworker worker -Q %i -n %i.%%h --loglevel=debug --logfile=/var/log/shifter_imagegw_worker/%i.log
+Environment=PYTHONPATH=@SHIFTER_LIBEXECDIR@/@PACKAGE_NAME@
 Restart=on-failure
 
 [Install]
