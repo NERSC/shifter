@@ -124,6 +124,6 @@ TODO:  put init scripts into RPM distribution
 Without init scripts, do something like:
 
 1. ``/usr/libexec/shifter/imagegwapi.py > /var/log/imagegwapi.log &``
-2. ``celery worker -A shifter_imagegw.imageworker -Q $CLUSTERNAME -t /var/log/imagegw_worker_$CLUSTERNAME.log &``
+2. ``PYTHONPATH=/usr/libexec/shifter celery worker -A shifter_imagegw.imageworker -Q $CLUSTERNAME -t /var/log/imagegw_worker_$CLUSTERNAME.log &``
 
    * Ensure that CLUSTERNAME matches the values in udiRoot.conf (system) and imagemanger.json (platform)
