@@ -17,9 +17,9 @@ Enabling SLURM integration has the following benefits:
 * optional extern step post-prolog image configuration (useful for tie-breaking
   parallel prolog operations)
 
-Integration with SLURM causes the `setupRoot` executable to be run in a per-
+Integration with SLURM causes the :code:`setupRoot` executable to be run in a per-
 node prolog at job allocation time.  Conversely, at job-end a per-node epilog
-runs the `unsetupRoot` executable to deconstruct the UDI environment. setupRoot
+runs the :code:`unsetupRoot` executable to deconstruct the UDI environment. setupRoot
 generates a container image environment in the same Linux namespace as the
 slurmd, meaning that the same environment can be re-used over-and-over again
 by multiple sruns, as well as allowing multiple tasks to be simultaneoulsy
@@ -100,11 +100,11 @@ Basic Job Submission and Usage
 ++++++++++++++++++++++++++++++
 The shifter_slurm.so plugin will add `--image`, `--volume`, and, if enabled,
 `--ccm` options to sbatch, salloc, and srun.  Typical usage is that a user
-would submit a job like:
+would submit a job like::
 
    cluster$ sbatch script.sh
 
-Where script.sh might look like:
+Where script.sh might look like::
 
    #!/bin/bash
    #SBATCH --image=docker:yourRepo/yourImage:latest
@@ -131,7 +131,7 @@ job submission.  The container image will be setup, including the volume mounts
 prior to execution of the batch script.
 
 *Option 1*: Explicitly launch applications in the image environment while
-keeping logic flow in the external (cluster) environment
+keeping logic flow in the external (cluster) environment::
 
    #!/bin/bash
    #SBATCH --image=docker:yourRepo/yourImage:latest
@@ -151,7 +151,7 @@ keeping logic flow in the external (cluster) environment
 
 *Option 2*: Execute script in shifter container with no direct access to the
 external environment.  Easier to write more complex workflows, but the 
-container must have everything needed
+container must have everything needed::
 
    #!/usr/bin/shifter /bin/bash
    #SBATCH --image=docker:yourRepo/yourImage:latest
@@ -205,7 +205,7 @@ environment.
 
 To enable `--ccm`, you'll need both `enable_ccm=1` and `enable_sshd=1` in
 plugstack.conf.  In addition you'll need to set `allowLocalChroot=1` in
-udiRoot.conf.  This is because CCM effectively works by doing:
+udiRoot.conf.  This is because CCM effectively works by doing::
 
    shifter --image=local:/  # but with setupRoot so the sshd can be setup
 
