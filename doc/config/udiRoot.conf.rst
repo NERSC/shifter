@@ -152,6 +152,11 @@ chmodPath (required)
 --------------------
 Absolute path to known-good chmod
 
+mkfsXfsPath
+-----------
+Absolute path to known-good mkfs.xfs. This is required for the perNodeCache
+feature to work.
+
 rootfsType (required)
 ---------------------
 The filesystem type to use for setting up the shifter VFS layer.
@@ -257,9 +262,3 @@ system (required)
 Name of your system, e.g., edison or cori.  This name must match a configured
 system in the imagegw.  This is primarily used by shifterimg to self-identify
 which system it is representing.
-
-nodeContextPrefix (required in 15.12.0, deprecated in 16.04.1 and thereafer)
-----------------------------------------------------------------------------
-Must be blank, e.g. put nodeContextPrefix= in your config file.
-
-Recommended value: 
