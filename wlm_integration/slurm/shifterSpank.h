@@ -40,6 +40,7 @@ typedef struct {
                                       should be moved into extern step control
                                       during job setup */
     int ccmEnabled;               /*! flag if the ccm option should be offered */
+    int sshdEnabled;              /*! flag if the sshd is enabled */
 
     /* config options from user */
     char *image;                  /*! user requested image identifier */
