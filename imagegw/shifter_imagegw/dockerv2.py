@@ -371,6 +371,7 @@ class dockerv2Handle():
         try:
             readsz = 4 * 1024 * 1024 # read 4MB chunks
             while nread < maxlen:
+                ## TODO: consider making this an os.read() to allow a timeout
                 buff = r1.read(readsz)
                 if buff is None:
                     break
@@ -463,6 +464,12 @@ class dockerv2Handle():
         layerPaths = []
         layer = baseLayer
         while layer is not None:
+            # excluding this blobSum because it translates to an empty tar file
+            # and python 2.6 throws an exception when an open is attempted
+            if layer['fsLayer']['blobSum'] == 'sha256:a3ed95caeb02ffe68cdd9fd84406680ae93d633cb16422d00e8a7c22955b46d4':
+                layer = layer['child']
+                continue
+
             tfname = os.path.join(cachedir,'%s.tar'%(layer['fsLayer']['blobSum']))
             tfp = tarfile.open(tfname, 'r:gz')
 
@@ -511,6 +518,12 @@ class dockerv2Handle():
         layerIdx = 0
         layer = baseLayer
         while layer is not None:
+            # excluding this blobSum because it translates to an empty tar file
+            # and python 2.6 throws an exception when an open is attempted
+            if layer['fsLayer']['blobSum'] == 'sha256:a3ed95caeb02ffe68cdd9fd84406680ae93d633cb16422d00e8a7c22955b46d4':
+                layer = layer['child']
+                continue
+
             tfname = os.path.join(cachedir,'%s.tar' % (layer['fsLayer']['blobSum']))
             tfp = tarfile.open(tfname, 'r:gz')
             members = layerPaths[layerIdx]

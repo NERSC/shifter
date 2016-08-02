@@ -154,7 +154,7 @@ def pull_image(request,updater=defupdater):
             updater.update_status("PULLING",'Getting manifest')
             manifest = dh.getImageManifest()
             resp=dh.pull_layers(manifest,cdir)
-            expandedpath=os.path.join(edir,str(resp['id']))
+            expandedpath = tempfile.mkdtemp(suffix='extract', prefix=str(resp['id']), dir=edir)
             if not os.path.exists(expandedpath):
                 os.mkdir(expandedpath)
             updater.update_status("PULLING",'Extracting Layers')
