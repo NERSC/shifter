@@ -357,9 +357,6 @@ int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
         if (config->ddPath == NULL || strlen(config->ddPath) == 0) {
             VAL_ERROR("\"ddPath\" is not defined", UDIROOT_VAL_PARSE);
         }
-        if (config->mkfsXfsPath == NULL || strlen(config->mkfsXfsPath) == 0) {
-            VAL_ERROR("\"mkfsXfsPath\" is not defined", UDIROOT_VAL_PARSE);
-        }
         if (config->rootfsType == NULL || strlen(config->rootfsType) == 0) {
             VAL_ERROR("\"rootfsType\" is not defined", UDIROOT_VAL_PARSE);
         }
@@ -396,10 +393,12 @@ int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
         } else if (!(statData.st_mode & S_IXUSR)) {
             VAL_ERROR("Specified \"ddPath\" is not executable.", UDIROOT_VAL_FILEVAL);
         }
-        if (stat(config->mkfsXfsPath, &statData) != 0) {
-            VAL_ERROR("Specified \"mkfsXfsPath\" doesn't appear to exist.", UDIROOT_VAL_FILEVAL);
-        } else if (!(statData.st_mode & S_IXUSR)) {
-            VAL_ERROR("Specified \"mkfsXfsPath\" is not executable.", UDIROOT_VAL_FILEVAL);
+        if (config->mkfsXfsPath) {
+            if (stat(config->mkfsXfsPath, &statData) != 0) {
+                VAL_ERROR("Specified \"mkfsXfsPath\" doesn't appear to exist.", UDIROOT_VAL_FILEVAL);
+            } else if (!(statData.st_mode & S_IXUSR)) {
+                VAL_ERROR("Specified \"mkfsXfsPath\" is not executable.", UDIROOT_VAL_FILEVAL);
+            }
         }
     }
     return 0;

@@ -171,7 +171,7 @@ ddPath=@DD_PATH@
 #mkfsXfsPath
 #
 # Absolute path to known-good mkfs.xfs
-mkfsXfsPath=@MKFSXFS_PATH@
+# mkfsXfsPath=@MKFSXFS_PATH@
 
 #rootfsType
 #
@@ -282,8 +282,3 @@ system=mycluster
 # certainly be set to "docker" for most systems.
 #
 defaultImageType=docker
-
-#allowedImageTypes (required)
-#
-# Exhaustive list of all the image types allowed
-allowedImageTypes=docker custom
