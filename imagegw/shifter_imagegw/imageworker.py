@@ -154,13 +154,13 @@ def pull_image(request,updater=defupdater):
             updater.update_status("PULLING",'Getting manifest')
             manifest = dh.getImageManifest()
             resp=dh.pull_layers(manifest,cdir)
+            request['meta']=resp
+
             expandedpath = tempfile.mkdtemp(suffix='extract', prefix=str(resp['id']), dir=edir)
-            if not os.path.exists(expandedpath):
-                os.mkdir(expandedpath)
+            request['expandedpath']=expandedpath
+
             updater.update_status("PULLING",'Extracting Layers')
             dh.extractDockerLayers(expandedpath, dh.get_eldest(), cachedir=cdir)
-            request['meta']=resp
-            request['expandedpath']=expandedpath
             return True
         except:
             logging.warn(sys.exc_value)
@@ -334,7 +334,9 @@ def dopull(self,request,TESTMODE=0):
         logging.error("ERROR: dopull failed system=%s tag=%s"%(request['system'],request['tag']))
         print sys.exc_value
         self.update_state(state='FAILURE')
-        #cleanup_temporary(request)
+
+        ## TODO: add a debugging flag and only disable cleanup if debugging
+        cleanup_temporary(request)
         raise
 
 
