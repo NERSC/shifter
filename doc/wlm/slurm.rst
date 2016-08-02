@@ -17,12 +17,12 @@ Enabling SLURM integration has the following benefits:
 * optional extern step post-prolog image configuration (useful for tie-breaking
   parallel prolog operations)
 
-Integration with SLURM causes the :code:`setupRoot` executable to be run in a per-
-node prolog at job allocation time.  Conversely, at job-end a per-node epilog
+Integration with SLURM causes the :code:`setupRoot` executable to be run in a
+per-node prolog at job allocation time.  Conversely, at job-end a per-node epilog
 runs the :code:`unsetupRoot` executable to deconstruct the UDI environment. setupRoot
 generates a container image environment in the same Linux namespace as the
 slurmd, meaning that the same environment can be re-used over-and-over again
-by multiple sruns, as well as allowing multiple tasks to be simultaneoulsy
+by multiple sruns, as well as allowing multiple tasks to be simultaneously
 launched within that container environment.  Use of the setupRoot environment
 also restricts the quantity of loop devices consumed by a job to just those
 needed to setup the environment (typically one for a basic environment).
@@ -30,8 +30,8 @@ needed to setup the environment (typically one for a basic environment).
 Without :code:`setupRoot` to prepare the environment, the shifter executable can
 do this, but these are all done in separate, private namespaces which increases
 setup time and consumes more loop devices.  If the user specifies :code:`--image` or
-:code:`--volume` options for the shifter executable that differ from the job-
-submitted values, a new shifter instance will be instantiated.  This enables
+:code:`--volume` options for the shifter executable that differ from the job-submitted
+values, a new shifter instance will be instantiated.  This enables
 the capability of running multiple containers within a single job, at the cost
 of increased startup time and perhaps a small amount of overhead.
 
@@ -236,3 +236,5 @@ Why not do it?:
    dynamic linking, there were too many edge cases where direct interaction
    with SLURM from within a generic UDI was not working quite right.  Also
    there may be some security concerns with such an approach.
+
+
