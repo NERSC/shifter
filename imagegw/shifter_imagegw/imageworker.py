@@ -10,6 +10,7 @@ import re
 import shutil
 import sys
 import subprocess
+import tempfile
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 from random import randint
