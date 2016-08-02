@@ -218,7 +218,8 @@ number of reasons; though there has been much discussion of it in the past and
 may be more in the future.  For example :code:`--ccm` does this for the special case
 of a locally constructed image :code:`/`.
 
-Why not do it?
+Why not do it?:
+
 1. We would need to chroot into the container in the task_init_privileged hook
    which carries a great deal of privilege and is executed far too early in the
    job setup process.  A number of privileged operations would happen in the
