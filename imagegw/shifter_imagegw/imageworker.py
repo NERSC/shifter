@@ -203,8 +203,8 @@ def convert_image(request):
     edir=config['ExpandDirectory']
 
     ## initially write image in tempfile
-    (fp,imagefile)=tempfile.mkstemp(prefix=request['id'],suffix=format,dir=edir)
-    fp.close()
+    (fd,imagefile)=tempfile.mkstemp(prefix=request['id'],suffix=format,dir=edir)
+    os.close(fd)
     request['imagefile']=imagefile
 
     status=converters.convert(format,request['expandedpath'],imagefile)
@@ -228,8 +228,8 @@ def write_metadata(request):
     edir=config['ExpandDirectory']
 
     ## initially write metadata to tempfile
-    (fp,metafile)=tempfile.mkstemp(prefix=request['id'],suffix='meta',dir=edir)
-    fp.close()
+    (fd,metafile)=tempfile.mkstemp(prefix=request['id'],suffix='meta',dir=edir)
+    os.close(fd)
     request['metafile']=metafile
 
     status=converters.writemeta(format,meta,metafile)
