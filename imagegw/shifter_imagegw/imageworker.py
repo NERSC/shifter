@@ -356,3 +356,11 @@ def doexpire(self,request,TESTMODE=0):
     except:
         logging.error("ERROR: doexpire failed system=%s tag=%s"%(request['system'],request['tag']))
         raise
+
+@queue.task(bind=True)
+def doimagevalid(self, request, TESTMODE=0):
+    """
+    Celery task to check if a pulled image exists and if it is valid
+    """
+    logging.debug("do imagevalid system=%s tag=%s TM=%d" % (request['system'], request['tag'], TESTMODE))
+
