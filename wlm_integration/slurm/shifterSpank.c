@@ -118,7 +118,10 @@ shifterSpank_config *shifterSpank_init(
         } else if (strncasecmp("enable_ccm=", argv[idx], 11) == 0) {
             char *ptr = argv[idx] + 11;
             ssconfig->ccmEnabled = atoi(ptr);
-        } 
+        } else if (strncasecmp("enable_sshd=", argv[idx], 12) == 0) {
+            char *ptr = argv[idx] + 12;
+            ssconfig->sshdEnabled = atoi(ptr);
+        }
     }
 
     if (ssconfig->shifter_config == NULL) {
@@ -581,7 +584,9 @@ void shifterSpank_init_allocator_setup(shifterSpank_config *ssconfig) {
     }
 
     /* for slurm native, generate ssh keys here */
-    generateSshKey(ssconfig);
+    if (ssconfig->sshdEnabled) {
+        generateSshKey(ssconfig);
+    }
     wrap_spank_setenv(ssconfig, "SHIFTER_IMAGE", ssconfig->image, 1);
     wrap_spank_setenv(ssconfig, "SHIFTER_IMAGETYPE", ssconfig->imageType, 1);
     wrap_spank_job_control_setenv(ssconfig, "SHIFTER_IMAGE", ssconfig->image, 1);
@@ -860,7 +865,7 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
 
     /* try to recover ssh public key */
     sshPubKey = getenv("SHIFTER_SSH_PUBKEY");
-    if (sshPubKey != NULL) {
+    if (sshPubKey != NULL && ssconfig->sshdEnabled) {
         char *ptr = strdup(sshPubKey);
         sshPubKey = shifter_trim(ptr);
         sshPubKey = strdup(sshPubKey);

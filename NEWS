@@ -19,6 +19,8 @@
 * Add imagegw heartbeating capability to increase robustness of image pulls
 * Add image expiration capability to allow images age out or be
   administratively removed
+* Allow sshd to be explicitly enabled in SLURM integration
+* Allow ccm-emulation-mode to be explicity enabled in SLURM integration
 
 16.04.0
 ===========
