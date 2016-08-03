@@ -21,6 +21,7 @@
   administratively removed
 * Allow sshd to be explicitly enabled in SLURM integration
 * Allow ccm-emulation-mode to be explicity enabled in SLURM integration
+* Only allow shifter to automatically create mount points on its tmpfs/ramfs
 
 16.04.0
 ===========
