@@ -306,32 +306,37 @@ class dockerv2Handle():
             raise e
         return jdata
 
+    def examine_manifest(self,manifest):
+        self.log("PULLING",'Constructing manifest')
+        (eldest,youngest) = self.constructImageMetadata(manifest)
+
+        self.eldest=eldest
+        self.youngest=youngest
+        meta=youngest
+
+        resp={'id':meta['id']}
+        if 'config' in meta:
+            c=meta['config']
+            if 'Env' in c:
+                resp['env']=c['Env']
+            if 'Entrypoint' in c:
+                resp['entrypoint']=c['Entrypoint']
+        return resp
+
+
     def pull_layers(self,manifest,cachedir):
-            self.log("PULLING",'Constructing manifest')
-            (eldest,youngest) = self.constructImageMetadata(manifest)
-            layer = eldest
-            while layer is not None:
-                if layer['fsLayer']['blobSum'] in self.excludeBlobSums:
-                    layer = layer['child']
-                    continue
-
-                self.log("PULLING","Pulling layer %s"%layer['fsLayer']['blobSum'])
-                self.saveLayer(layer['fsLayer']['blobSum'], cachedir)
+        if self.eldest is None:
+            resp = self.examine_manifest(manifest)
+        layer = self.eldest
+        while layer is not None:
+            if layer['fsLayer']['blobSum'] in self.excludeBlobSums:
                 layer = layer['child']
+                continue
 
-            self.eldest=eldest
-            self.youngest=youngest
-            meta=youngest
-            resp={'id':meta['id']}
-            if 'config' in meta:
-                c=meta['config']
-                if 'Env' in c:
-                    resp['env']=c['Env']
-                if 'Entrypoint' in c:
-                    resp['entrypoint']=c['Entrypoint']
-            return resp
-
-
+            self.log("PULLING","Pulling layer %s"%layer['fsLayer']['blobSum'])
+            self.saveLayer(layer['fsLayer']['blobSum'], cachedir)
+            layer = layer['child']
+        return True
 
     def saveLayer(self, layer, cachedir='./'):
         """
