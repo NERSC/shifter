@@ -57,7 +57,7 @@ extern "C" {
 #define FILE_SIZE_LIMIT 5242880
 
 int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig);
-int setupVolumeMapMounts(MountList *mountCache, VolumeMap *map, const char *fromPrefix, const char *toPrefix, int createTo, UdiRootConfig *udiConfig);
+int setupVolumeMapMounts(MountList *mountCache, VolumeMap *map, const char *fromPrefix, const char *toPrefix, dev_t createTo, UdiRootConfig *udiConfig);
 int userMountFilter(char *udiRoot, char *filtered_from, char *filtered_to, char *flags);
 int isKernelModuleLoaded(const char *name);
 int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig);
