@@ -202,18 +202,10 @@ def convert_image(request):
     cdir=config['CacheDirectory']
     edir=config['ExpandDirectory']
 
-    ## initially write image in tempfile
-    (fd,imagefile)=tempfile.mkstemp(prefix=request['id'],suffix=format,dir=edir)
-    os.close(fd)
+    imagefile=os.path.join(edir, '%s.%s' % (request['id'], format))
     request['imagefile']=imagefile
 
     status=converters.convert(format,request['expandedpath'],imagefile)
-
-    ## after success move to final name
-    final_imagefile=os.path.join(edir, '%s.%s' % (request['id'], format))
-    shutil.move(imagefile, final_imagefile)
-    request['imagefile']=final_imagefile
-
     return status
 
 def write_metadata(request):

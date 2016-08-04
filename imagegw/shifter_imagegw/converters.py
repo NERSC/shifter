@@ -103,7 +103,7 @@ def generateSquashFSImage(expandedPath, imagePath):
 
 def convert(format,expandedPath,imagePath):
     if os.path.exists(imagePath):
-        print "file already exist"
+        print "file already exists"
         return True
 
     (dirname,fname) = os.path.split(imagePath)

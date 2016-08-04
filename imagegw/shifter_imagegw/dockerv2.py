@@ -390,7 +390,6 @@ class dockerv2Handle():
         try:
             readsz = 4 * 1024 * 1024 # read 4MB chunks
             while nread < maxlen:
-                ## TODO: consider making this an os.read() to allow a timeout
                 buff = r1.read(readsz)
                 if buff is None:
                     break
