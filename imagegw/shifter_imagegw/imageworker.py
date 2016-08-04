@@ -347,26 +347,29 @@ def dopull(self,request,TESTMODE=0):
             print "pull_image failed"
             logging.info("Worker: Pull failed")
             raise OSError('Pull failed')
+
         if 'meta' not in request:
             raise OSError('Metadata not populated')
-        # Step 2 - Check the image
-        us.update_status('EXAMINATION','Examining image')
-        print "Worker: examining image %s"%(request['tag'])
-        if not examine_image(request):
-            raise OSError('Examine failed')
-        # Step 3 - Convert
-        us.update_status('CONVERSION','Converting image')
-        print "Worker: converting image %s"%(request['tag'])
-        if not convert_image(request):
-            raise OSError('Conversion failed')
-        if not write_metadata(request):
-            raise OSError('Metadata creation failed')
-        # Step 4 - TRANSFER
-        us.update_status('TRANSFER','Transferring image')
-        logging.info("Worker: transferring image %s"%(request['tag']))
-        print "Worker: transferring image %s"%(request['tag'])
-        if not transfer_image(request):
-            raise OSError('Transfer failed')
+
+        if not check_image(request, request['id']):
+            # Step 2 - Check the image
+            us.update_status('EXAMINATION','Examining image')
+            print "Worker: examining image %s"%(request['tag'])
+            if not examine_image(request):
+                raise OSError('Examine failed')
+            # Step 3 - Convert
+            us.update_status('CONVERSION','Converting image')
+            print "Worker: converting image %s"%(request['tag'])
+            if not convert_image(request):
+                raise OSError('Conversion failed')
+            if not write_metadata(request):
+                raise OSError('Metadata creation failed')
+            # Step 4 - TRANSFER
+            us.update_status('TRANSFER','Transferring image')
+            logging.info("Worker: transferring image %s"%(request['tag']))
+            print "Worker: transferring image %s"%(request['tag'])
+            if not transfer_image(request):
+                raise OSError('Transfer failed')
         # Done
         us.update_status('READY','Image ready')
         cleanup_temporary(request)
