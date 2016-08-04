@@ -10,6 +10,7 @@ import re
 import shutil
 import sys
 import subprocess
+import tempfile
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 from random import randint
@@ -153,14 +154,17 @@ def pull_image(request,updater=defupdater):
             dh = dockerv2.dockerv2Handle(imageident, options,updater=updater)
             updater.update_status("PULLING",'Getting manifest')
             manifest = dh.getImageManifest()
-            resp=dh.pull_layers(manifest,cdir)
-            expandedpath=os.path.join(edir,str(resp['id']))
-            if not os.path.exists(expandedpath):
-                os.mkdir(expandedpath)
+            resp=dh.examine_manifest(manifest)
+            request['meta']=resp
+            request['id'] = str(resp['id'])
+
+            dh.pull_layers(manifest,cdir)
+
+            expandedpath = tempfile.mkdtemp(suffix='extract', prefix=request['id'], dir=edir)
+            request['expandedpath']=expandedpath
+
             updater.update_status("PULLING",'Extracting Layers')
             dh.extractDockerLayers(expandedpath, dh.get_eldest(), cachedir=cdir)
-            request['meta']=resp
-            request['expandedpath']=expandedpath
             return True
         except:
             logging.warn(sys.exc_value)
@@ -194,12 +198,14 @@ def convert_image(request):
         format=request['format']
     else:
         request['format']=format
-    cdir=config['CacheDirectory']
-    imagefile='%s.%s'%(request['expandedpath'],format)
-    status=converters.convert(format,request['expandedpath'],imagefile)
 
-    # Write Metadata file
+    cdir=config['CacheDirectory']
+    edir=config['ExpandDirectory']
+
+    imagefile=os.path.join(edir, '%s.%s' % (request['id'], format))
     request['imagefile']=imagefile
+
+    status=converters.convert(format,request['expandedpath'],imagefile)
     return status
 
 def write_metadata(request):
@@ -210,11 +216,21 @@ def write_metadata(request):
     """
     format=request['format']
     meta=request['meta']
-    metafile='%s.meta'%(request['expandedpath'])
+
+    edir=config['ExpandDirectory']
+
+    ## initially write metadata to tempfile
+    (fd,metafile)=tempfile.mkstemp(prefix=request['id'],suffix='meta',dir=edir)
+    os.close(fd)
+    request['metafile']=metafile
+
     status=converters.writemeta(format,meta,metafile)
 
-    # Write Metadata file
-    request['metafile']=metafile
+    ## after success move to final name
+    final_metafile=os.path.join(edir, '%s.meta' % (request['id']))
+    shutil.move(metafile, final_metafile)
+    request['metafile']=final_metafile
+
     return status
 
 
@@ -334,7 +350,9 @@ def dopull(self,request,TESTMODE=0):
         logging.error("ERROR: dopull failed system=%s tag=%s"%(request['system'],request['tag']))
         print sys.exc_value
         self.update_state(state='FAILURE')
-        #cleanup_temporary(request)
+
+        ## TODO: add a debugging flag and only disable cleanup if debugging
+        cleanup_temporary(request)
         raise
 
 
