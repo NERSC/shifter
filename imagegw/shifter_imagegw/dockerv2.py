@@ -73,6 +73,10 @@ class dockerv2Handle():
     allowAuthenticated = True
     checkLayerChecksums = True
 
+    # excluding this blobSum because it translates to an empty tar file
+    # and python 2.6 throws an exception when an open is attempted
+    excludeBlobSums = ['sha256:a3ed95caeb02ffe68cdd9fd84406680ae93d633cb16422d00e8a7c22955b46d4']
+
     def __init__(self, imageIdent, options = None, updater=None):
         """
         Initialize an instance of the dockerv2 class.
@@ -163,6 +167,12 @@ class dockerv2Handle():
     def log(self,state,message=''):
         if self.updater is not None:
             self.updater.update_status(state,message)
+
+    def excludeLayer(self, blobsum):
+        ## TODO: add better verfication of the blobsum, potentially give other
+        ## routes to mask out a layer with this function
+        if blobsum not in self.excludeBlobSums:
+            self.excludeBlobSums.append(blobsum)
 
     def setupHttpConn(self, url, cacert=None):
         (protocol, url) = url.split('://', 1)
@@ -296,28 +306,37 @@ class dockerv2Handle():
             raise e
         return jdata
 
+    def examine_manifest(self,manifest):
+        self.log("PULLING",'Constructing manifest')
+        (eldest,youngest) = self.constructImageMetadata(manifest)
+
+        self.eldest=eldest
+        self.youngest=youngest
+        meta=youngest
+
+        resp={'id':meta['id']}
+        if 'config' in meta:
+            c=meta['config']
+            if 'Env' in c:
+                resp['env']=c['Env']
+            if 'Entrypoint' in c:
+                resp['entrypoint']=c['Entrypoint']
+        return resp
+
+
     def pull_layers(self,manifest,cachedir):
-            self.log("PULLING",'Constructing manifest')
-            (eldest,youngest) = self.constructImageMetadata(manifest)
-            layer = eldest
-            while layer is not None:
-                self.log("PULLING","Pulling layer %s"%layer['fsLayer']['blobSum'])
-                self.saveLayer(layer['fsLayer']['blobSum'], cachedir)
+        if self.eldest is None:
+            resp = self.examine_manifest(manifest)
+        layer = self.eldest
+        while layer is not None:
+            if layer['fsLayer']['blobSum'] in self.excludeBlobSums:
                 layer = layer['child']
+                continue
 
-            self.eldest=eldest
-            self.youngest=youngest
-            meta=youngest
-            resp={'id':meta['id']}
-            if 'config' in meta:
-                c=meta['config']
-                if 'Env' in c:
-                    resp['env']=c['Env']
-                if 'Entrypoint' in c:
-                    resp['entrypoint']=c['Entrypoint']
-            return resp
-
-
+            self.log("PULLING","Pulling layer %s"%layer['fsLayer']['blobSum'])
+            self.saveLayer(layer['fsLayer']['blobSum'], cachedir)
+            layer = layer['child']
+        return True
 
     def saveLayer(self, layer, cachedir='./'):
         """
@@ -463,6 +482,10 @@ class dockerv2Handle():
         layerPaths = []
         layer = baseLayer
         while layer is not None:
+            if layer['fsLayer']['blobSum'] in self.excludeBlobSums:
+                layer = layer['child']
+                continue
+
             tfname = os.path.join(cachedir,'%s.tar'%(layer['fsLayer']['blobSum']))
             tfp = tarfile.open(tfname, 'r:gz')
 
@@ -511,6 +534,10 @@ class dockerv2Handle():
         layerIdx = 0
         layer = baseLayer
         while layer is not None:
+            if layer['fsLayer']['blobSum'] in self.excludeBlobSums:
+                layer = layer['child']
+                continue
+
             tfname = os.path.join(cachedir,'%s.tar' % (layer['fsLayer']['blobSum']))
             tfp = tarfile.open(tfname, 'r:gz')
             members = layerPaths[layerIdx]
