@@ -35,6 +35,7 @@ Here is an example Dockerfile::
     ENV PATH=/usr/bin:/bin:/app
 
 Going through the above:
+
 1. base from a common distribution, e.g., ubuntu:14.04,
 2. install compiler tools to get a minimal dev environment.
 3. get and install mpich 3.2
@@ -116,6 +117,7 @@ Next copy /tmp/craylibs to your optUdiImage path (see udiRoot.conf) under
 cray/lib64, e.g., `code:/usr/lib/shifter/udiImage/cray/lib64`
 
 Finally, a few modifications need to be made to udiRoot.conf:
+
 1. add "LD_LIBRARY_PATH=/opt/udiImage/cray/lib64" to siteEnvAppend
 2. add "/var/opt/cray/alps:/var/opt/cray/alps" to siteFs
 3. if CLE6, add "/etc/opt/cray/wlm_detect:/etc/opt/cray/wlm_detect" to siteFs
