@@ -38,6 +38,7 @@
 #include <pwd.h>
 #include <grp.h>
 #include <getopt.h>
+#include <signal.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -86,6 +87,10 @@ int adoptPATH(char **environ);
 
 #ifndef _TESTHARNESS_SHIFTER
 int main(int argc, char **argv) {
+    signal(SIGHUP, SIG_IGN);
+    signal(SIGINT, SIG_IGN);
+    signal(SIGSTOP, SIG_IGN);
+    signal(SIGTERM, SIG_IGN);
 
     /* save a copy of the environment for the exec */
     char **environ_copy = shifter_copyenv();
