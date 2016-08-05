@@ -17,7 +17,7 @@ Can Shifter import Docker images with unicode filenames embedded?
 -----------------------------------------------------------------
 Yes.  If you are seeing errors similar to the following in the image worker log
 then you'll need to include the provide sitecustomize.py in your python setup
-or just point the celery process's PYTHONPATH to include it.
+or just point the celery process's PYTHONPATH to include it::
 
     [2016-08-01 09:41:20,664: ERROR/MainProcess] Task shifter_imagegw.imageworker.dopull[XXXXXXX-omitted-XXXXXXX] raised unexpected: UnicodeDecodeError('ascii', '/path/is/omitted/some\xc3\xa9_unicode', 35, 36, 'ordinal not in range(128)')
     Traceback (most recent call last):
@@ -41,8 +41,9 @@ or just point the celery process's PYTHONPATH to include it.
 
 This error is being caused by the celery process not properly getting setup for
 unicode processing.  To fix this, either set PYTHONPATH to include
-   * /usr/libexec/shifter (RedHat variants)
-   * /usr/lib/shifter (SLES variants)
+
+* /usr/libexec/shifter (RedHat variants)
+* /usr/lib/shifter (SLES variants)
 
 In order to get the shifter sitecustomize.py into your PYTHONPATH.
 
