@@ -108,6 +108,9 @@ def list(system):
 # This will lookup the status of the requested image.
 @app.route('/api/lookup/<system>/<type>/<path:tag>/', methods=["GET"])
 def lookup(system,type,tag):
+    if type == "docker" and tag.find(':') == -1:
+        tag = '%s:latest' % (tag)
+
     auth=request.headers.get(AUTH_HEADER)
     app.logger.debug("lookup system=%s type=%s tag=%s auth=%s"%(system,type,tag,auth))
     i={'system':system,'itype':type,'tag':tag}
@@ -137,6 +140,9 @@ def lookup(system,type,tag):
 # This will pull the requested image.
 @app.route('/api/pull/<system>/<type>/<path:tag>/', methods=["POST"])
 def pull(system,type,tag):
+    if type == "docker" and tag.find(':') == -1:
+        tag = '%s:latest' % (tag)
+
     auth=request.headers.get(AUTH_HEADER)
     app.logger.debug("pull system=%s type=%s tag=%s"%(system,type,tag))
     i={'system':system,'itype':type,'tag':tag}
@@ -167,6 +173,9 @@ def autoexpire(system):
 # This will expire an image which removes it from the cache.
 @app.route('/api/expire/<system>/<type>/<tag>/', methods=["GET"])
 def expire(system,type,tag):
+    if type == "docker" and tag.find(':') == -1:
+        tag = '%s:latest' % (tag)
+
     auth=request.headers.get(AUTH_HEADER)
     i={'system':system,'itype':type,'tag':tag}
     app.logger.debug("expire system=%s type=%s tag=%s"%(system,type,tag))
