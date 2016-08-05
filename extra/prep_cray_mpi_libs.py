@@ -51,6 +51,7 @@ so_skip_patterns = [
     r'^libpthread\.so.*',
     r'^libdl\.so.*',
     r'^libc[\.-]*so.*',
+    r'^libstdc++\.so.*'
 ]
 
 def module_list():

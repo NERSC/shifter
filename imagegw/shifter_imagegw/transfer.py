@@ -158,6 +158,23 @@ def remove_file(filename, system, logger=None):
     _execAndLog(rmCmd, logger)
     return True
 
+def check_file(filename, system, logger=None):
+    shCmd = None
+    baseRemotePath = None
+    if system['accesstype'] == 'local':
+        shCmd = _shCmd
+        baseRemotePath = system['local']['imageDir']
+    elif system['accesstype'] == 'remote':
+        shCmd = _sshCmd
+        baseRemotePath = system['ssh']['imageDir']
+    (basePath,imageFilename) = os.path.split(filename)
+    remoteFilename = os.path.join(baseRemotePath, imageFilename)
+    lsCmd = shCmd(system, 'ls', remoteFilename)
+    ret = _execAndLog(lsCmd, logger)
+
+    if ret == 0:
+        return True
+    return False
 
 def transfer(system,imagePath,metadataPath=None,logger=None):
     if metadataPath is not None:
@@ -168,11 +185,20 @@ def transfer(system,imagePath,metadataPath=None,logger=None):
         logger.error("Transfer of %s failed" % imagePath)
     return False
 
+
 def remove(system,imagePath,metadataPath=None,logger=None):
     if metadataPath is not None:
-        remove_file(metadataPath, system)
-    if remove_file(imagePath,system):
+        remove_file(metadataPath, system, logger)
+    if remove_file(imagePath,system, logger):
         return True
     if logger is not None:
         logger.error("Remove of %s failed" % imagePath)
     return False
+
+def imagevalid(system, imagePath, metadataPath=None, logger=None):
+    metadataOk = True
+    if metadataPath is not None:
+        metadataOk = check_file(metadataPath, system, logger)
+    imageOk = check_file(imagePath, system, logger)
+
+    return metadataOk and imageOk
