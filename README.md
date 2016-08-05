@@ -37,4 +37,4 @@ https://www.nersc.gov/research-and-development/user-defined-images/
 
 # Documentation
 
-https://github.com/NERSC/shifter/wiki
+https://github.com/NERSC/shifter/tree/master/doc
