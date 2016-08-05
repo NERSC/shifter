@@ -22,6 +22,10 @@
 * Allow sshd to be explicitly enabled in SLURM integration
 * Allow ccm-emulation-mode to be explicity enabled in SLURM integration
 * Only allow shifter to automatically create mount points on its tmpfs/ramfs
+* Enable docker-type images to implicitly assume "latest" if no tag is 
+  specified by user
+* Ensure failed image pulls are fully cleaned up
+* Check if the current image version is installed on the platform before pulling
 
 16.04.0
 ===========
