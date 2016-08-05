@@ -158,6 +158,10 @@ def pull_image(request,updater=defupdater):
             request['meta']=resp
             request['id'] = str(resp['id'])
 
+            image_exists = check_image(request, request['id'])
+            if image_exists:
+                return True
+
             dh.pull_layers(manifest,cdir)
 
             expandedpath = tempfile.mkdtemp(suffix='extract', prefix=request['id'], dir=edir)
@@ -186,6 +190,13 @@ def examine_image(request):
     # TODO: Add checks to examine the image.  Should be extensible.
     return True
 
+def get_image_format(request):
+    format=config['DefaultImageFormat']
+    if format in request:
+        format=request['format']
+
+    return format
+
 def convert_image(request):
     """
     Convert the image to the required format for the target system
@@ -193,11 +204,9 @@ def convert_image(request):
     Returns True on success
     """
     system=request['system']
-    format=config['DefaultImageFormat']
-    if format in request:
-        format=request['format']
-    else:
-        request['format']=format
+
+    format=get_image_format(request)
+    request['format']=format
 
     cdir=config['CacheDirectory']
     edir=config['ExpandDirectory']
@@ -233,6 +242,23 @@ def write_metadata(request):
 
     return status
 
+
+def check_image(request, imageid):
+    """
+    Checks if the target image is on the target system
+
+    Returns True on success
+    """
+    system=request['system']
+    if system not in config['Platforms']:
+        raise KeyError('%s is not in the configuration'%system)
+    sys=config['Platforms'][system]
+
+    format = get_image_format(request)
+    image_filename = "%s.%s" % (request['id'],format)
+    image_metadata = "%s.meta" % (request['id'])
+
+    return transfer.imagevalid(sys, image_filename, image_metadata, logging)
 
 def transfer_image(request):
     """
@@ -321,26 +347,29 @@ def dopull(self,request,TESTMODE=0):
             print "pull_image failed"
             logging.info("Worker: Pull failed")
             raise OSError('Pull failed')
+
         if 'meta' not in request:
             raise OSError('Metadata not populated')
-        # Step 2 - Check the image
-        us.update_status('EXAMINATION','Examining image')
-        print "Worker: examining image %s"%(request['tag'])
-        if not examine_image(request):
-            raise OSError('Examine failed')
-        # Step 3 - Convert
-        us.update_status('CONVERSION','Converting image')
-        print "Worker: converting image %s"%(request['tag'])
-        if not convert_image(request):
-            raise OSError('Conversion failed')
-        if not write_metadata(request):
-            raise OSError('Metadata creation failed')
-        # Step 4 - TRANSFER
-        us.update_status('TRANSFER','Transferring image')
-        logging.info("Worker: transferring image %s"%(request['tag']))
-        print "Worker: transferring image %s"%(request['tag'])
-        if not transfer_image(request):
-            raise OSError('Transfer failed')
+
+        if not check_image(request, request['id']):
+            # Step 2 - Check the image
+            us.update_status('EXAMINATION','Examining image')
+            print "Worker: examining image %s"%(request['tag'])
+            if not examine_image(request):
+                raise OSError('Examine failed')
+            # Step 3 - Convert
+            us.update_status('CONVERSION','Converting image')
+            print "Worker: converting image %s"%(request['tag'])
+            if not convert_image(request):
+                raise OSError('Conversion failed')
+            if not write_metadata(request):
+                raise OSError('Metadata creation failed')
+            # Step 4 - TRANSFER
+            us.update_status('TRANSFER','Transferring image')
+            logging.info("Worker: transferring image %s"%(request['tag']))
+            print "Worker: transferring image %s"%(request['tag'])
+            if not transfer_image(request):
+                raise OSError('Transfer failed')
         # Done
         us.update_status('READY','Image ready')
         cleanup_temporary(request)
@@ -374,3 +403,11 @@ def doexpire(self,request,TESTMODE=0):
     except:
         logging.error("ERROR: doexpire failed system=%s tag=%s"%(request['system'],request['tag']))
         raise
+
+@queue.task(bind=True)
+def doimagevalid(self, request, TESTMODE=0):
+    """
+    Celery task to check if a pulled image exists and if it is valid
+    """
+    logging.debug("do imagevalid system=%s tag=%s TM=%d" % (request['system'], request['tag'], TESTMODE))
+
