@@ -246,6 +246,7 @@ int main(int argc, char **argv) {
 
     /* attempt to execute user-requested exectuable */
     execvpe(opts.args[0], opts.args, environ_copy);
+    fprintf(stderr, "%s: %s: command not found\n", argv[0], opts.args[0]);
     return 127;
 }
 #endif
