@@ -248,7 +248,7 @@ int main(int argc, char **argv) {
     execvpe(opts.args[0], opts.args, environ_copy);
 
     char *errbuffer = NULL;
-    errbuffer = alloc_strgenf("%s: %s: ", argv[0], opts.args[0]);
+    errbuffer = alloc_strgenf("%s: %s", argv[0], opts.args[0]);
     perror(errbuffer);
 
     free(errbuffer);
