@@ -254,7 +254,7 @@ class imagemngr:
               continue
           else:
               self.images_remove({'_id':rec['_id']})
-      newimage={'format':'ext4',#<ext4|squashfs|vfs>
+      newimage={'format':'invalid',#<ext4|squashfs|vfs>
           'arch':'amd64', #<amd64|...>
           'os':'linux', #<linux|...>
           'location':'', #<urlencoded location, interpretation dependent on remotetype>
@@ -265,6 +265,8 @@ class imagemngr:
           'tag':[],
           'status':'INIT',
           'groupAcl':[]}
+      if 'DefaultImageFormat' in self.config:
+          newimage['format'] = self.config['DefaultImageFormat']
       for p in image:
           if p is 'tag':
               continue
