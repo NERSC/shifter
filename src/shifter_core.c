@@ -1565,7 +1565,7 @@ int setupVolumeMapMounts(
             backingStoreExists = 0;
 
         } else {
-            if (_shifterCore_bindMount(udiConfig, mountCache, from_buffer, to_buffer, flagsInEffect, 1) != 0) {
+            if (_shifterCore_bindMount(udiConfig, mountCache, from_buffer, to_buffer, flagsInEffect, 0) != 0) {
                 fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from_buffer, to_buffer);
                 goto _handleVolMountError;
             }
