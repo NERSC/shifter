@@ -39,6 +39,7 @@
 #include <grp.h>
 #include <getopt.h>
 #include <signal.h>
+#include <errno.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -247,13 +248,9 @@ int main(int argc, char **argv) {
     /* attempt to execute user-requested exectuable */
     execvpe(opts.args[0], opts.args, environ_copy);
 
-    char *errbuffer = NULL;
-    errbuffer = alloc_strgenf("%s: %s", argv[0], opts.args[0]);
-    perror(errbuffer);
+    /* doh! how did we get here? return the error */
+    fprintf(stderr, "%s: %s: %s\n", argv[0], opts.args[0], strerror(errno));
 
-    free(errbuffer);
-    errbuffer = NULL;
-    
     return 127;
 }
 #endif
