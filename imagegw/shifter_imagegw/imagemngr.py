@@ -107,12 +107,11 @@ class imagemngr:
       """
       if 'admins' not in self.platforms[system]:
           return False
-      admins=self.platforms[system]['admins'].split()
+      admins=self.platforms[system]['admins']
       user=session['user']
-      for ad in admins:
-          if user==ad:
-              self.logger.info('user %s is an admin'%(user))
-              return True
+      if user in admins:
+          self.logger.info('user %s is an admin'%(user))
+          return True
       return False
 
   def isasystem(self,system):
