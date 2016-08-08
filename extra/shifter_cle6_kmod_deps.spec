@@ -20,7 +20,7 @@ xfs, ext4 and deps
 
 %build
 cd /usr/src/linux
-if [ -e "arch/x86/configs/cray_ari_c_defconfi" ]; then
+if [ -e "arch/x86/configs/cray_ari_c_defconfig" ]; then
   # assuming we are on a chroot environment
   cp arch/x86/configs/cray_ari_c_defconfig .config
 else
