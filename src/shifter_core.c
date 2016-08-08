@@ -62,7 +62,9 @@
 #define UMOUNT_NOFOLLOW 0x00000008 /* do not follow symlinks when unmounting */
 #endif
 
-int _shifterCore_bindMount(UdiRootConfig *confg, MountList *mounts, const char *from, const char *to, size_t flags, int overwrite);
+int _shifterCore_bindMount(UdiRootConfig *confg, MountList *mounts,
+        const char *from, const char *to, size_t flags, int overwrite,
+        int preventOverShadow);
 int _shifterCore_copyFile(const char *cpPath, const char *source, const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode);
 
 /*! Bind subtree of static image into UDI rootfs */
@@ -106,7 +108,7 @@ int bindImageIntoUDI(
     fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", dir); \
     goto _bindImgUDI_unclean; \
 }
-#define BINDMOUNT(mounts, from, to, ro, overwrite) if (_shifterCore_bindMount(udiConfig, mounts, from, to, ro, overwrite) != 0) { \
+#define BINDMOUNT(mounts, from, to, ro, overwrite, noovershadow) if (_shifterCore_bindMount(udiConfig, mounts, from, to, ro, overwrite, noovershadow) != 0) { \
     fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from, to); \
     goto _bindImgUDI_unclean; \
 }
@@ -221,7 +223,7 @@ int bindImageIntoUDI(
                 /* create the file */
                 FILE *fp = fopen(mntBuffer, "w");
                 fclose(fp);
-                BINDMOUNT(&mountCache, srcBuffer, mntBuffer, 0, 1);
+                BINDMOUNT(&mountCache, srcBuffer, mntBuffer, 0, 0, 1);
             }
             free(itemname);
             continue;
@@ -229,7 +231,7 @@ int bindImageIntoUDI(
         if (S_ISDIR(statData.st_mode)) {
             if (copyFlag == 0) {
                 MKDIR(mntBuffer, 0755);
-                BINDMOUNT(&mountCache, srcBuffer, mntBuffer, 0, 1);
+                BINDMOUNT(&mountCache, srcBuffer, mntBuffer, 0, 0, 1);
             } else {
                 char *args[] = { strdup(udiConfig->cpPath), strdup("-rp"),
                     strdup(srcBuffer), strdup(mntBuffer), NULL
@@ -436,7 +438,7 @@ int prepareSiteModifications(const char *username,
     ret = 1; \
     goto _prepSiteMod_unclean; \
 }
-#define _BINDMOUNT(mountCache, from, to, flags, overwrite) if (_shifterCore_bindMount(udiConfig, mountCache, from, to, flags, overwrite) != 0) { \
+#define _BINDMOUNT(mountCache, from, to, flags, overwrite, noovershadow) if (_shifterCore_bindMount(udiConfig, mountCache, from, to, flags, overwrite, noovershadow) != 0) { \
     fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from, to); \
     perror("   --- REASON: "); \
     ret = 1; \
@@ -750,17 +752,17 @@ int prepareSiteModifications(const char *username,
     /* mount /sys */
     snprintf(mntBuffer, PATH_MAX, "%s/sys", udiRoot);
     mntBuffer[PATH_MAX-1] = 0;
-    _BINDMOUNT(&mountCache, "/sys", mntBuffer, 0, 1);
+    _BINDMOUNT(&mountCache, "/sys", mntBuffer, 0, 1, 0);
 
     /* mount /dev */
     snprintf(mntBuffer, PATH_MAX, "%s/dev", udiRoot);
     mntBuffer[PATH_MAX-1] = 0;
-    _BINDMOUNT(&mountCache, "/dev", mntBuffer, 0, 1);
+    _BINDMOUNT(&mountCache, "/dev", mntBuffer, 0, 1, 0);
 
     /* mount /tmp */
     snprintf(mntBuffer, PATH_MAX, "%s/tmp", udiRoot);
     mntBuffer[PATH_MAX-1] = 0;
-    _BINDMOUNT(&mountCache, "/tmp", mntBuffer, 0, 1);
+    _BINDMOUNT(&mountCache, "/tmp", mntBuffer, 0, 1, 0);
 
 
 #undef _MKDIR
@@ -1565,7 +1567,7 @@ int setupVolumeMapMounts(
             backingStoreExists = 0;
 
         } else {
-            if (_shifterCore_bindMount(udiConfig, mountCache, from_buffer, to_buffer, flagsInEffect, 0) != 0) {
+            if (_shifterCore_bindMount(udiConfig, mountCache, from_buffer, to_buffer, flagsInEffect, 0, 1) != 0) {
                 fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from_buffer, to_buffer);
                 goto _handleVolMountError;
             }
@@ -1716,7 +1718,7 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
     MountList mountCache;
     memset(&mountCache, 0, sizeof(MountList));
 
-#define _BINDMOUNT(mounts, from, to, flags, overwrite) if (_shifterCore_bindMount(udiConfig, mounts, from, to, flags, overwrite) != 0) { \
+#define _BINDMOUNT(mounts, from, to, flags, overwrite, noovershadow) if (_shifterCore_bindMount(udiConfig, mounts, from, to, flags, overwrite, noovershadow) != 0) { \
     fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from, to); \
     goto _setupImageSsh_unclean; \
 }
@@ -1864,14 +1866,14 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
         from[PATH_MAX-1] = 0;
         to[PATH_MAX-1] = 0;
         if (stat(to, &statData) == 0) {
-            _BINDMOUNT(&mountCache, from, to, VOLMAP_FLAG_READONLY, 1);
+            _BINDMOUNT(&mountCache, from, to, VOLMAP_FLAG_READONLY, 1, 0);
         }
         snprintf(from, PATH_MAX, "%s/bin/ssh", udiImage);
         snprintf(to, PATH_MAX, "%s/bin/ssh", udiConfig->udiMountPoint);
         from[PATH_MAX - 1] = 0;
         to[PATH_MAX - 1] = 0;
         if (stat(to, &statData) == 0) {
-            _BINDMOUNT(&mountCache, from, to, VOLMAP_FLAG_READONLY, 1);
+            _BINDMOUNT(&mountCache, from, to, VOLMAP_FLAG_READONLY, 1, 0);
         }
         snprintf(from, PATH_MAX, "%s/etc/ssh_config", udiImage);
         snprintf(to, PATH_MAX, "%s/etc/ssh/ssh_config", udiConfig->udiMountPoint);
@@ -2015,7 +2017,8 @@ int forkAndExecvSilent(char *const *args) {
 }
 
 int _shifterCore_bindMount(UdiRootConfig *udiConfig, MountList *mountCache,
-        const char *from, const char *to, size_t flags, int overwriteMounts)
+        const char *from, const char *to, size_t flags, int overwriteMounts,
+        int noovershadow)
 {
     int ret = 0;
     char **ptr = NULL;
@@ -2032,7 +2035,7 @@ int _shifterCore_bindMount(UdiRootConfig *udiConfig, MountList *mountCache,
         privateRemountFlags = MS_PRIVATE;
     }
 
-    if (from == NULL || to == NULL || mountCache == NULL) {
+    if (from == NULL || to == NULL || mountCache == NULL || udiConfig == NULL) {
         fprintf(stderr, "INVALID input to bind-mount. Fail\n");
         return 1;
     }
@@ -2041,6 +2044,10 @@ int _shifterCore_bindMount(UdiRootConfig *udiConfig, MountList *mountCache,
     if (to_real == NULL) {
         fprintf(stderr, "Couldn't lookup path %s, fail.\n", to);
         return 1;
+    }
+
+    if (noovershadow) {
+        ptr = findpartial_MountList(mountCache, to_real, udiConfig->udiMountPoint);
     }
 
     /* not interested in mounting over existing mounts, prevents

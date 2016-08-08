@@ -74,6 +74,7 @@ int insert_MountList(MountList *mounts, const char *mountPoint);
 int remove_MountList(MountList *mounts, const char *mountPoint);
 char **find_MountList(MountList *mounts, const char *mountPoint);
 char **findstartswith_MountList(MountList *mounts, const char *mountPoint);
+char **findpartial_MountList(MountList *mounts, const char *target, const char *acceptablePrefix);
 void free_MountList(MountList *mounts, int freeStruct);
 
 #ifdef __cplusplus

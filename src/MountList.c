@@ -329,6 +329,41 @@ char **findstartswith_MountList(MountList *mounts, const char *key) {
 }
 
 /**
+ * findpartial_MountList
+ * Return pointer to the first (lowest memory address) mount which partially
+ * matches target ignoring acceptablePrefix in both strings.
+ * \param mounts pointer to the MountList structure
+ * \param target string to partially match
+ * \param acceptablePrefix string that can be present at beginning without
+ *                         being considered a partial match
+ *
+ * Returns lowest matching key or NULL if there are no matches
+ */
+char **findpartial_MountList(MountList *mounts, const char *target, const char *acceptablePrefix) {
+    char **ptr = NULL;
+    size_t matchMin = 0;
+    size_t matchMax = 0;
+    if (mounts == NULL || target == NULL) return NULL;
+
+    matchMax = strlen(target);
+    if (acceptablePrefix != NULL) {
+        matchMin = strlen(acceptablePrefix);
+        if (strncmp(acceptablePrefix, target, matchMin) != 0) {
+            /* acceptablePrefix must appear at beginning of target */
+            return NULL;
+        }
+    }
+
+    for (ptr = mounts->mountPointList; ptr && *ptr; ptr++) {
+        size_t len = strlen(*ptr);
+        if (len <= matchMin) continue;
+        if (len > matchMax) continue;
+        if (strncmp(*ptr, target, len) == 0) return ptr;
+    }
+    return NULL;
+}
+
+/**
  * free_MountList
  * Fully destruct all components of the MountList, optionally, destruct the
  * MountList itself
