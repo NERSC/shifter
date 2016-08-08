@@ -63,8 +63,7 @@
 #endif
 
 int _shifterCore_bindMount(UdiRootConfig *confg, MountList *mounts,
-        const char *from, const char *to, size_t flags, int overwrite,
-        int preventOverShadow);
+        const char *from, const char *to, size_t flags, int overwrite);
 int _shifterCore_copyFile(const char *cpPath, const char *source, const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode);
 
 /*! Bind subtree of static image into UDI rootfs */
@@ -108,7 +107,7 @@ int bindImageIntoUDI(
     fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", dir); \
     goto _bindImgUDI_unclean; \
 }
-#define BINDMOUNT(mounts, from, to, ro, overwrite, noovershadow) if (_shifterCore_bindMount(udiConfig, mounts, from, to, ro, overwrite, noovershadow) != 0) { \
+#define BINDMOUNT(mounts, from, to, ro, overwrite) if (_shifterCore_bindMount(udiConfig, mounts, from, to, ro, overwrite) != 0) { \
     fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from, to); \
     goto _bindImgUDI_unclean; \
 }
@@ -223,7 +222,7 @@ int bindImageIntoUDI(
                 /* create the file */
                 FILE *fp = fopen(mntBuffer, "w");
                 fclose(fp);
-                BINDMOUNT(&mountCache, srcBuffer, mntBuffer, 0, 0, 1);
+                BINDMOUNT(&mountCache, srcBuffer, mntBuffer, 0, 0);
             }
             free(itemname);
             continue;
@@ -231,7 +230,7 @@ int bindImageIntoUDI(
         if (S_ISDIR(statData.st_mode)) {
             if (copyFlag == 0) {
                 MKDIR(mntBuffer, 0755);
-                BINDMOUNT(&mountCache, srcBuffer, mntBuffer, 0, 0, 1);
+                BINDMOUNT(&mountCache, srcBuffer, mntBuffer, 0, 0);
             } else {
                 char *args[] = { strdup(udiConfig->cpPath), strdup("-rp"),
                     strdup(srcBuffer), strdup(mntBuffer), NULL
@@ -438,7 +437,7 @@ int prepareSiteModifications(const char *username,
     ret = 1; \
     goto _prepSiteMod_unclean; \
 }
-#define _BINDMOUNT(mountCache, from, to, flags, overwrite, noovershadow) if (_shifterCore_bindMount(udiConfig, mountCache, from, to, flags, overwrite, noovershadow) != 0) { \
+#define _BINDMOUNT(mountCache, from, to, flags, overwrite) if (_shifterCore_bindMount(udiConfig, mountCache, from, to, flags, overwrite) != 0) { \
     fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from, to); \
     perror("   --- REASON: "); \
     ret = 1; \
@@ -752,17 +751,17 @@ int prepareSiteModifications(const char *username,
     /* mount /sys */
     snprintf(mntBuffer, PATH_MAX, "%s/sys", udiRoot);
     mntBuffer[PATH_MAX-1] = 0;
-    _BINDMOUNT(&mountCache, "/sys", mntBuffer, 0, 1, 0);
+    _BINDMOUNT(&mountCache, "/sys", mntBuffer, 0, 1);
 
     /* mount /dev */
     snprintf(mntBuffer, PATH_MAX, "%s/dev", udiRoot);
     mntBuffer[PATH_MAX-1] = 0;
-    _BINDMOUNT(&mountCache, "/dev", mntBuffer, 0, 1, 0);
+    _BINDMOUNT(&mountCache, "/dev", mntBuffer, 0, 1);
 
     /* mount /tmp */
     snprintf(mntBuffer, PATH_MAX, "%s/tmp", udiRoot);
     mntBuffer[PATH_MAX-1] = 0;
-    _BINDMOUNT(&mountCache, "/tmp", mntBuffer, 0, 1, 0);
+    _BINDMOUNT(&mountCache, "/tmp", mntBuffer, 0, 1);
 
 
 #undef _MKDIR
@@ -1408,9 +1407,11 @@ int setupVolumeMapMounts(
 ) {
     char *filtered_from = NULL;
     char *filtered_to = NULL;
+    char *to_real = NULL;
     VolumeMapFlag *flags = NULL;
 
     size_t mapIdx = 0;
+    size_t udiMountLen = 0;
 
     char from_buffer[PATH_MAX];
     char to_buffer[PATH_MAX];
@@ -1423,6 +1424,8 @@ int setupVolumeMapMounts(
     if (map == NULL || map->n == 0) {
         return 0;
     }
+
+    udiMountLen = strlen(udiConfig->udiMountPoint);
 
     for (mapIdx = 0; mapIdx < map->n; mapIdx++) {
         size_t flagsInEffect = 0;
@@ -1532,6 +1535,22 @@ int setupVolumeMapMounts(
             fprintf(stderr, "FAILED \"to\" location is not directory: %s\n", to_buffer);
             goto _handleVolMountError;
         }
+
+        to_real = realpath(to_buffer, NULL);
+        if (to_real == NULL) {
+            fprintf(stderr, "Failed to get realpath for %s\n", to_buffer);
+            goto _handleVolMountError;
+        } else {
+            size_t to_len = strlen(to_real);
+
+            /* validate that path starts with udiMountPoint */
+            if (to_len <= udiMountLen ||
+                strncmp(to_real, udiConfig->udiMountPoint, udiMountLen) != 0) {
+                fprintf(stderr, "Invalid destination %s, not allowed, fail.\n", to_real);
+                goto _handleVolMountError;
+            }
+        }
+
         if (flagsInEffect & VOLMAP_FLAG_PERNODECACHE) {
             VolMapPerNodeCacheConfig *cacheConfig = NULL;
             /* do something to mount backing store */
@@ -1550,12 +1569,16 @@ int setupVolumeMapMounts(
                 format = FORMAT_XFS;
             }
             if (strcmp(cacheConfig->method, "loop") == 0) {
-                loopMount(from_buffer, to_buffer, format, udiConfig, 0);
+                if (loopMount(from_buffer, to_real, format, udiConfig, 0) != 0) {
+                    fprintf(stderr, "FAILED to mount per-node cache, exiting.\n");
+                    goto _handleVolMountError;
+                }
+                insert_MountList(mountCache, to_real);
             } else {
                 fprintf(stderr, "FAILED to understand per-node cache mounting method, exiting.\n");
                 goto _handleVolMountError;
             }
-            if (chown(to_buffer, udiConfig->target_uid, udiConfig->target_gid) != 0) {
+            if (chown(to_real, udiConfig->target_uid, udiConfig->target_gid) != 0) {
                 fprintf(stderr, "FAILED to chown per-node cache to user.\n");
                 goto _handleVolMountError;
             }
@@ -1567,11 +1590,16 @@ int setupVolumeMapMounts(
             backingStoreExists = 0;
 
         } else {
-            if (_shifterCore_bindMount(udiConfig, mountCache, from_buffer, to_buffer, flagsInEffect, 0, 1) != 0) {
-                fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from_buffer, to_buffer);
+            int allowOverwriteBind = 0;
+
+            if (_shifterCore_bindMount(udiConfig, mountCache, from_buffer, to_real, flagsInEffect, allowOverwriteBind) != 0) {
+                fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from_buffer, to_real);
                 goto _handleVolMountError;
             }
         }
+        free(to_real);
+        to_real = NULL;
+
         continue;
 _handleVolMountError:
         if ((flagsInEffect & VOLMAP_FLAG_PERNODECACHE) && backingStoreExists == 1) {
@@ -1590,6 +1618,9 @@ _setupVolumeMapMounts_unclean:
     }
     if (filtered_to != NULL) {
         free(filtered_to);
+    }
+    if (to_real != NULL) {
+        free(to_real);
     }
     return 1;
 }
@@ -1718,7 +1749,7 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
     MountList mountCache;
     memset(&mountCache, 0, sizeof(MountList));
 
-#define _BINDMOUNT(mounts, from, to, flags, overwrite, noovershadow) if (_shifterCore_bindMount(udiConfig, mounts, from, to, flags, overwrite, noovershadow) != 0) { \
+#define _BINDMOUNT(mounts, from, to, flags, overwrite) if (_shifterCore_bindMount(udiConfig, mounts, from, to, flags, overwrite) != 0) { \
     fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from, to); \
     goto _setupImageSsh_unclean; \
 }
@@ -1866,14 +1897,14 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
         from[PATH_MAX-1] = 0;
         to[PATH_MAX-1] = 0;
         if (stat(to, &statData) == 0) {
-            _BINDMOUNT(&mountCache, from, to, VOLMAP_FLAG_READONLY, 1, 0);
+            _BINDMOUNT(&mountCache, from, to, VOLMAP_FLAG_READONLY, 1);
         }
         snprintf(from, PATH_MAX, "%s/bin/ssh", udiImage);
         snprintf(to, PATH_MAX, "%s/bin/ssh", udiConfig->udiMountPoint);
         from[PATH_MAX - 1] = 0;
         to[PATH_MAX - 1] = 0;
         if (stat(to, &statData) == 0) {
-            _BINDMOUNT(&mountCache, from, to, VOLMAP_FLAG_READONLY, 1, 0);
+            _BINDMOUNT(&mountCache, from, to, VOLMAP_FLAG_READONLY, 1);
         }
         snprintf(from, PATH_MAX, "%s/etc/ssh_config", udiImage);
         snprintf(to, PATH_MAX, "%s/etc/ssh/ssh_config", udiConfig->udiMountPoint);
@@ -2017,8 +2048,7 @@ int forkAndExecvSilent(char *const *args) {
 }
 
 int _shifterCore_bindMount(UdiRootConfig *udiConfig, MountList *mountCache,
-        const char *from, const char *to, size_t flags, int overwriteMounts,
-        int noovershadow)
+        const char *from, const char *to, size_t flags, int overwriteMounts)
 {
     int ret = 0;
     char **ptr = NULL;
@@ -2044,10 +2074,6 @@ int _shifterCore_bindMount(UdiRootConfig *udiConfig, MountList *mountCache,
     if (to_real == NULL) {
         fprintf(stderr, "Couldn't lookup path %s, fail.\n", to);
         return 1;
-    }
-
-    if (noovershadow) {
-        ptr = findpartial_MountList(mountCache, to_real, udiConfig->udiMountPoint);
     }
 
     /* not interested in mounting over existing mounts, prevents
@@ -2081,11 +2107,11 @@ int _shifterCore_bindMount(UdiRootConfig *udiConfig, MountList *mountCache,
     }
 
     /* perform the initial bind-mount */
-    ret = mount(from, to, "bind", mountFlags, NULL);
+    ret = mount(from, to_real, "bind", mountFlags, NULL);
     if (ret != 0) {
         goto _bindMount_unclean;
     }
-    insert_MountList(mountCache, to);
+    insert_MountList(mountCache, to_real);
 
     /* if the source is exactly /dev or starts with /dev/ then
        ALLOW device entires, otherwise remount with noDev */
@@ -2098,11 +2124,11 @@ int _shifterCore_bindMount(UdiRootConfig *udiConfig, MountList *mountCache,
     }
 
     /* remount the bind-mount to get the needed mount flags */
-    ret = mount(from, to, "bind", remountFlags, NULL);
+    ret = mount(from, to_real, "bind", remountFlags, NULL);
     if (ret != 0) {
         goto _bindMount_unclean;
     }
-    if (mount(NULL, to, NULL, privateRemountFlags, NULL) != 0) {
+    if (mount(NULL, to_real, NULL, privateRemountFlags, NULL) != 0) {
         perror("Failed to remount non-shared: ");
         goto _bindMount_unclean;
     }

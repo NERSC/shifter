@@ -358,7 +358,12 @@ char **findpartial_MountList(MountList *mounts, const char *target, const char *
         size_t len = strlen(*ptr);
         if (len <= matchMin) continue;
         if (len > matchMax) continue;
-        if (strncmp(*ptr, target, len) == 0) return ptr;
+        if (strncmp(*ptr, target, len) == 0) {
+            const char *sub = target + len;
+            if (strchr(sub, '/') != NULL) {
+                return ptr;
+            }
+        }
     }
     return NULL;
 }
