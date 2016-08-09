@@ -4,7 +4,7 @@
 Summary:  shifter
 Name:     shifter
 Version:  16.08.0pre1
-Release:  1
+Release:  1%{?dist}
 License:  BSD (LBNL-modified)
 Group:    System Environment/Base
 URL:      https://github.com/NERSC/shifter
