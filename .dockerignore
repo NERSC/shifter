@@ -1,4 +1,4 @@
 test.json
 docker-compose.yml
-test/config
+imagegw/test/config
 *.pyc
