@@ -558,12 +558,7 @@ int prepareSiteModifications(const char *username,
                     fprintf(stderr, "Couldn't copy %s because file already exists.\n", mntBuffer);
                     goto _prepSiteMod_unclean;
                 } else {
-                    char *args[] = { strdup(udiConfig->cpPath), strdup("-p"), strdup(srcBuffer), strdup(mntBuffer), NULL };
-                    char **argsPtr = NULL;
-                    int ret = forkAndExecv(args);
-                    for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
-                        free(*argsPtr);
-                    }
+                    int ret = _shifterCore_copyFile(udiConfig->cpPath, srcBuffer, mntBuffer, 0, 0, 0, 0644);
                     if (ret != 0) {
                         fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
                         goto _prepSiteMod_unclean;
@@ -1908,22 +1903,9 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
         }
         snprintf(from, PATH_MAX, "%s/etc/ssh_config", udiImage);
         snprintf(to, PATH_MAX, "%s/etc/ssh/ssh_config", udiConfig->udiMountPoint);
-        {
-            char *args[] = {strdup(udiConfig->cpPath),
-                strdup("-p"),
-                strdup(from),
-                strdup(to),
-                NULL
-            };
-            char **argsPtr = NULL;
-            int ret = forkAndExecv(args);
-            for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
-                free(*argsPtr);
-            }
-            if (ret != 0) {
-                fprintf(stderr, "FAILED to copy ssh_config to %s\n", to);
-                goto _setupImageSsh_unclean;
-            }
+        if (_shifterCore_copyFile(udiConfig->cpPath, from, to, 0, 0, 0, 0) != 0) {
+            fprintf(stderr, "FAILED to copy ssh_config to %s\n", to);
+            goto _setupImageSsh_unclean;
         }
         /* rely on var/empty created earlier in the setup process */
     }
