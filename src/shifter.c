@@ -328,7 +328,6 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         {"help", 0, 0, 'h'},
         {"volume", 1, 0, 'V'},
         {"verbose", 0, 0, 'v'},
-        {"user", 1, 0, 0},
         {"image", 1, 0, 'i'},
         {"entrypoint", 2, 0, 0},
         {"env", 0, 0, 'e'},
