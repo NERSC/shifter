@@ -99,6 +99,8 @@ int main(int argc, char **argv) {
     /* declare needed variables */
     char wd[PATH_MAX];
     char udiRoot[PATH_MAX];
+    uid_t actualUid = 0;
+    uid_t actualGid = 0;
     uid_t eUid = 0;
     gid_t eGid = 0;
     gid_t *gidList = NULL;
@@ -162,6 +164,8 @@ int main(int argc, char **argv) {
     /* figure out who we are and who we want to be */
     eUid = geteuid();
     eGid = getegid();
+    actualUid = getuid();
+    actualGid = getgid();
 
 
     nGroups = getgroups(0, NULL);
@@ -188,6 +192,10 @@ int main(int argc, char **argv) {
     }
     if (opts.tgtUid == 0 || opts.tgtGid == 0 || opts.username == NULL) {
         fprintf(stderr, "%s\n", "Failed to lookup username or attempted to run as root.\n");
+        exit(1);
+    }
+    if (opts.tgtUid != actualUid || opts.tgtGid != actualGid) {
+        fprintf(stderr, "Failed to correctly identify uid/gid, exiting.\n");
         exit(1);
     }
 
@@ -346,30 +354,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         switch (opt) {
             case 0:
                 {
-                    if (strcmp(long_options[longopt_index].name, "user") == 0) {
-                        struct passwd *pwd = NULL;
-                        if (optarg == NULL) {
-                            fprintf(stderr, "Must specify user with --user flag.\n");
-                            _usage(1);
-                        }
-                        pwd = shifter_getpwnam(optarg, udiConfig);
-                        if (pwd != NULL) {
-                            config->tgtUid = pwd->pw_uid;
-                            config->tgtGid = pwd->pw_gid;
-                            config->username = strdup(pwd->pw_name);
-                        } else {
-                            uid_t uid = atoi(optarg);
-                            if (uid != 0) {
-                                pwd = shifter_getpwuid(uid, udiConfig);
-                                config->tgtUid = pwd->pw_uid;
-                                config->tgtGid = pwd->pw_gid;
-                                config->username = strdup(pwd->pw_name);
-                            } else {
-                                fprintf(stderr, "Cannot run as root.\n");
-                                _usage(1);
-                            }
-                        }
-                    } else if (strcmp(long_options[longopt_index].name, "entrypoint") == 0) {
+                    if (strcmp(long_options[longopt_index].name, "entrypoint") == 0) {
                         config->useEntryPoint = 1;
                         if (optarg != NULL) {
                             config->entrypoint = strdup(optarg);
