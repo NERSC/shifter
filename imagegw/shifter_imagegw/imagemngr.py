@@ -482,7 +482,7 @@ class imagemngr:
   def autoexpire(self,session,system,TESTMODE=0):
       """Auto expire images and do cleanup"""
       # While this should be safe, let's restrict this to admins
-      if not self.isadmin(session,image['system']):
+      if not self.isadmin(session,system):
           return False
       # Cleanup - Lookup for things stuck in non-READY state
       self.update_states()
