@@ -15,6 +15,7 @@ for service in $@ ; do
   elif  [ $(echo $service|grep -c "worker:") -gt 0 ] ; then
     queue=$(echo $service|sed 's/.*://')
     echo "Worker Queue: $queue"
+    export PYTHONPATH=`pwd`
     celery -A shifter_imagegw.imageworker worker -Q $queue --loglevel=info &
   elif  [ "$service"  == "flower" ] ; then
     flower -A imageworker &
