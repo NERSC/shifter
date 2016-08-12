@@ -1585,7 +1585,7 @@ int setupVolumeMapMounts(
             backingStoreExists = 0;
 
         } else {
-            int allowOverwriteBind = 0;
+            int allowOverwriteBind = 1;
 
             if (_shifterCore_bindMount(udiConfig, mountCache, from_buffer, to_real, flagsInEffect, allowOverwriteBind) != 0) {
                 fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from_buffer, to_real);
