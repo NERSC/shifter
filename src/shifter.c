@@ -38,6 +38,8 @@
 #include <pwd.h>
 #include <grp.h>
 #include <getopt.h>
+#include <signal.h>
+#include <errno.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -82,9 +84,14 @@ int fprint_options(FILE *, struct options *);
 void free_options(struct options *, int freeStruct);
 int isImageLoaded(ImageData *, struct options *, UdiRootConfig *);
 int loadImage(ImageData *, struct options *, UdiRootConfig *);
+int adoptPATH(char **environ);
 
 #ifndef _TESTHARNESS_SHIFTER
 int main(int argc, char **argv) {
+    signal(SIGHUP, SIG_IGN);
+    signal(SIGINT, SIG_IGN);
+    signal(SIGSTOP, SIG_IGN);
+    signal(SIGTERM, SIG_IGN);
 
     /* save a copy of the environment for the exec */
     char **environ_copy = shifter_copyenv();
@@ -92,6 +99,8 @@ int main(int argc, char **argv) {
     /* declare needed variables */
     char wd[PATH_MAX];
     char udiRoot[PATH_MAX];
+    uid_t actualUid = 0;
+    uid_t actualGid = 0;
     uid_t eUid = 0;
     gid_t eGid = 0;
     gid_t *gidList = NULL;
@@ -155,6 +164,8 @@ int main(int argc, char **argv) {
     /* figure out who we are and who we want to be */
     eUid = geteuid();
     eGid = getegid();
+    actualUid = getuid();
+    actualGid = getgid();
 
 
     nGroups = getgroups(0, NULL);
@@ -181,6 +192,10 @@ int main(int argc, char **argv) {
     }
     if (opts.tgtUid == 0 || opts.tgtGid == 0 || opts.username == NULL) {
         fprintf(stderr, "%s\n", "Failed to lookup username or attempted to run as root.\n");
+        exit(1);
+    }
+    if (opts.tgtUid != actualUid || opts.tgtGid != actualGid) {
+        fprintf(stderr, "Failed to correctly identify uid/gid, exiting.\n");
         exit(1);
     }
 
@@ -234,7 +249,16 @@ int main(int argc, char **argv) {
 
     /* source the environment variables from the image */
     shifter_setupenv(&environ_copy, &imageData, &udiConfig);
+
+    /* immediately set PATH to container PATH to get search right */
+    adoptPATH(environ_copy);
+
+    /* attempt to execute user-requested exectuable */
     execvpe(opts.args[0], opts.args, environ_copy);
+
+    /* doh! how did we get here? return the error */
+    fprintf(stderr, "%s: %s: %s\n", argv[0], opts.args[0], strerror(errno));
+
     return 127;
 }
 #endif
@@ -299,11 +323,11 @@ int local_prependenv(char ***environ, const char *prepvar) {
 
 int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *udiConfig) {
     int opt = 0;
+    int volOptCount = 0;
     static struct option long_options[] = {
         {"help", 0, 0, 'h'},
         {"volume", 1, 0, 'V'},
         {"verbose", 0, 0, 'v'},
-        {"user", 1, 0, 0},
         {"image", 1, 0, 'i'},
         {"entrypoint", 2, 0, 0},
         {"env", 0, 0, 'e'},
@@ -329,30 +353,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         switch (opt) {
             case 0:
                 {
-                    if (strcmp(long_options[longopt_index].name, "user") == 0) {
-                        struct passwd *pwd = NULL;
-                        if (optarg == NULL) {
-                            fprintf(stderr, "Must specify user with --user flag.\n");
-                            _usage(1);
-                        }
-                        pwd = shifter_getpwnam(optarg, udiConfig);
-                        if (pwd != NULL) {
-                            config->tgtUid = pwd->pw_uid;
-                            config->tgtGid = pwd->pw_gid;
-                            config->username = strdup(pwd->pw_name);
-                        } else {
-                            uid_t uid = atoi(optarg);
-                            if (uid != 0) {
-                                pwd = shifter_getpwuid(uid, udiConfig);
-                                config->tgtUid = pwd->pw_uid;
-                                config->tgtGid = pwd->pw_gid;
-                                config->username = strdup(pwd->pw_name);
-                            } else {
-                                fprintf(stderr, "Cannot run as root.\n");
-                                _usage(1);
-                            }
-                        }
-                    } else if (strcmp(long_options[longopt_index].name, "entrypoint") == 0) {
+                    if (strcmp(long_options[longopt_index].name, "entrypoint") == 0) {
                         config->useEntryPoint = 1;
                         if (optarg != NULL) {
                             config->entrypoint = strdup(optarg);
@@ -368,12 +369,23 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                     if (optarg == NULL) break;
                     size_t raw_capacity = 0;
                     size_t new_capacity = strlen(optarg);
+
+                    /* if the user is specifying command-line volumes, want to
+                     * get rid of anything coming from the environment
+                     */
+                    if (volOptCount == 0 && config->rawVolumes != NULL) {
+                        free(config->rawVolumes);
+                        config->rawVolumes = NULL;
+                    }
+
                     if (config->rawVolumes != NULL) {
                         raw_capacity = strlen(config->rawVolumes);
                     }
                     config->rawVolumes = (char *) realloc(config->rawVolumes, sizeof(char) * (raw_capacity + new_capacity + 2));
                     char *ptr = config->rawVolumes + raw_capacity;
-                    snprintf(ptr, new_capacity + 2, "%s;", optarg);
+                    snprintf(ptr, new_capacity + 2, ";%s", optarg);
+
+                    volOptCount++;
                     break;
                 }
             case 'i':
@@ -743,3 +755,16 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
 _loadImage_error:
     return 1;
 }
+
+int adoptPATH(char **environ) {
+    char **ptr = environ;
+    for ( ; ptr && *ptr; ptr++) {
+        if (strncmp(*ptr, "PATH=", 5) == 0) {
+            char *path = *ptr + 5;
+            setenv("PATH", path, 1);
+            return 0;
+        }
+    }
+    return 1;
+}
+

@@ -62,7 +62,8 @@
 #define UMOUNT_NOFOLLOW 0x00000008 /* do not follow symlinks when unmounting */
 #endif
 
-int _shifterCore_bindMount(UdiRootConfig *confg, MountList *mounts, const char *from, const char *to, size_t flags, int overwrite);
+int _shifterCore_bindMount(UdiRootConfig *confg, MountList *mounts,
+        const char *from, const char *to, size_t flags, int overwrite);
 int _shifterCore_copyFile(const char *cpPath, const char *source, const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode);
 
 /*! Bind subtree of static image into UDI rootfs */
@@ -221,7 +222,7 @@ int bindImageIntoUDI(
                 /* create the file */
                 FILE *fp = fopen(mntBuffer, "w");
                 fclose(fp);
-                BINDMOUNT(&mountCache, srcBuffer, mntBuffer, 0, 1);
+                BINDMOUNT(&mountCache, srcBuffer, mntBuffer, 0, 0);
             }
             free(itemname);
             continue;
@@ -229,7 +230,7 @@ int bindImageIntoUDI(
         if (S_ISDIR(statData.st_mode)) {
             if (copyFlag == 0) {
                 MKDIR(mntBuffer, 0755);
-                BINDMOUNT(&mountCache, srcBuffer, mntBuffer, 0, 1);
+                BINDMOUNT(&mountCache, srcBuffer, mntBuffer, 0, 0);
             } else {
                 char *args[] = { strdup(udiConfig->cpPath), strdup("-rp"),
                     strdup(srcBuffer), strdup(mntBuffer), NULL
@@ -395,6 +396,7 @@ int prepareSiteModifications(const char *username,
     const char **fnamePtr = NULL;
     int ret = 0;
     struct stat statData;
+    dev_t udiMountDev = 0;
     MountList mountCache;
 
     const char *mandatorySiteEtcFiles[4] = {
@@ -407,6 +409,16 @@ int prepareSiteModifications(const char *username,
     memset(&mountCache, 0, sizeof(MountList));
     snprintf(udiRoot, PATH_MAX, "%s", udiConfig->udiMountPoint);
     udiRoot[PATH_MAX-1] = 0;
+
+    /* get udiMount device id */
+    if (stat(udiRoot, &statData) != 0) {
+        fprintf(stderr, "FAILED to stat udiRoot %s.\n", udiRoot);
+        return 1;
+    }
+    udiMountDev = statData.st_dev;
+
+    /* ensure any upcoming relative path operations are done with correct
+       working directory */
     if (chdir(udiRoot) != 0) {
         fprintf(stderr, "FAILED to chdir to %s. Exiting.\n", udiRoot);
         return 1;
@@ -463,8 +475,7 @@ int prepareSiteModifications(const char *username,
     }
 
     /* do site-defined mount activities */
-
-    if (setupVolumeMapMounts(&mountCache, udiConfig->siteFs, "", udiRoot, 1, udiConfig) != 0) {
+    if (setupVolumeMapMounts(&mountCache, udiConfig->siteFs, "", udiRoot, udiMountDev, udiConfig) != 0) {
         fprintf(stderr, "FAILED to mount siteFs volumes\n");
         goto _prepSiteMod_unclean;
     }
@@ -500,7 +511,6 @@ int prepareSiteModifications(const char *username,
         }
     }
 
-
     /* validate that the mandatorySiteEtcFiles do not exist yet */
     for (fnamePtr = mandatorySiteEtcFiles; *fnamePtr != NULL; fnamePtr++) {
         char path[PATH_MAX];
@@ -511,60 +521,119 @@ int prepareSiteModifications(const char *username,
         }
     }
 
-    /* --> loop over everything in site etc-files and copy into image etc */
-    if (udiConfig->etcPath == NULL || strlen(udiConfig->etcPath) == 0) {
-        fprintf(stderr, "UDI etcPath source directory not defined.\n");
-        goto _prepSiteMod_unclean;
-    }
-    snprintf(srcBuffer, PATH_MAX, "%s", udiConfig->etcPath);
-    srcBuffer[PATH_MAX-1] = 0;
-    memset(&statData, 0, sizeof(struct stat));
-    if (stat(srcBuffer, &statData) == 0) {
-        DIR *etcDir = opendir(srcBuffer);
-        struct dirent *entry = NULL;
-        while ((entry = readdir(etcDir)) != NULL) {
-            char *filename = NULL;
-            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-                continue;
-            }
-            filename = userInputPathFilter(entry->d_name, 0);
-            if (filename == NULL) {
-                fprintf(stderr, "FAILED to allocate filename string.\n");
-                goto _prepSiteMod_unclean;
-            }
-            snprintf(srcBuffer, PATH_MAX, "%s/%s", udiConfig->etcPath, filename);
-            srcBuffer[PATH_MAX-1] = 0;
-            snprintf(mntBuffer, PATH_MAX, "%s/etc/%s", udiRoot, filename);
-            mntBuffer[PATH_MAX-1] = 0;
-            free(filename);
-
-            if (lstat(srcBuffer, &statData) != 0) {
-                fprintf(stderr, "Couldn't find source file, check if there are illegal characters: %s\n", srcBuffer);
-                goto _prepSiteMod_unclean;
-            }
-
-            if (lstat(mntBuffer, &statData) == 0) {
-                fprintf(stderr, "Couldn't copy %s because file already exists.\n", mntBuffer);
-                goto _prepSiteMod_unclean;
-            } else {
-                char *args[] = { strdup(udiConfig->cpPath), strdup("-p"), strdup(srcBuffer), strdup(mntBuffer), NULL };
-                char **argsPtr = NULL;
-                int ret = forkAndExecv(args);
-                for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
-                    free(*argsPtr);
+    if (udiConfig->populateEtcDynamically == 0) {
+        /* --> loop over everything in site etc-files and copy into image etc */
+        if (udiConfig->etcPath == NULL || strlen(udiConfig->etcPath) == 0) {
+            fprintf(stderr, "UDI etcPath source directory not defined.\n");
+            goto _prepSiteMod_unclean;
+        }
+        snprintf(srcBuffer, PATH_MAX, "%s", udiConfig->etcPath);
+        srcBuffer[PATH_MAX-1] = 0;
+        memset(&statData, 0, sizeof(struct stat));
+        if (stat(srcBuffer, &statData) == 0) {
+            DIR *etcDir = opendir(srcBuffer);
+            struct dirent *entry = NULL;
+            while ((entry = readdir(etcDir)) != NULL) {
+                char *filename = NULL;
+                if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+                    continue;
                 }
-                if (ret != 0) {
-                    fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
+                filename = userInputPathFilter(entry->d_name, 0);
+                if (filename == NULL) {
+                    fprintf(stderr, "FAILED to allocate filename string.\n");
                     goto _prepSiteMod_unclean;
                 }
+                snprintf(srcBuffer, PATH_MAX, "%s/%s", udiConfig->etcPath, filename);
+                srcBuffer[PATH_MAX-1] = 0;
+                snprintf(mntBuffer, PATH_MAX, "%s/etc/%s", udiRoot, filename);
+                mntBuffer[PATH_MAX-1] = 0;
+                free(filename);
+
+                if (lstat(srcBuffer, &statData) != 0) {
+                    fprintf(stderr, "Couldn't find source file, check if there are illegal characters: %s\n", srcBuffer);
+                    goto _prepSiteMod_unclean;
+                }
+
+                if (lstat(mntBuffer, &statData) == 0) {
+                    fprintf(stderr, "Couldn't copy %s because file already exists.\n", mntBuffer);
+                    goto _prepSiteMod_unclean;
+                } else {
+                    int ret = _shifterCore_copyFile(udiConfig->cpPath, srcBuffer, mntBuffer, 0, 0, 0, 0644);
+                    if (ret != 0) {
+                        fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
+                        goto _prepSiteMod_unclean;
+                    }
+                }
             }
+            closedir(etcDir);
+        } else {
+            fprintf(stderr, "Couldn't stat udiRoot etc dir: %s\n", srcBuffer);
+            ret = 1;
+            goto _prepSiteMod_unclean;
         }
-        closedir(etcDir);
-    } else {
-        fprintf(stderr, "Couldn't stat udiRoot etc dir: %s\n", srcBuffer);
-        ret = 1;
+    } else if (udiConfig->target_uid != 0 && udiConfig->target_gid != 0) {
+        /* udiConfig->populateEtcDynamically == 1 */
+        struct passwd *pwd = shifter_getpwuid(udiConfig->target_uid, udiConfig);
+        struct group *grp = getgrgid(udiConfig->target_gid);
+        FILE *fp = NULL;
+        if (pwd == NULL) {
+            fprintf(stderr, "Couldn't get user properties for uid %d\n", udiConfig->target_uid);
+            goto _prepSiteMod_unclean;
+        }
+        if (grp == NULL) {
+            fprintf(stderr, "Couldn't get group properties for gid %d\n", udiConfig->target_gid);
+            goto _prepSiteMod_unclean;
+        }
+
+        /* write out container etc/passwd */
+        snprintf(srcBuffer, PATH_MAX, "%s/etc/passwd", udiRoot);
+        fp = fopen(srcBuffer, "w");
+        if (fp == NULL) {
+            fprintf(stderr, "Couldn't open passwd file for writing\n");
+            goto _prepSiteMod_unclean;
+        }
+        fprintf(fp, "%s:x:%d:%d:%s:%s:%s\n", pwd->pw_name, pwd->pw_uid,
+                pwd->pw_gid, pwd->pw_gecos, pwd->pw_dir, pwd->pw_shell);
+        fclose(fp);
+        fp = NULL;
+
+        /* write out container etc/group */
+        snprintf(srcBuffer, PATH_MAX, "%s/etc/group", udiRoot);
+        fp = fopen(srcBuffer, "w");
+        if (fp == NULL) {
+            fprintf(stderr, "Couldn't open group file for writing\n");
+            goto _prepSiteMod_unclean;
+        }
+        fprintf(fp, "%s:x:%d:\n", grp->gr_name, grp->gr_gid);
+        fclose(fp);
+        fp = NULL;
+
+        /* write out container etc/nsswitch.conf */
+        snprintf(srcBuffer, PATH_MAX, "%s/etc/nsswitch.conf", udiRoot);
+        fp = fopen(srcBuffer, "w");
+        if (fp == NULL) {
+            fprintf(stderr, "Couldn't open nsswitch.conf for writing\n");
+            goto _prepSiteMod_unclean;
+        }
+        fprintf(fp, "passwd: files\ngroup: files\nhosts: files dns\n"
+                "networks:   files dns\nservices: files\nprotocols: files\n"
+                "rpc: files\nethers: files\nnetmasks: files\nnetgroup: files\n"
+                "publickey: files\nbootparams: files\nautomount: files\n"
+                "aliases: files\n");
+        fclose(fp);
+        fp = NULL;
+    }
+
+    /* no valid reason for a user to provide their own /etc/shadow */
+    /* populate /etc/shadow with an empty file */
+    snprintf(srcBuffer, PATH_MAX, "%s/etc/shadow", udiRoot);
+    FILE *fp = fopen(srcBuffer, "w");
+    if (fp == NULL) {
+        fprintf(stderr, "Couldn't open shadow file for writing\n");
         goto _prepSiteMod_unclean;
     }
+    fclose(fp);
+    fp = NULL;
 
     /* validate that the mandatorySiteEtcFiles now exist */
     for (fnamePtr = mandatorySiteEtcFiles; *fnamePtr != NULL; fnamePtr++) {
@@ -829,6 +898,11 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
     }
     if (chmod(udiRoot, 0755) != 0) {
         fprintf(stderr, "FAILED to chmod \"%s\" to 0755.\n", udiRoot);
+        goto _mountImgVfs_unclean;
+    }
+
+    if (stat(udiRoot, &statData) != 0) {
+        fprintf(stderr, "FAILED to stat %s\n", udiRoot);
         goto _mountImgVfs_unclean;
     }
 
@@ -1181,11 +1255,19 @@ _loopMount_unclean:
 int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig) {
     char udiRoot[PATH_MAX];
     MountList mountCache;
+    struct stat statData;
     int ret = 0;
+    dev_t udiMountDev = 0;
 
     memset(&mountCache, 0, sizeof(MountList));
     snprintf(udiRoot, PATH_MAX, "%s", udiConfig->udiMountPoint);
     udiRoot[PATH_MAX-1] = 0;
+
+    if (stat(udiRoot, &statData) != 0) {
+        fprintf(stderr, "FAILED to stat udiRoot %s\n", udiRoot);
+        return 1;
+    }
+    udiMountDev = statData.st_dev;
 
     /* get list of current mounts for this namespace */
     if (parse_MountList(&mountCache) != 0) {
@@ -1193,7 +1275,7 @@ int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig) {
         return 1;
     }
 
-    ret = setupVolumeMapMounts(&mountCache, map, udiRoot, udiRoot, 1, udiConfig);
+    ret = setupVolumeMapMounts(&mountCache, map, udiRoot, udiRoot, udiMountDev, udiConfig);
     free_MountList(&mountCache, 0);
     return ret;
 }
@@ -1315,14 +1397,16 @@ int setupVolumeMapMounts(
         VolumeMap *map,
         const char *fromPrefix,
         const char *toPrefix,
-        int createTo,
+        dev_t createTo,
         UdiRootConfig *udiConfig
 ) {
     char *filtered_from = NULL;
     char *filtered_to = NULL;
+    char *to_real = NULL;
     VolumeMapFlag *flags = NULL;
 
     size_t mapIdx = 0;
+    size_t udiMountLen = 0;
 
     char from_buffer[PATH_MAX];
     char to_buffer[PATH_MAX];
@@ -1335,6 +1419,8 @@ int setupVolumeMapMounts(
     if (map == NULL || map->n == 0) {
         return 0;
     }
+
+    udiMountLen = strlen(udiConfig->udiMountPoint);
 
     for (mapIdx = 0; mapIdx < map->n; mapIdx++) {
         size_t flagsInEffect = 0;
@@ -1403,9 +1489,36 @@ int setupVolumeMapMounts(
         }
         if (stat(to_buffer, &statData) != 0) {
             if (createTo) {
-                mkdir(to_buffer, 0755);
-                if (stat(to_buffer, &statData) != 0) {
-                    fprintf(stderr, "FAILED to find volume \"to\": %s\n", to_buffer);
+                int okToMkdir = 0;
+
+                char *ptr = strrchr(to_buffer, '/');
+                if (ptr) {
+                    /* get parent path of intended dir */
+                    *ptr = '\0';
+
+                    /* if parent path is on the same device as is authorized by createTo
+                       then ok the mkdir operation */
+                    if (stat(to_buffer, &statData) == 0) {
+                        if (statData.st_dev == createTo) {
+                            okToMkdir = 1;
+                        }
+                    }
+
+                    /* reset to target path */
+                    *ptr = '/';
+                }
+
+                if (okToMkdir) {
+                    mkdir(to_buffer, 0755);
+                    if (stat(to_buffer, &statData) != 0) {
+                        fprintf(stderr, "FAILED to find volume \"to\": %s\n",
+                                to_buffer);
+                        goto _handleVolMountError;
+                    }
+                } else {
+                    fprintf(stderr, "FAILED to create volume \"to\": %s, cannot"
+                            " create mount points in that location\n",
+                            to_buffer);
                     goto _handleVolMountError;
                 }
             } else {
@@ -1417,6 +1530,22 @@ int setupVolumeMapMounts(
             fprintf(stderr, "FAILED \"to\" location is not directory: %s\n", to_buffer);
             goto _handleVolMountError;
         }
+
+        to_real = realpath(to_buffer, NULL);
+        if (to_real == NULL) {
+            fprintf(stderr, "Failed to get realpath for %s\n", to_buffer);
+            goto _handleVolMountError;
+        } else {
+            size_t to_len = strlen(to_real);
+
+            /* validate that path starts with udiMountPoint */
+            if (to_len <= udiMountLen ||
+                strncmp(to_real, udiConfig->udiMountPoint, udiMountLen) != 0) {
+                fprintf(stderr, "Invalid destination %s, not allowed, fail.\n", to_real);
+                goto _handleVolMountError;
+            }
+        }
+
         if (flagsInEffect & VOLMAP_FLAG_PERNODECACHE) {
             VolMapPerNodeCacheConfig *cacheConfig = NULL;
             /* do something to mount backing store */
@@ -1435,12 +1564,16 @@ int setupVolumeMapMounts(
                 format = FORMAT_XFS;
             }
             if (strcmp(cacheConfig->method, "loop") == 0) {
-                loopMount(from_buffer, to_buffer, format, udiConfig, 0);
+                if (loopMount(from_buffer, to_real, format, udiConfig, 0) != 0) {
+                    fprintf(stderr, "FAILED to mount per-node cache, exiting.\n");
+                    goto _handleVolMountError;
+                }
+                insert_MountList(mountCache, to_real);
             } else {
                 fprintf(stderr, "FAILED to understand per-node cache mounting method, exiting.\n");
                 goto _handleVolMountError;
             }
-            if (chown(to_buffer, udiConfig->target_uid, udiConfig->target_gid) != 0) {
+            if (chown(to_real, udiConfig->target_uid, udiConfig->target_gid) != 0) {
                 fprintf(stderr, "FAILED to chown per-node cache to user.\n");
                 goto _handleVolMountError;
             }
@@ -1452,11 +1585,16 @@ int setupVolumeMapMounts(
             backingStoreExists = 0;
 
         } else {
-            if (_shifterCore_bindMount(udiConfig, mountCache, from_buffer, to_buffer, flagsInEffect, 1) != 0) {
-                fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from_buffer, to_buffer);
+            int allowOverwriteBind = 1;
+
+            if (_shifterCore_bindMount(udiConfig, mountCache, from_buffer, to_real, flagsInEffect, allowOverwriteBind) != 0) {
+                fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from_buffer, to_real);
                 goto _handleVolMountError;
             }
         }
+        free(to_real);
+        to_real = NULL;
+
         continue;
 _handleVolMountError:
         if ((flagsInEffect & VOLMAP_FLAG_PERNODECACHE) && backingStoreExists == 1) {
@@ -1475,6 +1613,9 @@ _setupVolumeMapMounts_unclean:
     }
     if (filtered_to != NULL) {
         free(filtered_to);
+    }
+    if (to_real != NULL) {
+        free(to_real);
     }
     return 1;
 }
@@ -1762,22 +1903,9 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
         }
         snprintf(from, PATH_MAX, "%s/etc/ssh_config", udiImage);
         snprintf(to, PATH_MAX, "%s/etc/ssh/ssh_config", udiConfig->udiMountPoint);
-        {
-            char *args[] = {strdup(udiConfig->cpPath),
-                strdup("-p"),
-                strdup(from),
-                strdup(to),
-                NULL
-            };
-            char **argsPtr = NULL;
-            int ret = forkAndExecv(args);
-            for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
-                free(*argsPtr);
-            }
-            if (ret != 0) {
-                fprintf(stderr, "FAILED to copy ssh_config to %s\n", to);
-                goto _setupImageSsh_unclean;
-            }
+        if (_shifterCore_copyFile(udiConfig->cpPath, from, to, 0, 0, 0, 0) != 0) {
+            fprintf(stderr, "FAILED to copy ssh_config to %s\n", to);
+            goto _setupImageSsh_unclean;
         }
         /* rely on var/empty created earlier in the setup process */
     }
@@ -1922,7 +2050,7 @@ int _shifterCore_bindMount(UdiRootConfig *udiConfig, MountList *mountCache,
         privateRemountFlags = MS_PRIVATE;
     }
 
-    if (from == NULL || to == NULL || mountCache == NULL) {
+    if (from == NULL || to == NULL || mountCache == NULL || udiConfig == NULL) {
         fprintf(stderr, "INVALID input to bind-mount. Fail\n");
         return 1;
     }
@@ -1964,11 +2092,11 @@ int _shifterCore_bindMount(UdiRootConfig *udiConfig, MountList *mountCache,
     }
 
     /* perform the initial bind-mount */
-    ret = mount(from, to, "bind", mountFlags, NULL);
+    ret = mount(from, to_real, "bind", mountFlags, NULL);
     if (ret != 0) {
         goto _bindMount_unclean;
     }
-    insert_MountList(mountCache, to);
+    insert_MountList(mountCache, to_real);
 
     /* if the source is exactly /dev or starts with /dev/ then
        ALLOW device entires, otherwise remount with noDev */
@@ -1981,11 +2109,11 @@ int _shifterCore_bindMount(UdiRootConfig *udiConfig, MountList *mountCache,
     }
 
     /* remount the bind-mount to get the needed mount flags */
-    ret = mount(from, to, "bind", remountFlags, NULL);
+    ret = mount(from, to_real, "bind", remountFlags, NULL);
     if (ret != 0) {
         goto _bindMount_unclean;
     }
-    if (mount(NULL, to, NULL, privateRemountFlags, NULL) != 0) {
+    if (mount(NULL, to_real, NULL, privateRemountFlags, NULL) != 0) {
         perror("Failed to remount non-shared: ");
         goto _bindMount_unclean;
     }
@@ -2192,6 +2320,9 @@ _loadKrnlMod_unclean:
  *  or other systems where access to LDAP may be slow, difficult, or impossible
  *  on compute nodes.
  *
+ *  If UdiRootConfig parameter allowLibcPwdCalls is set to 1, this function
+ *  will simply call the regular getpwuid
+ *
  */
 struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config) {
     FILE *input = NULL;
@@ -2201,6 +2332,10 @@ struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config) {
 
     if (config == NULL) {
         return NULL;
+    }
+
+    if (config->allowLibcPwdCalls == 1) {
+        return getpwuid(tgtuid);
     }
 
     snprintf(buffer, PATH_MAX, "%s/passwd", config->etcPath);
@@ -2407,6 +2542,9 @@ struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config) {
     if (config == NULL) {
         return NULL;
     }
+    if (config->allowLibcPwdCalls == 1) {
+        return getpwnam(tgtnam);
+    }
 
     snprintf(buffer, PATH_MAX, "%s/passwd", config->etcPath);
     input = fopen(buffer, "r");
@@ -2504,7 +2642,7 @@ int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname,
             counter++;
             if (foundUsername && gid != 0) break;
         }
-        if (group_name != NULL) {
+        if (group_name != NULL && gid != 0) {
             if (foundUsername == 1 && foundGroups < maxGroups) {
                 fprintf(output, "%s:x:%d:%s\n", group_name, gid, username);
                 foundGroups++;

@@ -25,17 +25,18 @@ RUN apt-get update && \
 
 ENV NOTVISIBLE "in users profile"
 
-ADD ./udiRoot /src/udiRoot
+ADD . /src/
 
 RUN \
-       cd /src/udiRoot && \
-       cp /bin/mount /src/udiRoot/dep/mount && \
+       cd /src/ && \
+       cp /bin/mount /src/dep/mount && \
        sh ./autogen.sh && \
-       tar cf /src/udiRoot/dep/udiRoot_dep.tar /bin/mount && \
-       ./configure --prefix=/opt/shifter/udiRoot/1.0 --sysconfdir=/etc/shifter  --with-libcurl --with-munge  && \
+       tar cf /src/dep/udiRoot_dep.tar /bin/mount && \
+       ./configure --prefix=/opt/shifter/udiRoot/1.0 --sysconfdir=/etc/shifter  \
+           --with-libcurl --with-munge --disable-nativeSlurm --disable-staticsshd && \
        make && make install
 
-ADD imagegw/src/test/entrypoint.sh /entrypoint.sh
+ADD imagegw/test/entrypoint.sh /entrypoint.sh
 
 # Fix up perms and other things
 RUN \
@@ -47,8 +48,8 @@ RUN \
 
 #    chmod 600 /etc/munge/munge.key && chown munge /etc/munge/munge.key && \
 
-ADD ./imagegw/src/test/premount.sh /etc/shifter/premount.sh
-ADD ./imagegw/src/test/postmount.sh /etc/shifter/postmount.sh
+ADD ./imagegw/test/premount.sh /etc/shifter/premount.sh
+ADD ./imagegw/test/postmount.sh /etc/shifter/postmount.sh
 
 EXPOSE 22
 ENTRYPOINT [ "/entrypoint.sh" ]

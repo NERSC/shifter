@@ -171,7 +171,7 @@ ddPath=@DD_PATH@
 #mkfsXfsPath
 #
 # Absolute path to known-good mkfs.xfs
-mkfsXfsPath=@MKFSXFS_PATH@
+# mkfsXfsPath=@MKFSXFS_PATH@
 
 #rootfsType
 #
@@ -204,10 +204,11 @@ rootfsType=@ROOTFS_TYPE@
 
 #siteFs
 #
-# Space seperated list of paths to be automatically bind-mounted into the container. 
-# This is typically used to make network filesystems accessible within the 
-# container, but could be used to allow certain other facilities, like /var/run 
-# or /var/spool/alps to be accessible within the image (depending on your needs).
+# Semicolon seperated list of paths to be automatically bind-mounted into the
+# container. This is typically used to make network filesystems accessible
+# within the container, but could be used to allow certain other facilities,
+# like /var/run  or /var/spool/alps to be accessible within the image (depending
+# on your needs).
 #
 # Do not attempt to bind things under /usr or other common critical paths within 
 # containers.
@@ -281,8 +282,3 @@ system=mycluster
 # certainly be set to "docker" for most systems.
 #
 defaultImageType=docker
-
-#allowedImageTypes (required)
-#
-# Exhaustive list of all the image types allowed
-allowedImageTypes=docker custom

@@ -115,7 +115,13 @@ shifterSpank_config *shifterSpank_init(
             snprintf(buffer, PATH_MAX, "%s", ptr);
             ptr = shifter_trim(buffer);
             ssconfig->memory_cgroup = strdup(ptr);
-        } 
+        } else if (strncasecmp("enable_ccm=", argv[idx], 11) == 0) {
+            char *ptr = argv[idx] + 11;
+            ssconfig->ccmEnabled = atoi(ptr);
+        } else if (strncasecmp("enable_sshd=", argv[idx], 12) == 0) {
+            char *ptr = argv[idx] + 12;
+            ssconfig->sshdEnabled = atoi(ptr);
+        }
     }
 
     if (ssconfig->shifter_config == NULL) {
@@ -195,7 +201,9 @@ int shifterSpank_process_option_ccm(
 {
     if (ssconfig == NULL) return ERROR;
 
-    ssconfig->ccmMode = 1;
+    if (ssconfig->ccmEnabled) {
+        ssconfig->ccmMode = 1;
+    }
     if (ssconfig->image == NULL) ssconfig->image = strdup("/");
     if (ssconfig->imageType == NULL) ssconfig->imageType = strdup("local");
     return SUCCESS;
@@ -576,7 +584,9 @@ void shifterSpank_init_allocator_setup(shifterSpank_config *ssconfig) {
     }
 
     /* for slurm native, generate ssh keys here */
-    generateSshKey(ssconfig);
+    if (ssconfig->sshdEnabled) {
+        generateSshKey(ssconfig);
+    }
     wrap_spank_setenv(ssconfig, "SHIFTER_IMAGE", ssconfig->image, 1);
     wrap_spank_setenv(ssconfig, "SHIFTER_IMAGETYPE", ssconfig->imageType, 1);
     wrap_spank_job_control_setenv(ssconfig, "SHIFTER_IMAGE", ssconfig->image, 1);
@@ -855,7 +865,7 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
 
     /* try to recover ssh public key */
     sshPubKey = getenv("SHIFTER_SSH_PUBKEY");
-    if (sshPubKey != NULL) {
+    if (sshPubKey != NULL && ssconfig->sshdEnabled) {
         char *ptr = strdup(sshPubKey);
         sshPubKey = shifter_trim(ptr);
         sshPubKey = strdup(sshPubKey);
@@ -876,7 +886,21 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
         gid = strtoul(gid_str, NULL, 10);
     } else {
         if (wrap_spank_get_gid(ssconfig, &gid) == ERROR) {
-            PROLOG_ERROR("FAILED to get job gid!", ERROR);
+            _log(LOG_DEBUG, "shifter prolog: failed to get gid from environment, trying getpwuid_r on %d", uid);
+            char buffer[4096];
+            struct passwd pw, *result;
+            while (1) {
+                rc = getpwuid_r(uid, &pw, buffer, 4096, &result);
+                if (rc == EINTR) continue;
+                if (rc != 0) result = NULL;
+                break;
+            }
+            if (result != NULL) {
+                gid = result->pw_gid;
+                _log(LOG_DEBUG, "shifter prolog: got gid from getpwuid_r: %s", username);
+            } else {
+                PROLOG_ERROR("FAILED to get job gid!", ERROR);
+            }
         }
     }
 
@@ -1053,14 +1077,16 @@ int shifterSpank_job_epilog(shifterSpank_config *ssconfig) {
         size_t line_sz = 0;
         ssize_t bytes = 0;
         char *tasks = alloc_strgenf("%s/tasks", memory_cgroup_path);
-        FILE *fp = fopen(tasks, "w");
+        FILE *fp = NULL;
 
         /* kill all the processes in the cgroup tasks */
         fp = fopen(tasks, "r");
-        while ((bytes = getline(&line, &line_sz, fp)) >= 0) {
-            pid_t pid = atoi(line);
-            if (pid == 0) continue;
-            kill(pid, 9); 
+        if (fp != NULL) {
+            while ((bytes = getline(&line, &line_sz, fp)) >= 0) {
+                pid_t pid = atoi(line);
+                if (pid == 0) continue;
+                kill(pid, 9); 
+            }
         }
 
         /* remove the empty cgroups */

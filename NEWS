@@ -1,3 +1,35 @@
+16.08.1
+===========
+* Fixed bug in user volume mount flag parsing that could segfault
+* Fixed bug that could cause group file filtration to assign incorrect gid,
+  potentially security issue if sshd_config was modified away from shifter
+  defaults
+* Fixed bug that caused PATH to be searched incorrectly
+* Fixed issue with user volume mounts able to traverse relative paths
+  inappropriately
+* Fixed bug that confused SHIFTER_VOLUME environment variable with shifter
+  command line arguments
+* Performance and functionality improvements in docker image conversion
+* Add support for unicode filenames in images
+* Support for Docker and/or unionfs whiteouts to allows files to be deleted
+  in ancestral layers
+* Erase possibility of download collisions in image worker
+* Refactored SLURM plugin to better organize and abstract SLURM api
+* Fully support SLURM extern step for shifter sshd
+* Add imagegw heartbeating capability to increase robustness of image pulls
+* Add image expiration capability to allow images age out or be
+  administratively removed
+* Allow sshd to be explicitly enabled in SLURM integration
+* Allow ccm-emulation-mode to be explicity enabled in SLURM integration
+* Only allow shifter to automatically create mount points on its tmpfs/ramfs
+* Enable docker-type images to implicitly assume "latest" if no tag is 
+  specified by user
+* Ensure failed image pulls are fully cleaned up
+* Check if the current image version is installed on the platform before pulling
+* Remove old debugging functionality
+* Allow /etc required files to re-try copy (fixes dvs copy issue)
+* Require admin capability to autoexpire
+
 16.04.0
 ===========
 +  Modified repo layout to push udiRoot to top-level

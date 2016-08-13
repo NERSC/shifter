@@ -15,6 +15,7 @@ import urllib2
 import shifter_imagegw
 import stat
 import shutil
+from time import time
 
 ## Shifter, Copyright (c) 2015, The Regents of the University of California,
 ## through Lawrence Berkeley National Laboratory (subject to receipt of any
@@ -31,7 +32,7 @@ import shutil
 ##     National Laboratory, U.S. Dept. of Energy nor the names of its
 ##     contributors may be used to endorse or promote products derived from this
 ##     software without specific prior written permission.`
-## 
+##
 ## See LICENSE for full text.
 
 # Option to use a SOCKS proxy
@@ -72,7 +73,11 @@ class dockerv2Handle():
     allowAuthenticated = True
     checkLayerChecksums = True
 
-    def __init__(self, imageIdent, options = None):
+    # excluding this blobSum because it translates to an empty tar file
+    # and python 2.6 throws an exception when an open is attempted
+    excludeBlobSums = ['sha256:a3ed95caeb02ffe68cdd9fd84406680ae93d633cb16422d00e8a7c22955b46d4']
+
+    def __init__(self, imageIdent, options = None, updater=None):
         """
         Initialize an instance of the dockerv2 class.
         imageIdent is a tagged repo (e.g., ubuntu:14.04)
@@ -94,6 +99,7 @@ class dockerv2Handle():
             options = {}
         if type(options) is not dict:
             raise ValueError('Invalid type for dockerv2 options')
+        self.updater=updater
 
         if 'baseUrl' in options:
             baseUrlStr = options['baseUrl']
@@ -152,6 +158,21 @@ class dockerv2Handle():
         self.authMethod = 'token'
         if 'authMethod' in options:
             self.authMethod = options['authMethod']
+        self.eldest=None
+        self.youngest=None
+
+    def get_eldest(self):
+        return self.eldest
+
+    def log(self,state,message=''):
+        if self.updater is not None:
+            self.updater.update_status(state,message)
+
+    def excludeLayer(self, blobsum):
+        ## TODO: add better verfication of the blobsum, potentially give other
+        ## routes to mask out a layer with this function
+        if blobsum not in self.excludeBlobSums:
+            self.excludeBlobSums.append(blobsum)
 
     def setupHttpConn(self, url, cacert=None):
         (protocol, url) = url.split('://', 1)
@@ -185,7 +206,7 @@ class dockerv2Handle():
         authLocStr is a string returned in the "WWW-Authenticate" response header
         It contains:
             <mode> realm=<authUrl>,service=<service>,scope=<scope>
-            The mode will typically be "bearer", service and scope are the repo and 
+            The mode will typically be "bearer", service and scope are the repo and
             capabilities being requested respectively.  For shifter, the scope will
             only be pull.
 
@@ -285,6 +306,38 @@ class dockerv2Handle():
             raise e
         return jdata
 
+    def examine_manifest(self,manifest):
+        self.log("PULLING",'Constructing manifest')
+        (eldest,youngest) = self.constructImageMetadata(manifest)
+
+        self.eldest=eldest
+        self.youngest=youngest
+        meta=youngest
+
+        resp={'id':meta['id']}
+        if 'config' in meta:
+            c=meta['config']
+            if 'Env' in c:
+                resp['env']=c['Env']
+            if 'Entrypoint' in c:
+                resp['entrypoint']=c['Entrypoint']
+        return resp
+
+
+    def pull_layers(self,manifest,cachedir):
+        if self.eldest is None:
+            resp = self.examine_manifest(manifest)
+        layer = self.eldest
+        while layer is not None:
+            if layer['fsLayer']['blobSum'] in self.excludeBlobSums:
+                layer = layer['child']
+                continue
+
+            self.log("PULLING","Pulling layer %s"%layer['fsLayer']['blobSum'])
+            self.saveLayer(layer['fsLayer']['blobSum'], cachedir)
+            layer = layer['child']
+        return True
+
     def saveLayer(self, layer, cachedir='./'):
         """
         saveLayer - Save a layer and verify with the digest
@@ -355,7 +408,7 @@ class dockerv2Handle():
     def checkLayerChecksum(self, layer, filename):
         if self.checkLayerChecksums is False:
             return True
-            
+
         (hashType,value) = layer.split(':', 1)
         execName = '%s%s' % (hashType, 'sum')
         process = subprocess.Popen([execName, filename], stdout=subprocess.PIPE)
@@ -420,72 +473,83 @@ class dockerv2Handle():
         """
         return tempfile.mkdtemp()
 
-    def extractDockerLayers(self, basePath, layer, cachedir='./'):
-        """
-        extractDockerLayers - Recusrively Untar the layers
-        """
-        if layer is None:
-            return
-        os.umask(022)
-        devnull = open(os.devnull, 'w')
-        tarfile=os.path.join(cachedir,'%s.tar'%(layer['fsLayer']['blobSum']))
+    def extractDockerLayers(self, basePath, baseLayer, cachedir='./'):
+        import tarfile
+        def filterLayer(layerMembers, toRemove):
+            prefixToRemove = '%s%s' % (toRemove, '/' if not toRemove.endswith('/') else '')
+            return [ x for x in layerMembers if not x.name == toRemove and not x.name.startswith(prefixToRemove) ]
 
-        # check for whiteouts in tar and remove the path from the current
-        # expansion
-        cmd = ['tar', 'tf', tarfile, '--exclude=dev/*', '--force-local']
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        stdout,stderr = proc.communicate()
-        whiteouts = []
-        for line in stdout.split('\n'):
-            fullpath = line.strip()
-            (dirpath,endpt) = os.path.split(fullpath)
-            if endpt.startswith('.wh.'):
-                whiteouts.append(fullpath)
-                delpath = os.path.join(dirpath, endpt[4:])
-                print "found whiteout: %s, will delete %s" % (fullpath, delpath)
-                if dirpath == delpath:
-                    continue
-                delpath = os.path.join(basePath, delpath)
-                if os.path.exists(delpath):
-                    st = os.lstat(delpath)
-                    if stat.S_ISDIR(st.st_mode):
-                        shutil.rmtree(delpath)
-                    else:
-                        os.unlink(delpath)
+        layerPaths = []
+        layer = baseLayer
+        while layer is not None:
+            if layer['fsLayer']['blobSum'] in self.excludeBlobSums:
+                layer = layer['child']
+                continue
 
-        # extract the layer
-        command=['tar',
-                'xf',
-                tarfile,
-                '-C',
-                basePath,
-                '--exclude=dev/*',
-                '--exclude=.wh.*',
-                '--force-local']
-        ret = subprocess.call(command, stdout=devnull, stderr=devnull)
-        devnull.close()
-        if ret>1:
-            raise OSError("Extraction of layer (%s) to %s failed %d"%(tarfile,basePath,ret))
-        # ignore errors since some things like mknod are expected to fail
+            tfname = os.path.join(cachedir,'%s.tar'%(layer['fsLayer']['blobSum']))
+            tfp = tarfile.open(tfname, 'r:gz')
 
-        # adjust permissions of the extracted files
-        command=['tar','tf', tarfile, '--force-local', '--exclude=dev/*', '--exclude=.wh.*']
-        proc = subprocess.Popen(command, stdout=subprocess.PIPE)
-        stdout,stderr = proc.communicate()
-        for line in stdout.split('\n'):
-            fname = line.strip()
-            path = os.path.join(basePath, fname)
-            if os.path.exists(path):
-                statdata = os.lstat(path)
-                if stat.S_ISLNK(statdata.st_mode):
-                    continue
-                newmode = statdata.st_mode | stat.S_IWUSR | stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH
-                if statdata.st_mode & stat.S_IXUSR:
-                    newmode = newmode | stat.S_IXGRP | stat.S_IXOTH
-                os.chmod(path, newmode)
+            ## get directory of tar contents
+            layerMembers = tfp.getmembers()
 
-        self.extractDockerLayers(basePath, layer['child'], cachedir=cachedir)
+            ## remove all illegal files
+            layerMembers = filterLayer(layerMembers, 'dev/')
+            layerMembers = filterLayer(layerMembers, '/')
+            layerMembers = [ x for x in layerMembers if not x.name.find('..') >= 0 ]
 
+            ## find all whiteouts
+            whiteouts = [ x for x in layerMembers if (x.name.find('/.wh.') >= 0
+                    or x.name.startswith('.wh.')) ]
+
+            ## remove the whiteout tags from this layer
+            for wh in whiteouts:
+                layerMembers.remove(wh)
+
+            ## remove the whiteout targets from all ancestral layers
+            for idx,ancsLayer in enumerate(layerPaths):
+                for wh in whiteouts:
+                    path = wh.name.replace('/.wh.', '/')
+                    if path.startswith('.wh.'):
+                        path = path[4:]
+                    ancsLayerIter = (x for x in ancsLayer if x.name == path)
+                    ancsMember = next(ancsLayerIter, None)
+                    if ancsMember:
+                        ancsLayer = filterLayer(ancsLayer, path)
+                layerPaths[idx] = ancsLayer
+
+            ## remove identical paths (not dirs) from all ancestral layers
+            notdirs = [ x.name for x in layerMembers if not x.isdir() ]
+            for idx,ancsLayer in enumerate(layerPaths):
+                ancsLayer = [ x for x in ancsLayer if not x.name in notdirs ]
+                layerPaths[idx] = ancsLayer
+
+            ## push this layer into the collection
+            layerPaths.append(layerMembers)
+            tfp.close()
+
+            layer = layer['child']
+
+
+        ## extract the selected files
+        layerIdx = 0
+        layer = baseLayer
+        while layer is not None:
+            if layer['fsLayer']['blobSum'] in self.excludeBlobSums:
+                layer = layer['child']
+                continue
+
+            tfname = os.path.join(cachedir,'%s.tar' % (layer['fsLayer']['blobSum']))
+            tfp = tarfile.open(tfname, 'r:gz')
+            members = layerPaths[layerIdx]
+            tfp.extractall(path=basePath,members=members)
+
+            layerIdx += 1
+            layer = layer['child']
+
+        ## fix permissions on the extracted files
+        subprocess.call(['chmod', '-R', 'a+rX,u+w', basePath])
+
+# Deprecated: Just use the object above
 def pullImage(options, baseUrl, repo, tag, cachedir='./', expanddir='./', cacert=None, username=None, password=None):
     """
     pullImage - Uber function to pull the manifest, layers, and extract the layers
@@ -535,4 +599,6 @@ if __name__ == '__main__':
   dir=os.getcwd()
   cdir=os.environ['TMPDIR']
   #pullImage(None, 'https://registry.services.nersc.gov', 'ana', 'cctbx',cachedir=cdir,expanddir=cdir,cacert=dir+'/local.crt')
-  pullImage(None, 'https://registry-1.docker.io', 'ubuntu', 'latest', cachedir=cdir, expanddir=cdir)
+  #pullImage(None, 'https://registry-1.docker.io', 'ubuntu', 'latest', cachedir=cdir, expanddir=cdir)
+  #pullImage(None, 'https://registry-1.docker.io', 'tensorflow/tensorflow', 'latest', cachedir=cdir, expanddir=cdir)
+  pullImage(None, 'https://registry-1.docker.io', 'dmjacobsen/ltp-test', 'latest', cachedir=cdir, expanddir=cdir)

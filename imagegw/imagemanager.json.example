@@ -22,6 +22,7 @@
         "mycluster": {
             "mungeSocketPath": "/var/run/munge/munge.socket.2",
             "accesstype": "local",
+            "admins": ["root"],
             "usergroupService": "local",
             "local": {
                 "imageDir": "/images"

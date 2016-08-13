@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.62])
-AC_INIT([shifter], [16.04.0pre1], [shifter-hpc@googlegroups.com])
+AC_INIT([shifter], [16.08.0pre1], [shifter-hpc@googlegroups.com])
 AC_CONFIG_SRCDIR([src/shifter_core.h])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_AUX_DIR([auxdir])
@@ -110,6 +110,7 @@ AC_CONFIG_FILES([Makefile
                  imagegw/shifter_imagegw/api/Makefile
                  imagegw/shifter_imagegw/__init__.py
                  udiRoot.conf.example
+                 extra/systemd/shifter_imagegw_worker@.service
                ])
 #                 config/Makefile
 #                 dep/Makefile

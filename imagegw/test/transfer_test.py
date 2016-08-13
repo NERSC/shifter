@@ -205,5 +205,18 @@ class TransferTestCase(unittest.TestCase):
         os.unlink(metaPath)
         os.rmdir(tmpPath)
 
+    def test_remove_local(self):
+        (fd,tmpPath) = tempfile.mkstemp() 
+        dname,fname = os.path.split(tmpPath)
+        self.system['local']['imageDir'] = dname
+        self.system['ssh']['imageDir'] = dname
+        self.system['accesstype'] = 'local'
+
+        st=transfer.remove_file(fname, self.system)
+        self.assertEquals(os.path.exists(tmpPath),False)
+
+    # TODO: Add a test_remove_remote
+
+
 if __name__ == '__main__':
     unittest.main()

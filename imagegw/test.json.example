@@ -30,6 +30,7 @@
             "mungeSocketPath": "/tmp/systema/munge.socket",
             "accesstype": "remote",
             "mountCommand": "/bin/mount",
+            "admins": ["root"],
             "host": [
                 "localhost"
             ],
@@ -43,6 +44,7 @@
             "mungeSocketPath": "/tmp/systemb/munge.socket",
             "accesstype": "local",
             "usergroupService": "local",
+            "admins": "root",
             "local": {
                 "imageDir": "/tmp/systemb/images"
             }

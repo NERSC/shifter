@@ -3,7 +3,7 @@
 from pymongo import MongoClient
 import pymongo
 import json
-from imageworker import dopull,initqueue
+from imageworker import dopull,initqueue,doexpire
 import bson
 import celery
 import sys, os
@@ -57,13 +57,21 @@ class imagemngr:
           raise NameError('Platforms not defined')
       self.systems=[]
       self.tasks=[]
+      self.expire_requests=dict()
       self.task_image_id=dict()
+      # TIme before another pull can be attempted
+      self.pullupdatetimeout=300
+      if 'PullUpdateTime' in self.config:
+          self.pullupdatetimeout=self.config['PullUpdateTimeout']
+      # Max amount of time to allow for a pull
+      self.pulltimeout=self.pullupdatetimeout*10
       # This is not intended to provide security, but just
       # provide a basic check that a session object is correct
       self.magic='imagemngrmagic'
       if 'Authentication' not in self.config:
           self.config['Authentication']="munge"
       self.auth=auth.authentication(self.config)
+      self.platforms=self.config['Platforms']
 
       for system in self.config['Platforms']:
           self.systems.append(system)
@@ -92,6 +100,20 @@ class imagemngr:
           return False
       return True
 
+  def isadmin(self,session,system=None):
+      """
+      Check if this is an admin user.
+      Returns true if is an admin or false if not.
+      """
+      if 'admins' not in self.platforms[system]:
+          return False
+      admins=self.platforms[system]['admins']
+      user=session['user']
+      if user in admins:
+          self.logger.info('user %s is an admin'%(user))
+          return True
+      return False
+
   def isasystem(self,system):
       """Check if system is a valid platform."""
       if system in self.systems:
@@ -104,7 +126,7 @@ class imagemngr:
       return True
 
   def resetexpire(self,id):
-      """Reset the expire time.  (Not Implemented)."""
+      """Reset the expire time.  (Not fully implemented)."""
       # Change expire time for image
       (days,hours,minutes,secs)=self.config['ImageExpirationTimeout'].split(':')
       expire=time()+int(secs)+60*(int(minutes)+60*(int(hours)+24*int(days)))
@@ -120,22 +142,14 @@ class imagemngr:
       Returns a context that can be used for subsequent operations.
       """
       arec=self.auth.authenticate(authString,system)
-      if arec is None:
+      if arec is None and isinstance(arec,dict):
           raise OSError("Authenication returned None")
       else:
-          session=dict()
-          if len(arec)==3:
-              (uid,gid,token)=arec
-          elif len(arec)==2:
-              (uid,gid)=arec
-              token=''
-          else:
+          if 'user' not in arec:
               raise OSError("Authentication returned invalid response")
+          session=arec
           session['magic']=self.magic
           session['system']=system
-          session['uid']=uid
-          session['gid']=gid
-          session['token']=token
           return session
 
   def lookup(self,session,image):
@@ -205,10 +219,14 @@ class imagemngr:
         return True
     status=rec['status']
 
+    # EXPIRED images can be pulled
+    if status=='EXPIRED':
+        return True
+
     # Need to deal with last_pull for a READY record
     if 'last_pull' not in rec:
         return True
-    nextpull=self.config['PullUpdateTimeout']+rec['last_pull']
+    nextpull=self.pullupdatetimeout+rec['last_pull']
     # It has been a while, so re-pull to see if it is fresh
     if status=='READY' and (time()>nextpull):
         return True
@@ -217,9 +235,12 @@ class imagemngr:
     if status=='FAILURE' and (time()>nextpull):
         return True
     # Last thing... What if the pull somehow got hung or died in the middle
-    # TODO: add pull timeout.  For now use the same one
-    if time()>nextpull:
-        return True
+    # See if heartbeat is old
+    # TODO: add pull timeout.  For now use 1 hour
+    if 'last_heartbeat' in rec:
+        if (time()-rec['last_heartbeat'])>3600:
+            return True
+
     return False
 
 
@@ -233,7 +254,7 @@ class imagemngr:
               continue
           else:
               self.images_remove({'_id':rec['_id']})
-      newimage={'format':'ext4',#<ext4|squashfs|vfs>
+      newimage={'format':'invalid',#<ext4|squashfs|vfs>
           'arch':'amd64', #<amd64|...>
           'os':'linux', #<linux|...>
           'location':'', #<urlencoded location, interpretation dependent on remotetype>
@@ -244,6 +265,8 @@ class imagemngr:
           'tag':[],
           'status':'INIT',
           'groupAcl':[]}
+      if 'DefaultImageFormat' in self.config:
+          newimage['format'] = self.config['DefaultImageFormat']
       for p in image:
           if p is 'tag':
               continue
@@ -304,13 +327,19 @@ class imagemngr:
 
       return rec
 
-  def update_mongo_state(self,id,state):
+  def update_mongo_state(self,id,state,info=None):
       """
       Helper function to set the mongo state for an image with _id==id to state=state.
       """
       if state=='SUCCESS':
           state='READY'
-      self.images_update({'_id':id},{'$set':{'status':state}})
+      set_list={'status':state,'status_message':''}
+      if info is not None and isinstance(info, dict):
+          if 'heartbeat' in info:
+              set_list['last_heartbeat']=info['heartbeat']
+          if 'message' in info:
+              set_list['status_message']=info['message']
+      self.images_update({'_id':id},{'$set':set_list})
 
   def add_tag(self,id,system,tag):
       """
@@ -396,7 +425,12 @@ class imagemngr:
       """
       Lookup the state of the image with _id==id in Mongo.  Returns the state."""
       self.update_states()
-      return self.images_find_one({'_id':id},{'status':1})['status']
+      rec=self.images_find_one({'_id':id},{'status':1})
+      if rec is None:
+          return None
+      elif 'status' not in rec:
+          return None
+      return rec['status']
 
 
   def update_states(self):
@@ -407,37 +441,109 @@ class imagemngr:
       #logger.debug("Update_states called")
       i=0
       tasks=self.tasks
+
       for req in tasks:
           state='PENDING'
 
           if isinstance(req,celery.result.AsyncResult):
               state=req.state
+              info=req.info
           elif isinstance(req,bson.objectid.ObjectId):
-              print "Non-Async"
-          self.update_mongo_state(self.task_image_id[req],state)
+              self.logger.debug("Non-Async")
+
+          if req in self.expire_requests and state=='SUCCESS':
+              self.expire_requests.pop(req)
+              self.tasks.remove(req)
+              state='EXPIRED'
+          elif req in self.expire_requests and state=='FAILURE':
+              self.logger.warn("Expire request failed for %s"%(req))
+              self.expire_requests.pop(req)
+              self.tasks.remove(req)
+              continue
+          elif state=="FAILURE":
+              self.logger.warn("Pull failed for %s"%(req))
+
+          self.update_mongo_state(self.task_image_id[req],state,info)
           if state=="READY" or state=="SUCCESS":
-              self.logger.debug("Completing request %d"%i)
+              self.logger.debug("Completing pull request %d"%i)
               response=req.get()
               self.complete_pull(self.task_image_id[req],response)
               self.logger.debug('meta=%s'%(str(response)))
               # Now save the response
               self.tasks.remove(req)
-          if state=="FAILURE":
-              self.logger.warn("Pull failed for %s"%(req))
           i+=1
       # Look for failed pulls
       for rec in self.images_find({'status':'FAILURE'}):
-          nextpull=self.config['PullUpdateTimeout']+rec['last_pull']
+          nextpull=self.pullupdatetimeout+rec['last_pull']
           # It it has been a while then let's clean up
           if (time()>nextpull):
               self.images_remove({'_id':rec['_id']})
 
+  def autoexpire(self,session,system,TESTMODE=0):
+      """Auto expire images and do cleanup"""
+      # While this should be safe, let's restrict this to admins
+      if not self.isadmin(session,system):
+          return False
+      # Cleanup - Lookup for things stuck in non-READY state
+      self.update_states()
+      pulltimeout=time()-self.pullupdatetimeout*10
+      removed=[]
+      for rec in self.images.find({'status':{'$ne':'READY'},'system':system}):
+          self.logger.debug(rec)
+          if 'last_pull' not in rec:
+              self.logger.warning('image missing last_pull '+rec['_id'])
+              continue
+          if rec['last_pull']<pulltimeout:
+              removed.append(rec['_id'])
+              self.images_remove({'_id':rec['_id']})
 
-  def expire(self,session,system,type,tag,id):
+      expired=[]
+      # Look for READY images that haven't been pulled recently
+      for rec in self.images.find({'status':'READY','system':system}):
+              self.logger.debug(rec)
+              if 'expiration' not in rec:
+                  continue
+              elif rec['expiration']<time():
+                  self.logger.debug("expiring %s"%(rec['id']))
+                  id=rec.pop('_id')
+                  self.expire_id(rec,id)
+                  if 'id' in rec:
+                      expired.append(rec['id'])
+                  else:
+                      expired.append('unknown')
+              self.logger.debug(rec['expiration']>time())
+      return expired
+
+
+  def expire_id(self,rec,id,TESTMODE=0):
+    self.logger.debug("Calling do expire with queue=%s id=%s TM=%d"%(rec['system'],id,TESTMODE))
+    req=doexpire.apply_async([rec],queue=rec['system'])
+    self.logger.info("expire request queued s=%s t=%s"%(rec['system'],id))
+    self.task_image_id[req]=id
+    self.expire_requests[req]=id
+    self.tasks.append(req)
+
+
+  def expire(self,session,image,TESTMODE=0):
       """Expire an image.  (Not Implemented)"""
-      # Do lookup
-      resp=dict()
-      return resp
+      if not self.isadmin(session,image['system']):
+          return False
+      q={'system':image['system'],
+        'itype':image['itype'],
+        'tag':{'$in':[image['tag']]}}
+      rec=self.images.find_one(q)
+      if rec is None:
+          return None
+      id=rec.pop('_id')
+      self.logger.debug("Calling do expire with queue=%s id=%s TM=%d"%(image['system'],id,TESTMODE))
+      req=doexpire.apply_async([rec],queue=image['system'],
+                kwargs={'TESTMODE':TESTMODE})
+      self.logger.info("expire request queued s=%s t=%s"%(image['system'],image['tag']))
+      self.task_image_id[req]=id
+      self.expire_requests[req]=id
+      self.tasks.append(req)
+
+      return True
 
   ## decorator function to re-attempt any mongo operation that may have failed
   ## owing to AutoReconnect (e.g., mongod coming back, etc).  This may increase
@@ -459,7 +565,7 @@ class imagemngr:
   @mongo_reconnect_reattempt
   def images_remove(self, *args, **kwargs):
       return self.images.remove(*args, **kwargs)
-        
+
   @mongo_reconnect_reattempt
   def images_update(self, *args, **kwargs):
       return self.images.update(*args, **kwargs)

@@ -15,7 +15,7 @@
 
     "Locations": {
         "index.docker.io": {
-            "remotetype": "dockerhub",
+            "remotetype": "dockerv2",
             "authentication": "http"
         },
         "registry.services.nersc.gov": {
@@ -30,6 +30,7 @@
             "mungeSocketPath": "/var/run/munge/systema.socket",
             "usergroupService": "ldap",
             "accesstype": "remote",
+            "admins": "root",
             "mountCommand": "/bin/mount",
             "host": [
                 "systema"

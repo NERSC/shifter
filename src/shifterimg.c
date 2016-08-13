@@ -1,14 +1,14 @@
 /**
  *  @file ImageGWConnect.c
  *  @brief utility to perform image lookups
- * 
+ *
  * @author Douglas M. Jacobsen <dmjacobsen@lbl.gov>
  */
 
 /* Shifter, Copyright (c) 2015, The Regents of the University of California,
  * through Lawrence Berkeley National Laboratory (subject to receipt of any
  * required approvals from the U.S. Dept. of Energy).  All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *  1. Redistributions of source code must retain the above copyright notice,
@@ -20,7 +20,7 @@
  *     National Laboratory, U.S. Dept. of Energy nor the names of its
  *     contributors may be used to endorse or promote products derived from this
  *     software without specific prior written permission.
- * 
+ *
  * See LICENSE for full text.
  */
 
@@ -29,9 +29,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <termios.h>
+#include <unistd.h>
+#include <pwd.h>
+#include <signal.h>
 #include <munge.h>
 #include <curl/curl.h>
 #include <json-c/json.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include "utility.h"
 #include "UdiRootConfig.h"
@@ -43,8 +49,16 @@ enum ImageGwAction {
     MODE_IMAGES,
     MODE_LOGIN,
     MODE_PULL_NONBLOCK,
+    MODE_EXPIRE,
+    MODE_AUTOEXPIRE,
     MODE_INVALID
 };
+
+typedef struct _LoginCredential {
+    char *system;
+    char *location;
+    char *cred;
+} LoginCredential;
 
 struct options {
     int verbose;
@@ -53,6 +67,9 @@ struct options {
     char *tag;
     char *rawtype;
     char *rawtag;
+    char *location;
+    char *rawlocation;
+    LoginCredential **loginCredentials;
 };
 
 typedef struct _ImageGwState {
@@ -78,9 +95,10 @@ typedef struct _ImageGwImageRec {
     char **userAcl;
 } ImageGwImageRec;
 
+
 void _usage(int ret) {
     FILE *output = stdout;
-    fprintf(output, "Usage: imageGwConnect [-h|-v] <mode> <type:tag>\n\n");
+    fprintf(output, "Usage: shifterimg [-h|-v] <mode> <type:tag>\n\n");
     fprintf(output, "    Mode: images, lookup, or pull\n");
     exit(ret);
 }
@@ -132,9 +150,183 @@ void free_ImageGwImageRec(ImageGwImageRec *ptr, int free_struct) {
     }
 }
 
+static struct termios origTermState;
+static int termfd = -1;
 
-int doLogin() {
+void modtermSignalHandler(int signum) {
+    if (termfd != -1){ 
+        tcsetattr(termfd, TCSANOW, &origTermState);
+    }
+    exit(128+signum);
+}
+
+int getttycred(const char *system, char **username, char **password) {
+    FILE *read_fp = stdin;
+    FILE *write_fp = stderr;
+    char buffer[1024];
+    struct termios currState;
+    int mod = 0;
+
+    memset(&origTermState, 0, sizeof(struct termios));
+    memset(&currState, 0, sizeof(struct termios));
+
+    read_fp = fopen("/dev/tty", "w+");
+    if (read_fp == NULL) {
+        read_fp = stdin;
+        fprintf(write_fp, "failed to open dev/tty\n");
+    }
+    termfd = fileno(read_fp);
+
+    fprintf(write_fp, "%s username: ", system);
+    fflush(write_fp);
+    if (fgets(buffer, 1024, read_fp) != NULL) {
+        size_t len = strlen(buffer);
+        if (len > 0 && len < 1024 && buffer[len-1] == '\n') {
+            buffer[len-1] = 0;
+        }
+        *username = strdup(buffer);
+        mod++;
+    }
+
+    /* get current terminal state */
+    tcgetattr(termfd, &origTermState); 
+    tcgetattr(termfd, &currState); 
+
+
+    /* catch common termination/suspend signals to reset term */
+    signal(SIGTERM, modtermSignalHandler);
+    signal(SIGINT, modtermSignalHandler);
+    signal(SIGSTOP, modtermSignalHandler);
+
+    /* disable echoing */
+    currState.c_lflag &= ~ECHO;
+    tcsetattr(termfd, TCSANOW, &currState);
+    
+
+    fprintf(write_fp, "%s password: ", system);
+    fflush(write_fp);
+
+    /* read in password */
+    if (fgets(buffer, 1024, read_fp) != NULL) {
+        size_t pwdlen = strlen(buffer);
+        if (pwdlen > 0 && pwdlen < 1024 && buffer[pwdlen-1] == '\n') {
+            buffer[pwdlen-1] = 0;
+        }
+        *password = strdup(buffer);
+        mod++;
+    }
+    fprintf(write_fp, "\n");
+
+    /* reset terminal */
+    tcsetattr(termfd, TCSANOW, &origTermState);
+
+    /* reset signals */
+    signal(SIGTERM, SIG_DFL);
+    signal(SIGINT, SIG_DFL);
+    signal(SIGSTOP, SIG_DFL);
+
+    return mod == 2 ? 0 : 1;
+}
+
+int doLogin(struct options *options, UdiRootConfig *udiConfig) {
+    char *username = NULL;
+    char *password = NULL;
+    char *cred = NULL;
+    char *munge_cred = NULL;
+
+    if (options->location == NULL) {
+        options->location = strdup("default");
+    }
+
+    int ret = getttycred(options->location, &username, &password);
+    if (ret != 0) {
+        fprintf(stderr, "FAILED to read credentials from tty!\n");
+    }
+    cred = alloc_strgenf("%s:%s", username, password);
+
+    munge_ctx_t ctx = munge_ctx_create();
+    munge_encode(&munge_cred, ctx, cred, strlen(cred)); 
+    munge_ctx_destroy(ctx);
+
+    free(cred);
+    free(username);
+    free(password);
+    cred = username = password = NULL;
+
+    /* figure out where to insert credentials */
+    LoginCredential **lcptr = options->loginCredentials;
+    for ( ; lcptr && *lcptr; lcptr++) {
+        if ((*lcptr)->system && (*lcptr)->location && 
+                strcmp((*lcptr)->system, udiConfig->system) == 0 &&
+                strcmp((*lcptr)->location, options->location) == 0) {
+
+            break;
+        }
+    }
+
+    /* if they were found, replace existing */
+    if (lcptr && *lcptr) {
+        if ((*lcptr)->cred != NULL) {
+            free((*lcptr)->cred);
+        }
+        (*lcptr)->cred = munge_cred;
+    } else {
+        /* append to end of list */
+        size_t count = 0;
+        if (lcptr) count = lcptr - options->loginCredentials;
+        LoginCredential **tmp = (LoginCredential **) realloc(options->loginCredentials, sizeof(LoginCredential *) * (count+2));
+        if (tmp == NULL) {
+            fprintf(stderr, "FAILED to allocate memory to expand credential list\n");
+            goto _error;
+        }
+        options->loginCredentials = tmp;
+        lcptr = options->loginCredentials + count;
+        *lcptr = (LoginCredential *) malloc(sizeof(LoginCredential));
+        (*lcptr)->system = strdup(udiConfig->system);
+        (*lcptr)->location = strdup(options->location);
+        (*lcptr)->cred = munge_cred;
+
+        /* NULL-terminate the list */
+        lcptr++;
+        *lcptr = NULL;
+    }
+
+    /* write out credentials */
+    struct passwd *pwd = getpwuid(getuid());
+    if (pwd != NULL) {
+        char *creddir = alloc_strgenf("%s/.udiRoot", pwd->pw_dir);
+        char *path = alloc_strgenf("%s/.udiRoot/.cred", pwd->pw_dir);
+        struct stat statData;
+        if (stat(creddir, &statData) != 0) {
+            if (mkdir(creddir, 0700) != 0) {
+                fprintf(stderr, "FAILED to create directory %s\n", creddir);
+                goto _error;
+            }
+        }
+        if (stat(creddir, &statData) == 0) {
+            FILE *out = fopen(path, "w");
+            if (out == NULL) {
+                fprintf(stderr, "FAILED to open credentials for writing!\n");
+                goto _error;
+            }
+            lcptr = options->loginCredentials;
+            for ( ; lcptr && *lcptr; lcptr++) {
+                fprintf(out, "%s:%s=%s\n", (*lcptr)->system, (*lcptr)->location, (*lcptr)->cred);
+            }
+            fclose(out);
+            if (chmod(path, 0600) != 0) {
+                fprintf(stderr, "FAILED to correctly set permissions on %s\n", path);
+                goto _error;
+            }
+        } else {
+            fprintf(stderr, "FAILED to stat %s\n", creddir);
+            goto _error;
+        }
+    }
+
     return 0;
+_error:
+    return 1;
 }
 
 size_t handleResponseHeader(char *ptr, size_t sz, size_t nmemb, void *data) {
@@ -433,6 +625,122 @@ int imgCompare(const void *ta, const void *tb) {
     return strcmp(a->tag[0], b->tag[0]);
 }
 
+char *json_escape_string(const char *input) {
+    char *output = NULL;
+    const char *rptr = NULL;
+    char *wptr = NULL;
+    if (input == NULL || strlen(input) == 0) {
+        return NULL;
+    }
+
+    /* worst case is everything is escaped, so double input len */
+    output = (char *) malloc(sizeof(char) * (strlen(input) * 2 + 1));
+    if (output == NULL) return NULL;
+    for (rptr = input, wptr = output; rptr && *rptr; rptr++, wptr++) {
+        switch (*rptr) {
+            case '"':
+            case '\\':
+                *wptr = '\\';
+                wptr++;
+                *wptr = *rptr;
+                break;
+            case '\n':
+                *wptr = '\\';
+                wptr++;
+                *wptr = 'n';
+                break;
+            case '\b':
+                *wptr = '\\';
+                wptr++;
+                *wptr = 'b';
+                break;
+            case '\f':
+                *wptr = '\\';
+                wptr++;
+                *wptr = 'f';
+                break;
+            case '\r':
+                *wptr = '\\';
+                wptr++;
+                *wptr = 'r';
+                break;
+            case '\t':
+                *wptr = '\\';
+                wptr++;
+                *wptr = 't';
+                break;
+            default:
+                *wptr = *rptr;
+                break;
+        }
+    }
+    *wptr = '\0';
+    return output;
+}
+
+char *constructAuthMessage(struct options *config, UdiRootConfig *udiConfig) {
+    munge_ctx_t ctx = munge_ctx_create();
+    char *msg = NULL;
+    size_t msg_curr = 0;
+    size_t msg_len = 0;
+    char *buffer = NULL;
+    char *json_location = NULL;
+    char *json_credential = NULL;
+    int cnt = 0;
+
+    msg = alloc_strcatf(msg, &msg_curr, &msg_len, "{\"authorized_locations\":{");
+
+    LoginCredential **lcptr = config->loginCredentials;
+    for ( ; lcptr && *lcptr; lcptr++) {
+        LoginCredential *lc = *lcptr;
+        if (lc->system && strcmp(udiConfig->system, lc->system) == 0) {
+            uid_t uid = 0;
+            munge_err_t ret;
+            int len = 0;
+            ret = munge_decode(lc->cred, ctx, (void **) &buffer, &len, &uid, NULL);
+            if (ret != EMUNGE_SUCCESS && ret != EMUNGE_CRED_EXPIRED && ret != EMUNGE_CRED_REPLAYED) {
+                /* allowed to read or re-read these but that's it */
+                if (buffer != NULL) {
+                    free(buffer);
+                    buffer = NULL;
+                }
+                continue;
+            }
+            if (uid != getuid()) {
+                if (buffer != NULL) {
+                    free(buffer);
+                    buffer = NULL;
+                }
+                continue;
+            }
+            json_location = json_escape_string(lc->location);
+            json_credential = json_escape_string(buffer);
+            if (json_location && json_credential) {
+                msg = alloc_strcatf(msg, &msg_curr, &msg_len, "%s\"%s\":\"%s\"",
+                        cnt++ > 0 ? "," : "", json_location, json_credential);
+            }
+            if (json_location) {
+                free(json_location);
+                json_location = NULL;
+            }
+            if (json_credential) {
+                free(json_credential);
+                json_credential = NULL;
+            }
+            if (buffer != NULL) {
+                free(buffer);
+                buffer = NULL;
+            }
+        }
+    }
+    if (cnt > 0) {
+        msg = alloc_strcatf(msg, &msg_curr, &msg_len, "}}");
+        return msg;
+    }
+    free(msg);
+    return NULL;
+}
+
 ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options *config, UdiRootConfig *udiConfig) {
     const char *modeStr = NULL;
     if (config->mode == MODE_LOOKUP) {
@@ -441,6 +749,10 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
         modeStr = "pull";
     } else if (config->mode == MODE_IMAGES) {
         modeStr = "list";
+    } else if (config->mode == MODE_EXPIRE) {
+        modeStr = "expire";
+    } else if (config->mode == MODE_AUTOEXPIRE) {
+        modeStr = "autoexpire";
     } else {
         modeStr = "invalid";
     }
@@ -462,7 +774,18 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
     curl_easy_setopt(curl, CURLOPT_URL, url);
 
     munge_ctx_t ctx = munge_ctx_create();
-    munge_encode(&cred, ctx, "", 0); 
+
+    char *cred_message = constructAuthMessage(config, udiConfig);
+    if (cred_message == NULL) {
+        munge_encode(&cred, ctx, "", 0); 
+    } else {
+        size_t len = strlen(cred_message);
+        munge_encode(&cred, ctx, cred_message, len);
+        memset(cred_message, 0, sizeof(char)*len);
+        free(cred_message);
+        cred_message = NULL;
+    }
+
     authstr = alloc_strgenf("authentication:%s", cred);
     if (authstr == NULL) {
         exit(1);
@@ -490,7 +813,11 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
 
     err = curl_easy_perform(curl);
     if (err) {
-        printf("err %d\n", err);
+        if (err == 7) { // 7 means Failed to connect to host.
+          printf("ERROR: it's not possible to contact the image gateway.\n");
+        } else {
+          printf("err %d\n", err);
+        }
         return NULL;
     }
     long http_code = 0;
@@ -526,7 +853,7 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
                         strcmp(image->status, "PENDING") == 0 ||
                         strcmp(image->status, "PULLING") == 0 ||
                         strcmp(image->status, "EXAMINATION") == 0 ||
-                        strcmp(image->status, "CONVERSION") == 0 || 
+                        strcmp(image->status, "CONVERSION") == 0 ||
                         strcmp(image->status, "TRANSFER") == 0) {
                         free_ImageGwImageRec(image, 1);
                         return imageGw;
@@ -612,6 +939,42 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
     return imageGw;
 }
 
+int _assignLoginCredential(const char *key, const char *value, void *_data) {
+    const char *ptr = strchr(key, ':');
+    char *system = NULL;
+    char *location = NULL;
+    struct options *config = (struct options *) _data;
+
+    if (ptr != NULL) {
+        system = (char *) malloc(sizeof(char)*((ptr - key) + 1));
+        strncpy(system, key, (ptr - key));
+        system[ptr - key] = 0;
+        ptr++;
+        location = strdup(ptr);
+
+        size_t count = 0;
+        LoginCredential **lcptr = config->loginCredentials;
+        for ( ; lcptr && *lcptr; lcptr++) {
+            count++;
+        }
+        lcptr = (LoginCredential **) realloc(config->loginCredentials, sizeof(LoginCredential *) * (count + 2));
+        if (lcptr == NULL) {
+            goto _error;
+        }
+        config->loginCredentials = lcptr;
+        lcptr = config->loginCredentials + count;
+        *lcptr = (LoginCredential *) malloc(sizeof(LoginCredential));
+        (*lcptr)->system = system;
+        (*lcptr)->location = location;
+        (*lcptr)->cred = strdup(value);
+        lcptr++;
+        *lcptr = NULL;
+    }
+    return 0;
+_error:
+    return 1;
+}
+
 int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *udiConfig) {
     int opt = 0;
     static struct option long_options[] = {
@@ -660,6 +1023,10 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         config->mode = MODE_IMAGES;
     } else if (strcmp(argv[optind], "login") == 0) {
         config->mode = MODE_LOGIN;
+    } else if (strcmp(argv[optind], "expire") == 0) {
+        config->mode = MODE_EXPIRE;
+    } else if (strcmp(argv[optind], "autoexpire") == 0) {
+        config->mode = MODE_AUTOEXPIRE;
     }
     if (config->mode == MODE_INVALID) {
         fprintf(stderr, "Invalid mode specified\n");
@@ -673,19 +1040,35 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         char *type = NULL;
         char *tag = NULL;
 
-        if (parse_ImageDescriptor(argv[optind], &type, &tag, udiConfig) != 0) {
-            fprintf(stderr, "FAILED to parse image descriptor. Try specifying "
-                    "both the type and descriptor, e.g., docker:ubuntu:latest"
-                    "\n");
-            _usage(1);
+        if (config->mode == MODE_LOGIN) {
+            config->location = strdup(argv[optind]);
+        } else {
+            if (parse_ImageDescriptor(argv[optind], &type, &tag, udiConfig) != 0) {
+                fprintf(stderr, "FAILED to parse image descriptor. Try specifying "
+                        "both the type and descriptor, e.g., docker:ubuntu:latest"
+                        "\n");
+                _usage(1);
+            }
+
+            config->type = curl_easy_escape(curl, type, strlen(type));
+            config->rawtype = type; /* TODO: does this need to be strdup'd? */
+            config->tag = curl_easy_escape(curl, tag, strlen(tag));
+            config->rawtag = strdup(tag);
         }
 
-        config->type = curl_easy_escape(curl, type, strlen(type));
-        config->rawtype = type;
-        config->tag = curl_easy_escape(curl, tag, strlen(tag));
-        config->rawtag = strdup(tag);
-
         curl_easy_cleanup(curl);
+    }
+    if (config->location == NULL) {
+        config->location = strdup("default");
+    }
+
+    /* read any credentials that exist */
+    struct passwd *pwd = getpwuid(getuid());
+    if (pwd != NULL) {
+        char *path = alloc_strgenf("%s/.udiRoot/.cred", pwd->pw_dir);
+        if (access(path, F_OK) == 0) {
+            shifter_parseConfig(path, '=', config, _assignLoginCredential);
+        } 
     }
     return 0;
 }
@@ -710,7 +1093,7 @@ int main(int argc, char **argv) {
     }
 
     if (config.mode == MODE_LOGIN) {
-        return doLogin();
+        return doLogin(&config, &udiConfig);
     }
 
     /* get local copy of gateway urls */

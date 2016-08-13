@@ -1,20 +1,21 @@
 from celery import Celery
 import json
 import os
-import time
+from time import time,sleep
 import shifter_imagegw
 import dockerv2
-import dockerhub
 import converters
 import transfer
 import re
 import shutil
 import sys
 import subprocess
+import tempfile
 from pymongo import MongoClient
 from bson.objectid import ObjectId
-import logging
 from random import randint
+import logging
+
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
@@ -63,6 +64,16 @@ queue.conf.update(CELERY_ACCEPT_CONTENT = ['json'])
 queue.conf.update(CELERY_TASK_SERIALIZER = 'json')
 queue.conf.update(CELERY_RESULT_SERIALIZER = 'json')
 
+class updater():
+    def __init__(self,update_state):
+        self.update_state=update_state
+
+    def update_status(self,state,message):
+        if self.update_state is not None:
+            self.update_state(state=state,meta={'heartbeat':time(),'message':message})
+
+defupdater=updater(None)
+
 def initqueue(newconfig):
     """
     This is mainly used by the manager to configure the broker
@@ -84,7 +95,11 @@ def normalized_name(request):
     return '%s_%s'%(request['itype'],request['tag'].replace('/','_'))
     #return request['meta']['id']
 
-def pull_image(request):
+
+def already_processed(request):
+    return False
+
+def pull_image(request,updater=defupdater):
     """
     pull the image down and extract the contents
 
@@ -102,7 +117,7 @@ def pull_image(request):
         # This is a location
         location=parts[0]
         tag='/'.join(parts[1:])
-       
+
     parts=tag.split(':')
     if len(parts)==2:
         (repo,tag)=parts
@@ -127,33 +142,44 @@ def pull_image(request):
         if 'url' in params:
           url=params['url']
         try:
-            resp=dockerv2.pullImage(None, url,
-                repo, tag,
-                cachedir=cdir,expanddir=edir,
-                cacert=cacert)
+            #resp=dockerv2.pullImage(None, url,
+            #    repo, tag,
+            #    cachedir=cdir,expanddir=edir,
+            #    cacert=cacert,logger=logger)
+            options={}
+            if cacert is not None:
+                options['cacert'] = cacert
+            options['baseUrl'] = url
+            imageident = '%s:%s' % (repo, tag)
+            dh = dockerv2.dockerv2Handle(imageident, options,updater=updater)
+            updater.update_status("PULLING",'Getting manifest')
+            manifest = dh.getImageManifest()
+            resp=dh.examine_manifest(manifest)
             request['meta']=resp
-            request['expandedpath']=resp['expandedpath']
-            return True
-        except:
-            logging.warn(sys.exc_value)
-            return False
-    elif rtype=='dockerhub':
-        logging.debug("pulling from docker hub %s %s"%(repo,tag))
-        try:
-            resp=dockerhub.pullImage(None, None,
-                repo, tag,
-                cachedir=cdir,expanddir=edir,
-                cacert=cacert)
-            request['meta']=resp
-            request['expandedpath']=resp['expandedpath']
+            request['id'] = str(resp['id'])
+
+            image_exists = check_image(request, request['id'])
+            if image_exists:
+                return True
+
+            dh.pull_layers(manifest,cdir)
+
+            expandedpath = tempfile.mkdtemp(suffix='extract', prefix=request['id'], dir=edir)
+            request['expandedpath']=expandedpath
+
+            updater.update_status("PULLING",'Extracting Layers')
+            dh.extractDockerLayers(expandedpath, dh.get_eldest(), cachedir=cdir)
             return True
         except:
             logging.warn(sys.exc_value)
             raise
-
+    elif rtype=='dockerhub':
+        logging.warning("Use of depcreated dockerhub type")
+        raise NotImplementedError('dockerhub type is depcreated.  Use dockverv2')
     else:
         raise NotImplementedError('Unsupported remote type %s'%(rtype))
     return False
+
 
 def examine_image(request):
     """
@@ -164,6 +190,13 @@ def examine_image(request):
     # TODO: Add checks to examine the image.  Should be extensible.
     return True
 
+def get_image_format(request):
+    format=config['DefaultImageFormat']
+    if format in request:
+        format=request['format']
+
+    return format
+
 def convert_image(request):
     """
     Convert the image to the required format for the target system
@@ -171,17 +204,17 @@ def convert_image(request):
     Returns True on success
     """
     system=request['system']
-    format=config['DefaultImageFormat']
-    if format in request:
-        format=request['format']
-    else:
-        request['format']=format
-    cdir=config['CacheDirectory']
-    imagefile='%s.%s'%(request['expandedpath'],format)
-    status=converters.convert(format,request['expandedpath'],imagefile)
 
-    # Write Metadata file
+    format=get_image_format(request)
+    request['format']=format
+
+    cdir=config['CacheDirectory']
+    edir=config['ExpandDirectory']
+
+    imagefile=os.path.join(edir, '%s.%s' % (request['id'], format))
     request['imagefile']=imagefile
+
+    status=converters.convert(format,request['expandedpath'],imagefile)
     return status
 
 def write_metadata(request):
@@ -192,13 +225,40 @@ def write_metadata(request):
     """
     format=request['format']
     meta=request['meta']
-    metafile='%s.meta'%(request['expandedpath'])
+
+    edir=config['ExpandDirectory']
+
+    ## initially write metadata to tempfile
+    (fd,metafile)=tempfile.mkstemp(prefix=request['id'],suffix='meta',dir=edir)
+    os.close(fd)
+    request['metafile']=metafile
+
     status=converters.writemeta(format,meta,metafile)
 
-    # Write Metadata file
-    request['metafile']=metafile
+    ## after success move to final name
+    final_metafile=os.path.join(edir, '%s.meta' % (request['id']))
+    shutil.move(metafile, final_metafile)
+    request['metafile']=final_metafile
+
     return status
 
+
+def check_image(request, imageid):
+    """
+    Checks if the target image is on the target system
+
+    Returns True on success
+    """
+    system=request['system']
+    if system not in config['Platforms']:
+        raise KeyError('%s is not in the configuration'%system)
+    sys=config['Platforms'][system]
+
+    format = get_image_format(request)
+    image_filename = "%s.%s" % (request['id'],format)
+    image_metadata = "%s.meta" % (request['id'])
+
+    return transfer.imagevalid(sys, image_filename, image_metadata, logging)
 
 def transfer_image(request):
     """
@@ -213,7 +273,24 @@ def transfer_image(request):
     meta=None
     if 'metafile' in request:
         meta=request['metafile']
-    return transfer.transfer(sys,request['imagefile'],meta)
+    return transfer.transfer(sys,request['imagefile'],meta, logging)
+
+def remove_image(request):
+    """
+    Remove the image to the target system based on the configuration.
+
+    Returns True on success
+    """
+    system=request['system']
+    if system not in config['Platforms']:
+        raise KeyError('%s is not in the configuration'%system)
+    sys=config['Platforms'][system]
+    imagefile=request['id']+'.'+request['format']
+    meta=request['id']+'.meta'
+    if 'metafile' in request:
+        meta=request['metafile']
+    return transfer.remove(sys,imagefile,meta, logging)
+
 
 def cleanup_temporary(request):
     items = ('expandedpath', 'imagefile', 'metafile')
@@ -239,8 +316,11 @@ def cleanup_temporary(request):
                 else:
                     os.unlink(cleanitem)
             except:
-                logging.error("Worker: caught exception while trying to clean up %s." % cleanitem)
-                logging.warn(sys.exc_value)
+                logging.error("Worker: caught exception while trying to clean up (%s) %s." % (item,cleanitem))
+                #logging.warn(sys.exc_value)
+                pass
+
+
 
 @queue.task(bind=True)
 def dopull(self,request,TESTMODE=0):
@@ -248,11 +328,12 @@ def dopull(self,request,TESTMODE=0):
     Celery task to do the full workflow of pulling an image and transferring it
     """
     logging.debug("dopull system=%s tag=%s"%(request['system'],request['tag']))
+    us=updater(self.update_state)
     if TESTMODE==1:
         for state in ('PULLING','EXAMINATION','CONVERSION','TRANSFER','READY'):
             logging.info("Worker: TESTMODE Updating to %s"%(state))
-            self.update_state(state=state)
-            time.sleep(1)
+            us.update_status(state,state)
+            sleep(1)
         id='%x'%(randint(0,100000))
         return {'id':id,'entrypoint':['./blah'],'workdir':'/root','env':['FOO=bar','BAZ=boz']}
     elif TESTMODE==2:
@@ -260,33 +341,73 @@ def dopull(self,request,TESTMODE=0):
         raise OSError('task failed')
     try:
         # Step 1 - Do the pull
-        self.update_state(state='PULLING')
-        if not pull_image(request):
+        us.update_status('PULLING','PULLING')
+        print "pulling image %s"%(request['tag'])
+        if not pull_image(request,updater=us):
+            print "pull_image failed"
             logging.info("Worker: Pull failed")
             raise OSError('Pull failed')
+
         if 'meta' not in request:
             raise OSError('Metadata not populated')
-        # Step 2 - Check the image
-        self.update_state(state='EXAMINATION')
-        if not examine_image(request):
-            raise OSError('Examine failed')
-        # Step 3 - Convert
-        self.update_state(state='CONVERSION')
-        if not convert_image(request):
-            raise OSError('Conversion failed')
-        if not write_metadata(request):
-            raise OSError('Metadata creation failed')
-        # Step 4 - TRANSFER
-        self.update_state(state='TRANSFER')
-        if not transfer_image(request):
-            raise OSError('Transfer failed')
+
+        if not check_image(request, request['id']):
+            # Step 2 - Check the image
+            us.update_status('EXAMINATION','Examining image')
+            print "Worker: examining image %s"%(request['tag'])
+            if not examine_image(request):
+                raise OSError('Examine failed')
+            # Step 3 - Convert
+            us.update_status('CONVERSION','Converting image')
+            print "Worker: converting image %s"%(request['tag'])
+            if not convert_image(request):
+                raise OSError('Conversion failed')
+            if not write_metadata(request):
+                raise OSError('Metadata creation failed')
+            # Step 4 - TRANSFER
+            us.update_status('TRANSFER','Transferring image')
+            logging.info("Worker: transferring image %s"%(request['tag']))
+            print "Worker: transferring image %s"%(request['tag'])
+            if not transfer_image(request):
+                raise OSError('Transfer failed')
         # Done
-        self.update_state(state='READY')
+        us.update_status('READY','Image ready')
         cleanup_temporary(request)
         return request['meta']
 
     except:
         logging.error("ERROR: dopull failed system=%s tag=%s"%(request['system'],request['tag']))
+        print sys.exc_value
         self.update_state(state='FAILURE')
+
+        ## TODO: add a debugging flag and only disable cleanup if debugging
         cleanup_temporary(request)
         raise
+
+
+@queue.task(bind=True)
+def doexpire(self,request,TESTMODE=0):
+    """
+    Celery task to do the full workflow of pulling an image and transferring it
+    """
+    logging.debug("do expire system=%s tag=%s TM=%d"%(request['system'],request['tag'],TESTMODE))
+    try:
+        self.update_state(state='EXPIRING')
+        if not remove_image(request):
+            logging.info("Worker: Expire failed")
+            raise OSError('Expire failed')
+
+        self.update_state(state='EXPIRED')
+        return True
+
+    except:
+        logging.error("ERROR: doexpire failed system=%s tag=%s"%(request['system'],request['tag']))
+        raise
+
+@queue.task(bind=True)
+def doimagevalid(self, request, TESTMODE=0):
+    """
+    Celery task to check if a pulled image exists and if it is valid
+    """
+    logging.debug("do imagevalid system=%s tag=%s TM=%d" % (request['system'], request['tag'], TESTMODE))
+

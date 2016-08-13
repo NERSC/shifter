@@ -3,7 +3,7 @@ REDIS_PASSWORD=mypassword
 
 all:
 
-test/config/redis.conf: Makefile
+test/config/redis.conf: Makefile.test
 	echo "requirepass $(REDIS_PASSWORD)" > test/config/redis.conf
 	echo 'rename-command CONFIG ""' >> test/config/redis.conf
 	sed -i -e 's/redis:\/\/:.*@/redis:\/\/:$(REDIS_PASSWORD)@/' ./test/config/imagemanager.json
@@ -19,11 +19,18 @@ test/config/munge.key:
 testprep: test/config/redis.conf test/config/ssh.key test/config/munge.key
 
 
+startdeps:
+	docker run -d -p 27017:27017 mongo --smallfiles
+	docker run -d -p 6379:6379 redis
+
 starttest: testprep
 	docker build -t imagegwapi .
-	docker build -t shifter-test ../../
+	docker build -t shifter-test ..
 	docker-compose up -d
 
+restartgw:
+	docker build -t imagegwapi .
+	docker-compose up -d
 
 getssh:
 	$(eval IP=$(shell docker-machine ip $(shell docker-machine active)))

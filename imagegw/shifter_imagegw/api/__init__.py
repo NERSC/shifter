@@ -76,7 +76,7 @@ def help():
 
 def create_response(rec):
     resp={}
-    for field in ('id','system','itype','tag','status','userAcl','groupAcl','ENV','ENTRY','WORKDIR','last_pull'):
+    for field in ('id','system','itype','tag','status','userAcl','groupAcl','ENV','ENTRY','WORKDIR','last_pull','status_message'):
         try:
             resp[field]=rec[field]
         except KeyError,e:
@@ -108,6 +108,9 @@ def list(system):
 # This will lookup the status of the requested image.
 @app.route('/api/lookup/<system>/<type>/<path:tag>/', methods=["GET"])
 def lookup(system,type,tag):
+    if type == "docker" and tag.find(':') == -1:
+        tag = '%s:latest' % (tag)
+
     auth=request.headers.get(AUTH_HEADER)
     app.logger.debug("lookup system=%s type=%s tag=%s auth=%s"%(system,type,tag,auth))
     i={'system':system,'itype':type,'tag':tag}
@@ -137,6 +140,9 @@ def lookup(system,type,tag):
 # This will pull the requested image.
 @app.route('/api/pull/<system>/<type>/<path:tag>/', methods=["POST"])
 def pull(system,type,tag):
+    if type == "docker" and tag.find(':') == -1:
+        tag = '%s:latest' % (tag)
+
     auth=request.headers.get(AUTH_HEADER)
     app.logger.debug("pull system=%s type=%s tag=%s"%(system,type,tag))
     i={'system':system,'itype':type,'tag':tag}
@@ -149,18 +155,34 @@ def pull(system,type,tag):
         return not_found('%s %s'%(sys.exc_type,sys.exc_value))
     return jsonify(create_response(rec))
 
+# auto expire
+# This will autoexpire images and cleanup stuck pulls
+@app.route('/api/autoexpire/<system>/', methods=["GET"])
+def autoexpire(system):
+    auth=request.headers.get(AUTH_HEADER)
+    app.logger.debug("expire system=%s"%(system))
+    try:
+        session=mgr.new_session(auth,system)
+        resp=mgr.autoexpire(session,system)
+    except:
+        app.logger.exception('Exception in autoexpire')
+        return not_found()
+    return jsonify({'status':resp})
+
 # expire image
 # This will expire an image which removes it from the cache.
-@app.route('/api/expire/<system>/<type>/<tag>/<id>/', methods=["GET"])
-def expire(system,type,tag,id):
+@app.route('/api/expire/<system>/<type>/<tag>/', methods=["GET"])
+def expire(system,type,tag):
+    if type == "docker" and tag.find(':') == -1:
+        tag = '%s:latest' % (tag)
+
     auth=request.headers.get(AUTH_HEADER)
+    i={'system':system,'itype':type,'tag':tag}
     app.logger.debug("expire system=%s type=%s tag=%s"%(system,type,tag))
     try:
         session=mgr.new_session(auth,system)
-        resp=mgr.expire(session,system,type,tag,id)
+        resp=mgr.expire(session,i)
     except:
         app.logger.exception('Exception in expire')
         return not_found()
-    return jsonify(resp)
-
-
+    return jsonify({'status':resp})
