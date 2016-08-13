@@ -1,4 +1,4 @@
-16.08.0pre1
+16.08.1
 ===========
 * Fixed bug in user volume mount flag parsing that could segfault
 * Fixed bug that could cause group file filtration to assign incorrect gid,
@@ -26,6 +26,9 @@
   specified by user
 * Ensure failed image pulls are fully cleaned up
 * Check if the current image version is installed on the platform before pulling
+* Remove old debugging functionality
+* Allow /etc required files to re-try copy (fixes dvs copy issue)
+* Require admin capability to autoexpire
 
 16.04.0
 ===========
