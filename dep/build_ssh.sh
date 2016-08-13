@@ -99,7 +99,7 @@ make install "DESTDIR=${PREFIX}"
 cd "${builddir}"
 
 cat <<EOF > "${PREFIX}${INST_PREFIX}/etc/sshd_config"
-Port 204
+Port 1204
 StrictModes yes
 PermitRootLogin no
 AuthorizedKeysFile ${INST_PREFIX}/etc/user_auth_keys
@@ -123,7 +123,7 @@ EOF
 cat <<EOF > ${PREFIX}${INST_PREFIX}/etc/ssh_config
 Host *
   StrictHostKeyChecking no
-  Port 204
+  Port 1204
   IdentityFile ~/.udiRoot/id_rsa.key
 EOF
 

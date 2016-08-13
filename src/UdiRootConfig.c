@@ -263,6 +263,8 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
             config->allowLibcPwdCalls);
     written += fprintf(fp, "populateEtcDynamically = %d\n",
             config->populateEtcDynamically);
+    written += fprintf(fp, "optionalSshdAsRoot = %d\n",
+            config->optionalSshdAsRoot);
     written += fprintf(fp, "autoLoadKernelModule = %d\n",
         config->autoLoadKernelModule);
     written += fprintf(fp, "mountPropagationStyle = %s\n",
@@ -455,6 +457,8 @@ static int _assign(const char *key, const char *value, void *t_config) {
         config->allowLocalChroot = atoi(value) != 0;
     } else if (strcmp(key, "allowLibcPwdCalls") == 0) {
         config->allowLibcPwdCalls = atoi(value) != 0;
+    } else if (strcmp(key, "optionalSshdAsRoot") == 0) {
+        config->optionalSshdAsRoot = atoi(value) != 0;
     } else if (strcmp(key, "populateEtcDynamically") == 0) {
         config->populateEtcDynamically = atoi(value) != 0;
     } else if (strcmp(key, "autoLoadKernelModule") == 0) {

@@ -103,6 +103,7 @@ typedef struct _UdiRootConfig {
     int populateEtcDynamically;
     int autoLoadKernelModule;
     int mountUdiRootWritable;
+    int optionalSshdAsRoot;
     size_t maxGroupCount;
     size_t gatewayTimeout;
     size_t mountPropagationStyle;
