@@ -140,7 +140,7 @@ int main(int argc, char **argv) {
     if (config.sshPubKey != NULL && strlen(config.sshPubKey) > 0
             && config.user != NULL && strlen(config.user) > 0
             && config.uid != 0) {
-        if (setupImageSsh(config.sshPubKey, config.user, config.uid, &udiConfig) != 0) {
+        if (setupImageSsh(config.sshPubKey, config.user, config.uid, config.gid, &udiConfig) != 0) {
             fprintf(stderr, "FAILED to setup ssh configuration\n");
             exit(1);
         }

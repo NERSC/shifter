@@ -1728,7 +1728,7 @@ _compareShifterConfig_error:
     return -1;
 }
 
-int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udiConfig) {
+int setupImageSsh(char *sshPubKey, char *username, uid_t uid, gid_t gid, UdiRootConfig *udiConfig) {
     struct stat statData;
     char udiImage[PATH_MAX];
     char sshdConfigPath[PATH_MAX];
@@ -1737,12 +1737,24 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
     const char **keyPtr = NULL;
     char *lineBuf = NULL;
     size_t lineBuf_size = 0;
+    uid_t ownerUid = 0;
+    gid_t ownerGid = 0;
 
     FILE *inputFile = NULL;
     FILE *outputFile = NULL;
 
     MountList mountCache;
     memset(&mountCache, 0, sizeof(MountList));
+
+    if (udiConfig->optionalSshdAsRoot == 0) {
+        ownerUid = uid;
+        ownerGid = gid;
+    }
+
+    if (udiConfig->optionalSshdAsRoot == 0 && (ownerUid == 0 || ownerGid == 0)) {
+        fprintf(stderr, "FAILED to identify proper uid to run sshd\n");
+        goto _setupImageSsh_unclean;
+    }
 
 #define _BINDMOUNT(mounts, from, to, flags, overwrite) if (_shifterCore_bindMount(udiConfig, mounts, from, to, flags, overwrite) != 0) { \
     fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from, to); \
@@ -1792,6 +1804,13 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
 
         if (ret != 0) {
             fprintf(stderr, "Failed to generate key of type %s\n", *keyPtr);
+            goto _setupImageSsh_unclean;
+        }
+
+        /* chown files to user */
+        if (chown(keyFileName, ownerUid, ownerGid) != 0) {
+            fprintf(stderr, "Failed to chown ssh host key to user: %s\n",
+                    keyFileName);
             goto _setupImageSsh_unclean;
         }
     }
@@ -1848,7 +1867,7 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
             goto _setupImageSsh_unclean;
         }
     }
-    if (chown(sshdConfigPath, 0, 0) != 0) {
+    if (chown(sshdConfigPath, ownerUid, ownerGid) != 0) {
         fprintf(stderr, "FAILED to chown sshd config path %s\n", sshdConfigPath);
         perror("   errno: ");
         goto _setupImageSsh_unclean;
@@ -1942,6 +1961,11 @@ int startSshd(UdiRootConfig *udiConfig) {
         fprintf(stderr, "FAILED to chdir to %s while attempted to start sshd\n", chrootPath);
         goto _startSshd_unclean;
     }
+    if (udiConfig->optionalSshdAsRoot == 0 && (udiConfig->target_uid == 0 ||
+                udiConfig->target_gid == 0)) {
+        fprintf(stderr, "FAILED to start sshd, will not start as root\n");
+        goto _startSshd_unclean;
+    }
 
     pid = fork();
     if (pid < 0) {
@@ -1949,21 +1973,47 @@ int startSshd(UdiRootConfig *udiConfig) {
         goto _startSshd_unclean;
     }
     if (pid == 0) {
+        gid_t *groups = NULL;
+        size_t groups_sz = 0;
+
+        /* TODO call regular getgroups if libc calls are enabled */
+        if (shifter_getgrouplist(udiConfig->username,
+                    udiConfig->target_gid, &groups, &groups_sz,
+                    udiConfig) != 0) {
+            fprintf(stderr, "FAILED to get grouplist\n");
+            exit(1);
+        }
+        if (chdir(chrootPath) != 0) {
+            fprintf(stderr, "FAILED to chdir to %s while attempting to start sshd\n", chrootPath);
+            exit(1);
+        }
         if (chroot(chrootPath) != 0) {
             fprintf(stderr, "FAILED to chroot to %s while attempting to start sshd\n", chrootPath);
-            /* no goto, this is the child, we want it to end if this failed */
-        } else  {
-            setgroups(1, &(udiConfig->target_gid));
-            setresgid(udiConfig->target_gid, udiConfig->target_gid, udiConfig->target_gid);
-            setresuid(udiConfig->target_uid, udiConfig->target_uid, udiConfig->target_uid);
-            char *sshdArgs[2] = {
-                strdup("/opt/udiImage/sbin/sshd"),
-                NULL
-            };
-            execv(sshdArgs[0], sshdArgs);
-            fprintf(stderr, "FAILED to exec sshd!\n");
-
+            exit(1);
         }
+        if (udiConfig->optionalSshdAsRoot == 0) {
+            if (setgroups(groups_sz, groups) != 0) {
+                fprintf(stderr, "FAILED to setgroups()\n");
+                exit(1);
+            }
+            if (setresgid(udiConfig->target_gid, udiConfig->target_gid,
+                        udiConfig->target_gid) != 0) {
+                fprintf(stderr, "FAILED to setresgid()\n");
+                exit(1);
+            }
+            if (setresuid(udiConfig->target_uid, udiConfig->target_uid,
+                        udiConfig->target_uid) != 0) {
+                fprintf(stderr, "FAILED to setresuid()\n");
+                exit(1);
+            }
+        }
+        char *sshdArgs[2] = {
+            strdup("/opt/udiImage/sbin/sshd"),
+            NULL
+        };
+        execv(sshdArgs[0], sshdArgs);
+        fprintf(stderr, "FAILED to exec sshd!\n");
+
         /* if we fell through to here, there is a problem */
         exit(1);
     } else {
@@ -2461,7 +2511,7 @@ int shifter_getgrouplist(
     input = fopen(buffer, "r");
 
     if (input == NULL) {
-        fprintf(stderr, "FAILED to find shifter group file at %s", buffer);
+        fprintf(stderr, "FAILED to find shifter group file at %s: %s\n", buffer, strerror(errno));
         goto _shifter_getgrouplist_unclean;
     }
 
@@ -2480,6 +2530,11 @@ int shifter_getgrouplist(
 
         if (gr == NULL) {
             break;
+        }
+
+        /* will not allow gid 0 in shifter */
+        if (gr->gr_gid == 0) {
+            continue;
         }
 
         /* already added basegroup to list, no repeats please */
