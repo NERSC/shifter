@@ -144,7 +144,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "FAILED to setup ssh configuration\n");
             exit(1);
         }
-        if (startSshd(&udiConfig) != 0) {
+        if (startSshd(config.user, &udiConfig) != 0) {
             fprintf(stderr, "FAILED to start sshd\n");
             exit(1);
         }
