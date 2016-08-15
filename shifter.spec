@@ -14,7 +14,7 @@ Source0:  %{name}-%{version}.tar.gz
 %description
 Shifter enables container images for HPC. In a nutshell, Shifter
 allows an HPC system to efficiently and safely permit end-users to run
-jobs inside a docker image. Shifter consists of a few moving parts:
+jobs inside a Docker image. Shifter consists of a few moving parts:
   1) a utility that typically runs on the compute node that creates the
      runtime environment for the application,
   2) an image gateway service that pulls images from a registry and
@@ -43,7 +43,7 @@ BuildRequires: pam-devel
 %description runtime
 Shifter enables container images for HPC. In a nutshell, Shifter
 allows an HPC system to efficiently and safely permit end-users to run
-jobs inside a docker image. Shifter consists of a few moving parts:
+jobs inside a Docker image. Shifter consists of a few moving parts:
   1) a utility that typically runs on the compute node that creates the
      runtime environment for the application,
   2) an image gateway service that pulls images from a registry and
@@ -62,7 +62,7 @@ Summary: Image Manager/Gateway for Shifter
 %description imagegw
 Shifter enables container images for HPC. In a nutshell, Shifter
 allows an HPC system to efficiently and safely permit end-users to run
-jobs inside a docker image. Shifter consists of a few moving parts:
+jobs inside a Docker image. Shifter consists of a few moving parts:
   1) a utility that typically runs on the compute node that creates the
      runtime environment for the application,
   2) an image gateway service that pulls images from a registry and
