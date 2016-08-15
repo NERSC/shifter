@@ -592,7 +592,7 @@ class ImageMngrTestCase(unittest.TestCase):
         record['last_pull']=time.time()-3000
         id=self.images.insert(record)
         assert id is not None
-        session=self.m.new_session(self.auth,self.system)
+        session=self.m.new_session(self.authadmin,self.system)
         self.m.autoexpire(session,self.system,TESTMODE=1)
         state=self.m.get_state(id)
         assert state is None
@@ -602,7 +602,7 @@ class ImageMngrTestCase(unittest.TestCase):
         record['status']='ENQUEUED'
         id=self.images.insert(record)
         assert id is not None
-        session=self.m.new_session(self.auth,self.system)
+        session=self.m.new_session(self.authadmin,self.system)
         self.m.autoexpire(session,self.system,TESTMODE=1)
         state=self.m.get_state(id)
         assert state=='ENQUEUED'
@@ -617,7 +617,7 @@ class ImageMngrTestCase(unittest.TestCase):
         assert id is not None
         # Create a bogus image file
         file,metafile=self.create_fakeimage(self.system,record['id'],self.format)
-        session=self.m.new_session(self.auth,self.system)
+        session=self.m.new_session(self.authadmin,self.system)
         self.m.autoexpire(session,self.system,TESTMODE=1)#,delay=False)
         time.sleep(2)
         state=self.m.get_state(id)
@@ -634,7 +634,7 @@ class ImageMngrTestCase(unittest.TestCase):
         assert id is not None
         # Create a bogus image file
         file,metafile=self.create_fakeimage(self.system,record['id'],self.format)
-        session=self.m.new_session(self.auth,self.system)
+        session=self.m.new_session(self.authadmin,self.system)
         self.m.autoexpire(session,self.system,TESTMODE=1)#,delay=False)
         time.sleep(2)
         state=self.m.get_state(id)
@@ -652,7 +652,7 @@ class ImageMngrTestCase(unittest.TestCase):
         assert id is not None
         # Create a bogus image file
         file,metafile=self.create_fakeimage(self.system,record['id'],self.format)
-        session=self.m.new_session(self.auth,self.system)
+        session=self.m.new_session(self.authadmin,self.system)
         self.m.autoexpire(session,self.system,TESTMODE=1)#,delay=False)
         time.sleep(2)
         state=self.m.get_state(id)

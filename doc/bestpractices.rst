@@ -16,8 +16,9 @@ Recommended Practices for System Administrators
    Defined Image environments.  This is because the user-defined image is
    prepared externally, and may or may not contain security vulnerabilities
    fixed or otherwise not present in your environment.  Shifter does optionally
-   include an sshd is executed as root, however, we have attempted to secure
-   the sshd by statically linking it against libmusl (an embedded libc
+   include an sshd which is also *not* recommended to be run as root, however,
+   on some legacy systems it may be necessary. Therefore, we have attempted to
+   secure the sshd by statically linking it against libmusl (an embedded libc
    alternative), and libressl, to minimize to number and types of interactions
    it might have with the user defined environment.
 

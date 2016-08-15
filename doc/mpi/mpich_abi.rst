@@ -115,7 +115,7 @@ internal or external login node should work. You'll need to install patchelf
 into your PATH prior to running (https://nixos.org/patchelf.html)
 
 Next copy /tmp/craylibs to your optUdiImage path (see udiRoot.conf) under
-cray/lib64, e.g., `code:/usr/lib/shifter/udiImage/cray/lib64`
+cray/lib64, e.g., :code:`/usr/lib/shifter/udiImage/cray/lib64`
 
 Finally, a few modifications need to be made to udiRoot.conf:
 

@@ -42,7 +42,7 @@ services:
   - redis
 after_failure:
   - df /tmp
-  - find /tmp/
+  - find /tmp/|head -100
   - ls -latrh /tmp/*
   - ls -latrh /tmp/imagegw/*
   - ls -latrh /tmp/systema/images/*

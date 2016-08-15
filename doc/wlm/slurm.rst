@@ -88,11 +88,8 @@ shifter_slurm.so path.  These options will control the behavior of the plugin.
   enable_sshd as well. e.g., :code:`enable_ccm=1`
 * *enable_sshd* - Enable the optional sshd that is run within the container.
   This sshd is the statically linked sshd that is built with shifter.  If
-  enabled it is run as root within the container, but limits as much as
-  possible, interactions with the User Defined Image by using a statically
-  linked-in libc (musl) and SSL environment (libressl), and strictly using
-  files (/etc/passwd and /etc/group) which are explicitly placed by shifter
-  for authorization.  No privileged logins are permitted.
+  enabled it is run as the user within the container. See the shifter sshd
+  documentation for more information.
 
 Using Shifter with SLURM
 ------------------------
@@ -171,7 +168,7 @@ plugstack.conf on the shifter_slurm.so line.  This will start a specially
 constructed sshd on port 204 on each node.  This sshd will only all the user to
 login, and only using an ssh key constructed (automatically) for the explicit 
 use of shifter.  All the manipulations to change the default ssh port from 22 
-to 204 as well as provide the key are automatically injected into the image
+to 1204 as well as provide the key are automatically injected into the image
 container's /etc/ssh/ssh_config file to ease using the sshd.
 
 Once in the container environment the script can discover the other nodes in

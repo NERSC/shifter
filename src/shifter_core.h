@@ -67,8 +67,8 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
 int destructUDI(UdiRootConfig *udiConfig, int killSshd);
 int bindImageIntoUDI(const char *relpath, ImageData *imageData, UdiRootConfig *udiConfig, int copyFlag);
 int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig);
-int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udiConfig);
-int startSshd(UdiRootConfig *udiConfig);
+int setupImageSsh(char *sshPubKey, char *username, uid_t uid, gid_t gid, UdiRootConfig *udiConfig);
+int startSshd(const char *user, UdiRootConfig *udiConfig);
 int filterEtcGroup(const char *dest, const char *from, const char *username, size_t maxGroups);
 int remountUdiRootReadonly(UdiRootConfig *udiConfig);
 int forkAndExecv(char *const *argvs);
@@ -98,82 +98,6 @@ int shifter_unsetenv(char ***env, char *var);
 int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig);
 struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config);
 struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config);
-
-/**
-  * @brief read one record from group formatted field
-  *
-  * Reads an already open file line-by-line and returns a single group record.
-  * This is really an internal function intended to be used for parsing the
-  * shifter-specific group-file, and is implemented because various libc
-  * cannot be trusted to properly parse HUGE group files with large numbers of
-  * members in a reliable way. This function is intended to be called multiple
-  * times to parse a group file. User is responsible to free the contents of
-  * @p linebuf and @p grmembuf at the conclusion of all calls. This function
-  * gets around libc limitations by delegating memory management to calling
-  * function and not implementing any membership quantity limits.
-  * 
-  * Usage example:
-  * @code
-  * FILE *fp = fopen("group", "r");
-  * struct group grbuf, *gr = NULL;
-  * char *linebuf = NULL;
-  * size_t linebuf_sz = 0;
-  * char **grmembuf = NULL;
-  * size_t grmembuf_sz = 0;
-  * for ( ; ; ) {
-  *     gr = shifter_fgetgrent(fp, &grbuf, &linebuf, &linebuf_sz,
-  *         &grmembuf, &grmembuf_sz);
-  *     if (!gr) break;
-  *     // do something with group data in gr
-  * }
-  * if (linebuf) free(linebuf);
-  * if (grmembuf) free(grmembuf);
-  * close(fp);
-  * @endcode
-  *
-  * @param input pointer to an open group file
-  * @param gr pointer to an already-allocated (struct group) data structure
-  * @param linebuf pointer to string buffer for all character data, must not be
-  *        NULL, however may point to a NULL pointer. May be modified.
-  * @param linebuf_sz pointer to length of @p linebuf buffer.  May be modified.
-  * @param grmembuf pointer to store array of group members. May be modified.
-  * @param grmembuf_sz pointer to length of @p grmembuf buffer. May be modified.
-  * @return Returns @p gr upon success, NULL otherwise.  NULL if invalid input.
-  */
-struct group *
-shifter_fgetgrent(FILE *input, struct group *gr, char **linebuf,
-    size_t *linebuf_sz, char ***grmembuf, size_t *grmembuf_sz);
-
-/**
- * @brief Generate group list for a user from shifter-specific group file
- *
- * Utility function to generate a list of groups from the shifter-specific group
- * file. @p groups may get reallocated to store group list.
- * 
- * Usage example:
- * @code
- * // assume UdiRootConfig is already parse and stored in config
- * gid_t *grpList = NULL;
- * size_t ngroups = 0;
- * if (shifter_getgrouplist("foo", fooGrp, &grpList, &ngroups, config) != 0) {
- *     // ERROR
- *     ...
- * }
- * // Use Groups...
- * @endcode
- *
- * @param user string container username to search for
- * @param group primary gid to seed gidlist with (from passwd file)
- * @param groups list of groups, will be reallocated and modified. Cannot be
- *        NULL, but may be a pointer to NULL.
- * @param ngroups store number of found groups, will be modified.  Cannot be
- *        NULL.
- * @param config pointer to UdiRootConfig configuration
- * @return 0 upon sucess, -1 otherwise
- */
-int
-shifter_getgrouplist(const char *user, gid_t group, gid_t **groups,
-    size_t *ngroups, UdiRootConfig *config);
 
 int setupPerNodeCacheFilename(UdiRootConfig *udiConfig, VolMapPerNodeCacheConfig *, char *, size_t);
 int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *from_buffer, UdiRootConfig *udiConfig);

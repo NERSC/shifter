@@ -1585,7 +1585,7 @@ int setupVolumeMapMounts(
             backingStoreExists = 0;
 
         } else {
-            int allowOverwriteBind = 0;
+            int allowOverwriteBind = 1;
 
             if (_shifterCore_bindMount(udiConfig, mountCache, from_buffer, to_real, flagsInEffect, allowOverwriteBind) != 0) {
                 fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from_buffer, to_real);
@@ -1728,7 +1728,7 @@ _compareShifterConfig_error:
     return -1;
 }
 
-int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udiConfig) {
+int setupImageSsh(char *sshPubKey, char *username, uid_t uid, gid_t gid, UdiRootConfig *udiConfig) {
     struct stat statData;
     char udiImage[PATH_MAX];
     char sshdConfigPath[PATH_MAX];
@@ -1737,12 +1737,24 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
     const char **keyPtr = NULL;
     char *lineBuf = NULL;
     size_t lineBuf_size = 0;
+    uid_t ownerUid = 0;
+    gid_t ownerGid = 0;
 
     FILE *inputFile = NULL;
     FILE *outputFile = NULL;
 
     MountList mountCache;
     memset(&mountCache, 0, sizeof(MountList));
+
+    if (udiConfig->optionalSshdAsRoot == 0) {
+        ownerUid = uid;
+        ownerGid = gid;
+    }
+
+    if (udiConfig->optionalSshdAsRoot == 0 && (ownerUid == 0 || ownerGid == 0)) {
+        fprintf(stderr, "FAILED to identify proper uid to run sshd\n");
+        goto _setupImageSsh_unclean;
+    }
 
 #define _BINDMOUNT(mounts, from, to, flags, overwrite) if (_shifterCore_bindMount(udiConfig, mounts, from, to, flags, overwrite) != 0) { \
     fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from, to); \
@@ -1792,6 +1804,13 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
 
         if (ret != 0) {
             fprintf(stderr, "Failed to generate key of type %s\n", *keyPtr);
+            goto _setupImageSsh_unclean;
+        }
+
+        /* chown files to user */
+        if (chown(keyFileName, ownerUid, ownerGid) != 0) {
+            fprintf(stderr, "Failed to chown ssh host key to user: %s\n",
+                    keyFileName);
             goto _setupImageSsh_unclean;
         }
     }
@@ -1848,12 +1867,12 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, UdiRootConfig *udi
             goto _setupImageSsh_unclean;
         }
     }
-    if (chown(sshdConfigPath, 0, 0) != 0) {
+    if (chown(sshdConfigPath, ownerUid, ownerGid) != 0) {
         fprintf(stderr, "FAILED to chown sshd config path %s\n", sshdConfigPath);
         perror("   errno: ");
         goto _setupImageSsh_unclean;
     }
-    if (chmod(sshdConfigPath, S_IRUSR) != 0) {
+    if (chmod(sshdConfigPath, S_IRUSR | S_IROTH) != 0) {
         fprintf(stderr, "FAILED to set sshd config permissions to 0600\n");
         perror("   errno: ");
         goto _setupImageSsh_unclean;
@@ -1931,7 +1950,7 @@ _setupImageSsh_unclean:
   * startSshd
   * chroots into image and runs the secured sshd
   */
-int startSshd(UdiRootConfig *udiConfig) {
+int startSshd(const char *user, UdiRootConfig *udiConfig) {
     char chrootPath[PATH_MAX];
     pid_t pid = 0;
 
@@ -1942,6 +1961,11 @@ int startSshd(UdiRootConfig *udiConfig) {
         fprintf(stderr, "FAILED to chdir to %s while attempted to start sshd\n", chrootPath);
         goto _startSshd_unclean;
     }
+    if (udiConfig->optionalSshdAsRoot == 0 && (udiConfig->target_uid == 0 ||
+                udiConfig->target_gid == 0)) {
+        fprintf(stderr, "FAILED to start sshd, will not start as root\n");
+        goto _startSshd_unclean;
+    }
 
     pid = fork();
     if (pid < 0) {
@@ -1949,18 +1973,88 @@ int startSshd(UdiRootConfig *udiConfig) {
         goto _startSshd_unclean;
     }
     if (pid == 0) {
+
+        if (chdir(chrootPath) != 0) {
+            fprintf(stderr, "FAILED to chdir to %s while attempting to start sshd\n", chrootPath);
+            exit(1);
+        }
         if (chroot(chrootPath) != 0) {
             fprintf(stderr, "FAILED to chroot to %s while attempting to start sshd\n", chrootPath);
-            /* no goto, this is the child, we want it to end if this failed */
-        } else  {
-            char *sshdArgs[2] = {
-                strdup("/opt/udiImage/sbin/sshd"),
-                NULL
-            };
-            execv(sshdArgs[0], sshdArgs);
-            fprintf(stderr, "FAILED to exec sshd!\n");
-
+            exit(1);
         }
+        if (udiConfig->optionalSshdAsRoot == 0) {
+            gid_t *gidList = (gid_t *) malloc(sizeof(gid_t) * 128);
+            int nGroups = 128;
+            int ret = 0;
+            int idx = 0;
+
+            if (gidList == NULL) {
+                fprintf(stderr, "FAILED to allocate memory for group list\n");
+                exit(1);
+            }
+
+            /* get grouplist for /etc/group in container */
+            ret = getgrouplist(user, udiConfig->target_gid, gidList, &nGroups);
+            if (ret < 0) {
+                if (nGroups > 512) {
+                    fprintf(stderr, "FAILED to get groups, seriously 512 groups is enough!\n");
+                    exit(1);
+                }
+                gidList = (gid_t *) realloc(gidList, sizeof(gid_t) * nGroups);
+                if (gidList == NULL) {
+                    fprintf(stderr, "FAILED to reallocate memory for group list\n");
+                    exit(1);
+                }
+                ret = getgrouplist(user, udiConfig->target_gid, gidList, &nGroups);
+                if (ret < 0) {
+                    fprintf(stderr, "FAILED to get groups correctly\n");
+                    exit(1);
+                }
+                
+            }
+
+            /* set default group list if none are found */
+            if (nGroups <= 0) {
+                if (gidList == NULL) {
+                    gidList = (gid_t *) malloc(sizeof(gid_t));
+                }
+                if (gidList == NULL) {
+                    fprintf(stderr, "FAILED to allocate memory for default group list\n");
+                    exit(1);
+                }
+                gidList[0] = udiConfig->target_gid;
+                nGroups = 1;
+            }
+
+            /* just make sure no zeros snuck in */
+            for (idx = 0; idx < nGroups; idx++) {
+                if (gidList[idx] == 0) {
+                    gidList[idx] = udiConfig->target_gid;
+                }
+            }
+
+            if (setgroups(nGroups, gidList) != 0) {
+                fprintf(stderr, "FAILED to setgroups(): %s\n", strerror(errno));
+                exit(1);
+            }
+            if (setresgid(udiConfig->target_gid, udiConfig->target_gid,
+                        udiConfig->target_gid) != 0) {
+                fprintf(stderr, "FAILED to setresgid(): %s\n", strerror(errno));
+                exit(1);
+            }
+            if (setresuid(udiConfig->target_uid, udiConfig->target_uid,
+                        udiConfig->target_uid) != 0) {
+                fprintf(stderr, "FAILED to setresuid(): %s\n", strerror(errno));
+                exit(1);
+            }
+        }
+        char *sshdArgs[2] = {
+            strdup("/opt/udiImage/sbin/sshd"),
+            NULL
+        };
+        execv(sshdArgs[0], sshdArgs);
+        fprintf(stderr, "FAILED to exec sshd!\n");
+
         /* if we fell through to here, there is a problem */
         exit(1);
     } else {
@@ -2360,174 +2454,6 @@ _shifter_getpwuid_unclean:
         input = NULL;
     }
     return NULL;
-}
-
-struct group *shifter_fgetgrent(
-        FILE *input,
-        struct group *gr,
-        char **linebuf,
-        size_t *linebuf_sz,
-        char ***grmembuf,
-        size_t *grmembuf_sz)
-{
-    char *svptr = NULL;
-    char *token = NULL;
-    char *ptr = NULL;
-
-    size_t counter = 0;
-    size_t nmem = 0;
-    ssize_t nbytes = 0;
-
-    if (gr == NULL) return NULL;
-    if (input == NULL) return NULL;
-    if (feof(input) || ferror(input)) return NULL;
-
-    /* read just one line of the file */
-    nbytes = getline(linebuf, linebuf_sz, input);
-    if (nbytes <= 0) {
-        return NULL;
-    }
-
-    ptr = shifter_trim(*linebuf);
-
-    if (*grmembuf_sz == 0) {
-        *grmembuf = (char **) malloc(sizeof(char *) * 128);
-        *grmembuf_sz = 128;
-    }
-
-    /* parse the line */
-    for (token = strtok_r(ptr, ":,", &svptr);
-         token != NULL;
-         token = strtok_r(NULL, ":,", &svptr)) {
-
-        switch (counter) {
-            case 0: gr->gr_name = token;
-                    break;
-            case 1: gr->gr_passwd = token;
-                    break;
-            case 2: gr->gr_gid = strtoul(token, NULL, 10);
-                    break;
-            default: 
-                    if (*grmembuf_sz < (nmem + 2)) {
-                        char **tmp = (char **) realloc(*grmembuf,
-                                sizeof(char *) * ((nmem+2) * 2));
-                        if (tmp == NULL) {
-                            return NULL;
-                        }
-                        *grmembuf = tmp;
-                        *grmembuf_sz = ((nmem+2) * 2);
-                    }
-                    (*grmembuf)[nmem++] = token;
-                    break;
-        }
-        counter++;
-    }
-
-    /* add trailing NULL to signify end of list */
-    (*grmembuf)[nmem] = NULL;
-    gr->gr_mem = *grmembuf;
-
-    /* success!!! */
-    return gr;
-}
-
-int shifter_getgrouplist(
-        const char *user,
-        gid_t basegroup,
-        gid_t **groups,
-        size_t *ngroups,
-        UdiRootConfig *config)
-{
-    FILE *input = NULL;
-    char buffer[PATH_MAX];
-    struct group grbuf, *gr;
-    char *linebuf = NULL;
-    size_t linebuf_sz = 0;
-    char **grmembuf = NULL;
-    size_t grmembuf_sz = 0;
-    size_t groups_sz = 0;
-
-    memset(&grbuf, 0, sizeof(struct group));
-
-    if (config == NULL) {
-        return -1;
-    }
-
-    /* open shifter-specific group file */
-    snprintf(buffer, PATH_MAX, "%s/group", config->etcPath);
-    input = fopen(buffer, "r");
-
-    if (input == NULL) {
-        fprintf(stderr, "FAILED to find shifter group file at %s", buffer);
-        goto _shifter_getgrouplist_unclean;
-    }
-
-    /* get initial allocation for groups */
-    groups_sz = 128;
-    *groups = (gid_t *) malloc(sizeof(gid_t) * 128);
-
-    /* add basegroup to the list first */
-    (*groups)[0] = basegroup;
-    *ngroups = 1;
-
-    for ( ; ; ) {
-        char **memptr = NULL;
-        gr = shifter_fgetgrent(input, &grbuf, &linebuf, &linebuf_sz,
-                &grmembuf, &grmembuf_sz);
-
-        if (gr == NULL) {
-            break;
-        }
-
-        /* already added basegroup to list, no repeats please */
-        if (gr->gr_gid == basegroup) {
-            continue;
-        }
-        for (memptr = gr->gr_mem; memptr && *memptr; memptr++) {
-            if (strcmp(*memptr, user) == 0) {
-                /* allocate extra memory if groups is too small */
-                if (*ngroups + 2 >= groups_sz) {
-                    gid_t *tmp = NULL;
-                    if (groups_sz == 0) groups_sz = 128;
-                    tmp = (gid_t *) realloc(*groups, sizeof(gid_t) * groups_sz * 2);
-                    if (tmp == NULL) {
-                        fprintf(stderr, "FAILED to allocate memory for groups\n");
-                        goto _shifter_getgrouplist_unclean;
-                    }
-                    *groups = tmp;
-                    groups_sz *= 2;
-                }
-
-                /* match, add group to list */
-                (*groups)[*ngroups] = gr->gr_gid;
-                *ngroups += 1;
-                break;
-            }
-        }
-    }
-    fclose(input);
-    input = NULL;
-
-    free(linebuf);
-    linebuf = NULL;
-    free(grmembuf);
-    grmembuf = NULL;
-
-    return 0;
-_shifter_getgrouplist_unclean:
-    if (input != NULL) {
-        fclose(input);
-        input = NULL;
-    }
-    if (linebuf != NULL) {
-        free(linebuf);
-        linebuf = NULL;
-    }
-    if (grmembuf != NULL) {
-        free(grmembuf);
-        grmembuf = NULL;
-    }
-    return -1;
 }
 
 struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config) {
