@@ -92,9 +92,10 @@ shifter sshd is built with some attributes to at least mitigate your risk:
 2. it is statically linked against libmusl and libressl.  libmusl in particular
    is important as this should shield the sshd against most interactions with
    the container libc
-3. shifter uses an nsswitch.conf that only allows files to be searched for
-   user metatdata, and the :code:`/etc/passwd`, :code:`/etc/shadow`, and
-   :code:`/etc/group` files are all under the control of shifter, not the user.
+3. the Shifter sshd is linked against libmusl as a libc replacement, not glibc.
+   One of the features of libmusl is that it does not use nsswitch.conf, nor
+   dlopen libnss modules.  The only files read or accessed by the sshd, in our
+   testing are files imported from the external environment (not the container)
 4. the sshd is not linked against PAM, so no pam modules in the user
    environment will be considered
 
