@@ -15,6 +15,7 @@ import urllib2
 import shifter_imagegw
 import stat
 import shutil
+import tarfile
 from time import time
 
 ## Shifter, Copyright (c) 2015, The Regents of the University of California,
@@ -474,7 +475,6 @@ class dockerv2Handle():
         return tempfile.mkdtemp()
 
     def extractDockerLayers(self, basePath, baseLayer, cachedir='./'):
-        import tarfile
         def filterLayer(layerMembers, toRemove):
             prefixToRemove = '%s%s' % (toRemove, '/' if not toRemove.endswith('/') else '')
             return [ x for x in layerMembers if not x.name == toRemove and not x.name.startswith(prefixToRemove) ]
@@ -542,6 +542,7 @@ class dockerv2Handle():
             tfp = tarfile.open(tfname, 'r:gz')
             members = layerPaths[layerIdx]
             tfp.extractall(path=basePath,members=members)
+            tfp.close()
 
             layerIdx += 1
             layer = layer['child']

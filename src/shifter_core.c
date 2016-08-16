@@ -156,6 +156,7 @@ int bindImageIntoUDI(
         }
         if (strlen(itemname) == 0) {
             free(itemname);
+            itemname = NULL;
             continue;
         }
 
@@ -164,6 +165,7 @@ int bindImageIntoUDI(
         mntBuffer[PATH_MAX-1] = 0;
         if (pathcmp(mntBuffer, udiConfig->udiMountPoint) == 0) {
             free(itemname);
+            itemname = NULL;
             continue;
         }
 
@@ -173,6 +175,7 @@ int bindImageIntoUDI(
         if (lstat(mntBuffer, &statData) == 0) {
             /* exists in UDI, skip */
             free(itemname);
+            itemname = NULL;
             continue;
         }
 
@@ -182,6 +185,7 @@ int bindImageIntoUDI(
         if (lstat(srcBuffer, &statData) != 0) {
             /* path didn't exist, skip */
             free(itemname);
+            itemname = NULL;
             continue;
         }
 
@@ -201,6 +205,7 @@ int bindImageIntoUDI(
                 goto _bindImgUDI_unclean;
             }
             free(itemname);
+            itemname = NULL;
             continue;
         }
         if (S_ISREG(statData.st_mode)) {
@@ -225,6 +230,7 @@ int bindImageIntoUDI(
                 BINDMOUNT(&mountCache, srcBuffer, mntBuffer, 0, 0);
             }
             free(itemname);
+            itemname = NULL;
             continue;
         }
         if (S_ISDIR(statData.st_mode)) {
@@ -248,12 +254,15 @@ int bindImageIntoUDI(
                 }
             }
             free(itemname);
+            itemname = NULL;
             continue;
         }
         /* no other types are supported */
         free(itemname);
+        itemname = NULL;
     }
     closedir(subtree);
+    subtree = NULL;
 
 #undef MKDIR
 #undef BINDMOUNT
@@ -266,6 +275,10 @@ _bindImgUDI_unclean:
     if (itemname != NULL) {
         free(itemname);
         itemname = NULL;
+    }
+    if (subtree != NULL) {
+        closedir(subtree);
+        subtree = NULL;
     }
     return rc;
 }
