@@ -21,6 +21,8 @@
   administratively removed
 * Allow sshd to be explicitly enabled in SLURM integration
 * Allow ccm-emulation-mode to be explicity enabled in SLURM integration
+* Make perNodeCache pre-unlink cache files to create no mess for administrator
+  to clean up
 * Only allow shifter to automatically create mount points on its tmpfs/ramfs
 * Enable docker-type images to implicitly assume "latest" if no tag is 
   specified by user
@@ -29,6 +31,8 @@
 * Remove old debugging functionality
 * Allow /etc required files to re-try copy (fixes dvs copy issue)
 * Require admin capability to autoexpire
+* By default run sshd as user, add udiRoot.conf option to run with privilege
+
 
 16.04.0
 ===========

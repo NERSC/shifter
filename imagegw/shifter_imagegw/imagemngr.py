@@ -237,7 +237,7 @@ class imagemngr:
     # Last thing... What if the pull somehow got hung or died in the middle
     # See if heartbeat is old
     # TODO: add pull timeout.  For now use 1 hour
-    if 'last_heartbeat' in rec:
+    if status!='READY' and 'last_heartbeat' in rec:
         if (time()-rec['last_heartbeat'])>3600:
             return True
 
@@ -491,7 +491,7 @@ class imagemngr:
       for rec in self.images.find({'status':{'$ne':'READY'},'system':system}):
           self.logger.debug(rec)
           if 'last_pull' not in rec:
-              self.logger.warning('image missing last_pull '+rec['_id'])
+              self.logger.warning('image missing last_pull pulltag'+rec['pulltag'])
               continue
           if rec['last_pull']<pulltimeout:
               removed.append(rec['_id'])
