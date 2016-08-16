@@ -10,6 +10,7 @@ before_install:
   - sudo add-apt-repository -y ppa:ondrej/php5
   - sudo apt-get update -qq
   - sudo apt-get install -qq libjson-c2 libjson-c-dev libmunge2 libmunge-dev libcurl4-openssl-dev autoconf automake libtool curl make valgrind xfsprogs squashfs-tools
+  - cat /proc/filesystems
 install:
   - pip install -r imagegw/requirements.txt
   - pip install coverage
