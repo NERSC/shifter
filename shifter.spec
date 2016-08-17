@@ -1,15 +1,23 @@
 %{!?_shifter_sysconfdir: %{expand:%%global _shifter_sysconfdir %{_sysconfdir}/shifter}}
 %define _sysconfdir %_shifter_sysconfdir
 
-Summary:  NERSC Shifter -- Containers for HPC
-Name:     shifter
-Version:  16.08.0pre1
-Release:  1.nersc%{?dist}
-License:  BSD (LBNL-modified)
-Group:    System Environment/Base
-URL:      https://github.com/NERSC/shifter
-Packager: Douglas Jacobsen <dmjacobsen@lbl.gov>
-Source0:  %{name}-%{version}.tar.gz
+%if 0%{!?_without_shifter_user:1}
+%{expand:%%global shifter_user %{?shifter_user}%{!?shifter_user:shifter}}
+%{expand:%%global shifter_group %{?shifter_group}%{!?shifter_group:%{shifter_user}}}
+%{expand:%%global shifter_uid %{?shifter_uid}%{!?shifter_uid:50}}
+%{expand:%%global shifter_gid %{?shifter_gid}%{!?shifter_gid:%{shifter_uid}}}
+%endif
+
+Summary:   NERSC Shifter -- Containers for HPC
+Name:      shifter
+Version:   16.08.0pre1
+Release:   1.nersc%{?dist}
+License:   BSD (LBNL-modified)
+Group:     System Environment/Base
+URL:       https://github.com/NERSC/shifter
+Packager:  Douglas Jacobsen <dmjacobsen@lbl.gov>
+Source0:   %{name}-%{version}.tar.gz
+BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 
 %description
 Shifter enables container images for HPC. In a nutshell, Shifter
@@ -58,6 +66,7 @@ Shifter.
 
 %package imagegw
 Summary: Image Manager/Gateway for Shifter
+Requires(pre): shadow-utils
 
 %description imagegw
 Shifter enables container images for HPC. In a nutshell, Shifter
@@ -105,7 +114,7 @@ test -x configure || ./autogen.sh
 %build
 ## build udiRoot (runtime) first
 %configure \
-    %{?with_slurm:--with-slurm=%{?with_slurm}}
+    %{?with_slurm:--with-slurm=%{with_slurm}}
 
 MAKEFLAGS=%{?_smp_mflags} %{__make}
 
@@ -129,6 +138,19 @@ rm -f $RPM_BUILD_ROOT/%{_libexecdir}/shifter/shifter_slurm_dws_support
 %check
 %{__make} check
 
+
+%if 0%{!?_without_shifter_user:1}
+%pre imagegw
+getent group %{shifter_group} >/dev/null || groupadd -f -g %{shifter_gid} -r %{shifter_group}
+if ! getent passwd %{shifter_user} >/dev/null ; then
+    if ! getent passwd %{shifter_uid} >/dev/null ; then
+        useradd -r -u %{shifter_uid} -g %{shifter_group} -d %{_sysconfdir} -s /sbin/nologin -c "Shifter User" %{shifter_user}
+    else
+        useradd -r -g %{shifter_group} -d %{_sysconfdir} -s /sbin/nologin -c "Shifter User" %{shifter_user}
+    fi
+fi
+exit 0
+%endif
 
 %post runtime
 getent passwd > %{_sysconfdir}/shifter_etc_files/passwd
