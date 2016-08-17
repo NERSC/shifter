@@ -122,6 +122,9 @@ MAKEFLAGS=%{?_smp_mflags} %{__make}
 %install
 %make_install
 
+# Create directory for Celery/ImageGW API logs
+%{__mkdir_p} $RPM_BUILD_ROOT%{_localstatedir}/log/%{name}_imagegw
+
 : > $RPM_BUILD_ROOT/%{_sysconfdir}/shifter_etc_files/passwd
 : > $RPM_BUILD_ROOT/%{_sysconfdir}/shifter_etc_files/group
 %if %{?with_slurm:1}0
@@ -178,6 +181,7 @@ getent group > %{_sysconfdir}/shifter_etc_files/group
 %files imagegw
 %defattr(-, root, root)
 %doc AUTHORS LICENSE NEWS README*
+%attr(0770, %{shifter_user}, %{shifter_group}) %dir %{_localstatedir}/log/%{name}_imagegw/
 %{_libdir}/python2.*/site-packages/shifter_imagegw
 %{_libexecdir}/shifter/imagecli.py*
 %{_libexecdir}/shifter/imagegwapi.py*
