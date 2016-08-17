@@ -291,6 +291,12 @@ class ImageMngrTestCase(unittest.TestCase):
         rec={'last_pull':time.time(),'status':'READY'}
         # A recent READY image
         assert self.m.pullable(rec) is False
+
+        rec={'last_pull':time.time(),'last_heartbeat':0,'status':'READY'}
+        # A recent READY image but an old heartbeat (maybe re-pulled)
+        assert self.m.pullable(rec) is False
+
+
         # A failed image
         rec={'last_pull':0,'status':'FAILURE'}
         assert self.m.pullable(rec) is True
@@ -408,8 +414,64 @@ class ImageMngrTestCase(unittest.TestCase):
         session=self.m.new_session(self.auth,self.system)
         pull=self.m.pull(session,pr)
         assert pull is not None
-        assert pull['status']=='READY'
+        self.assertEqual(pull['status'],'READY')
 
+    def test_repull_pr(self):
+        # Test a repull
+        record=self.good_record()
+
+        # Create a fake record in mongo
+        id=self.images.insert(record)
+        assert id is not None
+
+        # Create a pull record
+        pr=self.good_pullrecord()
+        pr['status']='SUCCESS'
+        id=self.images.insert(pr)
+        assert id is not None
+
+        # Now let's try pulling it
+        pr={
+            'system':self.system,
+            'itype':self.itype,
+            'tag':self.tag,
+			'remotetype':'dockerv2',
+			'userAcl':[],
+			'groupAcl':[]
+        }
+        session=self.m.new_session(self.auth,self.system)
+        pull=self.m.pull(session,pr)
+        assert pull is not None
+        self.assertEqual(pull['status'],'READY')
+
+
+    def test_repull_pr_pulling(self):
+        # Test a repull
+        record=self.good_record()
+
+        # Create a fake record in mongo
+        id=self.images.insert(record)
+        assert id is not None
+
+        # Create a pull record
+        pr=self.good_pullrecord()
+        pr['status']='PULLING'
+        id=self.images.insert(pr)
+        assert id is not None
+
+        # Now let's try pulling it
+        pr={
+            'system':self.system,
+            'itype':self.itype,
+            'tag':self.tag,
+			'remotetype':'dockerv2',
+			'userAcl':[],
+			'groupAcl':[]
+        }
+        session=self.m.new_session(self.auth,self.system)
+        pull=self.m.pull(session,pr)
+        assert pull is not None
+        self.assertEqual(pull['status'],'PULLING')
 
 
     def test_pull(self):
