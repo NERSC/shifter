@@ -88,10 +88,10 @@ int adoptPATH(char **environ);
 
 #ifndef _TESTHARNESS_SHIFTER
 int main(int argc, char **argv) {
-    signal(SIGHUP, SIG_IGN);
-    signal(SIGINT, SIG_IGN);
-    signal(SIGSTOP, SIG_IGN);
-    signal(SIGTERM, SIG_IGN);
+    sighandler_t sighupHndlr = signal(SIGHUP, SIG_IGN);
+    sighandler_t sigintHndlr = signal(SIGINT, SIG_IGN);
+    sighandler_t sigstopHndlr = signal(SIGSTOP, SIG_IGN);
+    sighandler_t sigtermHndlr = signal(SIGTERM, SIG_IGN);
 
     /* save a copy of the environment for the exec */
     char **environ_copy = shifter_copyenv();
@@ -252,6 +252,12 @@ int main(int argc, char **argv) {
 
     /* immediately set PATH to container PATH to get search right */
     adoptPATH(environ_copy);
+
+    /* reset signal handlers */
+    signal(SIGHUP, sighupHndlr);
+    signal(SIGINT, sigintHndlr);
+    signal(SIGSTOP, sigstopHndlr);
+    signal(SIGTERM, sigtermHndlr);
 
     /* attempt to execute user-requested exectuable */
     execvpe(opts.args[0], opts.args, environ_copy);
