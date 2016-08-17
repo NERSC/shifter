@@ -480,6 +480,7 @@ class dockerv2Handle():
             return [ x for x in layerMembers if not x.name == toRemove and not x.name.startswith(prefixToRemove) ]
 
         layerPaths = []
+        tarFileRefs = []
         layer = baseLayer
         while layer is not None:
             if layer['fsLayer']['blobSum'] in self.excludeBlobSums:
@@ -488,6 +489,7 @@ class dockerv2Handle():
 
             tfname = os.path.join(cachedir,'%s.tar'%(layer['fsLayer']['blobSum']))
             tfp = tarfile.open(tfname, 'r:gz')
+            tarFileRefs.append(tfp)
 
             ## get directory of tar contents
             layerMembers = tfp.getmembers()
@@ -525,10 +527,8 @@ class dockerv2Handle():
 
             ## push this layer into the collection
             layerPaths.append(layerMembers)
-            tfp.close()
 
             layer = layer['child']
-
 
         ## extract the selected files
         layerIdx = 0
@@ -539,16 +539,17 @@ class dockerv2Handle():
                 continue
 
             tfname = os.path.join(cachedir,'%s.tar' % (layer['fsLayer']['blobSum']))
-            tfp = tarfile.open(tfname, 'r:gz')
+            tfp = tarFileRefs[layerIdx]
             members = layerPaths[layerIdx]
             tfp.extractall(path=basePath,members=members)
-            tfp.close()
 
             layerIdx += 1
             layer = layer['child']
 
         ## fix permissions on the extracted files
         subprocess.call(['chmod', '-R', 'a+rX,u+w', basePath])
+        for tfp in tarFileRefs:
+            tfp.close()
 
 # Deprecated: Just use the object above
 def pullImage(options, baseUrl, repo, tag, cachedir='./', expanddir='./', cacert=None, username=None, password=None):
@@ -602,4 +603,4 @@ if __name__ == '__main__':
   #pullImage(None, 'https://registry.services.nersc.gov', 'ana', 'cctbx',cachedir=cdir,expanddir=cdir,cacert=dir+'/local.crt')
   #pullImage(None, 'https://registry-1.docker.io', 'ubuntu', 'latest', cachedir=cdir, expanddir=cdir)
   #pullImage(None, 'https://registry-1.docker.io', 'tensorflow/tensorflow', 'latest', cachedir=cdir, expanddir=cdir)
-  pullImage(None, 'https://registry-1.docker.io', 'dmjacobsen/ltp-test', 'latest', cachedir=cdir, expanddir=cdir)
+  pullImage(None, 'https://registry-1.docker.io', 'dlwoodruff/pyomodock', '4.3.1137', cachedir=cdir, expanddir=cdir)
