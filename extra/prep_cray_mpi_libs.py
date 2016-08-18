@@ -51,7 +51,7 @@ so_skip_patterns = [
     r'^libpthread\.so.*',
     r'^libdl\.so.*',
     r'^libc[\.-]*so.*',
-    r'^libstdc++\.so.*'
+    r'^libstdc\+\+\.so.*'
 ]
 
 def module_list():
@@ -252,7 +252,7 @@ if __name__ == "__main__":
                 files = resolvedeps(files)
 
     ## a few are not detected by above strategy
-    for mod in ['wlm_detect','alps']:
+    for mod in ['wlm_detect','alps','rca']:
         libpaths = get_module_libpaths(mod)
         files = getlibs(libpaths, files, isdep=True)
         files = resolvedeps(files)
