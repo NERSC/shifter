@@ -46,6 +46,7 @@
 #include <sys/wait.h>
 #include <sys/mount.h>
 #include <sys/types.h>
+#include <sys/prctl.h>
 
 #include "ImageData.h"
 #include "UdiRootConfig.h"
@@ -53,6 +54,7 @@
 #include "utility.h"
 #include "VolumeMap.h"
 #include "MountList.h"
+#include "config.h"
 
 #ifndef BINDMOUNT_OVERWRITE_UNMOUNT_RETRY
 #define BINDMOUNT_OVERWRITE_UNMOUNT_RETRY 3
@@ -2060,6 +2062,15 @@ int startSshd(const char *user, UdiRootConfig *udiConfig) {
                 fprintf(stderr, "FAILED to setresuid(): %s\n", strerror(errno));
                 exit(1);
             }
+#if HAVE_DECL_PR_SET_NO_NEW_PRIVS == 1
+            /* ensure this process and its heirs cannot gain privilege */
+            /* see https://www.kernel.org/doc/Documentation/prctl/no_new_privs.txt */
+            if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) {
+                fprintf(stderr, "Failed to fully drop privileges: %s",
+                        strerror(errno));
+                exit(1);
+            }
+#endif
         }
         char *sshdArgs[2] = {
             strdup("/opt/udiImage/sbin/sshd"),
