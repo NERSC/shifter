@@ -84,6 +84,14 @@ int validateUnmounted(const char *path, int subtree);
 int isSharedMount(const char *);
 int writeHostFile(const char *minNodeSpec, UdiRootConfig *udiConfig);
 
+/** shifter_set_capability_boundingset_null
+  * attempts to prevent any capabilities from ever being assumed again by this
+  * process and its heirs
+  *
+  * Returns 0 upon success, non-zero upon any failure
+  */  
+int shifter_set_capability_boundingset_null();
+
 /** shifter_copyenv
   * copy current process environ into a newly allocated array with newly
   * allocated strings

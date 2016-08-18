@@ -32,6 +32,8 @@
 * Allow /etc required files to re-try copy (fixes dvs copy issue)
 * Require admin capability to autoexpire
 * By default run sshd as user, add udiRoot.conf option to run with privilege
+* Restrict capabilities that processes run within shifter can obtain (including
+  via non-root sshd)
 
 
 16.04.0
