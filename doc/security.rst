@@ -18,6 +18,10 @@ following recommendations:
    container, as well as preventing setuid root applications to operate *at all*
    within the container.
 
+   On more recent systems, shifter will attempt to permanently drop privileges
+   using the "no_new_privs" process control setting, see:
+   https://www.kernel.org/doc/Documentation/prctl/no_new_privs.txt
+
    See the :doc:`sshd` document for more information on the shifter-included
    sshd and recommendations around running it as root (don't unless you must).
 
@@ -35,6 +39,7 @@ following recommendations:
    chance that there are setuid-root (or other privileged user) files mounted
    under the target path.  This can be a very powerful feature, however
    *USE AT YOUR OWN RISK!*
+
 
 3. Use the most recent version of Shifter (16.08) as it repairs some issues
    from the previous pre-releases.
@@ -82,6 +87,13 @@ Securing the imagegw worker
 1. run as a non-root special-purpose account (e.g., shifter)
 2. install the mksquashfs, ext3/4 utilities and xfs progs in a trusted way (e.g.,
    package manager of your distribution)
+
+Running the imagegw worker as a non-root user is particularly important to
+ensure images generated do not have an Linux security capabilities embedded in
+the image.  This is a non-obvious way that a program may attempt to escalate
+privilege.  On more recent Linux systems (Linux kernel >= 3.5), this risk is
+somewhat mitigated so long as the shifter executable is rebuilt for those
+systems.
    
 Securing redis
 ++++++++++++++
