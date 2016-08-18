@@ -18,23 +18,34 @@ following recommendations:
    container, as well as preventing setuid root applications to operate *at all*
    within the container.
 
+   On more recent systems, shifter will attempt to permanently drop privileges
+   using the "no_new_privs" process control setting, see:
+   https://www.kernel.org/doc/Documentation/prctl/no_new_privs.txt
+
    See the :doc:`sshd` document for more information on the shifter-included
    sshd and recommendations around running it as root (don't unless you must).
 
-2. Related to point one, preventing setuid-root applications from operating is
-   mostly achieved through mounting as much as possible within the shifter
-   envionment "nosuid", meaning the setuid bits on file permissions are ignored.
+2. Related to point one, preventing setuid-root applications from operating with
+   privilege is mostly achieved through mounting as much as possible within the
+   shifter envionment "nosuid", meaning the setuid bits on file permissions are
+   ignored.  In addition, processes started within shifter and their heirs are
+   prevented from ever gaining additional privileges by restricting the set of
+   capabilities they can acquire to the null set.
 
-   One exception to this is if the ":rec" or ":shared" siteFs mount flags are
-   used.  The recursive bind mount operation will copy the mount flags from
-   the base system, and will not follow shifter standards.  Similarly, the
+   One exception to the nosuid ban is if the ":rec" or ":shared" siteFs mount
+   flags are used.  The recursive bind mount operation will copy the mount flags
+   from the base system, and will not follow shifter standards.  Similarly, the
    "shared" mount propagation strategy will remove the mounts from Shifter's
-   strict control.
+   strict control.  The privilege capability restrictions should prevent 
+   processes from escalating privelege even without the nosuid restriction.
    
-   Thus, *DO NOT* use the recursive mount option or shared if there is _any_
-   chance that there are setuid-root (or other privileged user) files mounted
-   under the target path.  This can be a very powerful feature, however
-   *USE AT YOUR OWN RISK!*
+   Thus, if you operate the sshd as root, *DO NOT* use the recursive mount
+   option or shared if there is _any_ chance that there are setuid-root (or
+   other privileged user) files mounted under the target path, or executables
+   that grant specific security capabilities.  The ":rec" or ":shared" options
+   can be a very powerful feature, however *USE WITH GREAT CAUTION* if you allow
+   the sshd to operate with root privilege.
+
 
 3. Use the most recent version of Shifter (16.08) as it repairs some issues
    from the previous pre-releases.
@@ -82,6 +93,13 @@ Securing the imagegw worker
 1. run as a non-root special-purpose account (e.g., shifter)
 2. install the mksquashfs, ext3/4 utilities and xfs progs in a trusted way (e.g.,
    package manager of your distribution)
+
+Running the imagegw worker as a non-root user is particularly important to
+ensure images generated do not have an Linux security capabilities embedded in
+the image.  This is a non-obvious way that a program may attempt to escalate
+privilege.  On more recent Linux systems (Linux kernel >= 3.5), this risk is
+somewhat mitigated so long as the shifter executable is rebuilt for those
+systems.
    
 Securing redis
 ++++++++++++++
