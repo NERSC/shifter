@@ -230,6 +230,13 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
+    /* attempt to prevent this process and its heirs from ever gaining any
+     * privilege by any means */
+    if (shifter_set_capability_boundingset_null() != 0) {
+        fprintf(stderr, "Failed to restrict future capabilities\n");
+        exit(1);
+    }
+
     /* drop privileges */
     if (setgroups(nGroups, gidList) != 0) {
         fprintf(stderr, "Failed to setgroups\n");
@@ -244,7 +251,7 @@ int main(int argc, char **argv) {
         exit(1);
     }
 #if HAVE_DECL_PR_SET_NO_NEW_PRIVS == 1
-    /* ensure this process and its heirs cannot gain privilege */
+    /* ensure this process and its heirs cannot gain privilege in recent kernels */
     /* see https://www.kernel.org/doc/Documentation/prctl/no_new_privs.txt */
     if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) {
         fprintf(stderr, "Failed to fully drop privileges: %s",

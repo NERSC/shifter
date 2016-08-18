@@ -94,7 +94,12 @@ AC_FUNC_GETGROUPS
 AC_FUNC_LSTAT_FOLLOWS_SLASHED_SYMLINK
 AC_FUNC_MALLOC
 AC_FUNC_REALLOC
-AC_CHECK_FUNCS([getcwd memmove memset mkdir putenv realpath rmdir setenv strchr strdup strstr strtoul uname])
+AC_CHECK_FUNCS([getcwd memmove memset mkdir putenv realpath rmdir setenv strchr strdup strstr strtoul uname prctl])
+AC_CHECK_DECLS([CAP_LAST_CAP],
+        [],
+        [AC_MSG_ERROR([Cannot build without libcap-devel (sys/capability.h)])],
+        [[#include <sys/capability.h>]]
+)
 AC_CHECK_DECLS([PR_SET_NO_NEW_PRIVS],
         [have_pr_set_no_new_privs=true],
         [have_pr_set_no_new_privs=false],

@@ -47,6 +47,7 @@
 #include <sys/mount.h>
 #include <sys/types.h>
 #include <sys/prctl.h>
+#include <sys/capability.h>
 
 #include "ImageData.h"
 #include "UdiRootConfig.h"
@@ -2048,6 +2049,10 @@ int startSshd(const char *user, UdiRootConfig *udiConfig) {
                 }
             }
 
+            if (shifter_set_capability_boundingset_null() != 0) {
+                fprintf(stderr, "FAILED to restrict future capabilities\n");
+                exit(1);
+            }
             if (setgroups(nGroups, gidList) != 0) {
                 fprintf(stderr, "FAILED to setgroups(): %s\n", strerror(errno));
                 exit(1);
@@ -2989,4 +2994,41 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
         shifter_unsetenv(env, *envPtr);
     }
     return 0;
+}
+
+int shifter_set_capability_boundingset_null() {
+    unsigned long maxCap = CAP_LAST_CAP;
+    unsigned long idx = 0;
+    int ret = 0;
+
+    /* starting in Linux 3.2 this file will proclaim the "last" capability
+     * read it to see if the current kernel has more capabilities than shifter
+     * was compiled with */
+    if (access("/proc/sys/kernel/cap_last_cap", R_OK) == 0) {
+        FILE *fp = fopen("/proc/sys/kernel/cap_last_cap", "r");
+        char buffer[1024];
+        if (fp == NULL) {
+            fprintf(stderr, "FAILED to determine capability max val\n");
+            return 1;
+        }
+        if (fread(buffer, sizeof(char), 1024, fp)) {
+            unsigned long tmp = strtoul(buffer, NULL, 10);
+            if (tmp > CAP_LAST_CAP) {
+                maxCap = tmp;
+            }
+        }
+        fclose(fp);
+    }
+
+    /* calling PR_CAPBSET_DROP for all possible capabilities is intended to
+     * prevent any mechanism from allowing processes running within shifter
+     * from gaining privileges; in particular if a file has capabilities that
+     * it can offer */
+    for (idx = 0; idx <= maxCap; idx++) {
+        if (prctl(PR_CAPBSET_DROP, idx, 0, 0, 0) != 0) {
+            fprintf(stderr, "Failed to drop capability %lu\n", idx);
+            ret = 1;
+        }
+    }
+    return ret;
 }
