@@ -234,15 +234,18 @@ IGNORE_TEST(ShifterCoreTestGroup, setupPerNodeCacheBackingStore_tests) {
     cache->fstype = strdup("xfs");
     cache->cacheSize = 200 * 1024 * 1024; // 200mb
 
-    config->target_uid = getuid();
-    config->target_gid = getgid();
-    config->mkfsXfsPath = strdup("/sbin/mkfs.xfs");
+    if (access("/sbin/mkfs.xfs", X_OK) == 0) {
+        config->target_uid = getuid();
+        config->target_gid = getgid();
+        config->mkfsXfsPath = strdup("/sbin/mkfs.xfs");
 
-    snprintf(backingStorePath, PATH_MAX, "%s/testBackingStore.xfs", tmpDir);
-    ret = setupPerNodeCacheBackingStore(cache, backingStorePath, config);
-    CHECK(ret == 0);
+        snprintf(backingStorePath, PATH_MAX, "%s/testBackingStore.xfs", tmpDir);
+        ret = setupPerNodeCacheBackingStore(cache, backingStorePath, config);
+        CHECK(ret == 0);
 
-    unlink(backingStorePath);
+        unlink(backingStorePath);
+    }
+
     free(cache->fstype);
     cache->fstype = NULL;
     free_UdiRootConfig(config, 1);
