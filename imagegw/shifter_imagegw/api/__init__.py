@@ -40,7 +40,7 @@ AUTH_HEADER='authentication'
 if 'GWCONFIG' in os.environ:
     configfile=os.environ['GWCONFIG']
 else:
-    configfile='%s/imagemanager.json' % (shifter_imagegw.configPath)
+    configfile='%s/imagemanager.json' % (shifter_imagegw.CONFIG_PATH)
 
 app.logger.setLevel(logging.INFO)
 ch = logging.StreamHandler()

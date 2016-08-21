@@ -1,2 +1,10 @@
-__all__ = ['api','imageworker','imagemngr']
-configPath='@SHIFTER_SYSCONFDIR@'
+"""Base functions and classes for shifter image management
+
+shifter_imagegw includes all software required for the importing, managing,
+and removing shifter images to and from computational platforms.  The files
+within are used by either the web RESTful API (recommend run with gunicorn)
+or the celery-based workers, which actually perform any needed actions on the
+systems.
+"""
+__all__ = ['api', 'imageworker', 'imagemngr']
+CONFIG_PATH = '@SHIFTER_SYSCONFDIR@'

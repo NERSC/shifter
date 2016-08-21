@@ -42,7 +42,7 @@ queue = None
 if 'GWCONFIG' in os.environ:
     CONFIGFILE=os.environ['GWCONFIG']
 else:
-    CONFIGFILE='%s/imagemanager.json' % (shifter_imagegw.configPath)
+    CONFIGFILE='%s/imagemanager.json' % (shifter_imagegw.CONFIG_PATH)
 
 logging.info("Opening %s"%(CONFIGFILE))
 
