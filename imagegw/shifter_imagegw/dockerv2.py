@@ -312,8 +312,7 @@ class dockerv2Handle(object):
             raise ValueError("Bad response from registry status=%d" \
                     % (resp1.status))
         expected_hash = resp1.getheader('docker-content-digest')
-        ## TODO do something with content_len
-        content_len = resp1.getheader('content-length')
+        content_len = int(resp1.getheader('content-length'))
         if expected_hash is None or len(expected_hash) == 0:
             raise ValueError("No docker-content-digest header found")
         (digest_algo, expected_hash) = expected_hash.split(':', 1)
