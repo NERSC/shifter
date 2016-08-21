@@ -47,47 +47,47 @@ class TransferTestCase(unittest.TestCase):
         """
         pass
 
-    def test_shCmd(self):
-        cmd = transfer._shCmd(self.system, 'echo', 'test')
+    def test_sh_cmd(self):
+        cmd = transfer._sh_cmd(self.system, 'echo', 'test')
         assert len(cmd) == 2
         assert cmd[0] == 'echo'
         assert cmd[1] == 'test'
      
-        cmd = transfer._shCmd(self.system, 'anotherCommand')
+        cmd = transfer._sh_cmd(self.system, 'anotherCommand')
         assert len(cmd) == 1
         assert cmd[0] == 'anotherCommand'
 
-        cmd = transfer._shCmd(self.system)
+        cmd = transfer._sh_cmd(self.system)
         assert cmd is None
 
-    def test_sshCmd(self):
-        cmd = transfer._sshCmd(self.system, 'echo', 'test')
+    def test_ssh_cmd(self):
+        cmd = transfer._ssh_cmd(self.system, 'echo', 'test')
         ## expect ssh -i somefile nobody@localhost echo test
         assert len(cmd) == 6
         assert '|'.join(cmd) == 'ssh|-i|somefile|nobody@localhost|echo|test'
 
         self.system['ssh']['sshCmdOptions'] = ['-t']
-        cmd = transfer._sshCmd(self.system, 'echo', 'test')
+        cmd = transfer._ssh_cmd(self.system, 'echo', 'test')
         assert len(cmd) == 7
         assert '|'.join(cmd) == 'ssh|-i|somefile|-t|nobody@localhost|echo|test'
         del self.system['ssh']['sshCmdOptions']
 
-        cmd = transfer._sshCmd(self.system)
+        cmd = transfer._ssh_cmd(self.system)
         assert cmd is None
 
 
-    def test_cpCmd(self):
-        cmd = transfer._cpCmd(self.system, 'a', 'b')
+    def test_cp_cmd(self):
+        cmd = transfer._cp_cmd(self.system, 'a', 'b')
         assert len(cmd) == 3
         assert '|'.join(cmd) == 'cp|a|b'
 
-    def test_scpCmd(self):
-        cmd = transfer._scpCmd(self.system, 'a', 'b')
+    def test_scp_cmd(self):
+        cmd = transfer._scp_cmd(self.system, 'a', 'b')
         assert len(cmd) == 5
         assert '|'.join(cmd) == 'scp|-i|somefile|a|nobody@localhost:b'
 
         self.system['ssh']['scpCmdOptions'] = ['-t']
-        cmd = transfer._scpCmd(self.system, 'a', 'b')
+        cmd = transfer._scp_cmd(self.system, 'a', 'b')
         assert len(cmd) == 6
         assert '|'.join(cmd) == 'scp|-i|somefile|-t|a|nobody@localhost:b'
         del self.system['ssh']['scpCmdOptions']
