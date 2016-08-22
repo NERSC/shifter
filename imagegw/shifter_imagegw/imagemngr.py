@@ -565,42 +565,42 @@ class imagemngr(object):
 
         return True
 
-    ## decorator function to re-attempt any mongo operation that may have failed
-    ## owing to AutoReconnect (e.g., mongod coming back, etc).  This may increase
-    ## the opportunity for race conditions, and should be more closely considered
-    ## for the insert/update functions
-    def mongo_reconnect_reattempt(self, call):
-        """Automatically re-attempt potentially failed mongo operations"""
-        def _mongo_reconnect_safe(self, *args, **kwargs):
-            for _ in xrange(2):
-                try:
-                    return call(self, *args, **kwargs)
-                except pymongo.errors.AutoReconnect:
-                    self.logger.warn("Error: mongo reconnect attmempt")
-                    sleep(2)
-            self.logger.warn("Error: Failed to deal with mongo auto-reconnect!")
-            raise
-        return _mongo_reconnect_safe
-
-    @mongo_reconnect_reattempt(self)
+    @mongo_reconnect_reattempt
     def images_remove(self, *args, **kwargs):
         return self.images.remove(*args, **kwargs)
 
-    @mongo_reconnect_reattempt(self)
+    @mongo_reconnect_reattempt
     def images_update(self, *args, **kwargs):
         return self.images.update(*args, **kwargs)
 
-    @mongo_reconnect_reattempt(self)
+    @mongo_reconnect_reattempt
     def images_find(self, *args, **kwargs):
         return self.images.find(*args, **kwargs)
 
-    @mongo_reconnect_reattempt(self)
+    @mongo_reconnect_reattempt
     def images_find_one(self, *args, **kwargs):
         return self.images.find_one(*args, **kwargs)
 
-    @mongo_reconnect_reattempt(self)
+    @mongo_reconnect_reattempt
     def images_insert(self, *args, **kwargs):
         return self.images.insert(*args, **kwargs)
+
+## decorator function to re-attempt any mongo operation that may have failed
+## owing to AutoReconnect (e.g., mongod coming back, etc).  This may increase
+## the opportunity for race conditions, and should be more closely considered
+## for the insert/update functions
+def mongo_reconnect_reattempt(call):
+    """Automatically re-attempt potentially failed mongo operations"""
+    def _mongo_reconnect_safe(self, *args, **kwargs):
+        for _ in xrange(2):
+            try:
+                return call(self, *args, **kwargs)
+            except pymongo.errors.AutoReconnect:
+                self.logger.warn("Error: mongo reconnect attmempt")
+                sleep(2)
+        self.logger.warn("Error: Failed to deal with mongo auto-reconnect!")
+        raise
+    return _mongo_reconnect_safe
 
 def usage():
     """Print usage"""
