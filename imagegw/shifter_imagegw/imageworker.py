@@ -1,90 +1,84 @@
+# Shifter, Copyright (c) 2015, The Regents of the University of California,
+# through Lawrence Berkeley National Laboratory (subject to receipt of any
+# required approvals from the U.S. Dept. of Energy).  All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#  1. Redistributions of source code must retain the above copyright notice,
+#     this list of conditions and the following disclaimer.
+#  2. Redistributions in binary form must reproduce the above copyright notice,
+#     this list of conditions and the following disclaimer in the documentation
+#     and/or other materials provided with the distribution.
+#  3. Neither the name of the University of California, Lawrence Berkeley
+#     National Laboratory, U.S. Dept. of Energy nor the names of its
+#     contributors may be used to endorse or promote products derived from this
+#     software without specific prior written permission.`
+#
+# See LICENSE for full text.
+
 from celery import Celery
 import json
 import os
-from time import time,sleep
-import shifter_imagegw
-import dockerv2
-import converters
-import transfer
-import re
+from time import time, sleep
+from shifter_imagegw import CONFIG_PATH, dockerv2, converters, transfer
 import shutil
 import sys
 import subprocess
 import tempfile
-from pymongo import MongoClient
-from bson.objectid import ObjectId
 from random import randint
 import logging
 
 
-"""
-Shifter, Copyright (c) 2015, The Regents of the University of California,
-through Lawrence Berkeley National Laboratory (subject to receipt of any
-required approvals from the U.S. Dept. of Energy).  All rights reserved.
+QUEUE = None
+CONFIG = None
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
- 1. Redistributions of source code must retain the above copyright notice,
-    this list of conditions and the following disclaimer.
- 2. Redistributions in binary form must reproduce the above copyright notice,
-    this list of conditions and the following disclaimer in the documentation
-    and/or other materials provided with the distribution.
- 3. Neither the name of the University of California, Lawrence Berkeley
-    National Laboratory, U.S. Dept. of Energy nor the names of its
-    contributors may be used to endorse or promote products derived from this
-    software without specific prior written permission.`
-
-See LICENSE for full text.
-"""
-
-
-queue = None
 if 'GWCONFIG' in os.environ:
-    CONFIGFILE=os.environ['GWCONFIG']
+    CONFIGFILE = os.environ['GWCONFIG']
 else:
-    CONFIGFILE='%s/imagemanager.json' % (shifter_imagegw.CONFIG_PATH)
+    CONFIGFILE = '%s/imagemanager.json' % (CONFIG_PATH)
 
-logging.info("Opening %s"%(CONFIGFILE))
+logging.info("Opening %s", CONFIGFILE)
 
 with open(CONFIGFILE) as configfile:
-    config=json.load(configfile)
+    CONFIG = json.load(configfile)
 
-if 'CacheDirectory' in config:
-    if not os.path.exists(config['CacheDirectory']):
-        os.mkdir(config['CacheDirectory'])
-if 'ExpandDirectory' in config:
-    if not os.path.exists(config['ExpandDirectory']):
-        os.mkdir(config['ExpandDirectory'])
+if 'CacheDirectory' in CONFIG:
+    if not os.path.exists(CONFIG['CacheDirectory']):
+        os.mkdir(CONFIG['CacheDirectory'])
+if 'ExpandDirectory' in CONFIG:
+    if not os.path.exists(CONFIG['ExpandDirectory']):
+        os.mkdir(CONFIG['ExpandDirectory'])
 
 
 # Create Celery Queue and configure serializer
 #
-queue = Celery('tasks', backend=config['Broker'],broker=config['Broker'])
-queue.conf.update(CELERY_ACCEPT_CONTENT = ['json'])
-queue.conf.update(CELERY_TASK_SERIALIZER = 'json')
-queue.conf.update(CELERY_RESULT_SERIALIZER = 'json')
+QUEUE = Celery('tasks', backend=CONFIG['Broker'], broker=CONFIG['Broker'])
+QUEUE.conf.update(CELERY_ACCEPT_CONTENT=['json'])
+QUEUE.conf.update(CELERY_TASK_SERIALIZER='json')
+QUEUE.conf.update(CELERY_RESULT_SERIALIZER='json')
 
-class updater():
-    def __init__(self,update_state):
-        self.update_state=update_state
+class Updater(object):
+    def __init__(self, update_state):
+        self.update_state = update_state
 
-    def update_status(self,state,message):
+    def update_status(self, state, message):
         if self.update_state is not None:
-            self.update_state(state=state,meta={'heartbeat':time(),'message':message})
+            metadata = {'heartbeat': time(), 'message': message}
+            self.update_state(state=state, meta=metadata)
 
-defupdater=updater(None)
+defupdater = Updater(None)
 
 def initqueue(newconfig):
     """
     This is mainly used by the manager to configure the broker
     after the module is already loaded
     """
-    global queue, config
-    config=newconfig
-    queue = Celery('tasks', backend=config['Broker'],broker=config['Broker'])
-    queue.conf.update(CELERY_ACCEPT_CONTENT = ['json'])
-    queue.conf.update(CELERY_TASK_SERIALIZER = 'json')
-    queue.conf.update(CELERY_RESULT_SERIALIZER = 'json')
+    global CONFIG, QUEUE
+    CONFIG = newconfig
+    QUEUE = Celery('tasks', backend=CONFIG['Broker'], broker=CONFIG['Broker'])
+    QUEUE.conf.update(CELERY_ACCEPT_CONTENT=['json'])
+    QUEUE.conf.update(CELERY_TASK_SERIALIZER='json')
+    QUEUE.conf.update(CELERY_RESULT_SERIALIZER='json')
 
 
 
@@ -92,92 +86,107 @@ def normalized_name(request):
     """
     Helper function that returns a filename based on the request
     """
-    return '%s_%s'%(request['itype'],request['tag'].replace('/','_'))
+    return '%s_%s' % (request['itype'], request['tag'].replace('/', '_'))
     #return request['meta']['id']
 
 
 def already_processed(request):
     return False
 
-def pull_image(request,updater=defupdater):
+def _get_cacert(location):
+    params = CONFIG['Locations'][location]
+    cacert = None
+    currdir = os.getcwd()
+    if 'sslcacert' in params:
+        if params['sslcacert'].startswith('/'):
+            cacert = params['sslcacert']
+        else:
+            cacert = '%s/%s' % (currdir, params['sslcacert'])
+        if not os.path.exists(cacert):
+            raise OSError('%s does not exist' % cacert)
+    return cacert
+
+def _pull_dockerv2(request, location, repo, tag, updater):
+    cdir = CONFIG['CacheDirectory']
+    edir = CONFIG['ExpandDirectory']
+    params = CONFIG['Locations'][location]
+    cacert = _get_cacert(location)
+
+    url = 'https://%s' % location
+    if 'url' in params:
+        url = params['url']
+    try:
+        options = {}
+        if cacert is not None:
+            options['cacert'] = cacert
+        options['baseUrl'] = url
+
+        imageident = '%s:%s' % (repo, tag)
+        dock = dockerv2.dockerv2Handle(imageident, options, updater=updater)
+        updater.update_status("PULLING", 'Getting manifest')
+        manifest = dock.getImageManifest()
+        request['meta'] = dock.examine_manifest(manifest)
+        request['id'] = str(request['meta']['id'])
+
+        if check_image(request, request['id']):
+            return True
+
+        dock.pull_layers(manifest, cdir)
+
+        expandedpath = tempfile.mkdtemp(suffix='extract', \
+                prefix=request['id'], dir=edir)
+        request['expandedpath'] = expandedpath
+
+        updater.update_status("PULLING", 'Extracting Layers')
+        dock.extractDockerLayers(expandedpath, dock.get_eldest(), cachedir=cdir)
+        return True
+    except:
+        logging.warn(sys.exc_value)
+        raise
+
+    return False
+
+
+def pull_image(request, updater=defupdater):
     """
     pull the image down and extract the contents
 
     Returns True on success
     """
-    dir=os.getcwd()
-    cdir=config['CacheDirectory']
-    edir=config['ExpandDirectory']
-    # See if there is a location specified
-    location=config['DefaultImageLocation']
-    tag=request['tag']
-    if tag.find('/')>0:
-      parts=tag.split('/')
-      if parts[0] in config['Locations']:
-        # This is a location
-        location=parts[0]
-        tag='/'.join(parts[1:])
+    params = None
+    rtype = None
 
-    parts=tag.split(':')
-    if len(parts)==2:
-        (repo,tag)=parts
+    # See if there is a location specified
+    location = CONFIG['DefaultImageLocation']
+    tag = request['tag']
+    if tag.find('/') > 0:
+        parts = tag.split('/')
+        if parts[0] in CONFIG['Locations']:
+            # This is a location
+            location = parts[0]
+            tag = '/'.join(parts[1:])
+
+    parts = tag.split(':')
+    if len(parts) == 2:
+        (repo, tag) = parts
     else:
         raise OSError('Unable to parse tag %s'%request['tag'])
-    logging.debug("doing image pull for loc=%s repo=%s tag=%s"%(location,repo,tag))
-    cacert=None
-    if location in config['Locations']:
-        params=config['Locations'][location]
-        rtype=params['remotetype']
-        if 'sslcacert' in params:
-            if params['sslcacert'].startswith('/'):
-              cacert=params['sslcacert']
-            else:
-              cacert='%s/%s'%(dir,params['sslcacert'])
-            if not os.path.exists(cacert):
-                raise OSError('%s does not exist'%(cacert))
+    logging.debug("doing image pull for loc=%s repo=%s tag=%s", location, \
+            repo, tag)
+
+    if location in CONFIG['Locations']:
+        params = CONFIG['Locations'][location]
+        rtype = params['remotetype']
     else:
-        raise KeyError('%s not found in configuration'%(location))
-    if rtype=='dockerv2':
-        url='https://%s'%(location)
-        if 'url' in params:
-          url=params['url']
-        try:
-            #resp=dockerv2.pullImage(None, url,
-            #    repo, tag,
-            #    cachedir=cdir,expanddir=edir,
-            #    cacert=cacert,logger=logger)
-            options={}
-            if cacert is not None:
-                options['cacert'] = cacert
-            options['baseUrl'] = url
-            imageident = '%s:%s' % (repo, tag)
-            dh = dockerv2.dockerv2Handle(imageident, options,updater=updater)
-            updater.update_status("PULLING",'Getting manifest')
-            manifest = dh.getImageManifest()
-            resp=dh.examine_manifest(manifest)
-            request['meta']=resp
-            request['id'] = str(resp['id'])
+        raise KeyError('%s not found in configuration' % location)
 
-            image_exists = check_image(request, request['id'])
-            if image_exists:
-                return True
-
-            dh.pull_layers(manifest,cdir)
-
-            expandedpath = tempfile.mkdtemp(suffix='extract', prefix=request['id'], dir=edir)
-            request['expandedpath']=expandedpath
-
-            updater.update_status("PULLING",'Extracting Layers')
-            dh.extractDockerLayers(expandedpath, dh.get_eldest(), cachedir=cdir)
-            return True
-        except:
-            logging.warn(sys.exc_value)
-            raise
-    elif rtype=='dockerhub':
+    if rtype == 'dockerv2':
+        return _pull_dockerv2(request, location, repo, tag, updater)
+    elif rtype == 'dockerhub':
         logging.warning("Use of depcreated dockerhub type")
-        raise NotImplementedError('dockerhub type is depcreated.  Use dockverv2')
+        raise NotImplementedError('dockerhub type is depcreated. Use dockverv2')
     else:
-        raise NotImplementedError('Unsupported remote type %s'%(rtype))
+        raise NotImplementedError('Unsupported remote type %s' % rtype)
     return False
 
 
@@ -191,11 +200,11 @@ def examine_image(request):
     return True
 
 def get_image_format(request):
-    format=config['DefaultImageFormat']
-    if format in request:
-        format=request['format']
+    fmt = CONFIG['DefaultImageFormat']
+    if fmt in request:
+        fmt = request['format']
 
-    return format
+    return fmt
 
 def convert_image(request):
     """
@@ -203,18 +212,15 @@ def convert_image(request):
 
     Returns True on success
     """
-    system=request['system']
+    fmt = get_image_format(request)
+    request['format'] = fmt
 
-    format=get_image_format(request)
-    request['format']=format
+    edir = CONFIG['ExpandDirectory']
 
-    cdir=config['CacheDirectory']
-    edir=config['ExpandDirectory']
+    imagefile = os.path.join(edir, '%s.%s' % (request['id'], fmt))
+    request['imagefile'] = imagefile
 
-    imagefile=os.path.join(edir, '%s.%s' % (request['id'], format))
-    request['imagefile']=imagefile
-
-    status=converters.convert(format,request['expandedpath'],imagefile)
+    status = converters.convert(fmt, request['expandedpath'], imagefile)
     return status
 
 def write_metadata(request):
@@ -223,22 +229,23 @@ def write_metadata(request):
 
     Returns True on success
     """
-    format=request['format']
-    meta=request['meta']
+    fmt = request['format']
+    meta = request['meta']
 
-    edir=config['ExpandDirectory']
+    edir = CONFIG['ExpandDirectory']
 
     ## initially write metadata to tempfile
-    (fd,metafile)=tempfile.mkstemp(prefix=request['id'],suffix='meta',dir=edir)
-    os.close(fd)
-    request['metafile']=metafile
+    (fdesc, metafile) = tempfile.mkstemp(prefix=request['id'], suffix='meta', \
+            dir=edir)
+    os.close(fdesc)
+    request['metafile'] = metafile
 
-    status=converters.writemeta(format,meta,metafile)
+    status = converters.writemeta(fmt, meta, metafile)
 
     ## after success move to final name
-    final_metafile=os.path.join(edir, '%s.meta' % (request['id']))
+    final_metafile = os.path.join(edir, '%s.meta' % (request['id']))
     shutil.move(metafile, final_metafile)
-    request['metafile']=final_metafile
+    request['metafile'] = final_metafile
 
     return status
 
@@ -249,16 +256,16 @@ def check_image(request, imageid):
 
     Returns True on success
     """
-    system=request['system']
-    if system not in config['Platforms']:
-        raise KeyError('%s is not in the configuration'%system)
-    sys=config['Platforms'][system]
+    system = request['system']
+    if system not in CONFIG['Platforms']:
+        raise KeyError('%s is not in the configuration' % system)
+    sysconf = CONFIG['Platforms'][system]
 
-    format = get_image_format(request)
-    image_filename = "%s.%s" % (request['id'],format)
+    fmt = get_image_format(request)
+    image_filename = "%s.%s" % (request['id'], fmt)
     image_metadata = "%s.meta" % (request['id'])
 
-    return transfer.imagevalid(sys, image_filename, image_metadata, logging)
+    return transfer.imagevalid(sysconf, image_filename, image_metadata, logging)
 
 def transfer_image(request):
     """
@@ -266,14 +273,14 @@ def transfer_image(request):
 
     Returns True on success
     """
-    system=request['system']
-    if system not in config['Platforms']:
-        raise KeyError('%s is not in the configuration'%system)
-    sys=config['Platforms'][system]
-    meta=None
+    system = request['system']
+    if system not in CONFIG['Platforms']:
+        raise KeyError('%s is not in the configuration' % system)
+    sysconf = CONFIG['Platforms'][system]
+    meta = None
     if 'metafile' in request:
-        meta=request['metafile']
-    return transfer.transfer(sys,request['imagefile'],meta, logging)
+        meta = request['metafile']
+    return transfer.transfer(sysconf, request['imagefile'], meta, logging)
 
 def remove_image(request):
     """
@@ -281,15 +288,15 @@ def remove_image(request):
 
     Returns True on success
     """
-    system=request['system']
-    if system not in config['Platforms']:
-        raise KeyError('%s is not in the configuration'%system)
-    sys=config['Platforms'][system]
-    imagefile=request['id']+'.'+request['format']
-    meta=request['id']+'.meta'
+    system = request['system']
+    if system not in CONFIG['Platforms']:
+        raise KeyError('%s is not in the configuration' % system)
+    sysconf = CONFIG['Platforms'][system]
+    imagefile = request['id'] + '.' + request['format']
+    meta = request['id'] + '.meta'
     if 'metafile' in request:
-        meta=request['metafile']
-    return transfer.remove(sys,imagefile,meta, logging)
+        meta = request['metafile']
+    return transfer.remove(sysconf, imagefile, meta, logging)
 
 
 def cleanup_temporary(request):
@@ -302,48 +309,54 @@ def cleanup_temporary(request):
             cleanitem = str(cleanitem)
 
         if type(cleanitem) is not str:
-            raise ValueError('Invalid type for %s, %s' % (item, type(cleanitem)))
+            raise ValueError('Invalid type for %s,%s' % (item, type(cleanitem)))
         if cleanitem == '' or cleanitem == '/':
             raise ValueError('Invalid value for %s: %s' % (item, cleanitem))
-        if not cleanitem.startswith(config['ExpandDirectory']):
+        if not cleanitem.startswith(CONFIG['ExpandDirectory']):
             raise ValueError('Invalid location for %s: %s' % (item, cleanitem))
         if os.path.exists(cleanitem):
-            logging.info("Worker: removing %s" % cleanitem)
+            logging.info("Worker: removing %s", cleanitem)
             try:
                 subprocess.call(['chmod', '-R', 'u+w', cleanitem])
                 if os.path.isdir(cleanitem):
-                    shutil.rmtree(cleanitem,ignore_errors=True)
+                    shutil.rmtree(cleanitem, ignore_errors=True)
                 else:
                     os.unlink(cleanitem)
             except:
-                logging.error("Worker: caught exception while trying to clean up (%s) %s." % (item,cleanitem))
-                #logging.warn(sys.exc_value)
-                pass
+                logging.error("Worker: caught exception while trying to " \
+                        "clean up (%s) %s.", item, cleanitem)
 
 
 
-@queue.task(bind=True)
-def dopull(self,request,TESTMODE=0):
+@QUEUE.task(bind=True)
+def dopull(self, request, TESTMODE=0):
     """
     Celery task to do the full workflow of pulling an image and transferring it
     """
-    logging.debug("dopull system=%s tag=%s"%(request['system'],request['tag']))
-    us=updater(self.update_state)
-    if TESTMODE==1:
-        for state in ('PULLING','EXAMINATION','CONVERSION','TRANSFER','READY'):
-            logging.info("Worker: TESTMODE Updating to %s"%(state))
-            us.update_status(state,state)
+    logging.debug("dopull system=%s tag=%s", request['system'], request['tag'])
+    updater = Updater(self.update_state)
+    if TESTMODE == 1:
+        states = ('PULLING', 'EXAMINATION', 'CONVERSION', 'TRANSFER', 'READY')
+        for state in states:
+            logging.info("Worker: TESTMODE Updating to %s", state)
+            updater.update_status(state, state)
             sleep(1)
-        id='%x'%(randint(0,100000))
-        return {'id':id,'entrypoint':['./blah'],'workdir':'/root','env':['FOO=bar','BAZ=boz']}
-    elif TESTMODE==2:
+        ident = '%x' % randint(0, 100000)
+        ret = {
+            'id': ident,
+            'entrypoint': ['./blah'],
+            'workdir': '/root',
+            'env':['FOO=bar', 'BAZ=boz']
+        }
+        return ret
+    elif TESTMODE == 2:
         logging.info("Worker: TESTMODE 2 setting failure")
         raise OSError('task failed')
     try:
         # Step 1 - Do the pull
-        us.update_status('PULLING','PULLING')
-        print "pulling image %s"%(request['tag'])
-        if not pull_image(request,updater=us):
+        updater.update_status('PULLING', 'PULLING')
+        print "pulling image %s" % request['tag']
+        if not pull_image(request, updater=updater):
             print "pull_image failed"
             logging.info("Worker: Pull failed")
             raise OSError('Pull failed')
@@ -353,30 +366,31 @@ def dopull(self,request,TESTMODE=0):
 
         if not check_image(request, request['id']):
             # Step 2 - Check the image
-            us.update_status('EXAMINATION','Examining image')
-            print "Worker: examining image %s"%(request['tag'])
+            updater.update_status('EXAMINATION', 'Examining image')
+            print "Worker: examining image %s" % request['tag']
             if not examine_image(request):
                 raise OSError('Examine failed')
             # Step 3 - Convert
-            us.update_status('CONVERSION','Converting image')
-            print "Worker: converting image %s"%(request['tag'])
+            updater.update_status('CONVERSION', 'Converting image')
+            print "Worker: converting image %s" % request['tag']
             if not convert_image(request):
                 raise OSError('Conversion failed')
             if not write_metadata(request):
                 raise OSError('Metadata creation failed')
             # Step 4 - TRANSFER
-            us.update_status('TRANSFER','Transferring image')
-            logging.info("Worker: transferring image %s"%(request['tag']))
-            print "Worker: transferring image %s"%(request['tag'])
+            updater.update_status('TRANSFER', 'Transferring image')
+            logging.info("Worker: transferring image %s", request['tag'])
+            print "Worker: transferring image %s" % request['tag']
             if not transfer_image(request):
                 raise OSError('Transfer failed')
         # Done
-        us.update_status('READY','Image ready')
+        updater.update_status('READY', 'Image ready')
         cleanup_temporary(request)
         return request['meta']
 
     except:
-        logging.error("ERROR: dopull failed system=%s tag=%s"%(request['system'],request['tag']))
+        logging.error("ERROR: dopull failed system=%s tag=%s", \
+                request['system'], request['tag'])
         print sys.exc_value
         self.update_state(state='FAILURE')
 
@@ -385,12 +399,13 @@ def dopull(self,request,TESTMODE=0):
         raise
 
 
-@queue.task(bind=True)
-def doexpire(self,request,TESTMODE=0):
+@QUEUE.task(bind=True)
+def doexpire(self, request, TESTMODE=0):
     """
     Celery task to do the full workflow of pulling an image and transferring it
     """
-    logging.debug("do expire system=%s tag=%s TM=%d"%(request['system'],request['tag'],TESTMODE))
+    logging.debug("do expire system=%s tag=%s TM=%d", request['system'], \
+            request['tag'], TESTMODE)
     try:
         self.update_state(state='EXPIRING')
         if not remove_image(request):
@@ -401,13 +416,16 @@ def doexpire(self,request,TESTMODE=0):
         return True
 
     except:
-        logging.error("ERROR: doexpire failed system=%s tag=%s"%(request['system'],request['tag']))
+        logging.error("ERROR: doexpire failed system=%s tag=%s", \
+                request['system'], request['tag'])
         raise
 
-@queue.task(bind=True)
+@QUEUE.task(bind=True)
 def doimagevalid(self, request, TESTMODE=0):
     """
     Celery task to check if a pulled image exists and if it is valid
     """
-    logging.debug("do imagevalid system=%s tag=%s TM=%d" % (request['system'], request['tag'], TESTMODE))
+    logging.debug("do imagevalid system=%s tag=%s TM=%d", request['system'], \
+            request['tag'], TESTMODE)
+    raise NotImplementedError('no image validity checks implemented yet')
 
