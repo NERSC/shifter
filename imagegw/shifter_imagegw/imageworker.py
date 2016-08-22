@@ -122,9 +122,9 @@ def _pull_dockerv2(request, location, repo, tag, updater):
         options['baseUrl'] = url
 
         imageident = '%s:%s' % (repo, tag)
-        dock = dockerv2.dockerv2Handle(imageident, options, updater=updater)
+        dock = dockerv2.DockerV2Handle(imageident, options, updater=updater)
         updater.update_status("PULLING", 'Getting manifest')
-        manifest = dock.getImageManifest()
+        manifest = dock.get_image_manifest()
         request['meta'] = dock.examine_manifest(manifest)
         request['id'] = str(request['meta']['id'])
 
@@ -138,7 +138,8 @@ def _pull_dockerv2(request, location, repo, tag, updater):
         request['expandedpath'] = expandedpath
 
         updater.update_status("PULLING", 'Extracting Layers')
-        dock.extractDockerLayers(expandedpath, dock.get_eldest(), cachedir=cdir)
+        dock.extract_docker_layers(expandedpath, dock.get_eldest_layer(), \
+            cachedir=cdir)
         return True
     except:
         logging.warn(sys.exc_value)

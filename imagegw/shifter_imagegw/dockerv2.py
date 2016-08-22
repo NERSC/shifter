@@ -1,32 +1,32 @@
+# Shifter, Copyright (c) 2015, The Regents of the University of California,
+# through Lawrence Berkeley National Laboratory (subject to receipt of any
+# required approvals from the U.S. Dept. of Energy).  All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#  1. Redistributions of source code must retain the above copyright notice,
+#     this list of conditions and the following disclaimer.
+#  2. Redistributions in binary form must reproduce the above copyright notice,
+#     this list of conditions and the following disclaimer in the documentation
+#     and/or other materials provided with the distribution.
+#  3. Neither the name of the University of California, Lawrence Berkeley
+#     National Laboratory, U.S. Dept. of Energy nor the names of its
+#     contributors may be used to endorse or promote products derived from this
+#     software without specific prior written permission.`
+#
+# See LICENSE for full text.
+
 import hashlib
 import httplib
 import ssl
 import json
 import os
 import re
-import subprocess
+from subprocess import Popen, PIPE
 import base64
 import tempfile
 import socket
 import tarfile
-
-## Shifter, Copyright (c) 2015, The Regents of the University of California,
-## through Lawrence Berkeley National Laboratory (subject to receipt of any
-## required approvals from the U.S. Dept. of Energy).  All rights reserved.
-##
-## Redistribution and use in source and binary forms, with or without
-## modification, are permitted provided that the following conditions are met:
-##  1. Redistributions of source code must retain the above copyright notice,
-##     this list of conditions and the following disclaimer.
-##  2. Redistributions in binary form must reproduce the above copyright notice,
-##     this list of conditions and the following disclaimer in the documentation
-##     and/or other materials provided with the distribution.
-##  3. Neither the name of the University of California, Lawrence Berkeley
-##     National Laboratory, U.S. Dept. of Energy nor the names of its
-##     contributors may be used to endorse or promote products derived from this
-##     software without specific prior written permission.`
-##
-## See LICENSE for full text.
 
 _EMPTY_TAR_SHA256 = \
     'sha256:a3ed95caeb02ffe68cdd9fd84406680ae93d633cb16422d00e8a7c22955b46d4'
@@ -80,8 +80,89 @@ def _verify_manifest_signature(manifest, text, hashalgo, digest):
 
     return True
 
+def _setup_http_conn(url, cacert=None):
+    """Prepare http connection object and return it."""
+    (protocol, url) = url.split('://', 1)
+    conn = None
+    port = 443
+    if url.find('/') >= 0:
+        (server, _) = url.split('/', 1)
+    else:
+        server = url
+    if ':' in server:
+        (server, port) = server.split(':')
+    if protocol == 'http':
+        conn = httplib.HTTPConnection(server)
+    elif protocol == 'https':
+        try:
+            ssl_context = ssl.create_default_context()
+            if cacert is not None:
+                ssl_context = ssl.create_default_context(cafile=cacert)
+            conn = httplib.HTTPSConnection(server, context=ssl_context)
+        except AttributeError:
+            conn = httplib.HTTPSConnection(server, port, None, cacert)
+    else:
+        print "Error, unknown protocol %s" % protocol
+        return None
+    return conn
 
-class dockerv2Handle(object):
+def _construct_image_metadata(manifest):
+    """Perform introspection and analysis of docker manifest."""
+    if manifest is None:
+        raise ValueError('Invalid manifest')
+
+    req_keys = ('schemaVersion', 'fsLayers', 'history', 'signatures')
+    if any([x for x in req_keys if x not in manifest]):
+        raise ValueError('Manifest in incorrect format')
+
+    if manifest['schemaVersion'] != 1:
+        raise ValueError('Incompatible manifest schema')
+
+    if len(manifest['fsLayers']) != len(manifest['history']):
+        raise ValueError('Manifest layer size mismatch')
+
+    layers = {}
+    no_parent = None
+    for idx, layer in enumerate(manifest['history']):
+        if 'v1Compatibility' not in layer:
+            raise ValueError('Unknown layer format')
+        layer_data = json.loads(layer['v1Compatibility'])
+        layer_data['fsLayer'] = manifest['fsLayers'][idx]
+        if 'parent' not in layer_data:
+            if no_parent is not None:
+                raise ValueError('Found more than one layer with no ' \
+                        'parent, cannot proceed')
+            no_parent = layer_data
+        else:
+            if layer_data['parent'] in layers:
+                if layers[layer_data['parent']]['id'] == layer_data['id']:
+                    # skip already-existing image
+                    continue
+                raise ValueError('Multiple inheritance from a layer, ' \
+                        'unsure how to proceed')
+            layers[layer_data['parent']] = layer_data
+        if 'id' not in layer_data:
+            raise ValueError('Malformed layer, missing id')
+
+    if no_parent is None:
+        raise ValueError('Unable to find single layer wihtout parent, ' \
+                'cannot identify terminal layer')
+
+    # traverse graph and construct linked-list of layers
+    curr = no_parent
+    while curr is not None:
+        if curr['id'] in layers:
+            curr['child'] = layers[curr['id']]
+            del layers[curr['id']]
+            curr = curr['child']
+        else:
+            curr['child'] = None
+            break
+
+    return (no_parent, curr,)
+
+
+class DockerV2Handle(object):
     """
     A class for fetching and unpacking docker registry (and dockerhub) images.
     This class is a client of the Docker Registry V2 protocol.
@@ -91,13 +172,13 @@ class dockerv2Handle(object):
     tag = None
     protocol = 'https'
     server = 'registry-1.docker.io'
-    basePath = '/v2'
+    base_path = '/v2'
     cacert = None
     username = None
     password = None
     token = None
-    allowAuthenticated = True
-    checkLayerChecksums = True
+    allow_authenticated = True
+    check_layer_checksums = True
 
     # excluding empty tar blobSum because python 2.6 throws an exception when
     # an open is attempted
@@ -105,7 +186,7 @@ class dockerv2Handle(object):
 
     def __init__(self, imageIdent, options=None, updater=None):
         """
-        Initialize an instance of the dockerv2 class.
+        Initialize an instance of the DockerV2 class.
         imageIdent is a tagged repo (e.g., ubuntu:14.04)
         options is a dictionary.  Valid options include:
             baseUrl to specify a URL other than dockerhub
@@ -125,24 +206,24 @@ class dockerv2Handle(object):
         if options is None:
             options = {}
         if type(options) is not dict:
-            raise ValueError('Invalid type for dockerv2 options')
+            raise ValueError('Invalid type for DockerV2 options')
         self.updater = updater
 
         if 'baseUrl' in options:
-            baseUrlStr = options['baseUrl']
+            base_url = options['baseUrl']
             protocol = None
             server = None
-            basePath = None
-            if baseUrlStr.find('http') >= 0:
-                protocol = baseUrlStr.split(':')[0]
-                index = baseUrlStr.find(':')
-                baseUrlStr = baseUrlStr[index+3:]
-            if baseUrlStr.find('/') >= 0:
-                index = baseUrlStr.find('/')
-                basePath = baseUrlStr[index:]
-                server = baseUrlStr[:index]
+            base_path = None
+            if base_url.find('http') >= 0:
+                protocol = base_url.split(':')[0]
+                index = base_url.find(':')
+                base_url = base_url[index+3:]
+            if base_url.find('/') >= 0:
+                index = base_url.find('/')
+                base_path = base_url[index:]
+                server = base_url[:index]
             else:
-                server = baseUrlStr
+                server = base_url
 
             if protocol is None or len(protocol) == 0:
                 protocol = 'https'
@@ -152,15 +233,15 @@ class dockerv2Handle(object):
                         'specified, should be like '
                         'https://server.location/optionalBasePath')
 
-            if basePath is None:
-                basePath = '/v2'
+            if base_path is None:
+                base_path = '/v2'
 
             self.protocol = protocol
             self.server = server
-            self.basePath = basePath
+            self.base_path = base_path
 
         if self.protocol == 'http':
-            self.allowAuthenticated = False
+            self.allow_authenticated = False
 
         self.url = '%s://%s' % (self.protocol, self.server)
 
@@ -184,59 +265,36 @@ class dockerv2Handle(object):
             raise ValueError('if either username or password is specified, ' \
                     'both must be')
 
-        if self.allowAuthenticated == False and self.username is not None:
+        if self.allow_authenticated == False and self.username is not None:
             raise ValueError('authentication not allowed with the current ' \
                     'settings (make sure you are using https)')
 
-        self.authMethod = 'token'
+        self.auth_method = 'token'
         if 'authMethod' in options:
-            self.authMethod = options['authMethod']
+            self.auth_method = options['authMethod']
         self.eldest = None
         self.youngest = None
 
-    def get_eldest(self):
+    def get_eldest_layer(self):
+        """Return base layer"""
         return self.eldest
 
     def log(self, state, message=''):
+        """Write state/message to upstream status collector"""
         if self.updater is not None:
             self.updater.update_status(state, message)
 
-    def excludeLayer(self, blobsum):
+    def exclude_layer(self, blobsum):
+        """Prevent a layer from being downloaded/extracted/examined"""
         ## TODO: add better verfication of the blobsum, potentially give other
         ## routes to mask out a layer with this function
         if blobsum not in self.excludeBlobSums:
             self.excludeBlobSums.append(blobsum)
 
-    def setupHttpConn(self, url, cacert=None):
-        (protocol, url) = url.split('://', 1)
-        location = None
-        conn = None
-        port = 443
-        if url.find('/') >= 0:
-            (server, location) = url.split('/', 1)
-        else:
-            server = url
-        if ':' in server:
-            (server, port) = server.split(':')
-        if protocol == 'http':
-            conn = httplib.HTTPConnection(server)
-        elif protocol == 'https':
-            try:
-                sslContext = ssl.create_default_context()
-                if cacert is not None:
-                    sslContext = ssl.create_default_context(cafile=cacert)
-                conn = httplib.HTTPSConnection(server, context=sslContext)
-            except AttributeError:
-                conn = httplib.HTTPSConnection(server, port, None, cacert)
-        else:
-            print "Error, unknown protocol %s" % protocol
-            return None
-        return conn
-
-    def doTokenAuth(self, authLocStr):
+    def do_token_auth(self, auth_loc_str):
         """
         Perform token authorization as in Docker registry v2 specification.
-        :param authLocStr: from "WWW-Authenticate" response header
+        :param auth_loc_str: from "WWW-Authenticate" response header
         Formatted as:
             <mode> realm=<authUrl>,service=<service>,scope=<scope>
             The mode will typically be "bearer", service and scope are the repo
@@ -244,19 +302,18 @@ class dockerv2Handle(object):
             scope will only be pull.
 
         """
-        mode = None
-        authDataStr = None
+        auth_data_str = None
 
         ## TODO, figure out what mode was for
-        (mode, authDataStr) = authLocStr.split(' ', 2)
+        (_, auth_data_str) = auth_loc_str.split(' ', 2)
 
-        authData = {}
-        for item in authDataStr.split(','):
-            (k, v) = item.split('=', 2)
-            authData[k] = v.replace('"', '')
+        auth_data = {}
+        for item in auth_data_str.split(','):
+            (key, val) = item.split('=', 2)
+            auth_data[key] = val.replace('"', '')
 
-        authConn = self.setupHttpConn(authData['realm'], self.cacert)
-        if authConn is None:
+        auth_conn = _setup_http_conn(auth_data['realm'], self.cacert)
+        if auth_conn is None:
             raise ValueError('Bad response from registry, failed to get auth ' \
                     'connection')
 
@@ -265,37 +322,36 @@ class dockerv2Handle(object):
             auth = '%s:%s' % (self.username, self.password)
             headers['Authorization'] = 'Basic %s' % base64.b64encode(auth)
 
-        matchObj = re.match(r'(https?)://(.*?)(/.*)', authData['realm'])
-        if matchObj is None:
+        match_obj = re.match(r'(https?)://(.*?)(/.*)', auth_data['realm'])
+        if match_obj is None:
             raise ValueError('Failed to parse authorization URL: %s' \
-                    % authData['realm'])
-        path = matchObj.groups()[2]
+                    % auth_data['realm'])
+        path = match_obj.groups()[2]
         path = '%s?service=%s&scope=%s' \
-               % (path, authData['service'], authData['scope'])
-        authConn.request("GET", path, None, headers)
-        r2 = authConn.getresponse()
+               % (path, auth_data['service'], auth_data['scope'])
+        auth_conn.request("GET", path, None, headers)
+        resp = auth_conn.getresponse()
 
-        if r2.status != 200:
-            raise ValueError('Bad response getting token: %d', r2.status)
-        if r2.getheader('content-type') != 'application/json':
+        if resp.status != 200:
+            raise ValueError('Bad response getting token: %d', resp.status)
+        if resp.getheader('content-type') != 'application/json':
             raise ValueError('Invalid response getting token, not json')
 
-        authResp = json.loads(r2.read())
-        self.token = authResp['token']
+        auth_resp = json.loads(resp.read())
+        self.token = auth_resp['token']
 
-    def getImageManifest(self, retrying=False):
+    def get_image_manifest(self, retrying=False):
         """
-        getImageManifest - Get the image manifest
-        returns a dictionary object of the manifest.
+        Get the image manifest returns a dictionary object of the manifest.
         """
-        conn = self.setupHttpConn(self.url, self.cacert)
+        conn = _setup_http_conn(self.url, self.cacert)
         if conn is None:
             return None
 
         headers = {}
-        if self.authMethod == 'token' and self.token is not None:
+        if self.auth_method == 'token' and self.token is not None:
             headers = {'Authorization': 'Bearer %s' % self.token}
-        elif self.authMethod == 'basic' and self.username is not None:
+        elif self.auth_method == 'basic' and self.username is not None:
             auth = '%s:%s' % (self.username, self.password)
             headers['Authorization'] = 'Basic %s' % base64.b64encode(auth)
 
@@ -304,10 +360,9 @@ class dockerv2Handle(object):
         resp1 = conn.getresponse()
 
         if resp1.status == 401 and not retrying:
-            if self.authMethod == 'token':
-                self.doTokenAuth(resp1.getheader('WWW-Authenticate'))
-            return self.getImageManifest(retrying=True)
-
+            if self.auth_method == 'token':
+                self.do_token_auth(resp1.getheader('WWW-Authenticate'))
+            return self.get_image_manifest(retrying=True)
         if resp1.status != 200:
             raise ValueError("Bad response from registry status=%d" \
                     % (resp1.status))
@@ -328,8 +383,9 @@ class dockerv2Handle(object):
         return jdata
 
     def examine_manifest(self, manifest):
+        """Extract metadata from manifest."""
         self.log("PULLING", 'Constructing manifest')
-        (eldest, youngest) = self.constructImageMetadata(manifest)
+        (eldest, youngest) = _construct_image_metadata(manifest)
 
         self.eldest = eldest
         self.youngest = youngest
@@ -346,6 +402,7 @@ class dockerv2Handle(object):
 
 
     def pull_layers(self, manifest, cachedir):
+        """Download layers to cachedir if they do not exist."""
         ## TODO: don't rely on self.eldest to demonstrate that
         ## examine_manifest has run
         if self.eldest is None:
@@ -359,25 +416,25 @@ class dockerv2Handle(object):
             memo = "Pulling layer %s" % layer['fsLayer']['blobSum']
             self.log("PULLING", memo)
 
-            self.saveLayer(layer['fsLayer']['blobSum'], cachedir)
+            self.save_layer(layer['fsLayer']['blobSum'], cachedir)
             layer = layer['child']
         return True
 
-    def saveLayer(self, layer, cachedir='./'):
+    def save_layer(self, layer, cachedir='./'):
         """
         Save a layer and verify with the digest
         """
         path = "/v2/%s/blobs/%s" % (self.repo, layer)
         url = self.url
         while True:
-            conn = self.setupHttpConn(url, self.cacert)
+            conn = _setup_http_conn(url, self.cacert)
             if conn is None:
                 return None
 
             headers = {}
-            if self.authMethod == 'token' and self.token is not None:
+            if self.auth_method == 'token' and self.token is not None:
                 headers = {'Authorization': 'Bearer %s' % self.token}
-            elif self.authMethod == 'basic' and self.username is not None:
+            elif self.auth_method == 'basic' and self.username is not None:
                 auth = '%s:%s' % (self.username, self.password)
                 headers['Authorization'] = 'Basic %s' % base64.b64encode(auth)
 
@@ -385,7 +442,7 @@ class dockerv2Handle(object):
 
             if os.path.exists(filename):
                 try:
-                    return self.checkLayerChecksum(layer, filename)
+                    return self.check_layer_checksum(layer, filename)
                 except ValueError:
                     # there was a checksum mismatch, nuke the file
                     os.unlink(filename)
@@ -396,14 +453,14 @@ class dockerv2Handle(object):
             if resp1.status == 200:
                 break
             elif resp1.status == 401:
-                if self.authMethod == 'token':
-                    self.doTokenAuth(resp1.getheader('WWW-Authenticate'))
+                if self.auth_method == 'token':
+                    self.do_token_auth(resp1.getheader('WWW-Authenticate'))
                     continue
             elif location != None:
                 url = location
-                matchObj = re.match(r'(https?)://(.*?)(/.*)', location)
-                url = '%s://%s' % (matchObj.groups()[0], matchObj.groups()[1])
-                path = matchObj.groups()[2]
+                match_obj = re.match(r'(https?)://(.*?)(/.*)', location)
+                url = '%s://%s' % (match_obj.groups()[0], match_obj.groups()[1])
+                path = match_obj.groups()[2]
             else:
                 print 'got status: %d' % resp1.status
                 return False
@@ -423,7 +480,7 @@ class dockerv2Handle(object):
                 out_fp.write(buff)
                 nread += len(buff)
             out_fp.close()
-            self.checkLayerChecksum(layer, out_fn)
+            self.check_layer_checksum(layer, out_fn)
         except:
             os.unlink(out_fn)
             out_fp.close()
@@ -432,82 +489,26 @@ class dockerv2Handle(object):
         os.rename(out_fn, filename)
         return True
 
-    def checkLayerChecksum(self, layer, filename):
-        if self.checkLayerChecksums is False:
+    def check_layer_checksum(self, layer, filename):
+        """Perform checksum calculation to exhaustively validate download."""
+        if self.check_layer_checksums is False:
             return True
 
-        (hashType, value) = layer.split(':', 1)
-        execName = '%s%s' % (hashType, 'sum')
-        process = subprocess.Popen([execName, filename], stdout=subprocess.PIPE)
+        (hash_type, value) = layer.split(':', 1)
+        exec_name = '%s%s' % (hash_type, 'sum')
+        process = Popen([exec_name, filename], stdout=PIPE)
 
-        stdoutData = process.communicate()[0]
-        checksum = stdoutData.split(' ', 1)[0]
+        stdout = process.communicate()[0]
+        checksum = stdout.split(' ', 1)[0]
         if checksum != value:
             raise ValueError("checksum mismatch, failure")
         return True
 
-    def constructImageMetadata(self, manifest):
-        if manifest is None:
-            raise ValueError('Invalid manifest')
-
-        req_keys = ('schemaVersion', 'fsLayers', 'history', 'signatures')
-        if any([x for x in req_keys if x not in manifest]):
-            raise ValueError('Manifest in incorrect format')
-
-        if manifest['schemaVersion'] != 1:
-            raise ValueError('Incompatible manifest schema')
-
-        if len(manifest['fsLayers']) != len(manifest['history']):
-            raise ValueError('Manifest layer size mismatch')
-
-        layers = {}
-        noParent = None
-        for idx, layer in enumerate(manifest['history']):
-            if 'v1Compatibility' not in layer:
-                raise ValueError('Unknown layer format')
-            layerData = json.loads(layer['v1Compatibility'])
-            layerData['fsLayer'] = manifest['fsLayers'][idx]
-            if 'parent' not in layerData:
-                if noParent is not None:
-                    raise ValueError('Found more than one layer with no ' \
-                            'parent, cannot proceed')
-                noParent = layerData
-            else:
-                if layerData['parent'] in layers:
-                    if layers[layerData['parent']]['id'] == layerData['id']:
-                        # skip already-existing image
-                        continue
-                    raise ValueError('Multiple inheritance from a layer, ' \
-                            'unsure how to proceed')
-                layers[layerData['parent']] = layerData
-            if 'id' not in layerData:
-                raise ValueError('Malformed layer, missing id')
-
-        if noParent is None:
-            raise ValueError('Unable to find single layer wihtout parent, ' \
-                    'cannot identify terminal layer')
-
-        # traverse graph and construct linked-list of layers
-        curr = noParent
-        while curr is not None:
-            if curr['id'] in layers:
-                curr['child'] = layers[curr['id']]
-                del layers[curr['id']]
-                curr = curr['child']
-            else:
-                curr['child'] = None
-                break
-
-        return (noParent, curr,)
-
-    def setupImageBase(self, options):
+    def extract_docker_layers(self, base_path, base_layer, cachedir='./'):
+        """Analyze files in docker layers and extract minimal set to base_path.
         """
-        setupImageBase - Helper function to create a work area
-        """
-        return tempfile.mkdtemp()
-
-    def extractDockerLayers(self, basePath, baseLayer, cachedir='./'):
         def filter_layer(layer_members, to_remove):
+            """Remove members and members starting with to_remove from layer"""
             trailing = '/' if not to_remove.endswith('/') else ''
             prefix_to_remove = to_remove + trailing
 
@@ -515,9 +516,9 @@ class dockerv2Handle(object):
                     if (not x.name == to_remove
                         and not x.name.startswith(prefix_to_remove))]
 
-        layerPaths = []
-        tarFileRefs = []
-        layer = baseLayer
+        layer_paths = []
+        tar_file_refs = []
+        layer = base_layer
         while layer is not None:
             if layer['fsLayer']['blobSum'] in self.excludeBlobSums:
                 layer = layer['child']
@@ -526,7 +527,7 @@ class dockerv2Handle(object):
             tfname = '%s.tar' % layer['fsLayer']['blobSum']
             tfname = os.path.join(cachedir, tfname)
             tfp = tarfile.open(tfname, 'r:gz')
-            tarFileRefs.append(tfp)
+            tar_file_refs.append(tfp)
 
             ## get directory of tar contents
             members = tfp.getmembers()
@@ -541,56 +542,59 @@ class dockerv2Handle(object):
                     if x.name.find('/.wh.') >= 0 or x.name.startswith('.wh.')]
 
             ## remove the whiteout tags from this layer
-            for wh in whiteouts:
-                members.remove(wh)
+            for wh_ in whiteouts:
+                members.remove(wh_)
 
             ## remove the whiteout targets from all ancestral layers
-            for idx, ancsLayer in enumerate(layerPaths):
-                for wh in whiteouts:
-                    path = wh.name.replace('/.wh.', '/')
+            for idx, ancs_layer in enumerate(layer_paths):
+                for wh_ in whiteouts:
+                    path = wh_.name.replace('/.wh.', '/')
                     if path.startswith('.wh.'):
                         path = path[4:]
-                    ancsLayerIter = (x for x in ancsLayer if x.name == path)
-                    ancsMember = next(ancsLayerIter, None)
-                    if ancsMember:
-                        ancsLayer = filter_layer(ancsLayer, path)
-                layerPaths[idx] = ancsLayer
+                    ancs_layer_iter = (x for x in ancs_layer if x.name == path)
+                    ancs_member = next(ancs_layer_iter, None)
+                    if ancs_member:
+                        ancs_layer = filter_layer(ancs_layer, path)
+                layer_paths[idx] = ancs_layer
 
             ## remove identical paths (not dirs) from all ancestral layers
             notdirs = [x.name for x in members if not x.isdir()]
-            for idx, ancsLayer in enumerate(layerPaths):
-                ancsLayer = [x for x in ancsLayer if not x.name in notdirs]
-                layerPaths[idx] = ancsLayer
+            for idx, ancs_layer in enumerate(layer_paths):
+                ancs_layer = [x for x in ancs_layer if not x.name in notdirs]
+                layer_paths[idx] = ancs_layer
 
             ## push this layer into the collection
-            layerPaths.append(members)
+            layer_paths.append(members)
 
             layer = layer['child']
 
         ## extract the selected files
-        layerIdx = 0
-        layer = baseLayer
+        layer_idx = 0
+        layer = base_layer
         while layer is not None:
             if layer['fsLayer']['blobSum'] in self.excludeBlobSums:
                 layer = layer['child']
                 continue
 
-            tfp = tarFileRefs[layerIdx]
-            members = layerPaths[layerIdx]
-            tfp.extractall(path=basePath, members=members)
+            tfp = tar_file_refs[layer_idx]
+            members = layer_paths[layer_idx]
+            tfp.extractall(path=base_path, members=members)
 
-            layerIdx += 1
+            layer_idx += 1
             layer = layer['child']
 
-        ## fix permissions on the extracted files
-        subprocess.call(['chmod', '-R', 'a+rX,u+w', basePath])
-        for tfp in tarFileRefs:
+        for tfp in tar_file_refs:
             tfp.close()
 
+        ## fix permissions on the extracted files
+        cmd = ['chmod', '-R', 'a+rX,u+w', base_path]
+        pfp = Popen(cmd)
+        pfp.communicate()
+
 # Deprecated: Just use the object above
-def pullImage(options, baseUrl, repo, tag,
-              cachedir='./', expanddir='./',
-              cacert=None, username=None, password=None):
+def pull_image(options, base_url, repo, tag,
+               cachedir='./', expanddir='./',
+               cacert=None, username=None, password=None):
     """
     Uber function to pull the manifest, layers, and extract the layers
     """
@@ -602,19 +606,19 @@ def pullImage(options, baseUrl, repo, tag,
         options['password'] = password
     if cacert is not None:
         options['cacert'] = cacert
-    if baseUrl is not None:
-        options['baseUrl'] = baseUrl
+    if base_url is not None:
+        options['baseUrl'] = base_url
     imageident = '%s:%s' % (repo, tag)
-    handle = dockerv2Handle(imageident, options)
+    handle = DockerV2Handle(imageident, options)
 
     print "about to get manifest"
-    manifest = handle.getImageManifest()
-    (eldest, youngest) = handle.constructImageMetadata(manifest)
+    manifest = handle.get_image_manifest()
+    (eldest, youngest) = _construct_image_metadata(manifest)
     layer = eldest
     print "about to get layers"
     while layer is not None:
         print "about to pull layer: ", layer['fsLayer']['blobSum']
-        handle.saveLayer(layer['fsLayer']['blobSum'], cachedir)
+        handle.save_layer(layer['fsLayer']['blobSum'], cachedir)
         layer = layer['child']
 
     layer = eldest
@@ -632,10 +636,14 @@ def pullImage(options, baseUrl, repo, tag,
     if not os.path.exists(expandedpath):
         os.mkdir(expandedpath)
 
-    handle.extractDockerLayers(expandedpath, layer, cachedir=cachedir)
+    handle.extract_docker_layers(expandedpath, layer, cachedir=cachedir)
     return resp
 
-if __name__ == '__main__':
+def main():
+    """Harness for manual testing."""
     cache_dir = os.environ['TMPDIR']
-    pullImage(None, 'https://registry-1.docker.io', 'dlwoodruff/pyomodock', \
+    pull_image(None, 'https://registry-1.docker.io', 'dlwoodruff/pyomodock', \
             '4.3.1137', cachedir=cache_dir, expanddir=cache_dir)
+
+if __name__ == '__main__':
+    main()

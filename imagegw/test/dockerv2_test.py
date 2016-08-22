@@ -41,7 +41,7 @@ class Dockerv2TestCase(unittest.TestCase):
         self.cleanpaths.append(cache)
         self.cleanpaths.append(expand)
 
-        resp = dockerv2.pullImage(None, 'https://registry-1.docker.io', \
+        resp = dockerv2.pull_image(None, 'https://registry-1.docker.io', \
                 'dmjacobsen/whiteouttest', 'latest', cachedir=cache, \
                 expanddir=expand)
 
