@@ -582,23 +582,23 @@ class imagemngr(object):
             raise
         return _mongo_reconnect_safe
 
-    @mongo_reconnect_reattempt
+    @mongo_reconnect_reattempt(self)
     def images_remove(self, *args, **kwargs):
         return self.images.remove(*args, **kwargs)
 
-    @mongo_reconnect_reattempt
+    @mongo_reconnect_reattempt(self)
     def images_update(self, *args, **kwargs):
         return self.images.update(*args, **kwargs)
 
-    @mongo_reconnect_reattempt
+    @mongo_reconnect_reattempt(self)
     def images_find(self, *args, **kwargs):
         return self.images.find(*args, **kwargs)
 
-    @mongo_reconnect_reattempt
+    @mongo_reconnect_reattempt(self)
     def images_find_one(self, *args, **kwargs):
         return self.images.find_one(*args, **kwargs)
 
-    @mongo_reconnect_reattempt
+    @mongo_reconnect_reattempt(self)
     def images_insert(self, *args, **kwargs):
         return self.images.insert(*args, **kwargs)
 
