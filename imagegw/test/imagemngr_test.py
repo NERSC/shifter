@@ -387,7 +387,7 @@ class ImageMngrTestCase(unittest.TestCase):
         rec2['status']='FAILURE'
         id2=self.images.insert(rec2)
         session=self.m.new_session(self.auth,self.system)
-        li=self.m.list(session,self.system)
+        li=self.m.imglist(session,self.system)
         assert len(li)==1
         l=li[0]
         assert '_id' in l

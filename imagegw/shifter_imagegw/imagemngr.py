@@ -171,7 +171,7 @@ class imagemngr:
       return rec
 
 
-  def list(self,session,system):
+  def imglist(self,session,system):
         """
         list images for a system.
         Image is dictionary with system defined.
