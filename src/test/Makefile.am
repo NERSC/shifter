@@ -6,14 +6,26 @@ CPPUTEST_LDFLAGS = $(top_builddir)/dep/cpputest/lib*/libCppUTest.a
 TEST_CFLAGS = -fprofile-arcs -ftest-coverage -O0 -ggdb -I$(top_srcdir)/src $(AM_CPPFLAGS) $(CPPUTEST_CFLAGS) -DNO_ROOT_OWN_CHECK=1 -DROOTFS_TYPE="\"$(ROOTFS_TYPE)\""
 TEST_LDFLAGS = $(CPPUTEST_LDFLAGS)
 
-dist_noinst_DATA = test_udiRoot.conf.in etc etc_small data_config1.conf data_config2.conf data_config3.conf data_config4.conf
-noinst_DATA = test_udiRoot.conf
+dist_noinst_DATA = test_udiRoot.conf.in chroot1 chroot2 chroot3 etc_small data_config1.conf data_config2.conf data_config3.conf data_config4.conf
+noinst_DATA = test_udiRoot.conf chroot1/nss chroot2/nss chroot3/nss
 check_PROGRAMS = test_utility test_VolumeMap test_UdiRootConfig test_MountList test_shifter_core test_shifter_core_AsRoot test_shifter_core_AsRootDangerous test_ImageData test_shifter
 TESTS = test_utility test_VolumeMap test_UdiRootConfig test_MountList test_shifter_core test_ImageData test_shifter
 
 test_udiRoot.conf: test_udiRoot.conf.in
 	cat $(srcdir)/test_udiRoot.conf.in | sed "s|@@@PREFIX@@@|./|g" | sed "s|@@@CONFIG_DIR@@@|./|g" | sed "s|@@@ROOTFSTYPE@@@|$(ROOTFS_TYPE)|g"  > test_udiRoot.conf
 	chmod 644 test_udiRoot.conf
+
+chroot1/nss:
+	./setup_test_chroot.sh chroot1
+	touch chroot1/nss
+
+chroot2/nss:
+	./setup_test_chroot.sh chroot2
+	touch chroot2/nss
+
+chroot3/nss:
+	./setup_test_chroot.sh chroot3
+	touch chroot3/nss
 
 
 test_utility_SOURCES = \
