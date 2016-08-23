@@ -1579,6 +1579,7 @@ int setupVolumeMapMounts(
              * container_from_real if appropriate.  At present time no
              * validation methods restrict from locations, so we can safely
              * ignore this for the time-being */
+            container_from_real = from_real;
 
             if ((ret = _validate_fp(container_from_real, container_to_real, flags)) != 0) {
                 fprintf(stderr, "Invalid mount request, permission denied! "
