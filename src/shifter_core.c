@@ -491,7 +491,7 @@ int prepareSiteModifications(const char *username,
     }
 
     /* do site-defined mount activities */
-    if (setupVolumeMapMounts(&mountCache, udiConfig->siteFs, "", udiRoot, udiMountDev, udiConfig) != 0) {
+    if (setupVolumeMapMounts(&mountCache, udiConfig->siteFs, "", udiRoot, udiMountDev, validateVolumeMap_siteRequest, udiConfig) != 0) {
         fprintf(stderr, "FAILED to mount siteFs volumes\n");
         goto _prepSiteMod_unclean;
     }
@@ -1291,7 +1291,7 @@ int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig) {
         return 1;
     }
 
-    ret = setupVolumeMapMounts(&mountCache, map, udiRoot, udiRoot, udiMountDev, udiConfig);
+    ret = setupVolumeMapMounts(&mountCache, map, udiRoot, udiRoot, udiMountDev, validateVolumeMap_userRequest, udiConfig);
     free_MountList(&mountCache, 0);
     return ret;
 }
@@ -1414,11 +1414,13 @@ int setupVolumeMapMounts(
         const char *fromPrefix,
         const char *toPrefix,
         dev_t createTo,
+        int (*_validate_fp)(const char *, const char *, VolumeMapFlag *),
         UdiRootConfig *udiConfig
 ) {
     char *filtered_from = NULL;
     char *filtered_to = NULL;
     char *to_real = NULL;
+    char *from_real = NULL;
     VolumeMapFlag *flags = NULL;
 
     size_t mapIdx = 0;
@@ -1495,7 +1497,7 @@ int setupVolumeMapMounts(
             }
         }
 
-        if (stat(from_buffer, &statData) != 0) {
+        if (lstat(from_buffer, &statData) != 0) {
             fprintf(stderr, "FAILED to find volume \"from\": %s\n", from_buffer);
             goto _handleVolMountError;
         }
@@ -1503,7 +1505,7 @@ int setupVolumeMapMounts(
             fprintf(stderr, "FAILED \"from\" location is not directory: %s\n", from_buffer);
             goto _handleVolMountError;
         }
-        if (stat(to_buffer, &statData) != 0) {
+        if (lstat(to_buffer, &statData) != 0) {
             if (createTo) {
                 int okToMkdir = 0;
 
@@ -1514,7 +1516,7 @@ int setupVolumeMapMounts(
 
                     /* if parent path is on the same device as is authorized by createTo
                        then ok the mkdir operation */
-                    if (stat(to_buffer, &statData) == 0) {
+                    if (lstat(to_buffer, &statData) == 0) {
                         if (statData.st_dev == createTo) {
                             okToMkdir = 1;
                         }
@@ -1526,7 +1528,7 @@ int setupVolumeMapMounts(
 
                 if (okToMkdir) {
                     mkdir(to_buffer, 0755);
-                    if (stat(to_buffer, &statData) != 0) {
+                    if (lstat(to_buffer, &statData) != 0) {
                         fprintf(stderr, "FAILED to find volume \"to\": %s\n",
                                 to_buffer);
                         goto _handleVolMountError;
@@ -1548,16 +1550,40 @@ int setupVolumeMapMounts(
         }
 
         to_real = realpath(to_buffer, NULL);
+        from_real = realpath(from_buffer, NULL);
         if (to_real == NULL) {
             fprintf(stderr, "Failed to get realpath for %s\n", to_buffer);
             goto _handleVolMountError;
+        } else if (from_real == NULL) {
+            fprintf(stderr, "Failed to get realpath for %s\n", from_buffer);
+            goto _handleVolMountError;
         } else {
             size_t to_len = strlen(to_real);
+            const char *container_to_real = NULL;
+            const char *container_from_real = NULL;
+            int ret = 0;
 
             /* validate that path starts with udiMountPoint */
             if (to_len <= udiMountLen ||
                 strncmp(to_real, udiConfig->udiMountPoint, udiMountLen) != 0) {
                 fprintf(stderr, "Invalid destination %s, not allowed, fail.\n", to_real);
+                goto _handleVolMountError;
+            }
+
+            /* validate that the path is allowed */
+            /* to_real is known to be at longer than udiMountLen from previous
+             * check */
+            container_to_real = to_real + udiMountLen;
+
+            /* TODO add some parsing to strip away udiMountPoint from
+             * container_from_real if appropriate.  At present time no
+             * validation methods restrict from locations, so we can safely
+             * ignore this for the time-being */
+
+            if ((ret = _validate_fp(container_from_real, container_to_real, flags)) != 0) {
+                fprintf(stderr, "Invalid mount request, permission denied! "
+                        "Cannot mount from %s to %s. Err Code %d\n",
+                        container_from_real, container_to_real, ret);
                 goto _handleVolMountError;
             }
         }
@@ -1610,6 +1636,8 @@ int setupVolumeMapMounts(
         }
         free(to_real);
         to_real = NULL;
+        free(from_real);
+        from_real = NULL;
 
         continue;
 _handleVolMountError:
