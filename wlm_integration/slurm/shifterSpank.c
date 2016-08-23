@@ -276,8 +276,16 @@ int forkAndExecvLogToSlurm(const char *appname, char **args) {
     int stdoutPipe[2];
     int stderrPipe[2];
 
-    pipe(stdoutPipe);
-    pipe(stderrPipe);
+    if (pipe(stdoutPipe) != 0) {
+        _log(LOG_ERROR, "FAILED to open stdout pipe! %s", strerror(errno));
+        rc = ERROR;
+        goto endf;
+    }
+    if (pipe(stderrPipe) != 0) {
+        _log(LOG_ERROR, "FAILED to open stderr pipe! %s", strerror(errno));
+        rc = ERROR;
+        goto endf;
+    }
     pid = fork();
     if (pid < 0) {
         _log(LOG_ERROR, "FAILED to fork %s", appname);
@@ -1231,7 +1239,10 @@ int shifterSpank_task_init_privileged(shifterSpank_config *ssconfig) {
             char error[PATH_MAX];
             snprintf(error, PATH_MAX, "FAILED to change directory to: %s", currcwd);
             _log(LOG_ERROR, "FAILED to change directory to %s, going to /tmp instead.", currcwd);
-            chdir("/tmp");
+            if (chdir("/tmp") != 0) {
+                snprintf(error, 1024, "Failed to chdir to /tmp, fatal error");
+                TASKINITPRIV_ERROR(error, ERROR);
+            }
         }
 
         /* go back to our original effective uid */
