@@ -171,6 +171,167 @@ TEST(ShifterCoreTestGroup, CopyFile_basic) {
     free(toFile);
 }
 
+#define SETUP_CHROOT(path) pid = fork(); \
+    if (pid == 0) { \
+         if (chdir(path) != 0) { \
+             fprintf(stderr, "FAILED to chdir to %s\n", path); \
+             exit(1); \
+         } \
+         if (chroot(".") != 0) { \
+             fprintf(stderr, "FAILED to chroot to %s\n", path); \
+             exit(1); \
+         }
+
+#define CHECK_CHROOT(statement) if (!(statement)) exit(1); \
+        exit(0); \
+    } else if (pid > 0) { \
+        int status = 0; \
+        int rc = 0; \
+        waitpid(pid, &status, 0); \
+        if (WIFEXITED(status)) { \
+             rc = WEXITSTATUS(status); \
+        } else { \
+             rc = 1; \
+        } \
+        CHECK(rc == 0); \
+    }
+
+
+#ifdef NOTROOT
+IGNORE_TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
+#else
+TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
+#endif
+    int ret = 0;
+    gid_t *groups = NULL;
+    int ngroups = 0;
+    pid_t pid = 0;
+
+    /* make sure fails if user is NULL */
+    ret = shifter_getgrouplist(NULL, 1000, &groups, &ngroups);
+    CHECK(ret != 0);
+
+    /* make sure fails if user is root */
+    ret = shifter_getgrouplist("root", 1000, &groups, &ngroups);
+    CHECK(ret != 0);
+
+    /* make sure fails if group is 0 */
+    ret = shifter_getgrouplist("test", 0, &groups, &ngroups);
+    CHECK(ret != 0);
+
+    /* make sure fails if groups is NULL */
+    ret = shifter_getgrouplist("test", 1000, NULL, &ngroups);
+    CHECK(ret != 0);
+
+    /* make sure fails if ngroups is NULL */
+    ret = shifter_getgrouplist("test", 1000, &groups, NULL);
+    CHECK(ret != 0);
+
+    /* in chroot1, user dmj is in groups 10, 990, and 1000 */
+
+    SETUP_CHROOT("chroot1")
+    ret = shifter_getgrouplist("dmj", 1000, &groups, &ngroups);
+    fprintf(stderr, "got back %d groups\n", ngroups);
+    int ok[] = {10, 990, 1000};
+    int expcnt[] = {1, 1, 1};
+    int gotcnt[] = {0, 0, 0};
+
+    for (int idx = 0; idx < ngroups; idx++) {
+        fprintf(stderr, "have gid: %d\n", groups[idx]);
+        for (int grpidx = 0; grpidx < 3; grpidx++) {
+            if (groups[idx] == ok[grpidx]) {
+                gotcnt[grpidx]++;
+            }
+        }
+    }
+    for (int grpidx = 0; grpidx < 3; grpidx++) {
+        if (expcnt[grpidx] != gotcnt[grpidx]) {
+            fprintf(stderr, "%d != %d occurences for gid %d\n", expcnt[grpidx], gotcnt[grpidx], ok[grpidx]);
+            exit(1);
+        } 
+    }
+    CHECK_CHROOT(ret == 0 && ngroups == 3)
+
+    /* should get back the 3 correct groups plus a duplicate
+     * 1000 replacing the evil 0 inserted into chroot2 */
+    SETUP_CHROOT("chroot2")
+    ret = shifter_getgrouplist("dmj", 1000, &groups, &ngroups);
+    fprintf(stderr, "got back %d groups\n", ngroups);
+    int ok[] = {10, 990, 1000};
+    int expcnt[] = {1, 1, 2};
+    int gotcnt[] = {0, 0, 0};
+
+    for (int idx = 0; idx < ngroups; idx++) {
+        fprintf(stderr, "have gid: %d\n", groups[idx]);
+        for (int grpidx = 0; grpidx < 3; grpidx++) {
+            if (groups[idx] == ok[grpidx]) {
+                gotcnt[grpidx]++;
+            }
+        }
+    }
+    for (int grpidx = 0; grpidx < 3; grpidx++) {
+        if (expcnt[grpidx] != gotcnt[grpidx]) {
+            fprintf(stderr, "%d != %d occurences for gid %d\n", expcnt[grpidx], gotcnt[grpidx], ok[grpidx]);
+            exit(1);
+        } 
+    }
+    CHECK_CHROOT(ret == 0 && ngroups == 4)
+
+    /* make sure the realloc works correctly */
+    free(groups);
+    groups = (gid_t *) malloc(sizeof(gid_t) * 1);
+    ngroups = 1;
+  
+    /* after making buffer too small, re-run test from above */
+    SETUP_CHROOT("chroot1")
+    ret = shifter_getgrouplist("dmj", 1000, &groups, &ngroups);
+    fprintf(stderr, "got back %d groups\n", ngroups);
+    int ok[] = {10, 990, 1000};
+    int expcnt[] = {1, 1, 1};
+    int gotcnt[] = {0, 0, 0};
+
+    for (int idx = 0; idx < ngroups; idx++) {
+        fprintf(stderr, "have gid: %d\n", groups[idx]);
+        for (int grpidx = 0; grpidx < 3; grpidx++) {
+            if (groups[idx] == ok[grpidx]) {
+                gotcnt[grpidx]++;
+            }
+        }
+    }
+    for (int grpidx = 0; grpidx < 3; grpidx++) {
+        if (expcnt[grpidx] != gotcnt[grpidx]) {
+            fprintf(stderr, "%d != %d occurences for gid %d\n", expcnt[grpidx], gotcnt[grpidx], ok[grpidx]);
+            exit(1);
+        } 
+    }
+    CHECK_CHROOT(ret == 0 && ngroups == 3)
+
+    /* check case when NO group entries are present
+     * should just get the provided gid back */
+    SETUP_CHROOT("chroot3")
+    ret = shifter_getgrouplist("dmj", 1000, &groups, &ngroups);
+    fprintf(stderr, "got back %d groups\n", ngroups);
+    int ok[] = {1000};
+    int expcnt[] = {1};
+    int gotcnt[] = {0};
+
+    for (int idx = 0; idx < ngroups; idx++) {
+        fprintf(stderr, "have gid: %d\n", groups[idx]);
+        for (int grpidx = 0; grpidx < 1; grpidx++) {
+            if (groups[idx] == ok[grpidx]) {
+                gotcnt[grpidx]++;
+            }
+        }
+    }
+    for (int grpidx = 0; grpidx < 1; grpidx++) {
+        if (expcnt[grpidx] != gotcnt[grpidx]) {
+            fprintf(stderr, "%d != %d occurences for gid %d\n", expcnt[grpidx], gotcnt[grpidx], ok[grpidx]);
+            exit(1);
+        } 
+    }
+    CHECK_CHROOT(ret == 0 && ngroups == 1)
+}
+
 TEST(ShifterCoreTestGroup, setupPerNodeCacheFilename_tests) {
     int ret = 0;
     char buffer[PATH_MAX];

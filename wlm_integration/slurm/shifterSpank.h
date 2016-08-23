@@ -133,6 +133,8 @@ int shifterSpank_process_option_image(
 int shifterSpank_process_option_volume(
     shifterSpank_config *ssconfig, int val, const char *optarg, int remote);
 
+int shifterSpank_task_init_privileged(shifterSpank_config *ssconfig);
+
 /** setup_memory_cgroup
  * generates each component of the shifter memory cgroup path and calls the
  * parameterized "action" function for each component of the path (if not

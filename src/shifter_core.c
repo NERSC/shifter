@@ -491,7 +491,7 @@ int prepareSiteModifications(const char *username,
     }
 
     /* do site-defined mount activities */
-    if (setupVolumeMapMounts(&mountCache, udiConfig->siteFs, "", udiRoot, udiMountDev, udiConfig) != 0) {
+    if (setupVolumeMapMounts(&mountCache, udiConfig->siteFs, "", udiRoot, udiMountDev, validateVolumeMap_siteRequest, udiConfig) != 0) {
         fprintf(stderr, "FAILED to mount siteFs volumes\n");
         goto _prepSiteMod_unclean;
     }
@@ -1291,7 +1291,7 @@ int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig) {
         return 1;
     }
 
-    ret = setupVolumeMapMounts(&mountCache, map, udiRoot, udiRoot, udiMountDev, udiConfig);
+    ret = setupVolumeMapMounts(&mountCache, map, udiRoot, udiRoot, udiMountDev, validateVolumeMap_userRequest, udiConfig);
     free_MountList(&mountCache, 0);
     return ret;
 }
@@ -1414,11 +1414,13 @@ int setupVolumeMapMounts(
         const char *fromPrefix,
         const char *toPrefix,
         dev_t createTo,
+        int (*_validate_fp)(const char *, const char *, VolumeMapFlag *),
         UdiRootConfig *udiConfig
 ) {
     char *filtered_from = NULL;
     char *filtered_to = NULL;
     char *to_real = NULL;
+    char *from_real = NULL;
     VolumeMapFlag *flags = NULL;
 
     size_t mapIdx = 0;
@@ -1495,7 +1497,7 @@ int setupVolumeMapMounts(
             }
         }
 
-        if (stat(from_buffer, &statData) != 0) {
+        if (lstat(from_buffer, &statData) != 0) {
             fprintf(stderr, "FAILED to find volume \"from\": %s\n", from_buffer);
             goto _handleVolMountError;
         }
@@ -1503,7 +1505,7 @@ int setupVolumeMapMounts(
             fprintf(stderr, "FAILED \"from\" location is not directory: %s\n", from_buffer);
             goto _handleVolMountError;
         }
-        if (stat(to_buffer, &statData) != 0) {
+        if (lstat(to_buffer, &statData) != 0) {
             if (createTo) {
                 int okToMkdir = 0;
 
@@ -1514,7 +1516,7 @@ int setupVolumeMapMounts(
 
                     /* if parent path is on the same device as is authorized by createTo
                        then ok the mkdir operation */
-                    if (stat(to_buffer, &statData) == 0) {
+                    if (lstat(to_buffer, &statData) == 0) {
                         if (statData.st_dev == createTo) {
                             okToMkdir = 1;
                         }
@@ -1526,7 +1528,7 @@ int setupVolumeMapMounts(
 
                 if (okToMkdir) {
                     mkdir(to_buffer, 0755);
-                    if (stat(to_buffer, &statData) != 0) {
+                    if (lstat(to_buffer, &statData) != 0) {
                         fprintf(stderr, "FAILED to find volume \"to\": %s\n",
                                 to_buffer);
                         goto _handleVolMountError;
@@ -1548,16 +1550,41 @@ int setupVolumeMapMounts(
         }
 
         to_real = realpath(to_buffer, NULL);
+        from_real = realpath(from_buffer, NULL);
         if (to_real == NULL) {
             fprintf(stderr, "Failed to get realpath for %s\n", to_buffer);
             goto _handleVolMountError;
+        } else if (from_real == NULL) {
+            fprintf(stderr, "Failed to get realpath for %s\n", from_buffer);
+            goto _handleVolMountError;
         } else {
             size_t to_len = strlen(to_real);
+            const char *container_to_real = NULL;
+            const char *container_from_real = NULL;
+            int ret = 0;
 
             /* validate that path starts with udiMountPoint */
             if (to_len <= udiMountLen ||
                 strncmp(to_real, udiConfig->udiMountPoint, udiMountLen) != 0) {
                 fprintf(stderr, "Invalid destination %s, not allowed, fail.\n", to_real);
+                goto _handleVolMountError;
+            }
+
+            /* validate that the path is allowed */
+            /* to_real is known to be at longer than udiMountLen from previous
+             * check */
+            container_to_real = to_real + udiMountLen;
+
+            /* TODO add some parsing to strip away udiMountPoint from
+             * container_from_real if appropriate.  At present time no
+             * validation methods restrict from locations, so we can safely
+             * ignore this for the time-being */
+            container_from_real = from_real;
+
+            if ((ret = _validate_fp(container_from_real, container_to_real, flags)) != 0) {
+                fprintf(stderr, "Invalid mount request, permission denied! "
+                        "Cannot mount from %s to %s. Err Code %d\n",
+                        container_from_real, container_to_real, ret);
                 goto _handleVolMountError;
             }
         }
@@ -1610,6 +1637,8 @@ int setupVolumeMapMounts(
         }
         free(to_real);
         to_real = NULL;
+        free(from_real);
+        from_real = NULL;
 
         continue;
 _handleVolMountError:
@@ -1962,6 +1991,67 @@ _setupImageSsh_unclean:
     return 1;
 }
 
+int shifter_getgrouplist(const char *user, gid_t group, gid_t **groups, int *ngroups) {
+    int ret = 0;
+    int idx = 0;
+
+    if (user == NULL || group == 0 || groups == NULL || ngroups == NULL) {
+        return -1;
+    }
+    if (strcmp(user, "root") == 0) {
+        fprintf(stderr, "FAILED: refuse to lookup groups for root\n");
+        return -1;
+    }
+
+    if (*groups == NULL) {
+        *groups = (gid_t *) malloc(sizeof(gid_t) * 128);
+        if (*groups == NULL) {
+            fprintf(stderr, "FAILED to allocate memory for grouplist\n");
+            return -1;
+        }
+        *ngroups = 128;
+    }
+
+    ret = getgrouplist(user, group, *groups, ngroups);
+    if (ret < 0) {
+        if (*ngroups > 512) {
+            fprintf(stderr, "FAILED to get groups, seriously 512 groups is enough!\n");
+            return -1;
+        }
+        *groups = (gid_t *) realloc(*groups, sizeof(gid_t) * (*ngroups));
+        if (*groups == NULL) {
+            fprintf(stderr, "FAILED to reallocate memory for group list\n");
+            return -1;
+        }
+        ret = getgrouplist(user, group, *groups, ngroups);
+        if (ret < 0) {
+            fprintf(stderr, "FAILED to get groups correctly\n");
+            return -1;
+        }
+    }
+
+    /* set default group list if none are found */
+    if (*ngroups <= 0) {
+        if (*groups == NULL) {
+            *groups = (gid_t *) malloc(sizeof(gid_t));
+        }
+        if (*groups == NULL) {
+            fprintf(stderr, "FAILED to allocate memory for default group list\n");
+            return -1;
+        }
+        (*groups)[0] = group;
+        *ngroups = 1;
+    }
+
+    /* just make sure no zeros snuck in */
+    for (idx = 0; idx < *ngroups; idx++) {
+        if ((*groups)[idx] == 0) {
+            (*groups)[idx] = group;
+        }
+    }
+    return 0;
+}
+
 /**
   * startSshd
   * chroots into image and runs the secured sshd
@@ -1989,6 +2079,16 @@ int startSshd(const char *user, UdiRootConfig *udiConfig) {
         goto _startSshd_unclean;
     }
     if (pid == 0) {
+        /* get grouplist in the external environment */
+        gid_t *gidList = NULL;
+        int nGroups = 0;
+        if (udiConfig->optionalSshdAsRoot == 0) {
+            int ret = shifter_getgrouplist(user, udiConfig->target_gid, &gidList, &nGroups);
+            if (ret != 0) {
+                fprintf(stderr, "FAILED to correctly get grouplist for sshd\n");
+                exit(1);
+            }
+        }
 
         if (chdir(chrootPath) != 0) {
             fprintf(stderr, "FAILED to chdir to %s while attempting to start sshd\n", chrootPath);
@@ -1999,56 +2099,10 @@ int startSshd(const char *user, UdiRootConfig *udiConfig) {
             exit(1);
         }
         if (udiConfig->optionalSshdAsRoot == 0) {
-            gid_t *gidList = (gid_t *) malloc(sizeof(gid_t) * 128);
-            int nGroups = 128;
-            int ret = 0;
-            int idx = 0;
-
             if (gidList == NULL) {
-                fprintf(stderr, "FAILED to allocate memory for group list\n");
+                fprintf(stderr, "FAILED to get groupllist for sshd, exiting!\n");
                 exit(1);
             }
-
-            /* get grouplist for /etc/group in container */
-            ret = getgrouplist(user, udiConfig->target_gid, gidList, &nGroups);
-            if (ret < 0) {
-                if (nGroups > 512) {
-                    fprintf(stderr, "FAILED to get groups, seriously 512 groups is enough!\n");
-                    exit(1);
-                }
-                gidList = (gid_t *) realloc(gidList, sizeof(gid_t) * nGroups);
-                if (gidList == NULL) {
-                    fprintf(stderr, "FAILED to reallocate memory for group list\n");
-                    exit(1);
-                }
-                ret = getgrouplist(user, udiConfig->target_gid, gidList, &nGroups);
-                if (ret < 0) {
-                    fprintf(stderr, "FAILED to get groups correctly\n");
-                    exit(1);
-                }
-                
-            }
-
-            /* set default group list if none are found */
-            if (nGroups <= 0) {
-                if (gidList == NULL) {
-                    gidList = (gid_t *) malloc(sizeof(gid_t));
-                }
-                if (gidList == NULL) {
-                    fprintf(stderr, "FAILED to allocate memory for default group list\n");
-                    exit(1);
-                }
-                gidList[0] = udiConfig->target_gid;
-                nGroups = 1;
-            }
-
-            /* just make sure no zeros snuck in */
-            for (idx = 0; idx < nGroups; idx++) {
-                if (gidList[idx] == 0) {
-                    gidList[idx] = udiConfig->target_gid;
-                }
-            }
-
             if (shifter_set_capability_boundingset_null() != 0) {
                 fprintf(stderr, "FAILED to restrict future capabilities\n");
                 exit(1);
