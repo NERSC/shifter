@@ -245,7 +245,6 @@ int shifterSpank_process_option_volume(
 {
     if (optarg != NULL && strlen(optarg) > 0) {
         /* validate input */
-        char *tmpvol = NULL;
         VolumeMap *vmap = (VolumeMap *) malloc(sizeof(VolumeMap));
         memset(vmap, 0, sizeof(VolumeMap));
 
@@ -442,7 +441,6 @@ int doExternStepTaskSetup(shifterSpank_config *ssconfig) {
     }
 
     int stepd_fd = 0;
-    int i = 0;
     char *dir = NULL;
     char *hostname = NULL;
     uint32_t jobid = 0;
@@ -466,7 +464,6 @@ int doExternStepTaskSetup(shifterSpank_config *ssconfig) {
         }
         if (memory_cgroup_path) {
             char buffer[PATH_MAX];
-            ssize_t bytes = 0;
             char *tasks = alloc_strgenf("%s/tasks", memory_cgroup_path);
             FILE *fp = fopen(tasks, "r");
             stepd_fd = wrap_spank_stepd_connect(ssconfig, dir, hostname, jobid, SLURM_EXTERN_CONT, &protocol);
@@ -474,7 +471,7 @@ int doExternStepTaskSetup(shifterSpank_config *ssconfig) {
                 pid_t pid = atoi(buffer);
                 if (pid == 0) continue;
                 _log(LOG_INFO, "shifterSpank: moving pid %d to extern step via fd %d\n", pid, stepd_fd);
-                int ret = wrap_spank_stepd_add_extern_pid(ssconfig, stepd_fd, protocol, pid);
+                wrap_spank_stepd_add_extern_pid(ssconfig, stepd_fd, protocol, pid);
             }
             free(tasks);
             fclose(fp);
@@ -750,7 +747,7 @@ char *setup_memory_cgroup(
     for (cptr = components; cptr && *cptr; cptr++) {
         cgroup_path = alloc_strcatf(cgroup_path, &cgroup_path_sz, &cgroup_path_cap, "/%s", *cptr);
         if (action != NULL) {
-            int local = action(ssconfig, cgroup_path, data);
+            action(ssconfig, cgroup_path, data);
         }
         free(*cptr);
     }
@@ -762,7 +759,6 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
 
     char *ptr = NULL;
     int idx = 0;
-    int i,j;
     uint32_t job;
     uid_t uid = 0;
     gid_t gid = 0;
@@ -774,7 +770,6 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     char **setupRootArgs_sv = NULL;
     size_t n_setupRootArgs = 0;
     char **volArgs = NULL;
-    char **volArgs_sv = NULL;
     size_t n_volArgs = 0;
     char *nodelist = NULL;
     char *username = NULL;
@@ -783,7 +778,6 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     char *sshPubKey = NULL;
     size_t tasksPerNode = 0;
     pid_t pid = 0;
-    int rcstatus = 0;
 
 #define PROLOG_ERROR(message, errCode) \
     _log(LOG_ERROR, "%s", message); \
@@ -1002,15 +996,18 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
 
     int status = forkAndExecvLogToSlurm("setupRoot", setupRootArgs);
 
-    _log(LOG_ERROR, "after setupRoot");
+    _log(LOG_ERROR, "after setupRoot, exit code: %d", status);
 
-    snprintf(buffer, PATH_MAX, "%s/var/shifterSlurm.jobid", ssconfig->udiConfig->udiMountPoint);
-    FILE *fp = fopen(buffer, "w");
-    if (fp == NULL) {
-        _log(LOG_ERROR, "shifter_prolog: failed to open file %s\n", buffer);
-    } else {
-        fprintf(fp, "%d", job);
-        fclose(fp);
+
+    if (status == 0) {
+        snprintf(buffer, PATH_MAX, "%s/var/shifterSlurm.jobid", ssconfig->udiConfig->udiMountPoint);
+        FILE *fp = fopen(buffer, "w");
+        if (fp == NULL) {
+            _log(LOG_ERROR, "shifter_prolog: failed to open file %s\n", buffer);
+        } else {
+            fprintf(fp, "%d", job);
+            fclose(fp);
+        }
     }
 
     pid = findSshd();
@@ -1040,13 +1037,8 @@ int shifterSpank_job_epilog(shifterSpank_config *ssconfig) {
     int rc = SUCCESS;
     char path[PATH_MAX];
     char *epilogueArgs[2];
-    int i, j;
-    pid_t pid = 0;
-    char *lineBuffer = NULL;
-    size_t lineBuffer_sz = 0;
     uid_t uid = 0;
-    int job = 0;
-    int retry = 0;
+    uint32_t job = 0;
 
 #define EPILOG_ERROR(message, errCode) \
     _log(LOG_ERROR, "%s", message); \
@@ -1072,7 +1064,6 @@ int shifterSpank_job_epilog(shifterSpank_config *ssconfig) {
     }
     if (memory_cgroup_path != NULL) {
         char **ptr = NULL;
-        size_t extent = 0;
         char *line = NULL;
         size_t line_sz = 0;
         ssize_t bytes = 0;
@@ -1113,7 +1104,6 @@ _epilog_exit_unclean:
 
 int shifterSpank_task_init_privileged(shifterSpank_config *ssconfig) {
     int rc = SUCCESS;
-    int i = 0, j = 0;
     ImageData imageData;
 
     uid_t job_uid = 0;

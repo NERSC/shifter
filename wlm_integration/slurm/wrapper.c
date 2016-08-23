@@ -22,6 +22,7 @@ See LICENSE for full text.
 #include <slurm/spank.h>
 #include <slurm/slurm.h>
 #include "shifterSpank.h"
+#include "wrapper.h"
 
 SPANK_PLUGIN(shifter, 1)
 
@@ -91,7 +92,7 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
     
 
     shifterSpank_validate_input(ssconfig,
-        context == S_CTX_ALLOCATOR | context == S_CTX_LOCAL
+        context == S_CTX_ALLOCATOR || context == S_CTX_LOCAL
     );
 
     if (context == S_CTX_ALLOCATOR || context == S_CTX_LOCAL) {
@@ -339,7 +340,6 @@ int wrap_spank_extra_job_attributes(
     job_info_msg_t *job_buf = NULL;
     hostlist_t hl;
     char *error = NULL;
-    char *raw_host_string = NULL;
     int (*load_job)(job_info_msg_t **, uint32_t, uint16_t);
     void (*free_job_info_msg)(job_info_msg_t *);
     hostlist_t (*hostlist_create_dims)(const char *hostlist, int dims);

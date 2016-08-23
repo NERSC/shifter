@@ -5,7 +5,7 @@ CPPUTEST_CFLAGS = -I$(top_builddir)/dep/cpputest/include
 CPPUTEST_LDFLAGS = $(top_builddir)/dep/cpputest/lib*/libCppUTest.a
 TEST_CFLAGS = -fprofile-arcs -ftest-coverage -O0 -ggdb \
     -I$(top_srcdir)/wlm_integration/slurm -I$(top_srcdir)/src \
-    $(AM_CPPFLAGS) $(CPPUTEST_CFLAGS) -DNO_ROOT_OWN_CHECK=1 \
+    $(AM_CPPFLAGS) $(SLURM_CPPFLAGS) $(CPPUTEST_CFLAGS) -DNO_ROOT_OWN_CHECK=1 \
     -DROOTFS_TYPE="\"$(ROOTFS_TYPE)\""
 TEST_LDFLAGS = $(CPPUTEST_LDFLAGS)
 
