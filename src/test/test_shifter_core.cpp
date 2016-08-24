@@ -417,10 +417,13 @@ IGNORE_TEST(ShifterCoreTestGroup, setupPerNodeCacheBackingStore_tests) {
 TEST(ShifterCoreTestGroup, CheckSupportedFilesystems) {
     char **fsTypes = getSupportedFilesystems();
     char **ptr = NULL;
+    int haveCommonFsType = 0;
     CHECK(fsTypes != NULL);
 
+    haveCommonFsType = supportsFilesystem(fsTypes, "ext4") == 0;
+    haveCommonFsType |= supportsFilesystem(fsTypes, "xfs") == 0;
     CHECK(supportsFilesystem(fsTypes, "proc") == 0);
-    CHECK(supportsFilesystem(fsTypes, "ext4") == 0);
+    CHECK(haveCommonFsType == 1);
     CHECK(supportsFilesystem(fsTypes, "blergityboo") != 0);
 }
 
