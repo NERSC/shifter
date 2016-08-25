@@ -3070,9 +3070,13 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
     return 0;
 }
 
-int _shifter_get_max_capability(unsigned long &_maxCap) {
+int _shifter_get_max_capability(unsigned long *_maxCap) {
     unsigned long maxCap = CAP_LAST_CAP;
     unsigned long idxCap = 0;
+
+    if (_maxCap == NULL) {
+        return 1;
+    }
 
     /* starting in Linux 3.2 this file will proclaim the "last" capability
      * read it to see if the current kernel has more capabilities than shifter
@@ -3091,7 +3095,7 @@ int _shifter_get_max_capability(unsigned long &_maxCap) {
             }
         }
         fclose(fp);
-        _maxCap = maxCap;
+        *_maxCap = maxCap;
         return 0;
     }
 
@@ -3100,7 +3104,7 @@ int _shifter_get_max_capability(unsigned long &_maxCap) {
         int ret = prctl(PR_CAPBSET_READ, idxCap, 0, 0, 0);
         if (ret < 0) {
             if (errno == EINVAL) {
-                _maxCap = idxCap;
+                *_maxCap = idxCap;
                 return 0;
             }
             return 1;
