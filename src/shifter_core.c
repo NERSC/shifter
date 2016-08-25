@@ -912,6 +912,11 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
         perror("   --- REASON: ");
         goto _mountImgVfs_unclean;
     }
+    if (makeUdiMountPrivate(udiConfig) != 0) {
+        fprintf(stderr, "FAILED to mark the udi as a private mount\n");
+        goto _mountImgVfs_unclean;
+    }
+
     if (chmod(udiRoot, 0755) != 0) {
         fprintf(stderr, "FAILED to chmod \"%s\" to 0755.\n", udiRoot);
         goto _mountImgVfs_unclean;
@@ -2262,7 +2267,7 @@ int _shifterCore_bindMount(UdiRootConfig *udiConfig, MountList *mountCache,
     if (strcmp(from, "/dev") == 0 || (flags & VOLMAP_FLAG_RECURSIVE)) {
         mountFlags |= MS_REC;
         remountFlags |= MS_REC;
-        privateRemountFlags |= MS_REC;
+        privateRemountFlags = MS_PRIVATE|MS_REC;
     }
 
     /* perform the initial bind-mount */
@@ -2770,6 +2775,7 @@ int destructUDI(UdiRootConfig *udiConfig, int killSsh) {
     if (parse_MountList(&mounts) != 0) {
         /*error*/
     }
+
     snprintf(udiRoot, PATH_MAX, "%s", udiConfig->udiMountPoint);
     udiRoot[PATH_MAX-1] = 0;
     snprintf(loopMount, PATH_MAX, "%s", udiConfig->loopMountPoint);

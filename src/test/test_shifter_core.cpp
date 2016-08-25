@@ -79,6 +79,7 @@ int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const cha
     (*config)->allowLocalChroot = 1;
     (*config)->target_uid = 1000;
     (*config)->target_gid = 1000;
+    (*config)->mountPropagationStyle = VOLMAP_FLAG_PRIVATE;
     return 0;
 }
 
