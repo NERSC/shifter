@@ -879,9 +879,9 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
     char udiRoot[PATH_MAX];
     char *sshPath = NULL;
     char *path = NULL;
-    char *tmpPath = NULL;
     dev_t destRootDev = 0;
     dev_t srcRootDev = 0;
+    dev_t tmpDev = 0;
 
     umask(022);
 
@@ -948,16 +948,23 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
     }
     srcRootDev = statData.st_dev;
 
-    /* authorize destRootDev and srcRootDev as the only allowed volume mount
-     * targets */
-    udiConfig->bindMountAllowedDevices = malloc(2 * sizeof(dev_t));
+    if (lstat("/tmp", &statData) != 0) {
+        fprintf(stderr, "FAILED to stat /tmp\n");
+        goto _mountImgVfs_unclean;
+    }
+    tmpDev = statData.st_dev;
+
+    /* authorize destRootDev, srcRootDev, and tmpDev  as the only allowed
+     * volume mount targets */
+    udiConfig->bindMountAllowedDevices = malloc(3 * sizeof(dev_t));
     if (udiConfig->bindMountAllowedDevices == NULL) {
         fprintf(stderr, "FAILED to allocate memory\n");
         goto _mountImgVfs_unclean;
     }
     udiConfig->bindMountAllowedDevices[0] = destRootDev;
     udiConfig->bindMountAllowedDevices[1] = srcRootDev;
-    udiConfig->bindMountAllowedDevices_sz = 2;
+    udiConfig->bindMountAllowedDevices[2] = tmpDev;
+    udiConfig->bindMountAllowedDevices_sz = 3;
 
 
     /* get our needs injected first */
@@ -994,9 +1001,6 @@ _mountImgVfs_unclean:
     }
     if (sshPath != NULL) {
         free(sshPath);
-    }
-    if (tmpPath != NULL) {
-        free(tmpPath);
     }
     return 1;
 }
