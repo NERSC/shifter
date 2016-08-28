@@ -491,7 +491,7 @@ int prepareSiteModifications(const char *username,
     }
 
     /* do site-defined mount activities */
-    if (setupVolumeMapMounts(&mountCache, udiConfig->siteFs, "", udiRoot, udiMountDev, validateVolumeMap_siteRequest, udiConfig) != 0) {
+    if (setupVolumeMapMounts(&mountCache, udiConfig->siteFs, 0, udiMountDev, udiConfig) != 0) {
         fprintf(stderr, "FAILED to mount siteFs volumes\n");
         goto _prepSiteMod_unclean;
     }
@@ -638,6 +638,9 @@ int prepareSiteModifications(const char *username,
                 "aliases: files\n");
         fclose(fp);
         fp = NULL;
+    } else {
+        fprintf(stderr, "Unable to setup etc.\n");
+        goto _prepSiteMod_unclean;
     }
 
     /* no valid reason for a user to provide their own /etc/shadow */
@@ -877,6 +880,8 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
     char *sshPath = NULL;
     char *path = NULL;
     char *tmpPath = NULL;
+    dev_t destRootDev = 0;
+    dev_t srcRootDev = 0;
 
     umask(022);
 
@@ -896,7 +901,7 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
 
     snprintf(udiRoot, PATH_MAX, "%s", udiConfig->udiMountPoint);
 
-    if (stat(udiRoot, &statData) != 0) {
+    if (lstat(udiRoot, &statData) != 0) {
         _MKDIR(udiRoot, 0755);
     }
 
@@ -922,10 +927,38 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
         goto _mountImgVfs_unclean;
     }
 
-    if (stat(udiRoot, &statData) != 0) {
+    /* get destination device */
+    if (lstat(udiRoot, &statData) != 0) {
         fprintf(stderr, "FAILED to stat %s\n", udiRoot);
         goto _mountImgVfs_unclean;
     }
+    destRootDev = statData.st_dev;
+
+    /* work out source device */
+    if (imageData->useLoopMount) {
+        if (lstat(udiConfig->loopMountPoint, &statData) != 0) {
+            fprintf(stderr, "FAILED to stat loop mount point.\n");
+            goto _mountImgVfs_unclean;
+        }
+    } else {
+        if (lstat(imageData->filename, &statData) != 0) {
+            fprintf(stderr, "FAILED to stat udi source.\n");
+            goto _mountImgVfs_unclean;
+        }
+    }
+    srcRootDev = statData.st_dev;
+
+    /* authorize destRootDev and srcRootDev as the only allowed volume mount
+     * targets */
+    udiConfig->bindMountAllowedDevices = malloc(2 * sizeof(dev_t));
+    if (udiConfig->bindMountAllowedDevices == NULL) {
+        fprintf(stderr, "FAILED to allocate memory\n");
+        goto _mountImgVfs_unclean;
+    }
+    udiConfig->bindMountAllowedDevices[0] = destRootDev;
+    udiConfig->bindMountAllowedDevices[1] = srcRootDev;
+    udiConfig->bindMountAllowedDevices_sz = 2;
+
 
     /* get our needs injected first */
     if (prepareSiteModifications(username, minNodeSpec, udiConfig) != 0) {
@@ -946,51 +979,9 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
         sshPath = NULL;
     }
 
-    if (imageData->volume != NULL) {
-        char **ptr = imageData->volume;
-        for (ptr = imageData->volume; ptr && *ptr; ptr++) {
-            if (strlen(*ptr) == 0) continue;
-
-            path = strdup(*ptr);
-            char *pathPtr = path;
-            char *pathEnd = NULL;
-            int stop = 0;
-
-            /* skip leading slashes */
-            while (*pathPtr == '/') {
-                pathPtr++;
-            }
-            if (*pathPtr == 0) {
-                continue;
-            }
-
-            /* create subcomponents along the path, if any exist along the way, STOP */
-            pathEnd = pathPtr;
-            while (stop == 0 && (pathEnd = strchr(pathEnd + 1, '/')) != NULL) {
-                *pathEnd = 0;
-                tmpPath = alloc_strgenf("%s/%s", udiRoot, pathPtr);
-                if (stat(tmpPath, &statData) == 0) {
-                    stop = 1;
-                } else {
-                    _MKDIR(tmpPath, 0755);
-                }
-                *pathEnd = '/';
-                free(tmpPath);
-                tmpPath = NULL;
-            }
-            if (stop == 0) {
-                tmpPath = alloc_strgenf("%s/%s", udiRoot, pathPtr);
-                _MKDIR(tmpPath, 0755);
-                free(tmpPath);
-                tmpPath = NULL;
-            }
-            free(path);
-            path = NULL;
-        }
-    }
-
     /* copy image /etc into place */
     BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
+
 
 #undef BIND_IMAGE_INTO_UDI
 #undef _MKDIR
@@ -1296,7 +1287,7 @@ int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig) {
         return 1;
     }
 
-    ret = setupVolumeMapMounts(&mountCache, map, udiRoot, udiRoot, udiMountDev, validateVolumeMap_userRequest, udiConfig);
+    ret = setupVolumeMapMounts(&mountCache, map, 1, udiMountDev, udiConfig);
     free_MountList(&mountCache, 0);
     return ret;
 }
@@ -1416,10 +1407,8 @@ int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *b
 int setupVolumeMapMounts(
         MountList *mountCache,
         VolumeMap *map,
-        const char *fromPrefix,
-        const char *toPrefix,
-        dev_t createTo,
-        int (*_validate_fp)(const char *, const char *, VolumeMapFlag *),
+        int userRequested,
+        dev_t createToDev,
         UdiRootConfig *udiConfig
 ) {
     char *filtered_from = NULL;
@@ -1427,6 +1416,7 @@ int setupVolumeMapMounts(
     char *to_real = NULL;
     char *from_real = NULL;
     VolumeMapFlag *flags = NULL;
+    int (*_validate_fp)(const char *, const char *, VolumeMapFlag *);
 
     size_t mapIdx = 0;
     size_t udiMountLen = 0;
@@ -1441,6 +1431,12 @@ int setupVolumeMapMounts(
 
     if (map == NULL || map->n == 0) {
         return 0;
+    }
+
+    if (userRequested == 0) {
+        _validate_fp = validateVolumeMap_siteRequest;
+    } else {
+        _validate_fp = validateVolumeMap_userRequest;
     }
 
     udiMountLen = strlen(udiConfig->udiMountPoint);
@@ -1459,12 +1455,12 @@ int setupVolumeMapMounts(
             goto _handleVolMountError;
         }
         snprintf(from_buffer, PATH_MAX, "%s/%s",
-                (fromPrefix != NULL ? fromPrefix : ""),
+                (userRequested != 0 ? udiConfig->udiMountPoint : ""),
                 filtered_from
         );
         from_buffer[PATH_MAX-1] = 0;
         snprintf(to_buffer, PATH_MAX, "%s/%s",
-                (toPrefix != NULL ? toPrefix : ""),
+                udiConfig->udiMountPoint,
                 filtered_to
         );
         to_buffer[PATH_MAX-1] = 0;
@@ -1511,7 +1507,7 @@ int setupVolumeMapMounts(
             goto _handleVolMountError;
         }
         if (lstat(to_buffer, &statData) != 0) {
-            if (createTo) {
+            if (createToDev) {
                 int okToMkdir = 0;
 
                 char *ptr = strrchr(to_buffer, '/');
@@ -1519,10 +1515,10 @@ int setupVolumeMapMounts(
                     /* get parent path of intended dir */
                     *ptr = '\0';
 
-                    /* if parent path is on the same device as is authorized by createTo
+                    /* if parent path is on the same device as is authorized by createToDev
                        then ok the mkdir operation */
                     if (lstat(to_buffer, &statData) == 0) {
-                        if (statData.st_dev == createTo) {
+                        if (statData.st_dev == createToDev) {
                             okToMkdir = 1;
                         }
                     }
@@ -1564,32 +1560,77 @@ int setupVolumeMapMounts(
             goto _handleVolMountError;
         } else {
             size_t to_len = strlen(to_real);
+            size_t from_len = strlen(from_real);
+            size_t idx = 0;
+            int volMountDevOk = 0;
             const char *container_to_real = NULL;
             const char *container_from_real = NULL;
             int ret = 0;
+            struct stat toStat;
 
             /* validate that path starts with udiMountPoint */
             if (to_len <= udiMountLen ||
                 strncmp(to_real, udiConfig->udiMountPoint, udiMountLen) != 0) {
+
                 fprintf(stderr, "Invalid destination %s, not allowed, fail.\n", to_real);
                 goto _handleVolMountError;
             }
 
+            /* validate source mount point */
+            if (userRequested != 0 && (
+                from_len <= udiMountLen ||
+                strncmp(from_real, udiConfig->udiMountPoint, udiMountLen) != 0)) {
+
+                fprintf(stderr, "Invalid source %s, not allowed, fail.\n", from_real);
+                goto _handleVolMountError;
+            }
+
+
             /* validate that the path is allowed */
-            /* to_real is known to be at longer than udiMountLen from previous
-             * check */
+            /* to_real is known to be longer than udiMountLen from previous
+             * check (i.e., don't remove the check!) */
             container_to_real = to_real + udiMountLen;
 
-            /* TODO add some parsing to strip away udiMountPoint from
-             * container_from_real if appropriate.  At present time no
-             * validation methods restrict from locations, so we can safely
-             * ignore this for the time-being */
             container_from_real = from_real;
+            if (userRequested != 0) {
+                /* from_real is known to be longer than udiMountLen from 
+                 * previous check (i.e., don't remove the check!) */ 
+                container_from_real = from_real + udiMountLen;
+            }
 
             if ((ret = _validate_fp(container_from_real, container_to_real, flags)) != 0) {
                 fprintf(stderr, "Invalid mount request, permission denied! "
                         "Cannot mount from %s to %s. Err Code %d\n",
                         container_from_real, container_to_real, ret);
+                goto _handleVolMountError;
+            }
+
+            /* the destination mount must be either in the shifter root
+             * filesystem, or on the orignal device providing the container
+             * image.  Should not allow volume mounts onto other imported 
+             * content */
+            memset(&toStat, 0, sizeof(struct stat));
+            if (lstat(to_real, &toStat) != 0) {
+                fprintf(stderr, "Failed to stat destination mount point: %s\n",
+                        strerror(errno));
+                goto _handleVolMountError;
+            }
+            if (udiConfig->bindMountAllowedDevices == NULL) {
+                fprintf(stderr, "No devices are authorized to accept "
+                        "volume mounts.\n");
+                goto _handleVolMountError;
+            }
+
+            volMountDevOk = 0;
+            for (idx = 0; idx < udiConfig->bindMountAllowedDevices_sz; idx++) {
+                if (toStat.st_dev == udiConfig->bindMountAllowedDevices[idx]) {
+                    volMountDevOk = 1;
+                    break;
+                }
+            }
+            if (volMountDevOk == 0){
+                fprintf(stderr, "Mount request path %s not on an approved "
+                        "device for volume mounts.\n", to_real);
                 goto _handleVolMountError;
             }
         }
