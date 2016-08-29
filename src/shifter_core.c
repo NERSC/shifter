@@ -1098,10 +1098,17 @@ char **getSupportedFilesystems() {
     char **writePtr = NULL;
     size_t listExtent = 10;
     size_t listLen = 0;
-    FILE *fp = fopen("/proc/filesystems", "r");
+    FILE *fp = NULL;
     
-    if (ret == NULL || fp == NULL) { // || buffer == NULL) {
+    if (ret == NULL) { // || buffer == NULL) {
         /* ran out of memory */
+        return NULL;
+    }
+
+    fp = fopen("/proc/filesystems", "r");
+    if (fp == NULL) {
+        free(ret);
+        ret = NULL;
         return NULL;
     }
 
@@ -1130,10 +1137,8 @@ char **getSupportedFilesystems() {
     }
     qsort(ret, listLen, sizeof(char **), _sortFsTypeForward);
 
-    if (fp != NULL) {
-        fclose(fp);
-        fp = NULL;
-    }
+    fclose(fp);
+    fp = NULL;
     return ret;
 error:
     if (fp != NULL) {
@@ -1455,7 +1460,7 @@ int setupVolumeMapMounts(
 
         if (filtered_from == NULL || filtered_to == NULL) {
             fprintf(stderr, "INVALID mount from %s to %s\n",
-                    filtered_from, filtered_to);
+                    map->from[mapIdx], map->to[mapIdx]);
             goto _handleVolMountError;
         }
         snprintf(from_buffer, PATH_MAX, "%s/%s",
@@ -2264,7 +2269,14 @@ int _shifterCore_bindMount(UdiRootConfig *udiConfig, MountList *mountCache,
     char *to_real = NULL;
     unsigned long mountFlags = MS_BIND;
     unsigned long remountFlags = MS_REMOUNT|MS_BIND|MS_NOSUID;
-    unsigned long privateRemountFlags =
+    unsigned long privateRemountFlags = 0;
+
+    if (udiConfig == NULL) {
+        fprintf(stderr, "FAILED to provide udiConfig!\n");
+        return 1;
+    }
+
+    privateRemountFlags = 
         udiConfig->mountPropagationStyle == VOLMAP_FLAG_SLAVE ?
         MS_SLAVE : MS_PRIVATE;
 
@@ -2274,7 +2286,7 @@ int _shifterCore_bindMount(UdiRootConfig *udiConfig, MountList *mountCache,
         privateRemountFlags = MS_PRIVATE;
     }
 
-    if (from == NULL || to == NULL || mountCache == NULL || udiConfig == NULL) {
+    if (from == NULL || to == NULL || mountCache == NULL) {
         fprintf(stderr, "INVALID input to bind-mount. Fail\n");
         return 1;
     }
@@ -3034,6 +3046,8 @@ static int _shifter_putenv(char ***env, char *var, int mode) {
     char **tmp = realloc(*env, sizeof(char *) * (envsize + 2));
     if (tmp != NULL) {
         *env = tmp;
+    } else {
+        return 1;
     }
     tmp[envsize] = strdup(var);
     tmp[envsize+1] = NULL;
@@ -3101,10 +3115,13 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
     return 0;
 }
 
-int shifter_set_capability_boundingset_null() {
+int _shifter_get_max_capability(unsigned long *_maxCap) {
     unsigned long maxCap = CAP_LAST_CAP;
-    unsigned long idx = 0;
-    int ret = 0;
+    unsigned long idxCap = 0;
+
+    if (_maxCap == NULL) {
+        return 1;
+    }
 
     /* starting in Linux 3.2 this file will proclaim the "last" capability
      * read it to see if the current kernel has more capabilities than shifter
@@ -3123,6 +3140,44 @@ int shifter_set_capability_boundingset_null() {
             }
         }
         fclose(fp);
+        *_maxCap = maxCap;
+        return 0;
+    }
+
+    /* if we couldn't read it from kernel, try to find maximum processively */
+    for (idxCap = 0; idxCap < 100; idxCap++) {
+        int ret = prctl(PR_CAPBSET_READ, idxCap, 0, 0, 0);
+        if (ret < 0) {
+            if (errno == EINVAL) {
+                *_maxCap = idxCap;
+                return 0;
+            }
+            return 1;
+        }
+    }
+
+    return 1;
+}
+
+
+int shifter_set_capability_boundingset_null() {
+    unsigned long maxCap = CAP_LAST_CAP;
+    unsigned long idx = 0;
+    int ret = 0;
+    unsigned long possibleMaxCap = 0;
+
+    if (_shifter_get_max_capability(&possibleMaxCap) != 0) {
+        fprintf(stderr, "FAILED to determine capability max val\n");
+        return 1;
+    }
+
+    if (possibleMaxCap > maxCap) {
+        maxCap = possibleMaxCap;
+    }
+
+    if (maxCap >= 100) {
+        fprintf(stderr, "FAILED: max cap seems too high (%lu)\n", maxCap);
+        return 1;
     }
 
     /* calling PR_CAPBSET_DROP for all possible capabilities is intended to
