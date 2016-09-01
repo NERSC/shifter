@@ -15,7 +15,7 @@ MAINTAINER Shane Canon <scanon@lbl.gov>
 # Install requirements to build shifter, run munge, and openssh
 RUN apt-get update && \
        apt-get install -y gcc autoconf make libtool g++ munge libmunge-dev  \
-       libcurl4-openssl-dev libjson-c-dev build-essential openssh-server  \
+       libcurl4-openssl-dev libjson-c-dev build-essential openssh-server libcap-dev \
     curl && \
     mkdir /var/run/sshd && \
     echo 'root:lookatmenow' | chpasswd && \
@@ -30,6 +30,7 @@ ADD . /src/
 RUN \
        cd /src/ && \
        cp /bin/mount /src/dep/mount && \
+       touch configure.ac && \
        sh ./autogen.sh && \
        tar cf /src/dep/udiRoot_dep.tar /bin/mount && \
        ./configure --prefix=/opt/shifter/udiRoot/1.0 --sysconfdir=/etc/shifter  \

@@ -29,7 +29,7 @@ from flask import Flask, Blueprint, request, Response, url_for, jsonify
 
 app = Flask(__name__)
 config = {}
-DEBUG_FLAG = True
+DEBUG_FLAG = False
 LISTEN_PORT = 5000
 AUTH_HEADER = 'authentication'
 
@@ -47,14 +47,27 @@ def _get_log_handler():
     return handler
 
 app.logger.setLevel(logging.INFO)
-app.logger.addHandler(_get_log_handler())
+app.debug_log_format = '%(asctime)s [%(name)s] %(levelname)s : %(message)s'
 app.logger.debug('Initializing image manager')
 
 app.logger.info("initializing with %s" % (CONFIG_FILE))
 with open(CONFIG_FILE) as config_file:
     config = json.load(config_file)
-mgr = imagemngr.imagemngr(config, logname='imagegwapi')
-print mgr
+    if 'LogLevel' in config:
+	log_string=config['LogLevel'].lower()
+	if log_string == 'debug':
+	  app.logger.setLevel(logging.DEBUG)
+	elif log_string == 'info':
+	  app.logger.setLevel(logging.INFO)
+	elif log_string == 'warn':
+	  app.logger.setLevel(logging.WARN)
+	elif log_string == 'error':
+	  app.logger.setLevel(logging.ERROR)
+	elif log_string == 'critical':
+	  app.logger.setLevel(logging.CRITICAL)
+        else:
+	  app.logger.critical('Unrecongnized Log Level specified')
+mgr = imagemngr.imagemngr(config, logger=app.logger)
 __all__ = [app, mgr, config, AUTH_HEADER, DEBUG_FLAG, LISTEN_PORT]
 
 # For RESTful Service
@@ -167,7 +180,7 @@ def pull(system, imgtype, tag):
 @app.route('/api/autoexpire/<system>/', methods=["GET"])
 def autoexpire(system):
     auth = request.headers.get(AUTH_HEADER)
-    app.logger.debug("expire system=%s" % (system))
+    app.logger.debug("autoexpire system=%s" % (system))
     try:
         session = mgr.new_session(auth, system)
         resp = mgr.autoexpire(session, system)
