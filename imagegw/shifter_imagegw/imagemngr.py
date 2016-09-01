@@ -53,16 +53,19 @@ class imagemngr(object):
     and has public functions to lookup, pull and expire images.
     """
 
-    def __init__(self, config, logname='imagemngr'):
+    def __init__(self, config, logger=None, logname='imagemngr'):
         """
         Create an instance of the image manager.
         """
-        self.logger = logging.getLogger(logname)
-        log_handler = logging.StreamHandler()
-        logfmt = '%(asctime)s [%(name)s] %(levelname)s : %(message)s'
-        log_handler.setFormatter(logging.Formatter(logfmt))
-        log_handler.setLevel(logging.DEBUG)
-        self.logger.addHandler(log_handler)
+	if logger is None:
+             self.logger = logging.getLogger(logname)
+             log_handler = logging.StreamHandler()
+             logfmt = '%(asctime)s [%(name)s] %(levelname)s : %(message)s'
+             log_handler.setFormatter(logging.Formatter(logfmt))
+             log_handler.setLevel(logging.DEBUG)
+             self.logger.addHandler(log_handler)
+        else:
+             self.logger=logger
 
         self.logger.debug('Initializing image manager')
         self.config = config
@@ -103,13 +106,13 @@ class imagemngr(object):
         session is a session handle
         """
         if 'magic' not in session:
-            self.logger.warn("no magic")
+            self.logger.warn("request recieved with no magic")
             return False
         elif session['magic'] is not self.magic:
-            self.logger.warn("bad magic %s", session['magic'])
+            self.logger.warn("request received with bad magic %s", session['magic'])
             return False
         if system is not None and session['system'] != system:
-            self.logger.warn("bad system %s!=%s", session['system'], system)
+            self.logger.warn("request received with a bad system %s!=%s", session['system'], system)
             return False
         return True
 
@@ -404,7 +407,7 @@ class imagemngr(object):
         Transition a completed pull request to an available image.
         """
 
-        self.logger.info("Complete called for %s %s", ident, str(response))
+        self.logger.debug("Complete called for %s %s", ident, str(response))
         pullrec = self.images_find_one({'_id': ident})
         if pullrec is None:
             self.logger.warn('Missing pull request (r=%s)', str(response))
@@ -518,7 +521,7 @@ class imagemngr(object):
         for rec in self.images.find({'status': {'$ne': 'READY'}, 'system': system}):
             self.logger.debug(rec)
             if 'last_pull' not in rec:
-                self.logger.warning('image missing last_pull pulltag' + rec['pulltag'])
+                self.logger.warning('Image missing last_pull for pulltag:' + rec['pulltag'])
                 continue
             if rec['last_pull'] < pulltimeout:
                 removed.append(rec['_id'])
