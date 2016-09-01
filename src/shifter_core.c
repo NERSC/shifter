@@ -3148,8 +3148,10 @@ int _shifter_get_max_capability(unsigned long *_maxCap) {
     for (idxCap = 0; idxCap < 100; idxCap++) {
         int ret = prctl(PR_CAPBSET_READ, idxCap, 0, 0, 0);
         if (ret < 0) {
-            if (errno == EINVAL) {
-                *_maxCap = idxCap;
+            if (idxCap > 0 && errno == EINVAL) {
+                /* use idxCap - 1 because idxCap refers to an invalid
+                   capability */
+                *_maxCap = idxCap - 1;
                 return 0;
             }
             return 1;
