@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from shifter_imagegw import api
+from shifter_imagegw.api import api
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,

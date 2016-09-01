@@ -17,7 +17,7 @@ test/config/munge.key:
 	dd if=/dev/urandom bs=1 count=1024 > test/config/munge.key 
 
 testprep: test/config/redis.conf test/config/ssh.key test/config/munge.key
-
+	docker volume inspect imagegw || docker volume create --name imagegw
 
 startdeps:
 	docker run -d -p 27017:27017 mongo --smallfiles
