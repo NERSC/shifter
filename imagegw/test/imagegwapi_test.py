@@ -36,7 +36,7 @@ class GWTestCase(unittest.TestCase):
             self.config = json.load(config_file)
         os.environ['GWCONFIG']=self.configfile
 
-        from shifter_imagegw.api import api
+        from shifter_imagegw import api
         mongouri=self.config['MongoDBURI']
         print "Debug: Connecting to %s"%mongouri
         client = MongoClient(mongouri)
