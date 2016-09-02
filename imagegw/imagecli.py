@@ -42,7 +42,7 @@ def main():
     url = "http://%s/api"%(SERVER)
 
     if com == 'lookup' and len(sys.argv) >= 2:
-        (system, image) = sys.argv
+        (system, image) = sys.argv[0:2]
         header = {'authentication': munge.strip()}
         uri = "%s/lookup/%s/docker/%s/" % (url, system, image)
         r = requests.get(uri, headers=header)
@@ -64,7 +64,7 @@ def main():
                 (image, tag) = i.split(':')
                 print '%-25.25s  %-20.10s  %-12.12s   %-10.10s' % (image, tag, r['id'], r['itype'])
     elif com == 'pull' and len(sys.argv) >= 2:
-        (system, image) = sys.argv
+        (system, image) = sys.argv[0:2]
         header = {'authentication':munge.strip()}
         uri = "%s/pull/%s/docker/%s/" % (url, system, image)
         r = requests.post(uri, headers=header)

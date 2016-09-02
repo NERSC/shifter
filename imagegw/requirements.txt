@@ -1,6 +1,6 @@
 celery
 pymongo
 flask
-pysocks
 redis
 gunicorn
+pylint

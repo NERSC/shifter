@@ -42,7 +42,7 @@ def mongo_reconnect_reattempt(call):
                 self.logger.warn("Error: mongo reconnect attmempt")
                 sleep(2)
         self.logger.warn("Error: Failed to deal with mongo auto-reconnect!")
-        raise
+        raise OSError('Reconnect to mongo failed')
     return _mongo_reconnect_safe
 
 
@@ -65,7 +65,7 @@ class imagemngr(object):
              log_handler.setLevel(logging.DEBUG)
              self.logger.addHandler(log_handler)
         else:
-             self.logger=logger
+             self.logger = logger
 
         self.logger.debug('Initializing image manager')
         self.config = config
@@ -391,15 +391,8 @@ class imagemngr(object):
         """
         Helper function to remove a tag to an image.
         """
-        self.images_update({'system': system, 'tag': {'$in': [tag]}}, {'$pull': {'tag': tag}}, multi=True)
-        # for old tag format
-        for rec in self.images_find({'system': system, 'tag': tag}):
-            if isinstance(rec['tag'], str):
-                ## TODO missing ident, update will crash
-                self.images_update({'_id': ident}, {'$set': {'tag': []}})
-        #This didn't work
-        #self.images_update({ '$and':[ {'tag': { '$type' : 2}},{'tag':tag }]},{'$set':{'tag':[]}},multi=True)
-
+        self.images_update({'system': system, 'tag': {'$in': [tag]}}, 
+              {'$pull': {'tag': tag}}, multi=True)
         return True
 
     def complete_pull(self, ident, response):
@@ -633,7 +626,7 @@ def main():
         if len(sys.argv) < 3:
             usage()
         req = dict()
-        (req['system'], req['itype'], req['tag']) = sys.argv
+        (req['system'], req['itype'], req['tag']) = sys.argv[0:3]
         mgr.pull('good', req)
     else:
         print "Unknown command %s" % (command)

@@ -61,7 +61,7 @@ with open(CONFIG_FILE) as config_file:
         else:
 	  app.logger.critical('Unrecongnized Log Level specified')
 mgr = imagemngr.imagemngr(config, logger=app.logger)
-__all__ = [app, mgr, config, AUTH_HEADER, DEBUG_FLAG, LISTEN_PORT]
+#__all__ = [app, mgr, config, AUTH_HEADER, DEBUG_FLAG, LISTEN_PORT]
 
 # For RESTful Service
 @app.errorhandler(404)
