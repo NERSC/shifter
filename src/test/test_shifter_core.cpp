@@ -67,7 +67,7 @@ int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const cha
     memset(*image, 0, sizeof(ImageData));
 
     (*image)->type = strdup("local");
-    (*image)->identifier = strdup("/");
+    parse_ImageData((*image)->type, strdup("/"), *config, *image);
     (*config)->udiMountPoint = strdup(tmpDir);
     (*config)->rootfsType = strdup(ROOTFS_TYPE);
     (*config)->etcPath = alloc_strgenf("%s/%s", basePath, "etc");
@@ -79,6 +79,7 @@ int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const cha
     (*config)->allowLocalChroot = 1;
     (*config)->target_uid = 1000;
     (*config)->target_gid = 1000;
+    (*config)->mountPropagationStyle = VOLMAP_FLAG_PRIVATE;
     return 0;
 }
 
@@ -373,6 +374,8 @@ TEST(ShifterCoreTestGroup, setupPerNodeCacheFilename_tests) {
     ret = setupPerNodeCacheFilename(config, cache, buffer, PATH_MAX);
     CHECK(ret == -1);
 
+    free_ImageData(image, 1);
+    free_UdiRootConfig(config, 1);
     free_VolMapPerNodeCacheConfig(cache);
     cache = NULL;
 }
@@ -425,6 +428,11 @@ TEST(ShifterCoreTestGroup, CheckSupportedFilesystems) {
     CHECK(supportsFilesystem(fsTypes, "proc") == 0);
     CHECK(haveCommonFsType == 1);
     CHECK(supportsFilesystem(fsTypes, "blergityboo") != 0);
+
+    for (ptr = fsTypes; ptr && *ptr; ptr++) {
+        free(*ptr);
+    }
+    free(fsTypes);
 }
 
 #ifdef NOTROOT
@@ -631,6 +639,8 @@ TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
     memset(&mounts, 0, sizeof(MountList));
     CHECK(setupLocalRootVFSConfig(&config, &image, tmpDir, cwd) == 0);
     config->allowLocalChroot = 0;
+
+    fprint_ImageData(stderr, image);
 
     rc = mountImageVFS(image, "dmj", NULL, config);
     CHECK(rc == 1);
