@@ -233,6 +233,7 @@ int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
     flagName = strdup(sptr);
     sptr = ptr + 1;
     while (sptr < limit) {
+        char **tmp_kvArray = NULL;
         char *vptr = strchr(sptr, '=');
         ptr = strchr(sptr, ',');
         if (ptr == NULL) ptr = limit;
@@ -240,11 +241,12 @@ int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
         if (vptr != NULL) {
             *vptr++ = 0;
         }
-        kvArray = (char **) realloc(kvArray, sizeof(char *) * (kvCount + 2));
-        if (kvArray == NULL) {
+        tmp_kvArray = (char **) realloc(kvArray, sizeof(char *) * (kvCount + 2));
+        if (tmp_kvArray == NULL) {
             fprintf(stderr, "Unknown flag: couldn't parse flag name\n");
             goto __parseFlags_exit_unclean;
         }
+        kvArray = tmp_kvArray;
         kvArray[kvCount++] = sptr;
         kvArray[kvCount++] = vptr;
         sptr = ptr + 1;
