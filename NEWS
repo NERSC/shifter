@@ -43,6 +43,7 @@
 * By default run sshd as user, add udiRoot.conf option to run with privilege
 * Restrict capabilities that processes run within shifter can obtain (including
   via non-root sshd)
+* Fix bug in VolumeMap flag parsing
 
 
 16.04.0
