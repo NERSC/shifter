@@ -1507,13 +1507,126 @@ int setupVolumeMapMounts(
             }
         }
 
-        if (lstat(from_buffer, &statData) != 0) {
-            fprintf(stderr, "FAILED to find volume \"from\": %s\n", from_buffer);
+        /* if this is not a per-node cache (i.e., is a standand volume mount),
+         * then validate the user has permissions to view the content, by 
+         * performing realpath() and lstat() as the user */
+        if (!(flagsInEffect & VOLMAP_FLAG_PERNODECACHE)) {
+            uid_t orig_euid = geteuid();
+            gid_t orig_egid = getegid();
+            gid_t *orig_auxgids = NULL;
+            int norig_auxgids = 0;
+            int switch_user_stage = 0;
+
+            /* switch privileges if this is a user mount to ensure we only
+             * grant access to resources the user can reach at time of 
+             * invocation */
+            if (userRequested != 0) {
+                if (udiConfig->auxiliary_gids == NULL ||
+                        udiConfig->nauxiliary_gids <= 0 ||
+                        udiConfig->target_uid == 0 ||
+                        udiConfig->target_gid == 0)
+                {
+                    fprintf(stderr, "Insufficient information about target "
+                            "user to setup volume mount\n");
+                    goto _fail_check_fromvol;
+                }
+                norig_auxgids = getgroups(0, NULL);
+                if (norig_auxgids < 0) {
+                    fprintf(stderr, "FAILED to getgroups.\n");
+                    goto _fail_check_fromvol;
+                } else if (norig_auxgids > 0) {
+                    orig_auxgids = (gid_t *) malloc(sizeof(gid_t) * norig_auxgids);
+                    if (orig_auxgids == NULL) {
+                        fprintf(stderr, "FAILED to allocate memory for groups\n");
+                        goto _fail_check_fromvol;
+                    }
+                    norig_auxgids = getgroups(norig_auxgids, orig_auxgids);
+                    if (norig_auxgids <= 0) {
+                        fprintf(stderr, "FAILED to getgroups().\n");
+                        goto _fail_check_fromvol;
+                    }
+                }
+
+                if (setgroups(udiConfig->nauxiliary_gids, udiConfig->auxiliary_gids) != 0) {
+                    fprintf(stderr, "FAILED to assume user auxiliary gids\n");
+                    goto _fail_check_fromvol;
+                }
+                switch_user_stage++;
+
+                if (setegid(udiConfig->target_gid) != 0) {
+                    fprintf(stderr, "FAILED to assume user gid\n");
+                    goto _fail_check_fromvol;
+                }
+                switch_user_stage++;
+
+                if (seteuid(udiConfig->target_uid) != 0) {
+                    fprintf(stderr, "FAILED to assume user uid\n");
+                    goto _fail_check_fromvol;
+                }
+                switch_user_stage++;
+            }
+
+            /* perform some introspection on the path to get it's real location
+             * and vital attributes */
+            from_real = realpath(from_buffer, NULL);
+            if (from_real == NULL) {
+                fprintf(stderr, "FAILED to find real path for volume "
+                        "\"from\": %s\n", from_buffer);
+                goto _fail_check_fromvol;
+            }
+            if (lstat(from_real, &statData) != 0) {
+                fprintf(stderr, "FAILED to find volume \"from\": %s\n", from_buffer);
+                goto _fail_check_fromvol;
+            }
+            if (!S_ISDIR(statData.st_mode)) {
+                fprintf(stderr, "FAILED \"from\" location is not directory: "
+                        "%s\n", from_real);
+                goto _fail_check_fromvol;
+            }
+
+            /* switch back to original privileges */
+            if (userRequested != 0) {
+                if (seteuid(orig_euid) != 0) {
+                    fprintf(stderr, "FAILED to assume original user effective uid\n");
+                    goto _fail_check_fromvol;
+                }
+                switch_user_stage--;
+
+                if (setegid(orig_egid) != 0) {
+                    fprintf(stderr, "FAILED to assume original user effective gid\n");
+                    goto _fail_check_fromvol;
+                }
+                switch_user_stage--;
+
+                if (setgroups(norig_auxgids, orig_auxgids) != 0) {
+                    fprintf(stderr, "FAILED to assume original user auxiliary gids\n");
+                    goto _fail_check_fromvol;
+                }
+                switch_user_stage--;
+            }
+            /* skip over error handler */
+            goto _pass_check_fromvol;
+
+_fail_check_fromvol:
+            if (switch_user_stage > 0) {
+                /* TODO decide if we should re-assume original privileges for
+                 * the crash */
+            }
+            if (orig_auxgids != NULL) {
+                free(orig_auxgids);
+                orig_auxgids = NULL;
+                norig_auxgids = 0;
+            }
             goto _handleVolMountError;
-        }
-        if (!(flagsInEffect & VOLMAP_FLAG_PERNODECACHE) && !S_ISDIR(statData.st_mode)) {
-            fprintf(stderr, "FAILED \"from\" location is not directory: %s\n", from_buffer);
-            goto _handleVolMountError;
+
+_pass_check_fromvol:
+            if (orig_auxgids != NULL) {
+                free(orig_auxgids);
+                orig_auxgids = NULL;
+                norig_auxgids = 0;
+            }
+        } else {
+            from_real = realpath(from_buffer, NULL);
         }
         if (lstat(to_buffer, &statData) != 0) {
             if (createToDev) {
@@ -1560,7 +1673,6 @@ int setupVolumeMapMounts(
         }
 
         to_real = realpath(to_buffer, NULL);
-        from_real = realpath(from_buffer, NULL);
         if (to_real == NULL) {
             fprintf(stderr, "Failed to get realpath for %s\n", to_buffer);
             goto _handleVolMountError;
@@ -1593,7 +1705,6 @@ int setupVolumeMapMounts(
                 fprintf(stderr, "Invalid source %s, not allowed, fail.\n", from_real);
                 goto _handleVolMountError;
             }
-
 
             /* validate that the path is allowed */
             /* to_real is known to be longer than udiMountLen from previous
