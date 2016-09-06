@@ -2046,65 +2046,74 @@ _setupImageSsh_unclean:
     return 1;
 }
 
-int shifter_getgrouplist(const char *user, gid_t group, gid_t **groups, int *ngroups) {
+gid_t *shifter_getgrouplist(const char *user, gid_t group, int *ngroups) {
     int ret = 0;
     int idx = 0;
+    gid_t *ret_groups = NULL;
+    int nret_groups = 0;
 
-    if (user == NULL || group == 0 || groups == NULL || ngroups == NULL) {
-        return -1;
+    if (user == NULL || group == 0 || ngroups == NULL) {
+        goto _err_invalid_args;
     }
     if (strcmp(user, "root") == 0) {
         fprintf(stderr, "FAILED: refuse to lookup groups for root\n");
-        return -1;
+        goto _err_valid_args;
     }
 
-    if (*groups == NULL) {
-        *groups = (gid_t *) malloc(sizeof(gid_t) * 128);
-        if (*groups == NULL) {
-            fprintf(stderr, "FAILED to allocate memory for grouplist\n");
-            return -1;
-        }
-        *ngroups = 128;
-    }
-
-    ret = getgrouplist(user, group, *groups, ngroups);
-    if (ret < 0) {
-        if (*ngroups > 512) {
+    ret = getgrouplist(user, group, NULL, &nret_groups);
+    if (ret < 0 && nret_groups > 0) {
+        if (nret_groups > 512) {
             fprintf(stderr, "FAILED to get groups, seriously 512 groups is enough!\n");
-            return -1;
+            goto _err_valid_args;
         }
-        *groups = (gid_t *) realloc(*groups, sizeof(gid_t) * (*ngroups));
-        if (*groups == NULL) {
+
+        /* allocate and initialize memory to be populated by getgrouplist */
+        ret_groups = (gid_t *) malloc(sizeof(gid_t) * (nret_groups + 1));
+        if (ret_groups == NULL) {
             fprintf(stderr, "FAILED to reallocate memory for group list\n");
-            return -1;
+            goto _err_valid_args;
         }
-        ret = getgrouplist(user, group, *groups, ngroups);
+        memset(ret_groups, 0, sizeof(gid_t) * (nret_groups + 1));
+
+        ret = getgrouplist(user, group, ret_groups, &nret_groups);
         if (ret < 0) {
             fprintf(stderr, "FAILED to get groups correctly\n");
-            return -1;
+            goto _err_valid_args;
         }
     }
 
     /* set default group list if none are found */
-    if (*ngroups <= 0) {
-        if (*groups == NULL) {
-            *groups = (gid_t *) malloc(sizeof(gid_t));
-        }
-        if (*groups == NULL) {
+    if (nret_groups <= 0) {
+        ret_groups = (gid_t *) malloc(sizeof(gid_t) * 2);
+        if (ret_groups == NULL) {
             fprintf(stderr, "FAILED to allocate memory for default group list\n");
-            return -1;
+            goto _err_valid_args;
         }
-        (*groups)[0] = group;
-        *ngroups = 1;
+        ret_groups[0] = group;
+        ret_groups[1] = 0;
+        nret_groups = 1;
     }
 
     /* just make sure no zeros snuck in */
-    for (idx = 0; idx < *ngroups; idx++) {
-        if ((*groups)[idx] == 0) {
-            (*groups)[idx] = group;
+    for (idx = 0; idx < nret_groups; idx++) {
+        if (ret_groups[idx] == 0) {
+            ret_groups[idx] = group;
         }
     }
-    return 0;
+    *ngroups = nret_groups;
+    return ret_groups;
+_err_invalid_args:
+    if (ngroups != NULL) {
+        *ngroups = 0;
+    }
+    return NULL;
+_err_valid_args:
+    if (ret_groups != NULL) {
+        free(ret_groups);
+        ret_groups = NULL;
+    }
+    *ngroups = 0;
+    return NULL;
 }
 
 /**
@@ -2138,8 +2147,8 @@ int startSshd(const char *user, UdiRootConfig *udiConfig) {
         gid_t *gidList = NULL;
         int nGroups = 0;
         if (udiConfig->optionalSshdAsRoot == 0) {
-            int ret = shifter_getgrouplist(user, udiConfig->target_gid, &gidList, &nGroups);
-            if (ret != 0) {
+            gidList = shifter_getgrouplist(user, udiConfig->target_gid, &nGroups);
+            if (gidList == NULL) {
                 fprintf(stderr, "FAILED to correctly get grouplist for sshd\n");
                 exit(1);
             }
