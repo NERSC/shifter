@@ -419,7 +419,7 @@ char *userInputPathFilter(const char *input, int allowSlash) {
 
 char *cleanPath(const char *path) {
     if (!path) return NULL;
-    size_t len = strlen(path) + 1;
+    ssize_t len = strlen(path) + 1;
 
     char *ret = (char *) malloc(sizeof(char) * len);
     memset(ret, 0, sizeof(char) * len);

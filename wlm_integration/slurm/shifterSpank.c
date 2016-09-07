@@ -766,7 +766,7 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     int rc = SUCCESS;
 
     char *ptr = NULL;
-    int idx = 0;
+    size_t idx = 0;
     uint32_t job;
     uid_t uid = 0;
     gid_t gid = 0;

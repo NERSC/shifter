@@ -1359,7 +1359,11 @@ int setupPerNodeCacheFilename(
             hostname_buf,
             cache->fstype
     );
-    if (nbytes >= buffer_len - 1) {
+    if (nbytes < 0) {
+        fprintf(stderr, "FAILED to write perNodeCache filename into buffer.\n");
+        return -1;
+    }
+    if (nbytes >= 0 && (size_t) nbytes >= buffer_len) {
         fprintf(stderr, "perNodeCache filename too long to store in buffer.\n");
         return -1;
     }
