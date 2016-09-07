@@ -114,8 +114,13 @@ int parse_MountList(MountList *mounts) {
         /* want second space-seperated column */
         /* TODO switch to strtok_r */
         ptr = strtok(lineBuffer, " ");
+        if (ptr == NULL) {
+            goto _parseMountList_error;
+        }
         ptr = strtok(NULL, " ");
-        if (ptr == NULL) continue;
+        if (ptr == NULL) {
+            continue;
+        }
         if (insert_MountList(mounts, ptr) == 2) {
             goto _parseMountList_error;
         }

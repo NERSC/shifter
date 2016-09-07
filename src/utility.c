@@ -373,6 +373,10 @@ char *alloc_strgenf(const char *format, ...) {
     if (status == 0) {
         return string;
     }
+    if (string != NULL) {
+        free(string);
+        string = NULL;
+    }
     return NULL;
 }
 

@@ -479,7 +479,7 @@ int prepareSiteModifications(const char *username,
             strdup("/bin/sh"), strdup(udiConfig->sitePreMountHook), NULL
         };
         char **argsPtr = NULL;
-        int ret = forkAndExecv(args);
+        ret = forkAndExecv(args);
         for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
             free(*argsPtr);
         }
@@ -502,7 +502,7 @@ int prepareSiteModifications(const char *username,
             strdup("/bin/sh"), strdup(udiConfig->sitePostMountHook), NULL
         };
         char **argsPtr = NULL;
-        int ret = forkAndExecv(args);
+        ret = forkAndExecv(args);
         for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
             free(*argsPtr);
         }
@@ -574,7 +574,7 @@ int prepareSiteModifications(const char *username,
                     fprintf(stderr, "Couldn't copy %s because file already exists.\n", mntBuffer);
                     goto _prepSiteMod_unclean;
                 } else {
-                    int ret = _shifterCore_copyFile(udiConfig->cpPath, srcBuffer, mntBuffer, 0, 0, 0, 0644);
+                    ret = _shifterCore_copyFile(udiConfig->cpPath, srcBuffer, mntBuffer, 0, 0, 0, 0644);
                     if (ret != 0) {
                         fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
                         goto _prepSiteMod_unclean;
@@ -584,7 +584,6 @@ int prepareSiteModifications(const char *username,
             closedir(etcDir);
         } else {
             fprintf(stderr, "Couldn't stat udiRoot etc dir: %s\n", srcBuffer);
-            ret = 1;
             goto _prepSiteMod_unclean;
         }
     } else if (udiConfig->target_uid != 0 && udiConfig->target_gid != 0) {
@@ -725,8 +724,7 @@ int prepareSiteModifications(const char *username,
             char *chmodArgs[] = {strdup(udiConfig->chmodPath), strdup("-R"),
                 strdup("a+rX"), strdup(finalPath), NULL
             };
-            char **argsPtr = NULL;
-            int ret = forkAndExecv(args);
+            ret = forkAndExecv(args);
             if (ret == 0) {
                 ret = forkAndExecv(chmodArgs);
                 if (ret != 0) {
@@ -735,8 +733,14 @@ int prepareSiteModifications(const char *username,
             } else {
                 fprintf(stderr, "FAILED to copy %s to %s.\n", srcBuffer, mntBuffer);
             }
-            for (argsPtr = args; *argsPtr != NULL; argsPtr++) free(*argsPtr);
-            for (argsPtr = chmodArgs; *argsPtr != NULL; argsPtr++) free(*argsPtr);
+            if (args[0]) free(args[0]);
+            if (args[1]) free(args[1]);
+            if (args[2]) free(args[2]);
+            if (args[3]) free(args[3]);
+            if (chmodArgs[0]) free(chmodArgs[0]);
+            if (chmodArgs[1]) free(chmodArgs[1]);
+            if (chmodArgs[2]) free(chmodArgs[2]);
+            if (chmodArgs[3]) free(chmodArgs[3]);
             if (ret != 0) {
                 goto _prepSiteMod_unclean;
             }
@@ -758,7 +762,6 @@ int prepareSiteModifications(const char *username,
     mntBuffer[PATH_MAX-1] = 0;
     if (mount(NULL, mntBuffer, "proc", MS_NOSUID|MS_NOEXEC|MS_NODEV, NULL) != 0) {
         fprintf(stderr, "FAILED to mount /proc\n");
-        ret = 1;
         goto _prepSiteMod_unclean;
     }
 
@@ -786,6 +789,9 @@ int prepareSiteModifications(const char *username,
 _prepSiteMod_unclean:
     free_MountList(&mountCache, 0);
     destructUDI(udiConfig, 0);
+    if (ret == 0) {
+        return 1;
+    }
     return ret;
 }
 
@@ -1240,7 +1246,15 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
             NULL
         };
         char **argsPtr = NULL;
-        int ret = forkAndExecvSilent(args);
+        int ret = 0;
+        for (argsPtr = args; argsPtr - args < 8; argsPtr++) {
+            if (argsPtr == NULL || *argsPtr == NULL) {
+                ret = 1;
+            }
+        }
+        if (ret == 0) {
+            ret = forkAndExecvSilent(args);
+        }
         for (argsPtr = args; argsPtr && *argsPtr; argsPtr++) {
             free(*argsPtr);
         }
@@ -1378,7 +1392,15 @@ int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *b
     args[4] = strdup("count=0");
     args[5] = alloc_strgenf("seek=%lu", cache->cacheSize);
     args[6] = NULL;
-    ret = forkAndExecvSilent(args);
+    for (arg = args; arg - args < 6; arg++) {
+        if (arg == NULL || *arg == NULL) {
+            fprintf(stderr, "FAILED to allocate memory!\n");
+            ret = 1;
+        }
+    }
+    if (ret == 0) {
+        ret = forkAndExecvSilent(args);
+    }
     for (arg = args; *arg; arg++) {
         free(*arg);
     }
@@ -1615,7 +1637,6 @@ _fail_check_fromvol:
             if (orig_auxgids != NULL) {
                 free(orig_auxgids);
                 orig_auxgids = NULL;
-                norig_auxgids = 0;
             }
             goto _handleVolMountError;
 
@@ -1623,7 +1644,6 @@ _pass_check_fromvol:
             if (orig_auxgids != NULL) {
                 free(orig_auxgids);
                 orig_auxgids = NULL;
-                norig_auxgids = 0;
             }
         } else {
             from_real = realpath(from_buffer, NULL);
@@ -1791,7 +1811,6 @@ _pass_check_fromvol:
                 perror("Error: ");
                 goto _handleVolMountError;
             }
-            backingStoreExists = 0;
 
         } else {
             int allowOverwriteBind = 1;
@@ -1810,7 +1829,6 @@ _pass_check_fromvol:
 _handleVolMountError:
         if ((flagsInEffect & VOLMAP_FLAG_PERNODECACHE) && backingStoreExists == 1) {
             unlink(from_buffer);
-            backingStoreExists = 0;
         }
         goto _setupVolumeMapMounts_unclean;
     }
@@ -2007,8 +2025,15 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, gid_t gid, UdiRoot
         args[5] = strdup("-N");
         args[6] = strdup("");
         args[7] = NULL;
-
-        ret = forkAndExecv(args);
+        for (argPtr = args; argPtr - args < 7; argPtr++) {
+            if (argPtr == NULL || *argPtr == NULL) {
+                fprintf(stderr, "Memory allocation failed\n");
+                ret = 1;
+            }
+        }
+        if (ret == 0) {
+            ret = forkAndExecv(args);
+        }
         for (argPtr = args; *argPtr != NULL; argPtr++) {
             free(*argPtr);
         }
@@ -2164,45 +2189,53 @@ gid_t *shifter_getgrouplist(const char *user, gid_t group, int *ngroups) {
     int nret_groups = 0;
 
     if (user == NULL || group == 0 || ngroups == NULL) {
-        goto _err_invalid_args;
+        goto _getgrlist_err;
     }
     if (strcmp(user, "root") == 0) {
         fprintf(stderr, "FAILED: refuse to lookup groups for root\n");
-        goto _err_valid_args;
+        goto _getgrlist_err;
     }
 
     ret = getgrouplist(user, group, NULL, &nret_groups);
     if (ret < 0 && nret_groups > 0) {
         if (nret_groups > 512) {
             fprintf(stderr, "FAILED to get groups, seriously 512 groups is enough!\n");
-            goto _err_valid_args;
+            goto _getgrlist_err;
         }
 
         /* allocate and initialize memory to be populated by getgrouplist */
         ret_groups = (gid_t *) malloc(sizeof(gid_t) * (nret_groups + 1));
         if (ret_groups == NULL) {
             fprintf(stderr, "FAILED to reallocate memory for group list\n");
-            goto _err_valid_args;
+            goto _getgrlist_err;
         }
         memset(ret_groups, 0, sizeof(gid_t) * (nret_groups + 1));
 
         ret = getgrouplist(user, group, ret_groups, &nret_groups);
         if (ret < 0) {
             fprintf(stderr, "FAILED to get groups correctly\n");
-            goto _err_valid_args;
+            goto _getgrlist_err;
         }
     }
 
     /* set default group list if none are found */
     if (nret_groups <= 0) {
+        if (ret_groups != NULL) {
+            free(ret_groups);
+            ret_groups = NULL;
+        }
         ret_groups = (gid_t *) malloc(sizeof(gid_t) * 2);
         if (ret_groups == NULL) {
             fprintf(stderr, "FAILED to allocate memory for default group list\n");
-            goto _err_valid_args;
+            goto _getgrlist_err;
         }
         ret_groups[0] = group;
         ret_groups[1] = 0;
         nret_groups = 1;
+    }
+    if (ret_groups == NULL) {
+        fprintf(stderr, "FAILED: no auxilliary groups found!\n");
+        goto _getgrlist_err;
     }
 
     /* just make sure no zeros snuck in */
@@ -2213,17 +2246,15 @@ gid_t *shifter_getgrouplist(const char *user, gid_t group, int *ngroups) {
     }
     *ngroups = nret_groups;
     return ret_groups;
-_err_invalid_args:
-    if (ngroups != NULL) {
-        *ngroups = 0;
-    }
-    return NULL;
-_err_valid_args:
+
+_getgrlist_err:
     if (ret_groups != NULL) {
         free(ret_groups);
         ret_groups = NULL;
     }
-    *ngroups = 0;
+    if (ngroups != NULL) {
+        *ngroups = 0;
+    }
     return NULL;
 }
 
@@ -2306,10 +2337,19 @@ int startSshd(const char *user, UdiRootConfig *udiConfig) {
             }
 #endif
         }
-        char *sshdArgs[2] = {
-            strdup("/opt/udiImage/sbin/sshd"),
-            NULL
-        };
+        char **sshdArgs = (char **) malloc(sizeof(char *) * 2);
+        if (sshdArgs == NULL) {
+            fprintf(stderr, "FAILED to exec sshd!\n");
+            exit(1);
+        }
+
+        sshdArgs[0] = strdup("/opt/udiImage/sbin/sshd");
+        sshdArgs[1] = NULL;
+
+        if (sshdArgs[0] == NULL) {
+            fprintf(stderr, "FAILED to exec sshd!\n");
+            exit(1);
+        }
         execv(sshdArgs[0], sshdArgs);
         fprintf(stderr, "FAILED to exec sshd!\n");
 
@@ -2519,19 +2559,26 @@ int isSharedMount(const char *mountPoint) {
     snprintf(filename, PATH_MAX, "/proc/%d/mountinfo", pid);
     fp = fopen(filename, "r");
 
-    if (fp == NULL) return -1;
+    if (fp == NULL) {
+        goto _err_valid_args;
+    }
     while (!feof(fp) && !ferror(fp)) {
         char *ptr = NULL;
         char *svptr = NULL;
         size_t n = getline(&lineBuffer, &lineBuffer_size, fp);
-        if (n == 0 || feof(fp) || ferror(fp)) {
+        if (n == 0 || feof(fp) || ferror(fp) || lineBuffer == NULL) {
             break;
         }
         ptr = strtok_r(lineBuffer, " ", &svptr);
+        if (ptr == NULL) goto _err_valid_args;
         ptr = strtok_r(NULL, " ", &svptr);
+        if (ptr == NULL) goto _err_valid_args;
         ptr = strtok_r(NULL, " ", &svptr);
+        if (ptr == NULL) goto _err_valid_args;
         ptr = strtok_r(NULL, " ", &svptr);
+        if (ptr == NULL) goto _err_valid_args;
         ptr = strtok_r(NULL, " ", &svptr);
+        if (ptr == NULL) goto _err_valid_args;
 
         if (strcmp(ptr, mountPoint) == 0) {
             ptr = strtok_r(NULL, "\0", &svptr); /* get rest of line */
@@ -2542,11 +2589,22 @@ int isSharedMount(const char *mountPoint) {
         }
     }
     fclose(fp);
+    fp = NULL;
     if (lineBuffer != NULL) {
         free(lineBuffer);
     }
 
     return rc;
+_err_valid_args:
+    if (lineBuffer != NULL) {
+        free(lineBuffer);
+        lineBuffer = NULL;
+    }
+    if (fp != NULL) {
+        fclose(fp);
+        fp = NULL;
+    }
+    return -1;
 }
 
 /*! Check if a kernel module is loaded
@@ -2575,7 +2633,7 @@ int isKernelModuleLoaded(const char *name) {
         char *ptr = NULL;
         char *svptr = NULL;
         nread = getline(&lineBuffer, &lineSize, fp);
-        if (nread == 0 || feof(fp) || ferror(fp)) {
+        if (nread == 0 || feof(fp) || ferror(fp) || lineBuffer == NULL) {
             break;
         }
         ptr = strtok_r(lineBuffer, " ", &svptr);
@@ -2807,7 +2865,7 @@ int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname,
         gid_t gid = 0;
         size_t counter = 0;
         int foundUsername = 0;
-        if (nread == 0) break;
+        if (nread == 0 || linePtr == NULL) break;
         ptr = shifter_trim(linePtr);
         for (token = strtok_r(ptr, ":,", &svptr);
              token != NULL;
