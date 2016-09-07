@@ -1718,25 +1718,25 @@ _pass_check_fromvol:
             }
 
             /* validate source mount point */
-            if (userRequested != 0 && (
-                from_len <= udiMountLen ||
-                strncmp(from_real, udiConfig->udiMountPoint, udiMountLen) != 0)) {
+            if (userRequested != 0 && !(flagsInEffect & VOLMAP_FLAG_PERNODECACHE)) {
+                if (from_len <= udiMountLen ||
+                    strncmp(from_real, udiConfig->udiMountPoint, udiMountLen) != 0) {
 
-                fprintf(stderr, "Invalid source %s, not allowed, fail.\n", from_real);
-                goto _handleVolMountError;
+                    fprintf(stderr, "Invalid source %s, not allowed, fail.\n", from_real);
+                    goto _handleVolMountError;
+                } else {
+                    /* from_real is known to be longer than udiMountLen from 
+                     * previous check (i.e., don't remove the check!) */ 
+                    container_from_real = from_real + udiMountLen;
+                }
+            } else {
+                container_from_real = from_real;
             }
 
             /* validate that the path is allowed */
             /* to_real is known to be longer than udiMountLen from previous
              * check (i.e., don't remove the check!) */
             container_to_real = to_real + udiMountLen;
-
-            container_from_real = from_real;
-            if (userRequested != 0) {
-                /* from_real is known to be longer than udiMountLen from 
-                 * previous check (i.e., don't remove the check!) */ 
-                container_from_real = from_real + udiMountLen;
-            }
 
             if ((ret = _validate_fp(container_from_real, container_to_real, flags)) != 0) {
                 fprintf(stderr, "Invalid mount request, permission denied! "
