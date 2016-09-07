@@ -845,7 +845,7 @@ int writeHostFile(const char *minNodeSpec, UdiRootConfig *udiConfig) {
         eptr = strchr(sptr, ' ');
         if (eptr == NULL) eptr = sptr + strlen(sptr);
         *eptr = 0;
-        count = atoi(sptr);
+        count = (int) strtol(sptr, NULL, 10);
         if (count == 0) {
             /* parse error, not a number */
             goto _writeHostFile_error;
@@ -2883,7 +2883,7 @@ pid_t findSshd(void) {
     }
     while ((dirEntry = readdir(proc)) != NULL) {
         size_t nread = 0;
-        pid_t pid = atoi(dirEntry->d_name);
+        pid_t pid = (pid_t) strtol(dirEntry->d_name, NULL, 10);
         if (pid == 0) {
             continue;
         }

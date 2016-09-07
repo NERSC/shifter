@@ -109,7 +109,7 @@ shifterSpank_config *shifterSpank_init(
             ssconfig->extern_setup = strdup(ptr);
         } else if (strncasecmp("extern_cgroup=", argv[idx], 14) == 0) {
             char *ptr = argv[idx] + 14;
-            ssconfig->extern_cgroup = atoi(ptr);
+            ssconfig->extern_cgroup = (int) strtol(ptr, NULL, 10);
         } else if (strncasecmp("memory_cgroup=", argv[idx], 14) == 0) {
             char *ptr = argv[idx] + 14;
             snprintf(buffer, PATH_MAX, "%s", ptr);
@@ -117,10 +117,10 @@ shifterSpank_config *shifterSpank_init(
             ssconfig->memory_cgroup = strdup(ptr);
         } else if (strncasecmp("enable_ccm=", argv[idx], 11) == 0) {
             char *ptr = argv[idx] + 11;
-            ssconfig->ccmEnabled = atoi(ptr);
+            ssconfig->ccmEnabled = (int) strtol(ptr, NULL, 10);
         } else if (strncasecmp("enable_sshd=", argv[idx], 12) == 0) {
             char *ptr = argv[idx] + 12;
-            ssconfig->sshdEnabled = atoi(ptr);
+            ssconfig->sshdEnabled = (int) strtol(ptr, NULL, 10);
         }
     }
 
@@ -476,7 +476,7 @@ int doExternStepTaskSetup(shifterSpank_config *ssconfig) {
             FILE *fp = fopen(tasks, "r");
             stepd_fd = wrap_spank_stepd_connect(ssconfig, dir, hostname, jobid, SLURM_EXTERN_CONT, &protocol);
             while (fgets(buffer, PATH_MAX, fp) != NULL) {
-                pid_t pid = atoi(buffer);
+                pid_t pid = (pid_t) strtol(buffer, NULL, 10);
                 if (pid == 0) continue;
                 _log(LOG_INFO, "shifterSpank: moving pid %d to extern step via fd %d\n", pid, stepd_fd);
                 wrap_spank_stepd_add_extern_pid(ssconfig, stepd_fd, protocol, pid);
@@ -1082,7 +1082,7 @@ int shifterSpank_job_epilog(shifterSpank_config *ssconfig) {
         fp = fopen(tasks, "r");
         if (fp != NULL) {
             while ((bytes = getline(&line, &line_sz, fp)) >= 0) {
-                pid_t pid = atoi(line);
+                pid_t pid = (pid_t) strtol(line, NULL, 10);
                 if (pid == 0) continue;
                 kill(pid, 9); 
             }
