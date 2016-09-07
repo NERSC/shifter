@@ -539,7 +539,7 @@ int _parseVolumeMap(
         if (ret != 0) goto _parseVolumeMap_unclean;
 
         if (volMap->n >= volMap->flagsCapacity) {
-            VolumeMapFlag **tmp = (VolumeMapFlag **) realloc(volMap->flags, sizeof(VolumeMapFlag *) * (volMap->flagsCapacity + VOLUME_ALLOC_BLOCK));
+            VolumeMapFlag **tmp = (VolumeMapFlag **) realloc(volMap->flags, sizeof(VolumeMapFlag *) * (volMap->flagsCapacity + VOLUME_ALLOC_BLOCK + 1));
             if (tmp == NULL) {
                 fprintf(stderr, "Failed to allocate memory!\n");
                 goto _parseVolumeMap_unclean;
@@ -550,11 +550,10 @@ int _parseVolumeMap(
             memset(flagPtr, 0, sizeof(VolumeMapFlag *) * (volMap->flagsCapacity - volMap->n));
         }
         
-        *flagPtr++ = flags;
+        *flagPtr = flags;
+        flagPtr++;
         *flagPtr = NULL;
         flagsCapacity = 0;
-
-        if (ret != 0) goto _parseVolumeMap_unclean;
 
         if (from != NULL) free(from);
         if (to != NULL) free(to);

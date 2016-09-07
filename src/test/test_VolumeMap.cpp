@@ -312,6 +312,32 @@ TEST(VolumeMapTestGroup, GetVolumeMapSignature_basic) {
     free_VolumeMap(&volMap, 0);
 }
 
+TEST(VolumeMapTestGroup, GetVolumeMapParseLongSiteFs) {
+    const char *mountStr = "/global/u1:/global/u1;"
+        "/global/u2:/global/u2;"
+        "/global/common:/global/common;"
+        "/global/syscom:/global/syscom;"
+        "/global/dna:/global/dna;"
+        "/global/project:/global/project;"
+        "/global/projecta:/global/projecta;"
+        "/global/projectb:/global/projectb;"
+        "/global/cscratch1:/global/cscratch1;"
+        "/var/opt/cray/dws:/var/opt/cray/dws:rec:slave;"
+        "/var/opt/cray/alps:/var/opt/cray/alps:rec:slave;"
+        "/var/spool/slurmd:/var/spool/slurmd;"
+        "/etc/opt/cray/wlm_detect:/etc/opt/cray/wlm_detect";
+
+    VolumeMap volMap;
+    memset(&volMap, 0, sizeof(VolumeMap));
+    int ret = parseVolumeMapSiteFs(mountStr, &volMap);
+
+    CHECK(ret == 0);
+
+    fprint_VolumeMap(stderr, &volMap);
+
+    fprintf(stderr, "mountStr: %s %d\n", mountStr, ret);
+}
+
 int main(int argc, char** argv) {
         return CommandLineTestRunner::RunAllTests(argc, argv);
 }
