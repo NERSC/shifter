@@ -62,7 +62,7 @@ static void _log(logLevel level, const char *format, ...) {
         dbuffer = (char *) malloc(sizeof(char) * (bytes + 2));
         va_list ap;
         va_start(ap, format);
-        bytes = vsnprintf(dbuffer, (bytes + 2), format, ap);
+        vsnprintf(dbuffer, (bytes + 2), format, ap);
         va_end(ap);
         bufptr = dbuffer;
     }
@@ -748,7 +748,7 @@ char *setup_memory_cgroup(
     char *cgroup_path = NULL;
     size_t cgroup_path_sz = 0;
     size_t cgroup_path_cap = 0;
-    char **cptr = components;
+    char **cptr = NULL;
 
     cgroup_path = alloc_strcatf(cgroup_path, &cgroup_path_sz, &cgroup_path_cap, "%s", ssconfig->memory_cgroup);
 
@@ -1023,7 +1023,7 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     
 _prolog_exit_unclean:
     if (setupRootArgs != NULL) {
-        char **ptr = setupRootArgs;
+        char **ptr = NULL;
         for (ptr = setupRootArgs; ptr && *ptr; ptr++) {
             free(*ptr);
         }
@@ -1069,31 +1069,51 @@ int shifterSpank_job_epilog(shifterSpank_config *ssconfig) {
     char **cgroup_components = NULL;
     if (ssconfig->memory_cgroup) {
         memory_cgroup_path = setup_memory_cgroup(ssconfig, job, uid, cgroup_record_components, (void *) &cgroup_components);
-    }
-    if (memory_cgroup_path != NULL) {
-        char **ptr = NULL;
-        char *line = NULL;
-        size_t line_sz = 0;
-        ssize_t bytes = 0;
-        char *tasks = alloc_strgenf("%s/tasks", memory_cgroup_path);
-        FILE *fp = NULL;
+        if (memory_cgroup_path != NULL && cgroup_components != NULL) {
+            char **ptr = NULL;
+            char *line = NULL;
+            size_t line_sz = 0;
+            ssize_t bytes = 0;
+            char *tasks = alloc_strgenf("%s/tasks", memory_cgroup_path);
+            FILE *fp = NULL;
 
-        /* kill all the processes in the cgroup tasks */
-        fp = fopen(tasks, "r");
-        if (fp != NULL) {
-            while ((bytes = getline(&line, &line_sz, fp)) >= 0) {
-                pid_t pid = (pid_t) strtol(line, NULL, 10);
-                if (pid == 0) continue;
-                kill(pid, 9); 
+            /* kill all the processes in the cgroup tasks */
+            fp = fopen(tasks, "r");
+            if (fp != NULL) {
+                while ((bytes = getline(&line, &line_sz, fp)) >= 0) {
+                    pid_t pid = (pid_t) strtol(line, NULL, 10);
+                    if (pid == 0) continue;
+                    kill(pid, 9); 
+                }
             }
-        }
+            fclose(fp);
+            free(tasks);
+            tasks = NULL;
 
-        /* remove the empty cgroups */
-        for (ptr = cgroup_components; ptr && *ptr; ptr++) { }
-        for (ptr-- ; ptr && *ptr && ptr > cgroup_components; ptr--) {
-            rmdir(*ptr);
+            /* remove the empty cgroups */
+            for (ptr = cgroup_components; ptr && *ptr; ptr++) { }
+            if (ptr > cgroup_components) {
+                for ( ; ptr && *ptr && (ptr > cgroup_components); ptr--) {
+                    rmdir(*ptr);
+                    free(*ptr);
+                    *ptr = NULL;
+                }
+            }
+            free(cgroup_components);
+            cgroup_components = NULL;
         }
-        
+        if (memory_cgroup_path != NULL) {
+            free(memory_cgroup_path);
+            memory_cgroup_path = NULL;
+        }
+        if (cgroup_components != NULL) {
+            char **ptr = NULL;
+            for (ptr = cgroup_components; ptr && *ptr; ptr++) {
+                free(*ptr);
+                *ptr = NULL;
+            }
+            free(cgroup_components);
+        }
     }
 
     snprintf(path, PATH_MAX, "%s/sbin/unsetupRoot", ssconfig->udiConfig->udiRootPath);
@@ -1105,7 +1125,7 @@ int shifterSpank_job_epilog(shifterSpank_config *ssconfig) {
     }
 
     _log(LOG_DEBUG, "shifter_epilog: done with unsetupRoot");
-    
+
 _epilog_exit_unclean:
     return rc;
 }
@@ -1258,8 +1278,16 @@ int shifterSpank_task_init_privileged(shifterSpank_config *ssconfig) {
         if (setgroups(n_existing_suppl_gids, existing_suppl_gids) != 0) {
             TASKINITPRIV_ERROR("FAILED to drop supplementary gids", ERROR);
         }
+        if (existing_suppl_gids != NULL) {
+            free(existing_suppl_gids);
+            existing_suppl_gids = NULL;
+        }
     }
 _taskInitPriv_exit_unclean:
     free_ImageData(&imageData, 0);
+    if (existing_suppl_gids != NULL) {
+        free(existing_suppl_gids);
+        existing_suppl_gids = NULL;
+    }
     return rc;
 }

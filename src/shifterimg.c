@@ -955,12 +955,6 @@ int _assignLoginCredential(const char *key, const char *value, void *_data) {
     struct options *config = (struct options *) _data;
 
     if (ptr != NULL) {
-        system = (char *) malloc(sizeof(char)*((ptr - key) + 1));
-        strncpy(system, key, (ptr - key));
-        system[ptr - key] = 0;
-        ptr++;
-        location = strdup(ptr);
-
         size_t count = 0;
         LoginCredential **lcptr = config->loginCredentials;
         for ( ; lcptr && *lcptr; lcptr++) {
@@ -970,6 +964,12 @@ int _assignLoginCredential(const char *key, const char *value, void *_data) {
         if (lcptr == NULL) {
             goto _error;
         }
+        system = (char *) malloc(sizeof(char)*((ptr - key) + 1));
+        strncpy(system, key, (ptr - key));
+        system[ptr - key] = 0;
+        ptr++;
+        location = strdup(ptr);
+
         config->loginCredentials = lcptr;
         lcptr = config->loginCredentials + count;
         *lcptr = (LoginCredential *) malloc(sizeof(LoginCredential));
