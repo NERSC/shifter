@@ -52,8 +52,8 @@
 extern "C" {
 #endif
 
-#define INVALID_USER UINT_MAX
-#define INVALID_GROUP UINT_MAX
+#define INVALID_USER INT_MAX
+#define INVALID_GROUP INT_MAX
 #define FILE_SIZE_LIMIT 5242880
 
 int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig);

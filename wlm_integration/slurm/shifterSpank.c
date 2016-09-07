@@ -327,7 +327,6 @@ int forkAndExecvLogToSlurm(const char *appname, char **args) {
             }
         }
 
-
         /* wait on the child */
         _log(LOG_ERROR, "waiting on %s\n", appname);
         waitpid(pid, &status, 0);
@@ -1085,8 +1084,9 @@ int shifterSpank_job_epilog(shifterSpank_config *ssconfig) {
                     if (pid == 0) continue;
                     kill(pid, 9); 
                 }
+                fclose(fp);
+                fp = NULL;
             }
-            fclose(fp);
             free(tasks);
             tasks = NULL;
 
@@ -1217,6 +1217,9 @@ int shifterSpank_task_init_privileged(shifterSpank_config *ssconfig) {
 
         if (chroot(ssconfig->udiConfig->udiMountPoint) != 0) {
             TASKINITPRIV_ERROR("FAILED to chroot to designated image", ERROR);
+        }
+        if (chdir("/") != 0) {
+            TASKINITPRIV_ERROR("FAILED to chdir to new chroot", ERROR);
         }
 
         if (wrap_spank_get_supplementary_gids(ssconfig, &gids, &ngids) == ERROR) {

@@ -358,9 +358,9 @@ int _shifterCore_copyFile(const char *cpPath, const char *source,
         }
     }
 
+    if (owner == INVALID_USER) owner = sourceStat.st_uid;
+    if (group == INVALID_GROUP) group = sourceStat.st_gid;
     if (owner != INVALID_USER && group != INVALID_GROUP) {
-        if (owner == INVALID_USER) owner = sourceStat.st_uid;
-        if (group == INVALID_GROUP) group = sourceStat.st_gid;
         if (chown(dest, owner, group) != 0) {
             fprintf(stderr, "Failed to set ownership to %d:%d on %s\n", owner, group, dest);
             goto _copyFile_unclean;
@@ -2304,6 +2304,10 @@ int startSshd(const char *user, UdiRootConfig *udiConfig) {
             fprintf(stderr, "FAILED to chroot to %s while attempting to start sshd\n", chrootPath);
             exit(1);
         }
+        if (chdir("/") != 0) {
+            fprintf(stderr, "FAILED to chdir following chroot\n");
+            exit(1);
+        }
         if (udiConfig->optionalSshdAsRoot == 0) {
             if (gidList == NULL) {
                 fprintf(stderr, "FAILED to get groupllist for sshd, exiting!\n");
@@ -2637,6 +2641,9 @@ int isKernelModuleLoaded(const char *name) {
             break;
         }
         ptr = strtok_r(lineBuffer, " ", &svptr);
+        if (ptr == NULL) {
+            continue;
+        }
         if (strcmp(name, ptr) == 0) {
             loaded = 1;
             break;
@@ -2838,7 +2845,6 @@ int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname,
     FILE *output = NULL;
     char *linePtr = NULL;
     size_t linePtr_size = 0;
-    char *group_name = NULL;
     size_t foundGroups = 0;
 
     if (group_dest_fname == NULL || strlen(group_dest_fname) == 0
@@ -2860,6 +2866,7 @@ int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname,
         size_t nread = getline(&linePtr, &linePtr_size, input);
         char *ptr = NULL;
         char *svptr = NULL;
+        char *group_name = NULL;
 
         char *token = NULL;
         gid_t gid = 0;
@@ -2895,6 +2902,8 @@ int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname,
             } else {
                 fprintf(output, "%s:x:%d:\n", group_name, gid);
             }
+        }
+        if (group_name != NULL) {
             free(group_name);
             group_name = NULL;
         }
@@ -2920,10 +2929,6 @@ _filterEtcGroup_unclean:
     if (linePtr != NULL) {
         free(linePtr);
         linePtr = NULL;
-    }
-    if (group_name != NULL) {
-        free(group_name);
-        group_name = NULL;
     }
     return 1;
 }
@@ -2955,6 +2960,7 @@ pid_t findSshd(void) {
             continue;
         } else if (feof(cmdlineFile) || ferror(cmdlineFile)) {
             fclose(cmdlineFile);
+            cmdlineFile = NULL;
             continue;
         }
         nread = fread(buffer, sizeof(char), 1024, cmdlineFile);

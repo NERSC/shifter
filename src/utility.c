@@ -48,6 +48,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdarg.h>
+#include <stdint.h>
 
 #include "utility.h"
 
@@ -209,6 +210,11 @@ int strncpy_StringArray(const char *str, size_t n, char ***wptr,
             || capacity == NULL || allocationBlock == 0 ||
             *wptr < *array || *wptr - *capacity > *array) {
         fprintf(stderr, "ERROR: invalid input to strncpy_StringArray\n");
+        return 1;
+    }
+    if (n == SIZE_MAX) {
+        fprintf(stderr, "ERROR: input string is too big, would not be able to "
+                "append terminator\n");
         return 1;
     }
 

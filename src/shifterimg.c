@@ -166,13 +166,16 @@ int getttycred(const char *system, char **username, char **password) {
     char buffer[1024];
     struct termios currState;
     int mod = 0;
+    int opened_readfp = 0;
 
     memset(&origTermState, 0, sizeof(struct termios));
     memset(&currState, 0, sizeof(struct termios));
 
     read_fp = fopen("/dev/tty", "w+");
+    opened_readfp = 1;
     if (read_fp == NULL) {
         read_fp = stdin;
+        opened_readfp = 0;
         fprintf(write_fp, "failed to open dev/tty\n");
     }
     termfd = fileno(read_fp);
@@ -224,6 +227,11 @@ int getttycred(const char *system, char **username, char **password) {
     signal(SIGTERM, SIG_DFL);
     signal(SIGINT, SIG_DFL);
     signal(SIGSTOP, SIG_DFL);
+
+    if (opened_readfp) {
+        fclose(read_fp);
+        read_fp = NULL;
+    }
 
     return mod == 2 ? 0 : 1;
 }
@@ -1075,9 +1083,13 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     struct passwd *pwd = getpwuid(getuid());
     if (pwd != NULL) {
         char *path = alloc_strgenf("%s/.udiRoot/.cred", pwd->pw_dir);
-        if (access(path, F_OK) == 0) {
+        if (path != NULL && access(path, F_OK) == 0) {
             shifter_parseConfig(path, '=', config, _assignLoginCredential);
         } 
+        if (path != NULL) {
+            free(path);
+            path = NULL;
+        }
     }
     return 0;
 }

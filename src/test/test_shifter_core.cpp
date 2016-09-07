@@ -134,7 +134,11 @@ TEST_GROUP(ShifterCoreTestGroup) {
 
 };
 
+#ifdef NOTROOT
+IGNORE_TEST(ShifterCoreTestGroup, CopyFile_basic) {
+#else
 TEST(ShifterCoreTestGroup, CopyFile_basic) {
+#endif
     char *toFile = NULL;
     char *ptr = NULL;
     int ret = 0;
