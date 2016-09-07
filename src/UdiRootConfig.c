@@ -454,15 +454,15 @@ static int _assign(const char *key, const char *value, void *t_config) {
         config->etcPath = strdup(value);
         if (config->etcPath == NULL) return 1;
     } else if (strcmp(key, "allowLocalChroot") == 0) {
-        config->allowLocalChroot = atoi(value) != 0;
+        config->allowLocalChroot = strtol(value, NULL, 10) != 0;
     } else if (strcmp(key, "allowLibcPwdCalls") == 0) {
-        config->allowLibcPwdCalls = atoi(value) != 0;
+        config->allowLibcPwdCalls = strtol(value, NULL, 10) != 0;
     } else if (strcmp(key, "optionalSshdAsRoot") == 0) {
-        config->optionalSshdAsRoot = atoi(value) != 0;
+        config->optionalSshdAsRoot = strtol(value, NULL, 10) != 0;
     } else if (strcmp(key, "populateEtcDynamically") == 0) {
-        config->populateEtcDynamically = atoi(value) != 0;
+        config->populateEtcDynamically = strtol(value, NULL, 10) != 0;
     } else if (strcmp(key, "autoLoadKernelModule") == 0) {
-        config->autoLoadKernelModule = atoi(value);
+        config->autoLoadKernelModule = strtol(value, NULL, 10);
     } else if (strcmp(key, "mountPropagationStyle") == 0) {
         if (strcmp(value, "private") == 0) {
             config->mountPropagationStyle = VOLMAP_FLAG_PRIVATE;
@@ -472,7 +472,7 @@ static int _assign(const char *key, const char *value, void *t_config) {
             return 1;
         }
     } else if (strcmp(key, "mountUdiRootWritable") == 0) {
-        config->mountUdiRootWritable = atoi(value);
+        config->mountUdiRootWritable = strtol(value, NULL, 10) != 0;
     } else if (strcmp(key, "maxGroupCount") == 0) {
         config->maxGroupCount = strtoul(value, NULL, 10);
     } else if (strcmp(key, "modprobePath") == 0) {

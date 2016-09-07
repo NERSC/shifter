@@ -161,7 +161,7 @@ void modtermSignalHandler(int signum) {
 }
 
 int getttycred(const char *system, char **username, char **password) {
-    FILE *read_fp = stdin;
+    FILE *read_fp = NULL;
     FILE *write_fp = stderr;
     char buffer[1024];
     struct termios currState;
@@ -341,7 +341,6 @@ size_t handleResponseHeader(char *ptr, size_t sz, size_t nmemb, void *data) {
     char *key = NULL, *value = NULL;
     if (colon != NULL) {
         *colon = 0;
-        value = colon + 1;
         key = shifter_trim(ptr);
         value = shifter_trim(colon + 1);
         if (strcasecmp(key, "Content-Type") == 0 && strcmp(value, "application/json") == 0) {
@@ -436,7 +435,7 @@ int jsonParseStringArray(json_object *json_data, char ***values) {
 
         size_t count = ptr - ret;
         if (count >= capacity) {
-            char **tmp = (char **) realloc(ret, sizeof(char **) * (count + 11));
+            char **tmp = (char **) realloc(ret, sizeof(char *) * (count + 11));
             if (tmp == NULL) {
                 break;
             }
@@ -791,6 +790,7 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
         exit(1);
     }
     free(cred);
+    cred = NULL;
     munge_ctx_destroy(ctx);
 
     headers = curl_slist_append(headers, authstr);
@@ -814,11 +814,11 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
     err = curl_easy_perform(curl);
     if (err) {
         if (err == 7) { // 7 means Failed to connect to host.
-          printf("ERROR: it's not possible to contact the image gateway.\n");
+          printf("ERROR: failed to contact the image gateway.\n");
         } else {
           printf("err %d\n", err);
         }
-        return NULL;
+        goto _fail_valid_args;
     }
     long http_code = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
@@ -885,7 +885,7 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
                 if (images != NULL && *images != NULL) {
                     size_t count = 0;
                     size_t lidx = 0;
-                    ImageGwImageRec **ptr = images;
+                    ImageGwImageRec **ptr = NULL;
                     for (ptr = images; ptr != NULL && *ptr != NULL; ptr++) {
                         ImageGwImageRec *image = *ptr;
                         char **tagPtr = image->tag;
@@ -893,6 +893,9 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
                             count++;
                             tagPtr++;
                         }
+                    }
+                    if (count == 0) {
+                        goto _fail_valid_args;
                     }
                     ImageGwImageRec *limages = (ImageGwImageRec *) malloc(sizeof(ImageGwImageRec) * count);
                     for (ptr = images; ptr != NULL && *ptr != NULL; ptr++) {
@@ -937,6 +940,12 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
     }
 
     return imageGw;
+_fail_valid_args:
+    if (imageGw != NULL) {
+        free_ImageGwState(imageGw);
+        imageGw = NULL;
+    }
+    return NULL;
 }
 
 int _assignLoginCredential(const char *key, const char *value, void *_data) {
@@ -946,12 +955,6 @@ int _assignLoginCredential(const char *key, const char *value, void *_data) {
     struct options *config = (struct options *) _data;
 
     if (ptr != NULL) {
-        system = (char *) malloc(sizeof(char)*((ptr - key) + 1));
-        strncpy(system, key, (ptr - key));
-        system[ptr - key] = 0;
-        ptr++;
-        location = strdup(ptr);
-
         size_t count = 0;
         LoginCredential **lcptr = config->loginCredentials;
         for ( ; lcptr && *lcptr; lcptr++) {
@@ -961,6 +964,12 @@ int _assignLoginCredential(const char *key, const char *value, void *_data) {
         if (lcptr == NULL) {
             goto _error;
         }
+        system = (char *) malloc(sizeof(char)*((ptr - key) + 1));
+        strncpy(system, key, (ptr - key));
+        system[ptr - key] = 0;
+        ptr++;
+        location = strdup(ptr);
+
         config->loginCredentials = lcptr;
         lcptr = config->loginCredentials + count;
         *lcptr = (LoginCredential *) malloc(sizeof(LoginCredential));

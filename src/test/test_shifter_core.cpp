@@ -203,35 +203,36 @@ IGNORE_TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
 #else
 TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
 #endif
-    int ret = 0;
     gid_t *groups = NULL;
     int ngroups = 0;
     pid_t pid = 0;
 
+    /* set bad data to ensure it gets reset correctly */
+    ngroups = 1;
+
     /* make sure fails if user is NULL */
-    ret = shifter_getgrouplist(NULL, 1000, &groups, &ngroups);
-    CHECK(ret != 0);
+    groups = shifter_getgrouplist(NULL, 1000, &ngroups);
+    CHECK(groups == NULL && ngroups == 0);
 
     /* make sure fails if user is root */
-    ret = shifter_getgrouplist("root", 1000, &groups, &ngroups);
-    CHECK(ret != 0);
+    ngroups = 1;
+    groups = shifter_getgrouplist("root", 1000, &ngroups);
+    CHECK(groups == NULL && ngroups == 0);
 
     /* make sure fails if group is 0 */
-    ret = shifter_getgrouplist("test", 0, &groups, &ngroups);
-    CHECK(ret != 0);
-
-    /* make sure fails if groups is NULL */
-    ret = shifter_getgrouplist("test", 1000, NULL, &ngroups);
-    CHECK(ret != 0);
+    ngroups = 1;
+    groups = shifter_getgrouplist("test", 0, &ngroups);
+    CHECK(groups == NULL && ngroups == 0);
 
     /* make sure fails if ngroups is NULL */
-    ret = shifter_getgrouplist("test", 1000, &groups, NULL);
-    CHECK(ret != 0);
+    groups = shifter_getgrouplist("test", 1000, NULL);
+    CHECK(groups == NULL);
 
     /* in chroot1, user dmj is in groups 10, 990, and 1000 */
+    ngroups = 0;
 
     SETUP_CHROOT("chroot1")
-    ret = shifter_getgrouplist("dmj", 1000, &groups, &ngroups);
+    groups = shifter_getgrouplist("dmj", 1000, &ngroups);
     fprintf(stderr, "got back %d groups\n", ngroups);
     int ok[] = {10, 990, 1000};
     int expcnt[] = {1, 1, 1};
@@ -251,12 +252,12 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
             exit(1);
         } 
     }
-    CHECK_CHROOT(ret == 0 && ngroups == 3)
+    CHECK_CHROOT(groups != NULL && ngroups == 3)
 
     /* should get back the 3 correct groups plus a duplicate
      * 1000 replacing the evil 0 inserted into chroot2 */
     SETUP_CHROOT("chroot2")
-    ret = shifter_getgrouplist("dmj", 1000, &groups, &ngroups);
+    groups = shifter_getgrouplist("dmj", 1000, &ngroups);
     fprintf(stderr, "got back %d groups\n", ngroups);
     int ok[] = {10, 990, 1000};
     int expcnt[] = {1, 1, 2};
@@ -276,7 +277,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
             exit(1);
         } 
     }
-    CHECK_CHROOT(ret == 0 && ngroups == 4)
+    CHECK_CHROOT(groups != NULL && ngroups == 4)
 
     /* make sure the realloc works correctly */
     free(groups);
@@ -285,7 +286,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
   
     /* after making buffer too small, re-run test from above */
     SETUP_CHROOT("chroot1")
-    ret = shifter_getgrouplist("dmj", 1000, &groups, &ngroups);
+    groups = shifter_getgrouplist("dmj", 1000, &ngroups);
     fprintf(stderr, "got back %d groups\n", ngroups);
     int ok[] = {10, 990, 1000};
     int expcnt[] = {1, 1, 1};
@@ -305,12 +306,12 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
             exit(1);
         } 
     }
-    CHECK_CHROOT(ret == 0 && ngroups == 3)
+    CHECK_CHROOT(groups != NULL && ngroups == 3)
 
     /* check case when NO group entries are present
      * should just get the provided gid back */
     SETUP_CHROOT("chroot3")
-    ret = shifter_getgrouplist("dmj", 1000, &groups, &ngroups);
+    groups = shifter_getgrouplist("dmj", 1000, &ngroups);
     fprintf(stderr, "got back %d groups\n", ngroups);
     int ok[] = {1000};
     int expcnt[] = {1};
@@ -330,7 +331,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
             exit(1);
         } 
     }
-    CHECK_CHROOT(ret == 0 && ngroups == 1)
+    CHECK_CHROOT(groups != NULL && ngroups == 1)
 }
 
 TEST(ShifterCoreTestGroup, setupPerNodeCacheFilename_tests) {
