@@ -17,20 +17,21 @@
 #
 # See LICENSE for full text.
 
+"""
+This module provides the REST API for the image gateway.
+"""
+
 import json
 import os
 import sys
-import socket
-import time
-import shifter_imagegw
-from shifter_imagegw import imagemngr
 import logging
-from flask import Flask, Blueprint, request, Response, url_for, jsonify
+import shifter_imagegw
+from shifter_imagegw.imagemngr import ImageMngr
+from flask import Flask, request, jsonify
+
 
 app = Flask(__name__)
 config = {}
-DEBUG_FLAG = False
-LISTEN_PORT = 5000
 AUTH_HEADER = 'authentication'
 
 
@@ -47,25 +48,25 @@ app.logger.info("initializing with %s" % (CONFIG_FILE))
 with open(CONFIG_FILE) as config_file:
     config = json.load(config_file)
     if 'LogLevel' in config:
-	log_string=config['LogLevel'].lower()
-	if log_string == 'debug':
-	  app.logger.setLevel(logging.DEBUG)
-	elif log_string == 'info':
-	  app.logger.setLevel(logging.INFO)
-	elif log_string == 'warn':
-	  app.logger.setLevel(logging.WARN)
-	elif log_string == 'error':
-	  app.logger.setLevel(logging.ERROR)
-	elif log_string == 'critical':
-	  app.logger.setLevel(logging.CRITICAL)
+        LOG_STRING = config['LogLevel'].lower()
+        if LOG_STRING == 'debug':
+            app.logger.setLevel(logging.DEBUG)
+        elif LOG_STRING == 'info':
+            app.logger.setLevel(logging.INFO)
+        elif LOG_STRING == 'warn':
+            app.logger.setLevel(logging.WARN)
+        elif LOG_STRING == 'error':
+            app.logger.setLevel(logging.ERROR)
+        elif LOG_STRING == 'critical':
+            app.logger.setLevel(logging.CRITICAL)
         else:
-	  app.logger.critical('Unrecongnized Log Level specified')
-mgr = imagemngr.imagemngr(config, logger=app.logger)
-#__all__ = [app, mgr, config, AUTH_HEADER, DEBUG_FLAG, LISTEN_PORT]
+            app.logger.critical('Unrecongnized Log Level specified')
+mgr = ImageMngr(config, logger=app.logger)
 
 # For RESTful Service
 @app.errorhandler(404)
 def not_found(error=None):
+    """ Standard error function to return a 404. """
     app.logger.warning("404 return")
     message = {
         'status': 404,
@@ -78,9 +79,11 @@ def not_found(error=None):
 
 @app.route('/')
 def apihelp():
-    return "{lookup,pull,expire}"
+    """ API helper return """
+    return "{lookup,pull,expire,list}"
 
 def create_response(rec):
+    """ Helper function to create a formated JSON response. """
     resp = {}
     fields = (
         'id', 'system', 'itype', 'tag', 'status', 'userAcl', 'groupAcl',
@@ -93,16 +96,17 @@ def create_response(rec):
             resp[field] = 'MISSING'
     return resp
 
-# Lookup image
-# This will lookup the status of the requested image.
+# List images
+# This will list the images for a system
 @app.route('/api/list/<system>/', methods=["GET"])
 def imglist(system):
+    """ List images for a specific system. """
     auth = request.headers.get(AUTH_HEADER)
     app.logger.debug("list system=%s" % (system))
     try:
         session = mgr.new_session(auth, system)
         records = mgr.imglist(session, system)
-        if records == None:
+        if records is None:
             return not_found('image not found')
     except:
         app.logger.exception('Exception in list')
@@ -118,6 +122,7 @@ def imglist(system):
 # This will lookup the status of the requested image.
 @app.route('/api/lookup/<system>/<imgtype>/<path:tag>/', methods=["GET"])
 def lookup(system, imgtype, tag):
+    """ Lookup an image for a system and return its record """
     if imgtype == "docker" and tag.find(':') == -1:
         tag = '%s:latest' % (tag)
 
@@ -129,29 +134,18 @@ def lookup(system, imgtype, tag):
     try:
         session = mgr.new_session(auth, system)
         rec = mgr.lookup(session, i)
-        if rec == None:
+        if rec is None:
             return not_found('image not found')
     except:
         app.logger.exception('Exception in lookup')
         return not_found('%s %s' % (sys.exc_type, sys.exc_value))
     return jsonify(create_response(rec))
-# {
-# 	"tag": "ubuntu:15.04",
-# 	"id": "<long random string of hexadecimal characters>",
-# 	"system": "edison",
-# 	"status": "ready",
-# 	"userAcl": [],
-# 	"groupAcl": [],
-# 	"ENV": [
-# 		"PATH=/usr/bin:bin"
-# 	],
-# 	"ENTRY": ""
-# }
 
 # Pull image
 # This will pull the requested image.
 @app.route('/api/pull/<system>/<imgtype>/<path:tag>/', methods=["POST"])
 def pull(system, imgtype, tag):
+    """ Pull a specific image and tag for a systems. """
     if imgtype == "docker" and tag.find(':') == -1:
         tag = '%s:latest' % (tag)
 
@@ -172,6 +166,7 @@ def pull(system, imgtype, tag):
 # This will autoexpire images and cleanup stuck pulls
 @app.route('/api/autoexpire/<system>/', methods=["GET"])
 def autoexpire(system):
+    """ Run the autoexpire handler to purge old images """
     auth = request.headers.get(AUTH_HEADER)
     app.logger.debug("autoexpire system=%s" % (system))
     try:
@@ -186,6 +181,7 @@ def autoexpire(system):
 # This will expire an image which removes it from the cache.
 @app.route('/api/expire/<system>/<imgtype>/<tag>/', methods=["GET"])
 def expire(system, imgtype, tag):
+    """ Expire a sepcific image for a system """
     if imgtype == "docker" and tag.find(':') == -1:
         tag = '%s:latest' % (tag)
 

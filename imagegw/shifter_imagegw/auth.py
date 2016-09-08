@@ -17,10 +17,14 @@
 #
 # See LICENSE for full text.
 
+"""
+Module to abstract authentication.  Currently just wraps munge.
+"""
+
 import json
 from shifter_imagegw import munge
 
-class authentication(object):
+class Authentication(object):
     """
     Authentication Class to authenticate user requests
     """

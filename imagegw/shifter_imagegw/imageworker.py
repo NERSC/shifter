@@ -16,17 +16,21 @@
 #
 # See LICENSE for full text.
 
-from celery import Celery
+"""
+This module provides the celery worker function for the image gateway.
+"""
+
 import json
 import os
-from time import time, sleep
-from shifter_imagegw import CONFIG_PATH, dockerv2, converters, transfer
 import shutil
 import sys
 import subprocess
-import tempfile
-from random import randint
 import logging
+import tempfile
+from time import time, sleep
+from random import randint
+from celery import Celery
+from shifter_imagegw import CONFIG_PATH, dockerv2, converters, transfer
 
 
 QUEUE = None
@@ -58,15 +62,20 @@ QUEUE.conf.update(CELERY_TASK_SERIALIZER='json')
 QUEUE.conf.update(CELERY_RESULT_SERIALIZER='json')
 
 class Updater(object):
+    """
+    This is a helper class to update the status for the request.
+    """
     def __init__(self, update_state):
+        """ init the updater. """
         self.update_state = update_state
 
     def update_status(self, state, message):
+        """ update the status including the heartbeat and message """
         if self.update_state is not None:
             metadata = {'heartbeat': time(), 'message': message}
             self.update_state(state=state, meta=metadata)
 
-defupdater = Updater(None)
+DEFAULT_UPDATER = Updater(None)
 
 def initqueue(newconfig):
     """
@@ -91,9 +100,11 @@ def normalized_name(request):
 
 
 def already_processed(request):
+    """ Stub method to see if something is already processed. """
     return False
 
 def _get_cacert(location):
+    """ Private method to get the cert location """
     params = CONFIG['Locations'][location]
     cacert = None
     currdir = os.getcwd()
@@ -107,6 +118,7 @@ def _get_cacert(location):
     return cacert
 
 def _pull_dockerv2(request, location, repo, tag, updater):
+    """ Private method to pull a docker images. """
     cdir = CONFIG['CacheDirectory']
     edir = CONFIG['ExpandDirectory']
     params = CONFIG['Locations'][location]
@@ -128,7 +140,7 @@ def _pull_dockerv2(request, location, repo, tag, updater):
         request['meta'] = dock.examine_manifest(manifest)
         request['id'] = str(request['meta']['id'])
 
-        if check_image(request, request['id']):
+        if check_image(request):
             return True
 
         dock.pull_layers(manifest, cdir)
@@ -148,7 +160,7 @@ def _pull_dockerv2(request, location, repo, tag, updater):
     return False
 
 
-def pull_image(request, updater=defupdater):
+def pull_image(request, updater=DEFAULT_UPDATER):
     """
     pull the image down and extract the contents
 
@@ -201,6 +213,9 @@ def examine_image(request):
     return True
 
 def get_image_format(request):
+    """
+    Retreive the image format for the reuqest using a default if not provided.
+    """
     fmt = CONFIG['DefaultImageFormat']
     if fmt in request:
         fmt = request['format']
@@ -251,7 +266,7 @@ def write_metadata(request):
     return status
 
 
-def check_image(request, imageid):
+def check_image(request):
     """
     Checks if the target image is on the target system
 
@@ -301,15 +316,18 @@ def remove_image(request):
 
 
 def cleanup_temporary(request):
+    """
+    Helper function to cleanup any temporary files or directories.
+    """
     items = ('expandedpath', 'imagefile', 'metafile')
     for item in items:
         if item not in request or request[item] is None:
             continue
         cleanitem = request[item]
-        if type(cleanitem) is unicode:
+        if isinstance(cleanitem, unicode):
             cleanitem = str(cleanitem)
 
-        if type(cleanitem) is not str:
+        if isinstance(cleanitem, str):
             raise ValueError('Invalid type for %s,%s' % (item, type(cleanitem)))
         if cleanitem == '' or cleanitem == '/':
             raise ValueError('Invalid value for %s: %s' % (item, cleanitem))
@@ -330,16 +348,16 @@ def cleanup_temporary(request):
 
 
 @QUEUE.task(bind=True)
-def dopull(self, request, TESTMODE=0):
+def dopull(self, request, testmode=0):
     """
     Celery task to do the full workflow of pulling an image and transferring it
     """
     logging.debug("dopull system=%s tag=%s", request['system'], request['tag'])
     updater = Updater(self.update_state)
-    if TESTMODE == 1:
+    if testmode == 1:
         states = ('PULLING', 'EXAMINATION', 'CONVERSION', 'TRANSFER', 'READY')
         for state in states:
-            logging.info("Worker: TESTMODE Updating to %s", state)
+            logging.info("Worker: testmode Updating to %s", state)
             updater.update_status(state, state)
             sleep(1)
         ident = '%x' % randint(0, 100000)
@@ -350,8 +368,8 @@ def dopull(self, request, TESTMODE=0):
             'env':['FOO=bar', 'BAZ=boz']
         }
         return ret
-    elif TESTMODE == 2:
-        logging.info("Worker: TESTMODE 2 setting failure")
+    elif testmode == 2:
+        logging.info("Worker: testmode 2 setting failure")
         raise OSError('task failed')
     try:
         # Step 1 - Do the pull
@@ -365,7 +383,7 @@ def dopull(self, request, TESTMODE=0):
         if 'meta' not in request:
             raise OSError('Metadata not populated')
 
-        if not check_image(request, request['id']):
+        if not check_image(request):
             # Step 2 - Check the image
             updater.update_status('EXAMINATION', 'Examining image')
             print "Worker: examining image %s" % request['tag']
@@ -401,12 +419,12 @@ def dopull(self, request, TESTMODE=0):
 
 
 @QUEUE.task(bind=True)
-def doexpire(self, request, TESTMODE=0):
+def doexpire(self, request, testmode=0):
     """
     Celery task to do the full workflow of pulling an image and transferring it
     """
     logging.debug("do expire system=%s tag=%s TM=%d", request['system'], \
-            request['tag'], TESTMODE)
+            request['tag'], testmode)
     try:
         self.update_state(state='EXPIRING')
         if not remove_image(request):
@@ -422,11 +440,10 @@ def doexpire(self, request, TESTMODE=0):
         raise
 
 @QUEUE.task(bind=True)
-def doimagevalid(self, request, TESTMODE=0):
+def doimagevalid(self, request, testmode=0):
     """
     Celery task to check if a pulled image exists and if it is valid
     """
     logging.debug("do imagevalid system=%s tag=%s TM=%d", request['system'], \
-            request['tag'], TESTMODE)
+            request['tag'], testmode)
     raise NotImplementedError('no image validity checks implemented yet')
-

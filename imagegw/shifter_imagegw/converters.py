@@ -1,11 +1,5 @@
 #!/usr/bin/python
 
-import os
-import subprocess
-import shutil
-import tempfile
-from shifter_imagegw.util import program_exists
-
 # Shifter, Copyright (c) 2015, The Regents of the University of California,
 # through Lawrence Berkeley National Laboratory (subject to receipt of any
 # required approvals from the U.S. Dept. of Energy).  All rights reserved.
@@ -24,11 +18,24 @@ from shifter_imagegw.util import program_exists
 #
 # See LICENSE for full text.
 
+"""
+Convert module that handles converting an unpacked image into a compatibable format
+for shifter.
+"""
+
+import os
+import subprocess
+import shutil
+import tempfile
+from shifter_imagegw.util import program_exists
+
 def generate_ext4_image(expand_path, image_path):
     """
     Creates an ext4 based image
     """
-    raise NotImplementedError('ext4 support is note implemented yet')
+    message = 'ext4 support is note implemented yet %s %s'%(expand_path, image_path)
+    raise NotImplementedError(message)
+    return False
 
 def generate_cramfs_image(expand_path, image_path):
     """
@@ -69,6 +76,7 @@ def generate_squashfs_image(expand_path, image_path):
     return True
 
 def convert(fmt, expand_path, image_path):
+    """ do the conversion """
     if os.path.exists(image_path):
         print "file already exists"
         return True
@@ -103,7 +111,7 @@ def convert(fmt, expand_path, image_path):
     return True
 
 def writemeta(fmt, meta, metafile):
-
+    """ write the metadata file """
     with open(metafile, 'w') as meta_fd:
         # write out ENV, ENTRYPOINT, WORKDIR and format
         meta_fd.write("FORMAT: %s\n" % (fmt))
@@ -117,4 +125,3 @@ def writemeta(fmt, meta, metafile):
         meta_fd.close()
     # Some error must have occurred
     return True
-

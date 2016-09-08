@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-from shifter_imagegw.api import api
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
@@ -21,7 +20,10 @@ modification, are permitted provided that the following conditions are met:
 See LICENSE for full text.
 """
 
-LISTEN_PORT=5000
+from shifter_imagegw import api
+
+LISTEN_PORT = 5000
+DEBUG_FLAG = False
 
 if __name__ == "__main__":
-    api.app.run(debug=api.DEBUG_FLAG, host='0.0.0.0', port=LISTEN_PORT, threaded=True)
+    api.app.run(debug=DEBUG_FLAG, host='0.0.0.0', port=LISTEN_PORT, threaded=True)
