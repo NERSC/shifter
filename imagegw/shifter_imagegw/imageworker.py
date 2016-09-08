@@ -327,7 +327,7 @@ def cleanup_temporary(request):
         if isinstance(cleanitem, unicode):
             cleanitem = str(cleanitem)
 
-        if isinstance(cleanitem, str):
+        if not isinstance(cleanitem, str):
             raise ValueError('Invalid type for %s,%s' % (item, type(cleanitem)))
         if cleanitem == '' or cleanitem == '/':
             raise ValueError('Invalid value for %s: %s' % (item, cleanitem))
