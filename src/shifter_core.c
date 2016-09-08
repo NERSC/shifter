@@ -902,7 +902,6 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
     struct stat statData;
     char udiRoot[PATH_MAX];
     char *sshPath = NULL;
-    char *path = NULL;
     dev_t destRootDev = 0;
     dev_t srcRootDev = 0;
     dev_t tmpDev = 0;
@@ -1020,9 +1019,6 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
     return 0;
 
 _mountImgVfs_unclean:
-    if (path != NULL) {
-        free(path);
-    }
     if (sshPath != NULL) {
         free(sshPath);
     }
