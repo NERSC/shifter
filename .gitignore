@@ -53,6 +53,7 @@ test_shifter_core_AsRootDangerous
 test_utility
 *.gcno
 *.gcda
+*.trs
 imagegw/shifter_imagegw/__init__.py
 udiRoot.conf.example
 shifter*.tar.*z*
@@ -60,12 +61,17 @@ auxdir/compile
 auxdir/test-driver
 dep/build/
 dep/build_mount/
+dep/cpputest/
 dep/mount
 dep/udiRoot_dep.tar
 etc_files/group
 etc_files/passwd
 extra/modules.tar
 extra/shifter_slurm_dws_support
+extra/systemd/shifter_imagegw_worker@.service
 src/test/test_udiRoot.conf
 wlm_integration/slurm/test/test_udiRoot.conf
-
+wlm_integration/slurm/test/test_shifterSpank_config
+wlm_integration/slurm/test/test_shifterSpank_prolog
+wlm_integration/slurm/test/test_shifterSpank_cgroup
+wlm_integration/slurm/test/test_shifterSpank_util
