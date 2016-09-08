@@ -2804,10 +2804,6 @@ struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config) {
     return NULL;
 
 _shifter_getpwuid_unclean:
-    if (input != NULL) {
-        fclose(input);
-        input = NULL;
-    }
     return NULL;
 }
 
