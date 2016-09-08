@@ -756,7 +756,11 @@ int cgroup_record_components(shifterSpank_config *ssconfig, const char *path, vo
 #if 0
     _log(LOG_DEBUG, "sz: %lu, diff: %lu, *comp_ptr=%lu, %s", sz, diff, *comp_ptr, path);
 #endif 
-    *comp_ptr = (char **) realloc(*comp_ptr, sizeof(char*) * sz);
+    char **tmp = (char **) realloc(*comp_ptr, sizeof(char*) * sz);
+    if (tmp == NULL) {
+        return 1;
+    }
+    *comp_ptr = tmp;
     ptr = *comp_ptr + diff;
     *ptr = strdup(path);
     ptr++;
@@ -797,10 +801,16 @@ char *setup_memory_cgroup(
 
     for (cptr = components; cptr && *cptr; cptr++) {
         cgroup_path = alloc_strcatf(cgroup_path, &cgroup_path_sz, &cgroup_path_cap, "/%s", *cptr);
+        if (cgroup_path == NULL) {
+            return NULL;
+        }
         if (action != NULL) {
-            action(ssconfig, cgroup_path, data);
+            if (action(ssconfig, cgroup_path, data) != 0) {
+                free(cgroup_path);
+            }
         }
         free(*cptr);
+        *cptr = NULL;
     }
     return cgroup_path;
 }
@@ -970,7 +980,11 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
         char *ptr = ssconfig->volume;
         for ( ; ; ) {
             char *limit = strchr(ptr, ';');
-            volArgs = (char **) realloc(volArgs,sizeof(char *) * (n_volArgs + 2));
+            char **tmp = (char **) realloc(volArgs, sizeof(char *) * (n_volArgs + 2));
+            if (tmp == NULL) {
+                PROLOG_ERROR("FAILED to allocate memory for volArgs!", ERROR);
+            }
+            volArgs = tmp;
             if (limit != NULL) *limit = 0;
             volArgs[n_volArgs++] = strdup(ptr);
             volArgs[n_volArgs] = NULL;
