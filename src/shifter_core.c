@@ -1963,9 +1963,6 @@ int compareShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMa
 
     return cmpVal;
 _compareShifterConfig_error:
-    if (fp != NULL) {
-        fclose(fp);
-    }
     if (configString != NULL) {
         free(configString);
     }
