@@ -1153,7 +1153,7 @@ char **getSupportedFilesystems() {
             listLen++;
         }
     }
-    qsort(ret, listLen, sizeof(char **), _sortFsTypeForward);
+    qsort(ret, listLen, sizeof(char *), _sortFsTypeForward);
 
     fclose(fp);
     fp = NULL;
