@@ -368,8 +368,8 @@ endf:
 int generateSshKey(shifterSpank_config *ssconfig) {
     struct stat st_data;
 
-    char filename[1024];
-    char buffer[4096];
+    char filename[PATH_MAX];
+    char buffer[PATH_MAX];
     struct passwd pwd;
     struct passwd *ptr = NULL;
     int generateKey = 0;
@@ -378,33 +378,77 @@ int generateSshKey(shifterSpank_config *ssconfig) {
     size_t n_linePtr = 0;
     FILE *fp = NULL;
 
-    getpwuid_r(getuid(), &pwd, buffer, 4096, &ptr);
+    getpwuid_r(getuid(), &pwd, buffer, sizeof(buffer), &ptr);
     if (ptr == NULL) {
         _log(LOG_ERROR, "FAIL cannot lookup current_user");
         return 1;
     }
-    snprintf(filename, 1024, "%s/.udiRoot/id_rsa.key", pwd.pw_dir);
+    int bytes = snprintf(filename, sizeof(filename), "%s/.udiRoot/id_rsa.key",
+            pwd.pw_dir);
+    if (bytes <= 0 || bytes >= sizeof(filename)) {
+        _log(LOG_ERROR, "FAIL cannot write out path, too long\n");
+        return 1;
+    }
 
     memset(&st_data, 0, sizeof(struct stat));
     if (stat(filename, &st_data) != 0) {
         generateKey = 1;
     }
-    snprintf(filename, 1024, "%s/.udiRoot/id_rsa.key.pub", pwd.pw_dir);
+
+    bytes = snprintf(filename, sizeof(filename), "%s/.udiRoot/id_rsa.key.pub",
+            pwd.pw_dir);
+    if (bytes <= 0 || bytes >= sizeof(filename)) {
+        _log(LOG_ERROR, "FAIL cannot write out path, too long");
+        return 1;
+    }
+
     memset(&st_data, 0, sizeof(struct stat));
     if (stat(filename, &st_data) != 0) {
         generateKey = 1;
     }
 
     if (generateKey) {
-        char cmd[1024];
-        snprintf(filename, 1024, "%s/.udiRoot", pwd.pw_dir);
-        mkdir(filename, 0700); // intentionally ignoring errors for this
-        snprintf(filename, 1024, "%s/.udiRoot/id_rsa.key", pwd.pw_dir);
-        snprintf(cmd, 1024, "ssh-keygen -t rsa -f %s -N '' >/dev/null 2>/dev/null", filename);
+        char cmd[PATH_MAX];
+        bytes = snprintf(filename, sizeof(filename), "%s/.udiRoot",
+                pwd.pw_dir);
+        if (bytes <= 0 || bytes >= sizeof(filename)) {
+            _log(LOG_ERROR, "FAILED directory path too long");
+            rc = 1;
+            goto generateSshKey_exit;
+        }
+        if (mkdir(filename, 0700) == -1) {
+            if (errno != EEXIST) {
+                _log(LOG_ERROR, "FAILED to create directory for udiRoot keys "
+                        "%s: %s", filename, strerror(errno));
+                rc = 1;
+                goto generateSshKey_exit;
+            }
+        }
+        bytes = snprintf(filename, sizeof(filename), "%s/.udiRoot/id_rsa.key",
+                pwd.pw_dir);
+        if (bytes <= 0 || bytes >= sizeof(filename)) {
+            _log(LOG_ERROR, "FAILED path too long");
+            rc = 1;
+            goto generateSshKey_exit;
+        }
+        bytes = snprintf(cmd, sizeof(cmd),
+                "ssh-keygen -t rsa -f %s -N '' >/dev/null 2>/dev/null",
+                filename);
+        if (bytes <= 0 || bytes >= sizeof(cmd)) {
+            _log(LOG_ERROR, "FAILED command too long");
+            rc = 1;
+            goto generateSshKey_exit;
+        }
         rc = system(cmd);
     }
     if (rc == 0) {
-        snprintf(filename, 1024, "%s/.udiRoot/id_rsa.key.pub", pwd.pw_dir);
+        bytes = snprintf(filename, sizeof(filename),
+                "%s/.udiRoot/id_rsa.key.pub", pwd.pw_dir);
+        if (bytes <= 0 || bytes >= sizeof(filename)) {
+            _log(LOG_ERROR, "FAILED path too long");
+            rc = 1;
+            goto generateSshKey_exit;
+        }
         fp = fopen(filename, "r");
         if (fp == NULL) {
             _log(LOG_ERROR, "FAILED to open udiRoot pubkey: %s", filename);
