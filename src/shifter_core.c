@@ -2844,10 +2844,6 @@ struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config) {
     return NULL;
 
 _shifter_getpwnam_unclean:
-    if (input != NULL) {
-        fclose(input);
-        input = NULL;
-    }
     return NULL;
 }
 
