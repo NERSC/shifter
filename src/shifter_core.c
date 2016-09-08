@@ -834,6 +834,10 @@ int writeHostFile(const char *minNodeSpec, UdiRootConfig *udiConfig) {
     if (minNodeSpec == NULL || udiConfig == NULL) return 1;
 
     minNode = strdup(minNodeSpec);
+    if (minNode == NULL) {
+        goto _writeHostFile_error;
+    }
+
     limit = minNode + strlen(minNode);
 
     snprintf(filename, PATH_MAX, "%s/var/hostsfile", udiConfig->udiMountPoint);
