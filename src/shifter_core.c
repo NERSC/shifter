@@ -557,29 +557,41 @@ int prepareSiteModifications(const char *username,
                 filename = userInputPathFilter(entry->d_name, 0);
                 if (filename == NULL) {
                     fprintf(stderr, "FAILED to allocate filename string.\n");
-                    goto _prepSiteMod_unclean;
+                    goto _fail_copy_etcPath;
                 }
                 snprintf(srcBuffer, PATH_MAX, "%s/%s", udiConfig->etcPath, filename);
                 srcBuffer[PATH_MAX-1] = 0;
                 snprintf(mntBuffer, PATH_MAX, "%s/etc/%s", udiRoot, filename);
                 mntBuffer[PATH_MAX-1] = 0;
                 free(filename);
+                filename = NULL;
 
                 if (lstat(srcBuffer, &statData) != 0) {
                     fprintf(stderr, "Couldn't find source file, check if there are illegal characters: %s\n", srcBuffer);
-                    goto _prepSiteMod_unclean;
+                    goto _fail_copy_etcPath;
                 }
 
                 if (lstat(mntBuffer, &statData) == 0) {
                     fprintf(stderr, "Couldn't copy %s because file already exists.\n", mntBuffer);
-                    goto _prepSiteMod_unclean;
+                    goto _fail_copy_etcPath;
                 } else {
                     ret = _shifterCore_copyFile(udiConfig->cpPath, srcBuffer, mntBuffer, 0, 0, 0, 0644);
                     if (ret != 0) {
                         fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
-                        goto _prepSiteMod_unclean;
+                        goto _fail_copy_etcPath;
                     }
                 }
+                continue;
+_fail_copy_etcPath:
+                if (filename != NULL) {
+                    free(filename);
+                    filename = NULL;
+                }
+                if (etcDir != NULL) {
+                    closedir(etcDir);
+                    etcDir = NULL;
+                }
+                goto _prepSiteMod_unclean;
             }
             closedir(etcDir);
         } else {
