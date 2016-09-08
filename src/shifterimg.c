@@ -35,6 +35,7 @@
 #include <signal.h>
 #include <munge.h>
 #include <curl/curl.h>
+#include <errno.h>
 #include <json-c/json.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -301,39 +302,57 @@ int doLogin(struct options *options, UdiRootConfig *udiConfig) {
 
     /* write out credentials */
     struct passwd *pwd = getpwuid(getuid());
+    char *creddir = NULL;
+    char *path = NULL;
     if (pwd != NULL) {
-        char *creddir = alloc_strgenf("%s/.udiRoot", pwd->pw_dir);
-        char *path = alloc_strgenf("%s/.udiRoot/.cred", pwd->pw_dir);
-        struct stat statData;
-        if (stat(creddir, &statData) != 0) {
-            if (mkdir(creddir, 0700) != 0) {
-                fprintf(stderr, "FAILED to create directory %s\n", creddir);
+        FILE *out = NULL;
+        creddir = alloc_strgenf("%s/.udiRoot", pwd->pw_dir);
+        path = alloc_strgenf("%s/.udiRoot/.cred", pwd->pw_dir);
+        if (creddir == NULL || path == NULL) {
+            fprintf(stderr, "FAILED to allocate memory for paths\n");
+            goto _error;
+        }
+        if (mkdir(creddir, 0700) != 0) {
+            if (errno != EEXIST) {
+                fprintf(stderr, "FAILED to create directory %s: %s\n", creddir, strerror(errno));
                 goto _error;
             }
         }
-        if (stat(creddir, &statData) == 0) {
-            FILE *out = fopen(path, "w");
-            if (out == NULL) {
-                fprintf(stderr, "FAILED to open credentials for writing!\n");
-                goto _error;
-            }
-            lcptr = options->loginCredentials;
-            for ( ; lcptr && *lcptr; lcptr++) {
-                fprintf(out, "%s:%s=%s\n", (*lcptr)->system, (*lcptr)->location, (*lcptr)->cred);
-            }
-            fclose(out);
-            if (chmod(path, 0600) != 0) {
-                fprintf(stderr, "FAILED to correctly set permissions on %s\n", path);
-                goto _error;
-            }
-        } else {
-            fprintf(stderr, "FAILED to stat %s\n", creddir);
+        out = fopen(path, "w");
+        if (out == NULL) {
+            fprintf(stderr, "FAILED to open credentials for writing!\n");
+            goto _error;
+        }
+        lcptr = options->loginCredentials;
+        for ( ; lcptr && *lcptr; lcptr++) {
+            fprintf(out, "%s:%s=%s\n", (*lcptr)->system, (*lcptr)->location, (*lcptr)->cred);
+        }
+        fclose(out);
+        out = NULL;
+
+        if (chmod(path, 0600) != 0) {
+            fprintf(stderr, "FAILED to correctly set permissions on %s\n", path);
             goto _error;
         }
     }
-
+    if (path != NULL) {
+        free(path);
+        path = NULL;
+    }
+    if (creddir != NULL) {
+        free(creddir);
+        creddir = NULL;
+    }
     return 0;
 _error:
+    if (path != NULL) {
+        free(path);
+        path = NULL;
+    }
+    if (creddir != NULL) {
+        free(creddir);
+        creddir = NULL;
+    }
     return 1;
 }
 
