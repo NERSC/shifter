@@ -781,7 +781,6 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     char *nodelist = NULL;
     char *username = NULL;
     char *uid_str = NULL;
-    char *gid_str = NULL;
     char *sshPubKey = NULL;
     size_t tasksPerNode = 0;
     pid_t pid = 0;
@@ -875,42 +874,34 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
 
     uid_str = getenv("SLURM_JOB_UID");
     if (uid_str != NULL) {
-        uid = strtoul(uid_str, NULL, 10);
+        uid = (uid_t) strtol(uid_str, NULL, 10);
     } else {
         if (wrap_spank_get_uid(ssconfig, &uid) == ERROR) {
             PROLOG_ERROR("FAILED to get job uid!", ERROR);
         }
     }
+    if (uid <= 0) {
+        PROLOG_ERROR("Job uid is invalid!", ERROR);
+    }
 
-    gid_str = getenv("SHIFTER_GID");
-    if (gid_str != NULL) {
-        gid = strtoul(gid_str, NULL, 10);
-    } else {
-        if (wrap_spank_get_gid(ssconfig, &gid) == ERROR) {
-            _log(LOG_DEBUG, "shifter prolog: failed to get gid from environment, trying getpwuid_r on %d", uid);
-            char buffer[4096];
-            struct passwd pw, *result;
-            while (1) {
-                rc = getpwuid_r(uid, &pw, buffer, 4096, &result);
-                if (rc == EINTR) continue;
-                if (rc != 0) result = NULL;
-                break;
-            }
-            if (result != NULL) {
-                gid = result->pw_gid;
-                _log(LOG_DEBUG, "shifter prolog: got gid from getpwuid_r: %s", username);
-            } else {
-                PROLOG_ERROR("FAILED to get job gid!", ERROR);
-            }
+    if (wrap_spank_get_gid(ssconfig, &gid) == ERROR) {
+        char buffer[4096];
+        struct passwd pw, *result;
+        while (1) {
+            rc = getpwuid_r(uid, &pw, buffer, 4096, &result);
+            if (rc == EINTR) continue;
+            if (rc != 0) result = NULL;
+            break;
+        }
+        if (result != NULL) {
+            gid = result->pw_gid;
+            _log(LOG_DEBUG, "shifter prolog: got gid from getpwuid_r: %s", username);
+        } else {
+            PROLOG_ERROR("FAILED to get job gid!", ERROR);
         }
     }
 
-    /* try to get username from environment first, then fallback to getpwuid */
-    username = getenv("SLURM_JOB_USER");
-    if (username != NULL && strcmp(username, "(null)") != 0) {
-        username = strdup(username);
-        _log(LOG_DEBUG, "shifter prolog: got username from environment: %s", username);
-    } else if (uid != 0) {
+    if (uid != 0) {
         /* getpwuid may not be optimal on cray compute node, but oh well */
         _log(LOG_DEBUG, "shifter prolog: failed to get username from environment, trying getpwuid_r on %d", uid);
         char buffer[4096];
@@ -950,14 +941,20 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     snprintf(setupRootPath, PATH_MAX, "%s/sbin/setupRoot", ssconfig->udiConfig->udiRootPath);
     strncpy_StringArray(setupRootPath, strlen(setupRootPath), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     if (uid != 0) {
-        snprintf(buffer, PATH_MAX, "%u", uid);
+        int bytes = snprintf(buffer, sizeof(buffer), "%u", uid);
+        if (bytes <= 0 || bytes >= sizeof(buffer)) {
+            PROLOG_ERROR("FAILED to write uid into job!\n", ERROR);
+        }
         strncpy_StringArray("-U", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
-        strncpy_StringArray(buffer, strlen(buffer), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+        strncpy_StringArray(buffer, bytes, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
     if (gid != 0) {
-        snprintf(buffer, PATH_MAX, "%u", gid);
+        int bytes = snprintf(buffer, sizeof(buffer), "%u", gid);
+        if (bytes <= 0 || bytes >= sizeof(buffer)) {
+            PROLOG_ERROR("FAILED to write gid into setupRoot args!", ERROR);
+        }
         strncpy_StringArray("-G", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
-        strncpy_StringArray(buffer, strlen(buffer), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+        strncpy_StringArray(buffer, bytes, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
     if (username != NULL) {
         strncpy_StringArray("-u", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
