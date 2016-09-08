@@ -2190,10 +2190,6 @@ _setupImageSsh_unclean:
         fclose(outputFile);
         outputFile = NULL;
     }
-    if (lineBuf != NULL) {
-        free(lineBuf);
-        lineBuf = NULL;
-    }
     return 1;
 }
 
