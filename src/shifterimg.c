@@ -958,7 +958,6 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
                         strftime(time_str, 100, "%Y-%m-%dT%H:%M:%S", &time_struct);
 
                         printf("%-10s %-10s %-8s %-.10s   %s %-30s\n", image->system, image->type, image->status, image->identifier, time_str, tag);
-                        free(image);
                     }
                     free(limages);
                 }
