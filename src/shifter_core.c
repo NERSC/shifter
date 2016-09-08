@@ -1067,11 +1067,6 @@ _remountUdiRootReadonly_unclean:
 int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig) {
     char loopMountPath[PATH_MAX];
     char imagePath[PATH_MAX];
-    struct stat statData;
-#define MKDIR(dir, perm) if (mkdir(dir, perm) != 0) { \
-    fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", dir); \
-    goto _mountImageLoop_unclean; \
-}
     if (imageData == NULL || udiConfig == NULL) {
         return 1;
     }
@@ -1081,15 +1076,21 @@ int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig) {
     if (udiConfig->loopMountPoint == NULL || strlen(udiConfig->loopMountPoint) == 0) {
         return 1;
     }
-    if (stat(udiConfig->loopMountPoint, &statData) != 0) {
-        MKDIR(udiConfig->loopMountPoint, 0755);
+    if (mkdir(udiConfig->loopMountPoint, 0755) != 0) {
+        if (errno != EEXIST) {
+            fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", udiConfig->loopMountPoint);
+            goto _mountImageLoop_unclean;
+        }
     }
+
     snprintf(loopMountPath, PATH_MAX, "%s", udiConfig->loopMountPoint);
     loopMountPath[PATH_MAX-1] = 0;
     snprintf(imagePath, PATH_MAX, "%s", imageData->filename);
     imagePath[PATH_MAX-1] = 0;
-    loopMount(imagePath, loopMountPath, imageData->format, udiConfig, 1);
-#undef MKDIR
+    if (loopMount(imagePath, loopMountPath, imageData->format, udiConfig, 1) != 0) {
+        fprintf(stderr, "FAILED to loop mount image: %s\n", imagePath);
+        goto _mountImageLoop_unclean;
+    }
     return 0;
 _mountImageLoop_unclean:
     return 1;
