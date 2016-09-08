@@ -1381,13 +1381,16 @@ int setupPerNodeCacheFilename(
         fprintf(stderr, "perNodeCache filename too long to store in buffer.\n");
         return -1;
     }
+    mode_t old_umask = umask(077);
     fd = mkstemp(buffer);
     if (fd < 0) {
         fprintf(stderr, "Failed to open perNodeCache backing store %s.\n",
                 buffer);
         perror("Error: ");
+        umask(old_umask);
         return -1;
     }
+    umask(old_umask);
     return fd;
 }
 
