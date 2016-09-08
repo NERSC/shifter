@@ -2426,6 +2426,10 @@ int _forkAndExecv(char *const *args, int silent) {
     /* this is the child */
     if (silent) {
         int devNull = open("/dev/null", O_WRONLY);
+        if (devNull < 0) {
+            fprintf(stderr, "FAILED to open /dev/null: %s", strerror(errno));
+            exit(1);
+        }
         dup2(devNull, STDOUT_FILENO);
         dup2(devNull, STDERR_FILENO);
         close(devNull);
