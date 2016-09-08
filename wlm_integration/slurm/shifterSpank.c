@@ -835,8 +835,12 @@ char *setup_memory_cgroup(
         if (action != NULL) {
             if (action(ssconfig, cgroup_path, data) != 0) {
                 free(cgroup_path);
+                cgroup_path = NULL;
+                break;
             }
         }
+    }
+    for (cptr = components; cptr && *cptr; cptr++) {
         free(*cptr);
         *cptr = NULL;
     }
