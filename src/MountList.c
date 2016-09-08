@@ -165,7 +165,7 @@ void setSort_MountList(MountList *mounts, MountListSortOrder sorting) {
 
     if (mounts->sorted == sorting) return;
     if (mounts->sorted == MOUNT_SORT_UNSORTED) {
-        qsort(mounts->mountPointList, mounts->count, sizeof(char **), sorting == MOUNT_SORT_FORWARD ? _sortMountForward : _sortMountReverse);
+        qsort(mounts->mountPointList, mounts->count, sizeof(char *), sorting == MOUNT_SORT_FORWARD ? _sortMountForward : _sortMountReverse);
     } else {
         /* need to reverse the list */
         char **left = mounts->mountPointList;
