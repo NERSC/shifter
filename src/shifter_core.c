@@ -229,7 +229,9 @@ int bindImageIntoUDI(
             } else if (copyFlag == 0) {
                 /* create the file */
                 FILE *fp = fopen(mntBuffer, "w");
-                fclose(fp);
+                if (fp != NULL) {
+                    fclose(fp);
+                }
                 BINDMOUNT(&mountCache, srcBuffer, mntBuffer, 0, 0);
             }
             free(itemname);
