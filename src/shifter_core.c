@@ -2554,9 +2554,6 @@ _bindMount_unclean:
         remove_MountList(mountCache, to_real);
         free(to_real);
         to_real = NULL;
-    } else {
-        ret = umount2(to, UMOUNT_NOFOLLOW|MNT_DETACH);
-        remove_MountList(mountCache, to);
     }
     if (ret != 0) {
         fprintf(stderr, "ERROR: unclean exit from bind-mount routine. %s may still be mounted.\n", to);
