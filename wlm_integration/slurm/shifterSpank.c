@@ -470,9 +470,6 @@ generateSshKey_exit:
     if (linePtr != NULL) {
         free(linePtr);
     }
-    if (fp != NULL) {
-        fclose(fp);
-    }
     return rc;
 }
 
