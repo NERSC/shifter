@@ -18,7 +18,7 @@
 
 import os
 import unittest
-from shifter_imagegw import auth
+from shifter_imagegw.auth import Authentication
 
 class AuthTestCase(unittest.TestCase):
 
@@ -35,7 +35,7 @@ class AuthTestCase(unittest.TestCase):
             "Authentication":"munge",
             "Platforms":{self.system: {"mungeSocketPath": "/tmp/munge.s"}}
         }
-        self.auth = auth.authentication(self.config)
+        self.auth = Authentication(self.config)
 
     def tearDown(self):
         with open(self.test_dir + "munge.expired", 'w') as f:

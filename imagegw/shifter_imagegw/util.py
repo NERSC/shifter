@@ -33,7 +33,7 @@ def program_exists(program):
     """
     Checks if a program (bin) exists and raises an exception if not found.
     """
-    if which(program) == None:
+    if which(program) is None:
         raise IOError('Binary %s not found or not executable.' % str(program))
     return True
 

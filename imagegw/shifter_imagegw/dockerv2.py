@@ -16,6 +16,11 @@
 #
 # See LICENSE for full text.
 
+"""
+This modules implements the logic to interact with a dockver v2 registry.  This
+includes pulling down the manifest, pulling layers, and unpacking the layers.
+"""
+
 import hashlib
 import httplib
 import ssl
@@ -51,7 +56,7 @@ def jose_decode_base64(input_string):
         return base64.b64decode(input_string + '===')
     return base64.b64decode(input_string)
 
-def _verify_manifest_signature(manifest, text, hashalgo, digest):
+def _verify_manifest_signature(manifest, text, digest):
     """
     Verify the manifest digest and signature
     """
@@ -197,7 +202,7 @@ class DockerV2Handle(object):
         try:
             self.repo, self.tag = imageIdent.strip().split(':', 1)
         except ValueError:
-            if type(imageIdent) is str:
+            if isinstance(imageIdent, str):
                 raise ValueError('Invalid docker image identifier: %s' \
                         % imageIdent)
             else:
@@ -205,7 +210,7 @@ class DockerV2Handle(object):
 
         if options is None:
             options = {}
-        if type(options) is not dict:
+        if not isinstance(options, dict):
             raise ValueError('Invalid type for DockerV2 options')
         self.updater = updater
 
@@ -265,7 +270,7 @@ class DockerV2Handle(object):
             raise ValueError('if either username or password is specified, ' \
                     'both must be')
 
-        if self.allow_authenticated == False and self.username is not None:
+        if self.allow_authenticated is False and self.username is not None:
             raise ValueError('authentication not allowed with the current ' \
                     'settings (make sure you are using https)')
 
@@ -370,7 +375,7 @@ class DockerV2Handle(object):
         content_len = int(resp1.getheader('content-length'))
         if expected_hash is None or len(expected_hash) == 0:
             raise ValueError("No docker-content-digest header found")
-        (digest_algo, expected_hash) = expected_hash.split(':', 1)
+        expected_hash = expected_hash.split(':', 1)[1]
         data = resp1.read()
         if len(data) != content_len:
             memo = "Failed to read manifest: %d/%d bytes read" \
@@ -379,7 +384,7 @@ class DockerV2Handle(object):
         jdata = json.loads(data)
 
         ## throws exceptions upon failure only
-        _verify_manifest_signature(jdata, data, digest_algo, expected_hash)
+        _verify_manifest_signature(jdata, data, expected_hash)
         return jdata
 
     def examine_manifest(self, manifest):
@@ -419,6 +424,18 @@ class DockerV2Handle(object):
             self.save_layer(layer['fsLayer']['blobSum'], cachedir)
             layer = layer['child']
         return True
+    def _get_auth_header(self):
+        """
+        Helper function to generate the header.
+        """
+        headers = {}
+        if self.auth_method == 'token' and self.token is not None:
+            headers = {'Authorization': 'Bearer %s' % self.token}
+        elif self.auth_method == 'basic' and self.username is not None:
+            auth = '%s:%s' % (self.username, self.password)
+            headers['Authorization'] = 'Basic %s' % base64.b64encode(auth)
+        return headers
+
 
     def save_layer(self, layer, cachedir='./'):
         """
@@ -431,13 +448,7 @@ class DockerV2Handle(object):
             if conn is None:
                 return None
 
-            headers = {}
-            if self.auth_method == 'token' and self.token is not None:
-                headers = {'Authorization': 'Bearer %s' % self.token}
-            elif self.auth_method == 'basic' and self.username is not None:
-                auth = '%s:%s' % (self.username, self.password)
-                headers['Authorization'] = 'Basic %s' % base64.b64encode(auth)
-
+            headers = self._get_auth_header()
             filename = '%s/%s.tar' % (cachedir, layer)
 
             if os.path.exists(filename):
@@ -452,10 +463,9 @@ class DockerV2Handle(object):
             location = resp1.getheader('location')
             if resp1.status == 200:
                 break
-            elif resp1.status == 401:
-                if self.auth_method == 'token':
-                    self.do_token_auth(resp1.getheader('WWW-Authenticate'))
-                    continue
+            elif resp1.status == 401 and self.auth_method == 'token':
+                self.do_token_auth(resp1.getheader('WWW-Authenticate'))
+                continue
             elif location != None:
                 url = location
                 match_obj = re.match(r'(https?)://(.*?)(/.*)', location)
@@ -592,22 +602,18 @@ class DockerV2Handle(object):
         pfp.communicate()
 
 # Deprecated: Just use the object above
-def pull_image(options, base_url, repo, tag,
-               cachedir='./', expanddir='./',
-               cacert=None, username=None, password=None):
+def pull_image(options, repo, tag, cachedir='./', expanddir='./'):
     """
     Uber function to pull the manifest, layers, and extract the layers
     """
     if options is None:
         options = {}
-    if username is not None:
-        options['username'] = username
-    if password is not None:
-        options['password'] = password
-    if cacert is not None:
-        options['cacert'] = cacert
-    if base_url is not None:
-        options['baseUrl'] = base_url
+    if 'username' not in options:
+        options['username'] = None
+    if 'password' not in options:
+        options['password'] = None
+    if 'baseUrl' not in options:
+        options['baseUrl'] = 'https://registry-1.docker.io'
     imageident = '%s:%s' % (repo, tag)
     handle = DockerV2Handle(imageident, options)
 
@@ -642,7 +648,7 @@ def pull_image(options, base_url, repo, tag,
 def main():
     """Harness for manual testing."""
     cache_dir = os.environ['TMPDIR']
-    pull_image(None, 'https://registry-1.docker.io', 'dlwoodruff/pyomodock', \
+    pull_image({'baseUrl':'https://registry-1.docker.io'}, 'dlwoodruff/pyomodock', \
             '4.3.1137', cachedir=cache_dir, expanddir=cache_dir)
 
 if __name__ == '__main__':
