@@ -2930,10 +2930,6 @@ _filterEtcGroup_unclean:
         fclose(output);
         output = NULL;
     }
-    if (linePtr != NULL) {
-        free(linePtr);
-        linePtr = NULL;
-    }
     return 1;
 }
 
