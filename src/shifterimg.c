@@ -903,6 +903,13 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
                         }
                     }
                     if (count == 0) {
+                        if (images != NULL) {
+                            for (ptr = images; ptr && *ptr; ptr++) {
+                                free_ImageGwImageRec(*ptr, 1);
+                            }
+                            free(images);
+                            images = NULL;
+                        }
                         goto _fail_valid_args;
                     }
                     ImageGwImageRec *limages = (ImageGwImageRec *) malloc(sizeof(ImageGwImageRec) * count);
@@ -932,10 +939,17 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
                         strftime(time_str, 100, "%Y-%m-%dT%H:%M:%S", &time_struct);
 
                         printf("%-10s %-10s %-8s %-.10s   %s %-30s\n", image->system, image->type, image->status, image->identifier, time_str, tag);
+                        free(image);
                     }
+                    free(limages);
                 }
                 if (images != NULL) {
+                    ImageGwImageRec **ptr = NULL;
+                    for (ptr = images; ptr && *ptr; ptr++) {
+                        free_ImageGwImageRec(*ptr, 1);
+                    }
                     free(images);
+                    images = NULL;
                 }
             }
         }
