@@ -515,24 +515,47 @@ int doExternStepTaskSetup(shifterSpank_config *ssconfig) {
         }
         if (memory_cgroup_path) {
             char buffer[PATH_MAX];
+            FILE *fp = NULL;
             char *tasks = alloc_strgenf("%s/tasks", memory_cgroup_path);
-            FILE *fp = fopen(tasks, "r");
+            if (tasks == NULL) {
+                goto _mem_cgrp_term;
+            }
+
+            fp = fopen(tasks, "r");
+            if (fp == NULL) {
+                goto _mem_cgrp_term;
+            }
             stepd_fd = wrap_spank_stepd_connect(ssconfig, dir, hostname, jobid, SLURM_EXTERN_CONT, &protocol);
+            if (stepd_fd < 0) {
+                goto _mem_cgrp_term;
+            }
             while (fgets(buffer, PATH_MAX, fp) != NULL) {
                 pid_t pid = (pid_t) strtol(buffer, NULL, 10);
                 if (pid == 0) continue;
                 _log(LOG_INFO, "shifterSpank: moving pid %d to extern step via fd %d\n", pid, stepd_fd);
                 wrap_spank_stepd_add_extern_pid(ssconfig, stepd_fd, protocol, pid);
             }
-            free(tasks);
-            fclose(fp);
+_mem_cgrp_term:
+            if (tasks != NULL) {
+                free(tasks);
+                tasks = NULL;
+            }
+            if (fp != NULL) {
+                fclose(fp);
+                fp = NULL;
+            }
         } else {
             /* move sshd into slurm proctrack */
             int sshd_pid = findSshd();
-            if (sshd_pid > 0) {
-                stepd_fd = wrap_spank_stepd_connect(ssconfig, dir, hostname, jobid, SLURM_EXTERN_CONT, &protocol);
-                int ret = wrap_spank_stepd_add_extern_pid(ssconfig, stepd_fd, protocol, sshd_pid);
-                _log(LOG_INFO, "shifterSpank: moved sshd (pid %d) into slurm controlled extern_step (ret: %d) via fd %d\n", sshd_pid, ret, stepd_fd);
+            stepd_fd = wrap_spank_stepd_connect(ssconfig, dir, hostname, jobid,
+                    SLURM_EXTERN_CONT, &protocol);
+
+            if (sshd_pid > 2 && stepd_fd >= 0) {
+                int ret = wrap_spank_stepd_add_extern_pid(ssconfig, stepd_fd,
+                        protocol, sshd_pid);
+                _log(LOG_INFO, "shifterSpank: moved sshd (pid %d) into slurm "
+                        "controlled extern_step (ret: %d) via fd %d\n",
+                        sshd_pid, ret, stepd_fd);
             }
         }
     }
