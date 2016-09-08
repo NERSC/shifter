@@ -3338,11 +3338,16 @@ int _shifter_get_max_capability(unsigned long *_maxCap) {
             fprintf(stderr, "FAILED to determine capability max val\n");
             return 1;
         }
-        if (fread(buffer, sizeof(char), 1024, fp)) {
+        size_t bytes = fread(buffer, sizeof(char), 1024, fp);
+        if (bytes > 0 && bytes < 100) {
             unsigned long tmp = strtoul(buffer, NULL, 10);
             if (tmp > CAP_LAST_CAP) {
                 maxCap = tmp;
             }
+        } else {
+            fprintf(stderr, "FAILED to determine capability max val\n");
+            fclose(fp);
+            return 1;
         }
         fclose(fp);
         *_maxCap = maxCap;
