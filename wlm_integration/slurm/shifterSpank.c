@@ -544,6 +544,7 @@ _mem_cgrp_term:
                 fclose(fp);
                 fp = NULL;
             }
+            free(memory_cgroup_path);
         } else {
             /* move sshd into slurm proctrack */
             int sshd_pid = findSshd();
