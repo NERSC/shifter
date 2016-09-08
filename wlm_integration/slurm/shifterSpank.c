@@ -572,7 +572,11 @@ _mem_cgrp_term:
     _log(LOG_INFO, "shifterSpank: done with extern step setup");
     snprintf(buffer, PATH_MAX, "%s/var/shifterExtern.complete", ssconfig->udiConfig->udiMountPoint);
     int fd = open(buffer, O_CREAT|O_WRONLY|O_TRUNC, 0644);
-    close(fd);
+    if (fd >= 0) {
+        close(fd);
+    } else {
+        _log(LOG_ERROR, "shifterSpank: failed to create %s: %s", buffer, strerror(errno));
+    }
     return rc;
 }
 
