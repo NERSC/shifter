@@ -1916,9 +1916,6 @@ int saveShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMap, 
 
     return 0;
 _saveShifterConfig_error:
-    if (fp != NULL) {
-        fclose(fp);
-    }
     if (configString != NULL) {
         free(configString);
     }
