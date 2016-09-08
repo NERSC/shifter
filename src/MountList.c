@@ -293,7 +293,7 @@ char **find_MountList(MountList *mounts, const char *mountPoint) {
     }
 
     if (compareFxn != NULL) {
-        char **found = (char **) bsearch(&mountPoint, mounts->mountPointList, mounts->count, sizeof(char**), compareFxn);
+        char **found = (char **) bsearch(&mountPoint, mounts->mountPointList, mounts->count, sizeof(char *), compareFxn);
         if (found != NULL) return found;
         return NULL;
     }
