@@ -2934,18 +2934,28 @@ _filterEtcGroup_unclean:
 }
 
 pid_t findSshd(void) {
-    DIR *proc = opendir("/proc");
+    return shifter_find_process_by_cmdline("/opt/udiImage/sbin/sshd");
+}
+
+pid_t shifter_find_process_by_cmdline(const char *command) {
+    DIR *proc = NULL;
     struct dirent *dirEntry = NULL;
-    FILE *cmdlineFile = NULL;
-    char *filename = NULL;
     char buffer[1024];
     pid_t found = 0;
+
+    if (command == NULL || strlen(command) == 0) {
+        return -1;
+    }
+
+    proc = opendir("/proc");
 
     if (proc == NULL) {
         return -1;
     }
     while ((dirEntry = readdir(proc)) != NULL) {
         size_t nread = 0;
+        FILE *cmdlineFile = NULL;
+        char *filename = NULL;
         pid_t pid = (pid_t) strtol(dirEntry->d_name, NULL, 10);
         if (pid == 0) {
             continue;
@@ -2969,25 +2979,20 @@ pid_t findSshd(void) {
 
         if (nread > 0) {
             buffer[nread-1] = 0;
-            if (strcmp(buffer, "/opt/udiImage/sbin/sshd") == 0) {
+            if (strcmp(buffer, command) == 0) {
                 found = pid;
                 break;
             }
         }
     }
     closedir(proc);
-    if (filename != NULL) {
-        free(filename);
-    }
-    if (cmdlineFile != NULL) {
-        fclose(cmdlineFile);
-    }
+    proc = NULL;
     return found;
 }
 
 int killSshd(void) {
     pid_t sshdPid = findSshd();
-    if (sshdPid > 0) {
+    if (sshdPid > 2) {
         kill(sshdPid, SIGTERM);
         return 0;
     }

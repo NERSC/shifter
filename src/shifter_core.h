@@ -140,6 +140,16 @@ int makeUdiMountPrivate(UdiRootConfig *udiConfig);
 char **getSupportedFilesystems();
 int supportsFilesystem(char *const * fsTypes, const char *fsType);
 
+/** shifter_find_process_by_cmdline
+ *  discover a process id which was started with a particular command
+ *  (relies on there only being one process of interest running on the
+ *   machine)
+ *
+ * @param command string to match command line
+ * @returns pid of discovered process, -1 upon error, 0 if not found
+ */
+pid_t shifter_find_process_by_cmdline(const char *command);
+
 #ifdef __cplusplus
 }
 #endif

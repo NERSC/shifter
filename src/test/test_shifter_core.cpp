@@ -134,6 +134,33 @@ TEST_GROUP(ShifterCoreTestGroup) {
 
 };
 
+TEST(ShifterCoreTestGroup, check_find_process_by_cmdline) {
+    const char *basepath = getenv("srcdir");
+    if (basepath == NULL) {
+        basepath = ".";
+    }
+    char *cmd = alloc_strgenf("%s/shifter_sleep_test", basepath);
+    char *args[] = {cmd, cmd, NULL};
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        execv(args[0], args);
+        exit(127);
+    }
+    CHECK(pid > 0);
+    usleep(10000);
+
+    pid_t discovered = shifter_find_process_by_cmdline(cmd);
+    printf("pid: %d, discovered: %d, %s\n", pid, discovered, cmd);
+    CHECK(pid == discovered);
+
+    CHECK(kill(pid, SIGTERM) == 0);
+
+    CHECK(shifter_find_process_by_cmdline(NULL) == -1);
+
+    free(cmd);
+};
+
 #ifdef NOTROOT
 IGNORE_TEST(ShifterCoreTestGroup, CopyFile_basic) {
 #else
