@@ -1,4 +1,5 @@
 #!/bin/bash
+set -ex
 
 CIDIR="$BUILDDIR/extra/CI"
 if [[ ! -e "$CIDIR" ]]; then
@@ -31,6 +32,9 @@ gunicorn -b 0.0.0.0:5000 --backlog 2048 --access-logfile=/var/log/shifter_imageg
 
 echo "Starting image worker"
 celery -A shifter_imagegw.imageworker worker -Q mycluster -n mycluster.%h --loglevel=debug --logfile=/var/log/shifter_imagegw_worker/mycluster.log &
+
+echo "setting up base config"
+sudo cp "$CIDIR/base_udiRoot.conf" /etc/shifter/udiRoot.conf
 
 echo "Pull Image"
 shifterimg pull ubuntu:14.04
