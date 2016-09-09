@@ -31,7 +31,7 @@ if [[ -z "$LIBEXECDIR" ]]; then
     exit 1
 fi
 
-export PYTHONPATH="$LIBEXECDIR:$PYDIR/site-packages"
+export PYTHONPATH="$LIBEXECDIR:$PYDIR"
 
 echo "Setting up imagegw configuration"
 sudo cp "$CIDIR/imagemanager.json" /etc/shifter
