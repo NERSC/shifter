@@ -36,8 +36,8 @@ celery -A shifter_imagegw.imageworker worker -Q mycluster -n mycluster.%h --logl
 echo "setting up base config"
 sudo cp /etc/shifter/udiRoot.conf.example /etc/shifter/udiRoot.conf
 sudo mkdir -p /etc/shifter/shifter_etc_files
-sudo getent passwd > /etc/shifter/shifter_etc_files/paswd
-sudo getent group > /etc/shifter/shifter_etc_files/group
+sudo "getent passwd > /etc/shifter/shifter_etc_files/passwd"
+sudo "getent group > /etc/shifter/shifter_etc_files/group"
 sudo touch /etc/shifter/shifter_etc_files/shadow
 sudo cp "$BUILDDIR/etc_files/nsswitch.conf" /etc/shifter/shifter_etc_files/nsswitch.conf
 
