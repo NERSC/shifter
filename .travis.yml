@@ -45,6 +45,7 @@ script:
   - export BUILDDIR=$(pwd)
   - cd /
   - $BUILDDIR/extra/CI/integration_test.sh
+  - cd $BUILDDIR
 services:
   - mongodb
   - redis

@@ -72,5 +72,10 @@ sleep 10
 
 echo "Pull Image"
 shifterimg pull ubuntu:16.04
-
+shifterimg lookup ubuntu:16.04
 ls /images
+
+echo "Ensure container gets basic setup"
+shifter --image=ubuntu:16.04 cat /var/shifterConfig.json
+shifter --image=ubuntu:16.04 cat /proc/self/status | grep Cap
+
