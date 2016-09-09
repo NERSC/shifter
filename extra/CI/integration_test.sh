@@ -7,6 +7,20 @@ if [[ ! -e "$CIDIR" ]]; then
     exit 1
 fi
 
+PYDIR=
+for libpath in lib lib64; do
+    for pypath in python2.6 python2.7; do
+        if [[ -e "/usr/$libpath/$pypath/site-packages" ]]; then
+            PYDIR=$pypath
+        fi
+    done
+done
+if [[ -z "$PYDIR" ]]; then
+    echo "FAILED to find python dir"
+    exit 1
+fi
+
+for path in /usr/lib/python2.6
 LIBEXECDIR=
 for path in /usr/libexec/shifter /usr/lib/shifter; do
     if [[ -e $path ]]; then
@@ -17,6 +31,8 @@ if [[ -z "$LIBEXECDIR" ]]; then
     echo "FAILED to find shifter libexec dir"
     exit 1
 fi
+
+export PYTHONPATH="$LIBEXECDIR:$PYDIR/site-packages"
 
 echo "Setting up imagegw configuration"
 sudo cp "$CIDIR/imagemanager.json" /etc/shifter
