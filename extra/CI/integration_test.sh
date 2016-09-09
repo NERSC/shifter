@@ -10,8 +10,8 @@ fi
 PYDIR=
 for libpath in lib lib64; do
     for pypath in python2.6 python2.7; do
-        if [[ -e "/usr/$libpath/$pypath/site-packages" ]]; then
-            PYDIR=$pypath
+        if [[ -e "/usr/$libpath/$pypath/site-packages/shifter_imagegw" ]]; then
+            PYDIR="/usr/$libpath/$pypath/site-packages"
         fi
     done
 done
