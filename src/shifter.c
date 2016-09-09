@@ -233,6 +233,10 @@ int main(int argc, char **argv) {
         perror("Could not chroot: ");
         exit(1);
     }
+    if (chdir("/") != 0) {
+        perror("Could not chdir to new root: ");
+        exit(1);
+    }
 
     /* attempt to prevent this process and its heirs from ever gaining any
      * privilege by any means */

@@ -35,6 +35,7 @@
 #include <signal.h>
 #include <munge.h>
 #include <curl/curl.h>
+#include <errno.h>
 #include <json-c/json.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -166,13 +167,16 @@ int getttycred(const char *system, char **username, char **password) {
     char buffer[1024];
     struct termios currState;
     int mod = 0;
+    int opened_readfp = 0;
 
     memset(&origTermState, 0, sizeof(struct termios));
     memset(&currState, 0, sizeof(struct termios));
 
     read_fp = fopen("/dev/tty", "w+");
+    opened_readfp = 1;
     if (read_fp == NULL) {
         read_fp = stdin;
+        opened_readfp = 0;
         fprintf(write_fp, "failed to open dev/tty\n");
     }
     termfd = fileno(read_fp);
@@ -224,6 +228,11 @@ int getttycred(const char *system, char **username, char **password) {
     signal(SIGTERM, SIG_DFL);
     signal(SIGINT, SIG_DFL);
     signal(SIGSTOP, SIG_DFL);
+
+    if (opened_readfp) {
+        fclose(read_fp);
+        read_fp = NULL;
+    }
 
     return mod == 2 ? 0 : 1;
 }
@@ -293,39 +302,57 @@ int doLogin(struct options *options, UdiRootConfig *udiConfig) {
 
     /* write out credentials */
     struct passwd *pwd = getpwuid(getuid());
+    char *creddir = NULL;
+    char *path = NULL;
     if (pwd != NULL) {
-        char *creddir = alloc_strgenf("%s/.udiRoot", pwd->pw_dir);
-        char *path = alloc_strgenf("%s/.udiRoot/.cred", pwd->pw_dir);
-        struct stat statData;
-        if (stat(creddir, &statData) != 0) {
-            if (mkdir(creddir, 0700) != 0) {
-                fprintf(stderr, "FAILED to create directory %s\n", creddir);
+        FILE *out = NULL;
+        creddir = alloc_strgenf("%s/.udiRoot", pwd->pw_dir);
+        path = alloc_strgenf("%s/.udiRoot/.cred", pwd->pw_dir);
+        if (creddir == NULL || path == NULL) {
+            fprintf(stderr, "FAILED to allocate memory for paths\n");
+            goto _error;
+        }
+        if (mkdir(creddir, 0700) != 0) {
+            if (errno != EEXIST) {
+                fprintf(stderr, "FAILED to create directory %s: %s\n", creddir, strerror(errno));
                 goto _error;
             }
         }
-        if (stat(creddir, &statData) == 0) {
-            FILE *out = fopen(path, "w");
-            if (out == NULL) {
-                fprintf(stderr, "FAILED to open credentials for writing!\n");
-                goto _error;
-            }
-            lcptr = options->loginCredentials;
-            for ( ; lcptr && *lcptr; lcptr++) {
-                fprintf(out, "%s:%s=%s\n", (*lcptr)->system, (*lcptr)->location, (*lcptr)->cred);
-            }
-            fclose(out);
-            if (chmod(path, 0600) != 0) {
-                fprintf(stderr, "FAILED to correctly set permissions on %s\n", path);
-                goto _error;
-            }
-        } else {
-            fprintf(stderr, "FAILED to stat %s\n", creddir);
+        out = fopen(path, "w");
+        if (out == NULL) {
+            fprintf(stderr, "FAILED to open credentials for writing!\n");
+            goto _error;
+        }
+        lcptr = options->loginCredentials;
+        for ( ; lcptr && *lcptr; lcptr++) {
+            fprintf(out, "%s:%s=%s\n", (*lcptr)->system, (*lcptr)->location, (*lcptr)->cred);
+        }
+        fclose(out);
+        out = NULL;
+
+        if (chmod(path, 0600) != 0) {
+            fprintf(stderr, "FAILED to correctly set permissions on %s\n", path);
             goto _error;
         }
     }
-
+    if (path != NULL) {
+        free(path);
+        path = NULL;
+    }
+    if (creddir != NULL) {
+        free(creddir);
+        creddir = NULL;
+    }
     return 0;
 _error:
+    if (path != NULL) {
+        free(path);
+        path = NULL;
+    }
+    if (creddir != NULL) {
+        free(creddir);
+        creddir = NULL;
+    }
     return 1;
 }
 
@@ -895,6 +922,13 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
                         }
                     }
                     if (count == 0) {
+                        if (images != NULL) {
+                            for (ptr = images; ptr && *ptr; ptr++) {
+                                free_ImageGwImageRec(*ptr, 1);
+                            }
+                            free(images);
+                            images = NULL;
+                        }
                         goto _fail_valid_args;
                     }
                     ImageGwImageRec *limages = (ImageGwImageRec *) malloc(sizeof(ImageGwImageRec) * count);
@@ -925,9 +959,15 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
 
                         printf("%-10s %-10s %-8s %-.10s   %s %-30s\n", image->system, image->type, image->status, image->identifier, time_str, tag);
                     }
+                    free(limages);
                 }
                 if (images != NULL) {
+                    ImageGwImageRec **ptr = NULL;
+                    for (ptr = images; ptr && *ptr; ptr++) {
+                        free_ImageGwImageRec(*ptr, 1);
+                    }
                     free(images);
+                    images = NULL;
                 }
             }
         }
@@ -1075,9 +1115,13 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     struct passwd *pwd = getpwuid(getuid());
     if (pwd != NULL) {
         char *path = alloc_strgenf("%s/.udiRoot/.cred", pwd->pw_dir);
-        if (access(path, F_OK) == 0) {
+        if (path != NULL && access(path, F_OK) == 0) {
             shifter_parseConfig(path, '=', config, _assignLoginCredential);
         } 
+        if (path != NULL) {
+            free(path);
+            path = NULL;
+        }
     }
     return 0;
 }

@@ -86,8 +86,9 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
 }
 
 int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
+    /* TODO figure out if the init routines really should be returning
+       status, right now they are not */
     spank_context_t context = spank_context();
-    int rc = SUCCESS;
     ssconfig->id = sp;
     
 
@@ -99,7 +100,6 @@ int slurm_spank_init_post_opt(spank_t sp, int argc, char **argv) {
         shifterSpank_init_allocator_setup(ssconfig);
     }
     shifterSpank_init_setup(ssconfig);
-    if (rc != SUCCESS) return ESPANK_ERROR;
     return ESPANK_SUCCESS;
 }
     

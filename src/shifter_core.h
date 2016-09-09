@@ -52,8 +52,8 @@
 extern "C" {
 #endif
 
-#define INVALID_USER UINT_MAX
-#define INVALID_GROUP UINT_MAX
+#define INVALID_USER INT_MAX
+#define INVALID_GROUP INT_MAX
 #define FILE_SIZE_LIMIT 5242880
 
 int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig);
@@ -139,6 +139,16 @@ int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *f
 int makeUdiMountPrivate(UdiRootConfig *udiConfig);
 char **getSupportedFilesystems();
 int supportsFilesystem(char *const * fsTypes, const char *fsType);
+
+/** shifter_find_process_by_cmdline
+ *  discover a process id which was started with a particular command
+ *  (relies on there only being one process of interest running on the
+ *   machine)
+ *
+ * @param command string to match command line
+ * @returns pid of discovered process, -1 upon error, 0 if not found
+ */
+pid_t shifter_find_process_by_cmdline(const char *command);
 
 #ifdef __cplusplus
 }

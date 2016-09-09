@@ -229,7 +229,9 @@ int bindImageIntoUDI(
             } else if (copyFlag == 0) {
                 /* create the file */
                 FILE *fp = fopen(mntBuffer, "w");
-                fclose(fp);
+                if (fp != NULL) {
+                    fclose(fp);
+                }
                 BINDMOUNT(&mountCache, srcBuffer, mntBuffer, 0, 0);
             }
             free(itemname);
@@ -358,9 +360,9 @@ int _shifterCore_copyFile(const char *cpPath, const char *source,
         }
     }
 
+    if (owner == INVALID_USER) owner = sourceStat.st_uid;
+    if (group == INVALID_GROUP) group = sourceStat.st_gid;
     if (owner != INVALID_USER && group != INVALID_GROUP) {
-        if (owner == INVALID_USER) owner = sourceStat.st_uid;
-        if (group == INVALID_GROUP) group = sourceStat.st_gid;
         if (chown(dest, owner, group) != 0) {
             fprintf(stderr, "Failed to set ownership to %d:%d on %s\n", owner, group, dest);
             goto _copyFile_unclean;
@@ -557,29 +559,41 @@ int prepareSiteModifications(const char *username,
                 filename = userInputPathFilter(entry->d_name, 0);
                 if (filename == NULL) {
                     fprintf(stderr, "FAILED to allocate filename string.\n");
-                    goto _prepSiteMod_unclean;
+                    goto _fail_copy_etcPath;
                 }
                 snprintf(srcBuffer, PATH_MAX, "%s/%s", udiConfig->etcPath, filename);
                 srcBuffer[PATH_MAX-1] = 0;
                 snprintf(mntBuffer, PATH_MAX, "%s/etc/%s", udiRoot, filename);
                 mntBuffer[PATH_MAX-1] = 0;
                 free(filename);
+                filename = NULL;
 
                 if (lstat(srcBuffer, &statData) != 0) {
                     fprintf(stderr, "Couldn't find source file, check if there are illegal characters: %s\n", srcBuffer);
-                    goto _prepSiteMod_unclean;
+                    goto _fail_copy_etcPath;
                 }
 
                 if (lstat(mntBuffer, &statData) == 0) {
                     fprintf(stderr, "Couldn't copy %s because file already exists.\n", mntBuffer);
-                    goto _prepSiteMod_unclean;
+                    goto _fail_copy_etcPath;
                 } else {
                     ret = _shifterCore_copyFile(udiConfig->cpPath, srcBuffer, mntBuffer, 0, 0, 0, 0644);
                     if (ret != 0) {
                         fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
-                        goto _prepSiteMod_unclean;
+                        goto _fail_copy_etcPath;
                     }
                 }
+                continue;
+_fail_copy_etcPath:
+                if (filename != NULL) {
+                    free(filename);
+                    filename = NULL;
+                }
+                if (etcDir != NULL) {
+                    closedir(etcDir);
+                    etcDir = NULL;
+                }
+                goto _prepSiteMod_unclean;
             }
             closedir(etcDir);
         } else {
@@ -822,6 +836,10 @@ int writeHostFile(const char *minNodeSpec, UdiRootConfig *udiConfig) {
     if (minNodeSpec == NULL || udiConfig == NULL) return 1;
 
     minNode = strdup(minNodeSpec);
+    if (minNode == NULL) {
+        goto _writeHostFile_error;
+    }
+
     limit = minNode + strlen(minNode);
 
     snprintf(filename, PATH_MAX, "%s/var/hostsfile", udiConfig->udiMountPoint);
@@ -884,7 +902,6 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
     struct stat statData;
     char udiRoot[PATH_MAX];
     char *sshPath = NULL;
-    char *path = NULL;
     dev_t destRootDev = 0;
     dev_t srcRootDev = 0;
     dev_t tmpDev = 0;
@@ -1002,9 +1019,6 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
     return 0;
 
 _mountImgVfs_unclean:
-    if (path != NULL) {
-        free(path);
-    }
     if (sshPath != NULL) {
         free(sshPath);
     }
@@ -1053,11 +1067,6 @@ _remountUdiRootReadonly_unclean:
 int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig) {
     char loopMountPath[PATH_MAX];
     char imagePath[PATH_MAX];
-    struct stat statData;
-#define MKDIR(dir, perm) if (mkdir(dir, perm) != 0) { \
-    fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", dir); \
-    goto _mountImageLoop_unclean; \
-}
     if (imageData == NULL || udiConfig == NULL) {
         return 1;
     }
@@ -1067,15 +1076,21 @@ int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig) {
     if (udiConfig->loopMountPoint == NULL || strlen(udiConfig->loopMountPoint) == 0) {
         return 1;
     }
-    if (stat(udiConfig->loopMountPoint, &statData) != 0) {
-        MKDIR(udiConfig->loopMountPoint, 0755);
+    if (mkdir(udiConfig->loopMountPoint, 0755) != 0) {
+        if (errno != EEXIST) {
+            fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", udiConfig->loopMountPoint);
+            goto _mountImageLoop_unclean;
+        }
     }
+
     snprintf(loopMountPath, PATH_MAX, "%s", udiConfig->loopMountPoint);
     loopMountPath[PATH_MAX-1] = 0;
     snprintf(imagePath, PATH_MAX, "%s", imageData->filename);
     imagePath[PATH_MAX-1] = 0;
-    loopMount(imagePath, loopMountPath, imageData->format, udiConfig, 1);
-#undef MKDIR
+    if (loopMount(imagePath, loopMountPath, imageData->format, udiConfig, 1) != 0) {
+        fprintf(stderr, "FAILED to loop mount image: %s\n", imagePath);
+        goto _mountImageLoop_unclean;
+    }
     return 0;
 _mountImageLoop_unclean:
     return 1;
@@ -1141,7 +1156,7 @@ char **getSupportedFilesystems() {
             listLen++;
         }
     }
-    qsort(ret, listLen, sizeof(char **), _sortFsTypeForward);
+    qsort(ret, listLen, sizeof(char *), _sortFsTypeForward);
 
     fclose(fp);
     fp = NULL;
@@ -1367,13 +1382,16 @@ int setupPerNodeCacheFilename(
         fprintf(stderr, "perNodeCache filename too long to store in buffer.\n");
         return -1;
     }
+    mode_t old_umask = umask(077);
     fd = mkstemp(buffer);
     if (fd < 0) {
         fprintf(stderr, "Failed to open perNodeCache backing store %s.\n",
                 buffer);
         perror("Error: ");
+        umask(old_umask);
         return -1;
     }
+    umask(old_umask);
     return fd;
 }
 
@@ -1899,9 +1917,6 @@ int saveShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMap, 
 
     return 0;
 _saveShifterConfig_error:
-    if (fp != NULL) {
-        fclose(fp);
-    }
     if (configString != NULL) {
         free(configString);
     }
@@ -1949,9 +1964,6 @@ int compareShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMa
 
     return cmpVal;
 _compareShifterConfig_error:
-    if (fp != NULL) {
-        fclose(fp);
-    }
     if (configString != NULL) {
         free(configString);
     }
@@ -2179,10 +2191,6 @@ _setupImageSsh_unclean:
         fclose(outputFile);
         outputFile = NULL;
     }
-    if (lineBuf != NULL) {
-        free(lineBuf);
-        lineBuf = NULL;
-    }
     return 1;
 }
 
@@ -2308,6 +2316,10 @@ int startSshd(const char *user, UdiRootConfig *udiConfig) {
             fprintf(stderr, "FAILED to chroot to %s while attempting to start sshd\n", chrootPath);
             exit(1);
         }
+        if (chdir("/") != 0) {
+            fprintf(stderr, "FAILED to chdir following chroot\n");
+            exit(1);
+        }
         if (udiConfig->optionalSshdAsRoot == 0) {
             if (gidList == NULL) {
                 fprintf(stderr, "FAILED to get groupllist for sshd, exiting!\n");
@@ -2408,6 +2420,10 @@ int _forkAndExecv(char *const *args, int silent) {
     /* this is the child */
     if (silent) {
         int devNull = open("/dev/null", O_WRONLY);
+        if (devNull < 0) {
+            fprintf(stderr, "FAILED to open /dev/null: %s", strerror(errno));
+            exit(1);
+        }
         dup2(devNull, STDOUT_FILENO);
         dup2(devNull, STDERR_FILENO);
         close(devNull);
@@ -2529,9 +2545,6 @@ _bindMount_unclean:
         remove_MountList(mountCache, to_real);
         free(to_real);
         to_real = NULL;
-    } else {
-        ret = umount2(to, UMOUNT_NOFOLLOW|MNT_DETACH);
-        remove_MountList(mountCache, to);
     }
     if (ret != 0) {
         fprintf(stderr, "ERROR: unclean exit from bind-mount routine. %s may still be mounted.\n", to);
@@ -2641,6 +2654,9 @@ int isKernelModuleLoaded(const char *name) {
             break;
         }
         ptr = strtok_r(lineBuffer, " ", &svptr);
+        if (ptr == NULL) {
+            continue;
+        }
         if (strcmp(name, ptr) == 0) {
             loaded = 1;
             break;
@@ -2776,10 +2792,6 @@ struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config) {
     return NULL;
 
 _shifter_getpwuid_unclean:
-    if (input != NULL) {
-        fclose(input);
-        input = NULL;
-    }
     return NULL;
 }
 
@@ -2816,10 +2828,6 @@ struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config) {
     return NULL;
 
 _shifter_getpwnam_unclean:
-    if (input != NULL) {
-        fclose(input);
-        input = NULL;
-    }
     return NULL;
 }
 
@@ -2842,7 +2850,6 @@ int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname,
     FILE *output = NULL;
     char *linePtr = NULL;
     size_t linePtr_size = 0;
-    char *group_name = NULL;
     size_t foundGroups = 0;
 
     if (group_dest_fname == NULL || strlen(group_dest_fname) == 0
@@ -2864,6 +2871,7 @@ int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname,
         size_t nread = getline(&linePtr, &linePtr_size, input);
         char *ptr = NULL;
         char *svptr = NULL;
+        char *group_name = NULL;
 
         char *token = NULL;
         gid_t gid = 0;
@@ -2899,6 +2907,8 @@ int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname,
             } else {
                 fprintf(output, "%s:x:%d:\n", group_name, gid);
             }
+        }
+        if (group_name != NULL) {
             free(group_name);
             group_name = NULL;
         }
@@ -2921,30 +2931,32 @@ _filterEtcGroup_unclean:
         fclose(output);
         output = NULL;
     }
-    if (linePtr != NULL) {
-        free(linePtr);
-        linePtr = NULL;
-    }
-    if (group_name != NULL) {
-        free(group_name);
-        group_name = NULL;
-    }
     return 1;
 }
 
 pid_t findSshd(void) {
-    DIR *proc = opendir("/proc");
+    return shifter_find_process_by_cmdline("/opt/udiImage/sbin/sshd");
+}
+
+pid_t shifter_find_process_by_cmdline(const char *command) {
+    DIR *proc = NULL;
     struct dirent *dirEntry = NULL;
-    FILE *cmdlineFile = NULL;
-    char *filename = NULL;
     char buffer[1024];
     pid_t found = 0;
+
+    if (command == NULL || strlen(command) == 0) {
+        return -1;
+    }
+
+    proc = opendir("/proc");
 
     if (proc == NULL) {
         return -1;
     }
     while ((dirEntry = readdir(proc)) != NULL) {
         size_t nread = 0;
+        FILE *cmdlineFile = NULL;
+        char *filename = NULL;
         pid_t pid = (pid_t) strtol(dirEntry->d_name, NULL, 10);
         if (pid == 0) {
             continue;
@@ -2959,6 +2971,7 @@ pid_t findSshd(void) {
             continue;
         } else if (feof(cmdlineFile) || ferror(cmdlineFile)) {
             fclose(cmdlineFile);
+            cmdlineFile = NULL;
             continue;
         }
         nread = fread(buffer, sizeof(char), 1024, cmdlineFile);
@@ -2967,25 +2980,20 @@ pid_t findSshd(void) {
 
         if (nread > 0) {
             buffer[nread-1] = 0;
-            if (strcmp(buffer, "/opt/udiImage/sbin/sshd") == 0) {
+            if (strcmp(buffer, command) == 0) {
                 found = pid;
                 break;
             }
         }
     }
     closedir(proc);
-    if (filename != NULL) {
-        free(filename);
-    }
-    if (cmdlineFile != NULL) {
-        fclose(cmdlineFile);
-    }
+    proc = NULL;
     return found;
 }
 
 int killSshd(void) {
     pid_t sshdPid = findSshd();
-    if (sshdPid > 0) {
+    if (sshdPid > 2) {
         kill(sshdPid, SIGTERM);
         return 0;
     }
@@ -3315,11 +3323,16 @@ int _shifter_get_max_capability(unsigned long *_maxCap) {
             fprintf(stderr, "FAILED to determine capability max val\n");
             return 1;
         }
-        if (fread(buffer, sizeof(char), 1024, fp)) {
+        size_t bytes = fread(buffer, sizeof(char), 1024, fp);
+        if (bytes > 0 && bytes < 100) {
             unsigned long tmp = strtoul(buffer, NULL, 10);
             if (tmp > CAP_LAST_CAP) {
                 maxCap = tmp;
             }
+        } else {
+            fprintf(stderr, "FAILED to determine capability max val\n");
+            fclose(fp);
+            return 1;
         }
         fclose(fp);
         *_maxCap = maxCap;
