@@ -43,7 +43,9 @@ for i in /var/log/shifter_imagegw /var/log/shifter_imagegw_worker /images; do
 done
 
 echo "setting up munge"
-sudo /usr/sbin/create-munge-key
+if [[ -e /usr/sbin/create-munge-key ]]; then
+    sudo /usr/sbin/create-munge-key
+fi
 sudo service munge start
 
 echo "Starting imagegw api"
@@ -77,6 +79,8 @@ shifterimg lookup ubuntu:16.04
 ls /images
 
 echo "Ensure container gets basic setup"
-shifter --image=ubuntu:16.04 cat /var/shifterConfig.json
-shifter --image=ubuntu:16.04 cat /proc/self/status | grep Cap
+python integration/test_shifterConfig_format.py ubuntu:16.04
+
+echo "Check capabilities and bounding sets"
+python integration/test_capabilities.py ubuntu:16.04
 
