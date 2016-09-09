@@ -20,7 +20,6 @@ if [[ -z "$PYDIR" ]]; then
     exit 1
 fi
 
-for path in /usr/lib/python2.6
 LIBEXECDIR=
 for path in /usr/libexec/shifter /usr/lib/shifter; do
     if [[ -e $path ]]; then
