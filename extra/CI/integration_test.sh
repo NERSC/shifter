@@ -59,8 +59,11 @@ sudo cp "$BUILDDIR/etc_files/nsswitch.conf" /etc/shifter/shifter_etc_files/nsswi
 
 cat /etc/shifter/udiRoot.conf | egrep -v '^#'
 
+## need to sleep a bit to let celery and gunicorn get started
+sleep 10
+
 
 echo "Pull Image"
-shifterimg pull ubuntu:14.04
+shifterimg pull ubuntu:16.04
 
 ls /images
