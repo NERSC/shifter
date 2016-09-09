@@ -34,7 +34,8 @@ echo "Starting image worker"
 celery -A shifter_imagegw.imageworker worker -Q mycluster -n mycluster.%h --loglevel=debug --logfile=/var/log/shifter_imagegw_worker/mycluster.log &
 
 echo "setting up base config"
-sudo cp /etc/shifter/udiRoot.conf.example /etc/shifter/udiRoot.conf
+sudo /bin/bash -c "cat /etc/shifter/udiRoot.conf.example | sed  's|etcPath=.*|etcPath=/etc/shifter/shifter_etc_files|g' > /etc/shifter/udiRoot.conf"
+#sudo cp /etc/shifter/udiRoot.conf.example /etc/shifter/udiRoot.conf
 sudo mkdir -p /etc/shifter/shifter_etc_files
 sudo /bin/bash -c "getent passwd > /etc/shifter/shifter_etc_files/passwd"
 sudo /bin/bash -c "getent group > /etc/shifter/shifter_etc_files/group"
