@@ -44,7 +44,7 @@ script:
   - export PATH=$ORIGPATH
   - export BUILDDIR=$(pwd)
   - cd /
-  - $BUILDDIR/extra/CI/integration_tests.sh
+  - $BUILDDIR/extra/CI/integration_test.sh
 services:
   - mongodb
   - redis
