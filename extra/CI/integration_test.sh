@@ -79,8 +79,8 @@ shifterimg lookup ubuntu:16.04
 ls /images
 
 echo "Ensure container gets basic setup"
-python integration/test_shifterConfig_format.py ubuntu:16.04
+python $CIDIR/integration/test_shifterConfig_format.py ubuntu:16.04
 
 echo "Check capabilities and bounding sets"
-python integration/test_capabilities.py ubuntu:16.04
+python $CIDIR/integration/test_capabilities.py ubuntu:16.04
 

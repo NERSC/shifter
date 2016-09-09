@@ -20,6 +20,7 @@ install:
   - LOC=$(dirname $(which coveralls) ); sudo mv $LOC/coveralls $LOC/cpp-coveralls
   - pip install coveralls
   - pip install coveralls-merge
+  - pip install pexpect
 # command to run tests
 before_script:
   - cp imagegw/test.json.example test.json
