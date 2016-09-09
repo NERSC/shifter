@@ -4,7 +4,7 @@ import pexpect
 import subprocess
 import sys
 
-image_name = sys.args[1]
+image_name = sys.argv[1]
 
 pex = pexpect.spawnu("shifter --image=%s cat /proc/self/status | grep Cap" % image_name)
 pex.expect(u'CapInh:\s+0+')
