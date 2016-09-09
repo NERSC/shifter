@@ -42,6 +42,10 @@ for i in /var/log/shifter_imagegw /var/log/shifter_imagegw_worker /images; do
     sudo chown -R $me $i
 done
 
+echo "setting up munge"
+sudo /usr/sbin/create-munge-key
+sudo service munge start
+
 echo "Starting imagegw api"
 gunicorn -b 0.0.0.0:5000 --backlog 2048 --access-logfile=/var/log/shifter_imagegw/access.log --log-file=/var/log/shifter_imagegw/error.log shifter_imagegw.api:app &
 
