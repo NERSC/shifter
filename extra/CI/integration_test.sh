@@ -34,7 +34,7 @@ echo "Starting image worker"
 celery -A shifter_imagegw.imageworker worker -Q mycluster -n mycluster.%h --loglevel=debug --logfile=/var/log/shifter_imagegw_worker/mycluster.log &
 
 echo "setting up base config"
-sudo cp "$CIDIR/base_udiRoot.conf" /etc/shifter/udiRoot.conf
+sudo cp /etc/shifter/udiRoot.conf.example /etc/shifter/udiRoot.conf
 
 echo "Pull Image"
 shifterimg pull ubuntu:14.04
