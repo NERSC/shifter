@@ -65,7 +65,7 @@ sudo touch /etc/shifter/shifter_etc_files/shadow
 sudo cp "$BUILDDIR/etc_files/nsswitch.conf" /etc/shifter/shifter_etc_files/nsswitch.conf
 
 cat /etc/shifter/udiRoot.conf | egrep -v '^#'
-mkdir -p $LIBEXECDIR/opt/udiImage
+sudo mkdir -p $LIBEXECDIR/opt/udiImage
 
 ## need to sleep a bit to let celery and gunicorn get started
 sleep 10
