@@ -38,8 +38,13 @@ script:
   - export DO_ROOT_DANGEROUS_TESTS=1
   - ../../extra/CI/test_script.sh
   - cd ../..
+  - export ORIGPATH=$PATH
   - export PATH=$PWD/imagegw/test:$PATH
   - PYTHONPATH=$PWD/imagegw nosetests -s --with-coverage imagegw/test
+  - export PATH=$ORIGPATH
+  - export BUILDDIR=$(pwd)
+  - cd /
+  - $BUILDDIR/extra/CI/integration_tests.sh
 services:
   - mongodb
   - redis
