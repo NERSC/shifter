@@ -115,7 +115,7 @@ test -x configure || ./autogen.sh
 %build
 ## build udiRoot (runtime) first
 %configure \
-    %{?with_slurm:--with-slurm=%{with_slurm}}
+    %{?with_slurm:--with-slurm=%{with_slurm}} %{?acflags}
 
 MAKEFLAGS=%{?_smp_mflags} %{__make}
 
