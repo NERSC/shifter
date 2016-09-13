@@ -16,15 +16,15 @@ test_udiRoot.conf: test_udiRoot.conf.in
 	chmod 644 test_udiRoot.conf
 
 chroot1/nss:
-	./setup_test_chroot.sh chroot1
+	$(srcdir)/setup_test_chroot.sh chroot1
 	touch chroot1/nss
 
 chroot2/nss:
-	./setup_test_chroot.sh chroot2
+	$(srcdir)/setup_test_chroot.sh chroot2
 	touch chroot2/nss
 
 chroot3/nss:
-	./setup_test_chroot.sh chroot3
+	$(srcdir)/setup_test_chroot.sh chroot3
 	touch chroot3/nss
 
 
@@ -107,6 +107,7 @@ test_MountList_LDFLAGS = $(TEST_LDFLAGS)
 
 clean-local: clean-local-check
 clean-local-check:
+	-rm -rf chroot1 chroot2 chroot3
 	-rm -rf *.gcda
 	-rm -rf *.gcno
 	-rm -f test_udiRoot.conf 
