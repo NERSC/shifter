@@ -150,6 +150,12 @@ int supportsFilesystem(char *const * fsTypes, const char *fsType);
  */
 pid_t shifter_find_process_by_cmdline(const char *command);
 
+/** shifter_realpath
+ *  perform standard realpath operation, but ensure that any symlinks resolve
+ *  within the container
+ */
+char *shifter_realpath(const char *path, UdiRootConfig *config);
+
 #ifdef __cplusplus
 }
 #endif

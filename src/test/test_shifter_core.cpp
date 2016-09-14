@@ -1045,6 +1045,43 @@ TEST(ShifterCoreTestGroup, setupenv_test) {
     free_UdiRootConfig(config, 1);
 }
 
+TEST(ShifterCoreTestGroup, shifterRealpath_test) {
+    UdiRootConfig *config = (UdiRootConfig *) malloc(sizeof(UdiRootConfig));
+    memset(config, 0, sizeof(UdiRootConfig));
+    char buffer[PATH_MAX];
+
+    config->udiMountPoint = strdup(tmpDir);
+
+    snprintf(buffer, PATH_MAX, "%s/test", tmpDir);
+    mkdir(buffer, 0755);
+    snprintf(buffer, PATH_MAX, "%s/test/path", tmpDir);
+    mkdir(buffer, 0755);
+    snprintf(buffer, PATH_MAX, "%s/test/path/rellink", tmpDir);
+    symlink("../../../../../../../../test", buffer);
+    snprintf(buffer, PATH_MAX, "%s/test/path/abslink", tmpDir);
+    symlink("/test/path", buffer);
+
+    char *result = shifter_realpath("test/path", config);
+    CHECK(result != NULL);
+    snprintf(buffer, PATH_MAX, "%s/test/path", tmpDir);
+    CHECK(strcmp(result, buffer) == 0);
+    free(result);
+
+    result = shifter_realpath("test/path/rellink/path", config);
+    CHECK(result != NULL);
+    snprintf(buffer, PATH_MAX, "%s/test/path", tmpDir);
+    CHECK(strcmp(result, buffer) == 0);
+    free(result);
+
+    result = shifter_realpath("test/path/abslink", config);
+    CHECK(result != NULL);
+    snprintf(buffer, PATH_MAX, "%s/test/path", tmpDir);
+    CHECK(strcmp(result, buffer) == 0);
+
+    free(result);
+    free_UdiRootConfig(config, 1);
+}
+
 #if ISROOT
 TEST(ShifterCoreTestGroup, destructUDI_test) {
 #else

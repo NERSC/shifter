@@ -56,6 +56,7 @@
 #include "VolumeMap.h"
 #include "MountList.h"
 #include "config.h"
+#include "PathList.h"
 
 #ifndef BINDMOUNT_OVERWRITE_UNMOUNT_RETRY
 #define BINDMOUNT_OVERWRITE_UNMOUNT_RETRY 3
@@ -1518,8 +1519,6 @@ int setupVolumeMapMounts(
         );
         to_buffer[PATH_MAX-1] = 0;
 
-        free(filtered_from);
-        filtered_from = NULL;
         free(filtered_to);
         filtered_to = NULL;
 
@@ -1612,7 +1611,14 @@ int setupVolumeMapMounts(
 
             /* perform some introspection on the path to get it's real location
              * and vital attributes */
-            from_real = realpath(from_buffer, NULL);
+            char *from_real_shft = shifter_realpath(filtered_from, udiConfig);
+            if (from_real == NULL) {
+                fprintf(stderr, "FAILED to find real path for volume "
+                        "\"from\": %s\n", filtered_from);
+                goto _fail_check_fromvol;
+            }
+            from_real = realpath(from_real_shft, NULL);
+            free(from_real_shft);
             if (from_real == NULL) {
                 fprintf(stderr, "FAILED to find real path for volume "
                         "\"from\": %s\n", from_buffer);
@@ -1846,6 +1852,8 @@ _pass_check_fromvol:
         to_real = NULL;
         free(from_real);
         from_real = NULL;
+        free(filtered_from);
+        filtered_from = NULL;
 
         continue;
 _handleVolMountError:
@@ -3388,4 +3396,79 @@ int shifter_set_capability_boundingset_null() {
         }
     }
     return ret;
+}
+
+char *shifter_realpath(const char *src_path, UdiRootConfig *config) {
+    struct stat statData;
+    char *currPath = NULL;
+    PathList *udiRootBasePath = NULL;
+    PathList *searchPath = NULL;
+    PathComponent *pathPtr = NULL;
+
+    if (src_path == NULL || config == NULL || config->udiMountPoint == NULL) {
+        goto _realpath_err;
+    }
+    udiRootBasePath = pathList_init(config->udiMountPoint);
+    if (udiRootBasePath == NULL) {
+        goto _realpath_err;
+    }
+    if (pathList_setRoot(udiRootBasePath, config->udiMountPoint) != 0) {
+        goto _realpath_err;
+    }
+
+    searchPath = pathList_duplicate(udiRootBasePath);
+    if (searchPath == NULL) {
+        goto _realpath_err;
+    }
+    if (pathList_append(searchPath, src_path) != 0) {
+        goto _realpath_err;
+    }
+
+    if (searchPath->relroot == NULL) {
+        goto _realpath_err;
+    }
+
+    pathPtr = searchPath->path;
+    while (pathPtr != NULL) {
+        if (currPath != NULL) free(currPath);
+        currPath = pathList_stringPartial(searchPath, pathPtr);
+        if (currPath == NULL) {
+            goto _realpath_err;
+        }
+
+        if (lstat(currPath, &statData) != 0) {
+            goto _realpath_err;
+        }
+        if (S_ISLNK(statData.st_mode)) {
+            char lnkPath[PATH_MAX];
+            ssize_t nbytes = readlink(currPath, lnkPath, sizeof(lnkPath));
+            if (nbytes < 0 || nbytes >= PATH_MAX) {
+                goto _realpath_err;
+            }
+            lnkPath[nbytes] = '\0';
+            pathPtr = pathList_symlinkSubstitute(searchPath, pathPtr, lnkPath);
+
+            continue;
+        }
+        pathPtr = pathPtr->child; 
+    }
+    if (currPath) free(currPath);
+    currPath = pathList_string(searchPath);
+    pathList_free(searchPath);
+    pathList_free(udiRootBasePath);
+    return currPath;
+
+_realpath_err:
+    if (udiRootBasePath != NULL) {
+        pathList_free(udiRootBasePath);
+        udiRootBasePath = NULL;
+    }
+    if (searchPath != NULL) {
+        pathList_free(searchPath);
+        searchPath = NULL;
+    }
+    if (currPath != NULL) {
+        free(currPath);
+    }
+    return NULL;
 }
