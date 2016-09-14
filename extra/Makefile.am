@@ -14,3 +14,5 @@ SHIFTER_SLURM_DWS_SUPPORT_SOURCES = \
 
 
 shifter_slurm_dws_support_SOURCES = $(SHIFTER_SLURM_DWS_SUPPORT_SOURCES)
+
+EXTRA_DIST = cle6 systemd
