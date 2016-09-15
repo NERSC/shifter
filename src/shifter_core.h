@@ -122,17 +122,19 @@ int shifter_set_capability_boundingset_null();
 int shifter_getgrouplist(const char *user, gid_t group, gid_t **groups, int *ngroups);
 
 /** shifter_copyenv
-  * copy current process environ into a newly allocated array with newly
-  * allocated strings
+  * copy the passed environ (array of strings) into a newly allocated array with newly
+  * allocated strings. Reserve some spots at the end of the array for additional
+  * environment variables. The number of spots to be reserved is specified through
+  * the "reserve" parameter
   *
   * @return copy of the environment, caller is responsible to deal with memory
   */
-char **shifter_copyenv(void);
+char **shifter_copyenv(char** env, int reserve);
 int shifter_putenv(char ***env, char *var);
 int shifter_appendenv(char ***env, char *var);
 int shifter_prependenv(char ***env, char *var);
 int shifter_unsetenv(char ***env, char *var);
-int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig);
+int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig, char* gpuSupportEnv0, char* gpuSupportEnv1);
 struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config);
 struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config);
 

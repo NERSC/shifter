@@ -89,6 +89,8 @@ int loadImage(ImageData *, struct options *, UdiRootConfig *);
 int adoptPATH(char **environ);
 
 #ifndef _TESTHARNESS_SHIFTER
+extern char** environ;
+
 int main(int argc, char **argv) {
     sighandler_t sighupHndlr = signal(SIGHUP, SIG_IGN);
     sighandler_t sigintHndlr = signal(SIGINT, SIG_IGN);
@@ -96,7 +98,7 @@ int main(int argc, char **argv) {
     sighandler_t sigtermHndlr = signal(SIGTERM, SIG_IGN);
 
     /* save a copy of the environment for the exec */
-    char **environ_copy = shifter_copyenv();
+    char **environ_copy = shifter_copyenv(environ, 0);
 
     /* declare needed variables */
     char wd[PATH_MAX];
@@ -265,8 +267,13 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to switch to working dir: %s, staying in /\n", opts.workdir);
     }
 
-    /* source the environment variables from the image */
-    shifter_setupenv(&environ_copy, &imageData, &udiConfig);
+    /* set the environment variables */
+    /*
+    FIXME: we definitely need some cleanup here. Ideas:
+    1. group the LD_LIBRARY_PATH variables into udiConfig or a new gpuSupportConfig structure
+    2. should the user be able to specify the name of the gpu-support folder??? (through udiRoot.conf)
+    */
+    shifter_setupenv(&environ_copy, &imageData, &udiConfig, strdup("LD_LIBRARY_PATH=/gpu-support/lib/nvidia/lib"), strdup("LD_LIBRARY_PATH=/gpu-support/lib/nvidia/lib64"));
 
     /* immediately set PATH to container PATH to get search right */
     adoptPATH(environ_copy);
