@@ -439,11 +439,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                 break;
             case 'g':
                 {
-                    if (optarg == NULL || strlen(optarg) > 1)
-                        break;
-
-                    /* Check that the argument represents an integer between 0 and 7 */
-                    if (optarg[0] < 0x30 || optarg[0] > 0x37)
+                    if (optarg == NULL)
                         break;
 
                     config->gpu = strdup(optarg);
@@ -648,8 +644,6 @@ static void _usage(int status) {
 "use the \"--gpu\" or \"-g\" options, supplying as argument the ID of the \n"
 "device as reported by nvidia-smi or the CUDA Runtime, e.g.:\n"
 "   shifter --gpu=0\n"
-"The current configuration supports only 1 GPU per container and nodes with up \n"
-"to 8 GPUs (IDs 0 through 7)."
 "\n"
         );
     exit(status);
