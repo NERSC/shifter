@@ -79,4 +79,5 @@ shifterimg_LDFLAGS = $(MUNGE_LDFLAGS) $(JSON_LDFLAGS) $(LIBCURL) $(MUNGE_LDFLAGS
 shifterimg_CPPFLAGS = $(AM_CPPFLAGS) $(MUNGE_CPPFLAGS) $(JSON_CPPFLAGS) $(LIBCURL_CPPFLAGS) $(MUNGE_CPPFLAGS)
 
 install-exec-hook:
+	cp activate_gpu_support.sh $(DESTDIR)$(bindir)/activate_gpu_support.sh
 	/bin/chmod 4755 $(DESTDIR)$(bindir)/shifter
