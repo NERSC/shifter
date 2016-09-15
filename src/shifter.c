@@ -71,6 +71,7 @@ struct options {
     gid_t tgtGid;
     char *username;
     char *workdir;
+    char *gpu;
     char **args;
     char **env;
     VolumeMap volumeMap;
@@ -355,6 +356,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         {"image", 1, 0, 'i'},
         {"entrypoint", 2, 0, 0},
         {"env", 0, 0, 'e'},
+        {"gpu", 1, 0, 'g'},
         {0, 0, 0, 0}
     };
     if (config == NULL) {
@@ -371,7 +373,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     optind = 1;
     for ( ; ; ) {
         int longopt_index = 0;
-        opt = getopt_long(argc, argv, "hnvV:i:e:", long_options, &longopt_index);
+        opt = getopt_long(argc, argv, "hnvV:i:e:g:", long_options, &longopt_index);
         if (opt == -1) break;
 
         switch (opt) {
@@ -435,6 +437,14 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                  * variables
                  */
                 break;
+            case 'g':
+                {
+                    if (optarg == NULL)
+                        break;
+
+                    config->gpu = strdup(optarg);
+                    break;
+                }
             case 'h':
                 _usage(0);
                 break;
@@ -456,6 +466,11 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     }
     if (config->imageIdentifier == NULL) {
         fprintf(stderr, "FAILED to lookup %s image %s\n", config->imageType, config->imageTag);
+        _usage(1);
+    }
+    if (config->gpu == NULL)
+    {
+        fprintf(stderr, "No GPU device specified, or specified incorrectly!\n");
         _usage(1);
     }
 
@@ -588,7 +603,7 @@ static void _usage(int status) {
         "Usage:\n"
         "shifter [-h|--help] [-v|--verbose] [--image=<imageType>:<imageTag>]\n"
         "    [--entry] [-V|--volume=/path/to/bind:/mnt/in/image[:<flags>][,...]]\n"
-        "    [-- /command/to/exec/in/shifter [args...]]\n"
+        "    [-g|--gpu=<deviceID>] [-- /command/to/exec/in/shifter [args...]]\n"
         );
     printf("\n");
     printf(
@@ -624,6 +639,11 @@ static void _usage(int status) {
 "in the provided image.  You can not bind a path into any path including or\n"
 "under /dev, /etc, /opt/udiImage, /proc, or /var; or overwrite any bind-\n"
 "requested by the system configuration.\n"
+"\n"
+"GPU Selection: To select a GPU device to be made available inside the container \n"
+"use the \"--gpu\" or \"-g\" options, supplying as argument the ID of the \n"
+"device as reported by nvidia-smi or the CUDA Runtime, e.g.:\n"
+"   shifter --gpu=0\n"
 "\n"
         );
     exit(status);
@@ -726,7 +746,7 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
     /* all of the mounts visible to us are now in our private namespace; since
      * we'll be changing things, need to ensure that nothing is mounted with
      * MS_SHARED, which would cause our changes to propagate out to the outside
-     * system.  If we used MS_PRIVATE it would prevent us from receiving 
+     * system.  If we used MS_PRIVATE it would prevent us from receiving
      * external events even if downstream bindmounts made by the container
      * specify MS_SLAVE.  Thus setting MS_SLAVE forces the one-way propagation
      * of mount/umounts that are desirable here
@@ -791,4 +811,3 @@ int adoptPATH(char **environ) {
     }
     return 1;
 }
-
