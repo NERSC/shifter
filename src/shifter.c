@@ -780,7 +780,7 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
             goto _loadImage_error;
         }
     }
-    if (mountImageVFS(image, opts->username, NULL, udiConfig) != 0) {
+    if (mountImageVFS(image, opts->username, opts->gpu, NULL, udiConfig) != 0) {
         fprintf(stderr, "FAILED to mount image into UDI\n");
         goto _loadImage_error;
     }
