@@ -988,7 +988,30 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
 
     /* copy image /etc into place */
     BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
-
+    
+    /* execute hook to activate GPU support */
+    /*
+    FIXME: some cleanup is required here:
+    1. get rid of absolute script location
+    2. factor out in dedicated function?
+    */
+    {
+        char *args[] = {
+            strdup("/bin/sh"),
+            strdup("/opt/shifter/udiRoot/bin/activate_gpu_support.sh"),
+            NULL
+        };
+        int ret = forkAndExecv(args);
+        char **argsPtr;
+        for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
+            free(*argsPtr);
+        }
+        if (ret != 0) {
+            fprintf(stderr, "activate_gpu_support hook failed\n");
+            ret = 1;
+            goto _mountImgVfs_unclean;
+        }
+    }
 
 #undef BIND_IMAGE_INTO_UDI
 #undef _MKDIR
@@ -2991,6 +3014,18 @@ static int _shifter_unsetenv(char ***env, char *var) {
     return 0;
 }
 
+static void _shifter_create_new_env_variable(char ***env, char *var)
+{
+    char** ptr;
+    char** new_env = shifter_copyenv(*env, 1);
+    for(ptr=new_env; *ptr!=NULL; ++ptr)
+    {}
+    *ptr = strdup(var);
+    ++ptr;
+    *ptr = NULL;
+    *env = new_env;
+}
+
 static int _shifter_putenv(char ***env, char *var, int mode) {
     size_t namelen = 0;
     size_t envsize = 0;
@@ -3005,7 +3040,12 @@ static int _shifter_putenv(char ***env, char *var, int mode) {
     }
     namelen = ptr - var;
     pptr = _shifter_findenv(env, var, namelen, &envsize);
-    if (pptr != NULL) {
+    if (pptr == NULL)
+    {
+        _shifter_create_new_env_variable(env, var);
+    }
+    else
+    {
         char *value = strchr(*pptr, '=');
         if (value != NULL) {
             value++;
@@ -3054,20 +3094,19 @@ static int _shifter_putenv(char ***env, char *var, int mode) {
     return 0;
 }
 
-extern char **environ;
-char **shifter_copyenv(void) {
+char **shifter_copyenv(char **source_environ, int reserve) {
     char **outenv = NULL;
     char **ptr = NULL;
     char **wptr = NULL;
 
-    if (environ == NULL) {
+    if (source_environ == NULL) {
         return NULL;
     }
 
-    for (ptr = environ; *ptr != NULL; ++ptr) {
+    for (ptr = source_environ; *ptr != NULL; ++ptr) {
     }
-    outenv = (char **) malloc(sizeof(char*) * ((ptr - environ) + 1));
-    ptr = environ;
+    outenv = (char **) malloc(sizeof(char*) * ((ptr - source_environ) + reserve + 1));
+    ptr = source_environ;
     wptr = outenv;
     for ( ; *ptr != NULL; ptr++) {
         *wptr++ = strdup(*ptr);
@@ -3092,7 +3131,7 @@ int shifter_unsetenv(char ***env, char *var) {
     return _shifter_unsetenv(env, var);
 }
 
-int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
+int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig, char* gpuSupportEnv0, char* gpuSupportEnv1) {
     char **envPtr = NULL;
     if (env == NULL || *env == NULL || image == NULL || udiConfig == NULL) {
         return 1;
@@ -3112,6 +3151,8 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
     for (envPtr = udiConfig->siteEnvUnset; envPtr && *envPtr; envPtr++) {
         shifter_unsetenv(env, *envPtr);
     }
+    shifter_prependenv(env, gpuSupportEnv0);
+    shifter_prependenv(env, gpuSupportEnv1);
     return 0;
 }
 
