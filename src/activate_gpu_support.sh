@@ -2,8 +2,6 @@
 
 container_mount_point=/var/udiMount #TODO: replace this variable with parameter passed to the script by the shifter executable
 nvidia_libs_mount_point=$container_mount_point/gpu-support/lib/nvidia
-nvidia_lib_mount_point=/var/udiMount/gpu-support/lib/nvidia/lib
-nvidia_lib64_mount_point=/var/udiMount/gpu-support/lib/nvidia/lib64
 
 #the NVIDIA compute libraries that will be bind mounted into the container
 nvidia_compute_libs="cuda \
