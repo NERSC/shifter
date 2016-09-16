@@ -11,17 +11,6 @@ nvidia_compute_libs="cuda \
                     nvidia-ml \
                     nvidia-fatbinaryloader"
 
-__filter_duplicate_paths()
-{
-    local paths="$1"
-
-    local sums="$( md5sum $paths | sed 's/[^/]*$/ &/' )"
-    local uniq="$( echo "$sums" | uniq -u -f2 | awk '{print $2$3}')"
-    local dupl="$( echo "$sums" | uniq --all-repeated=separate -f2 \
-                                | uniq -w 32 | awk 'NF {print $2$3}')"
-    echo $uniq $dupl
-}
-
 __log()
 {
     local level="$1"
@@ -43,7 +32,7 @@ check_prerequisites()
 
 add_nvidia_compute_libs_to_container()
 {
-    export PATH=/sbin:$PATH #FIXME: find out why PATH is different during shifter's execution
+    export PATH=/sbin:$PATH #FIXME: find out why PATH is different during shifter's execution. Should we use mount program specified in udiRoot.conf?
 
     mkdir -p $nvidia_libs_mount_point/lib
     mkdir -p $nvidia_libs_mount_point/lib64
@@ -55,7 +44,7 @@ add_nvidia_compute_libs_to_container()
             continue
         fi
         
-        for lib_path in $( __filter_duplicate_paths "$lib_paths" ); do
+        for lib_path in $lib_paths; do
             local lib_arch=$( file -L $lib_path | awk '{print $3}' | cut -d- -f1 )
             if [ "$lib_arch" = "32" ]; then
                 local lib_mount_point=$nvidia_libs_mount_point/lib/$(basename $lib_path)
