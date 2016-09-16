@@ -447,7 +447,11 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
             case 'g':
                 {
                     if (optarg == NULL)
+                    {
+                        fprintf(stderr, "GPU device requested but not specified, or specified incorrectly!\n");
+                        _usage(1);
                         break;
+                    }
 
                     config->gpu = strdup(optarg);
                     break;
@@ -473,11 +477,6 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     }
     if (config->imageIdentifier == NULL) {
         fprintf(stderr, "FAILED to lookup %s image %s\n", config->imageType, config->imageTag);
-        _usage(1);
-    }
-    if (config->gpu == NULL)
-    {
-        fprintf(stderr, "No GPU device specified, or specified incorrectly!\n");
         _usage(1);
     }
 
