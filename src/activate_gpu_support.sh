@@ -63,5 +63,13 @@ add_nvidia_compute_libs_to_container()
     done
 }
 
+load_nvidia_uvm_if_necessary()
+{
+    if [ ! -e /dev/nvidia-uvm ]; then
+        nvidia-modprobe -u -c=0
+    fi
+}
+
 check_prerequisites
 add_nvidia_compute_libs_to_container
+load_nvidia_uvm_if_necessary
