@@ -66,7 +66,7 @@ PathList *pathList_init(const char *path) {
     if (path_len == 0) return NULL;
 
     buffer = strdup(path);
-    if (path == NULL) {
+    if (buffer == NULL) {
         return NULL;
     }
 
@@ -158,7 +158,7 @@ int pathList_append(PathList *base, const char *path) {
             newpath->path->parent = base->terminal;
         }
     } else {
-        newpath->path = newpath->path;
+        base->path = newpath->path;
     }
     base->terminal = newpath->terminal;
     newpath->path = NULL;
@@ -375,9 +375,19 @@ PathList *pathList_duplicatePartial(PathList *origpath, PathComponent *tohere) {
         return NULL;
     }
     ret->terminal = rptr;
-    trim = rptr->child;
-    rptr->child = NULL;
-    pathList_freeComponents(trim);
+    if (rptr != NULL) {
+        trim = rptr->child;
+        rptr->child = NULL;
+        pathList_freeComponents(trim);
+    } else {
+        /* this is an exceptionally unlikely branch, but if it does happen,
+         * this will keep the ret path consistent */
+        if (ret->path != NULL) {
+            pathList_freeComponents(ret->path);
+        }
+        ret->path = NULL;
+        ret->terminal = NULL;
+    }
     return ret;
 }
 
@@ -453,6 +463,10 @@ PathComponent *pathList_appendComponents(
     while (compPtr) {
         newComp = (PathComponent *) malloc(sizeof(PathComponent));
         if (newComp == NULL) {
+            if (retComp != NULL) {
+                pathList_freeComponents(retComp);
+                retComp = NULL;
+            }
             return NULL;
         }
         newComp->item = strdup(compPtr->item);

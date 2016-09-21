@@ -906,6 +906,8 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
                         free_ImageGwState(gwState);
                         config->mode = MODE_PULL;
                     }
+                    free_ImageGwImageRec(image, 1);
+                    image = NULL;
                 }
             } else if (config->mode == MODE_IMAGES) {
                 ImageGwImageRec **images = parseImagesResponse(imageGw);
