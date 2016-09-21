@@ -25,6 +25,8 @@ SHIFTER_SOURCES = \
     ImageData.c \
     VolumeMap.h \
     VolumeMap.c \
+    PathList.h \
+    PathList.c \
     MountList.h \
     MountList.c
 
@@ -40,6 +42,8 @@ SETUPROOT_SOURCES = \
     ImageData.c \
     VolumeMap.h \
     VolumeMap.c \
+    PathList.h \
+    PathList.c \
     MountList.h \
     MountList.c
 
@@ -55,6 +59,8 @@ UNSETUPROOT_SOURCES = \
     ImageData.c \
     VolumeMap.h \
     VolumeMap.c \
+    PathList.h \
+    PathList.c \
     MountList.h \
     MountList.c
 

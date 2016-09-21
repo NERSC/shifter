@@ -124,12 +124,22 @@ char *lookup_ImageIdentifier(
         if (nread == 0 || feof(pp) || ferror(pp)) break;
         lineBuffer[nread] = 0;
         ptr = shifter_trim(lineBuffer);
+        if (ptr == NULL) {
+            goto _lookupImageIdentifier_error;
+        }
+
         if (strncmp(ptr, "ENV:", 4) == 0) {
             ptr += 4;
             ptr = shifter_trim(ptr);
+            if (ptr == NULL) {
+                goto _lookupImageIdentifier_error;
+            }
         } else if (strncmp(ptr, "ENTRY:", 6) == 0) {
             ptr += 6;
             ptr = shifter_trim(ptr);
+            if (ptr == NULL) {
+                goto _lookupImageIdentifier_error;
+            }
         } else if (identifier == NULL && strchr(ptr, ':') == NULL) {
             /* this is the image id */
             identifier = strdup(ptr);

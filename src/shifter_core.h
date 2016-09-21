@@ -52,8 +52,8 @@
 extern "C" {
 #endif
 
-#define INVALID_USER UINT_MAX
-#define INVALID_GROUP UINT_MAX
+#define INVALID_USER INT_MAX
+#define INVALID_GROUP INT_MAX
 #define FILE_SIZE_LIMIT 5242880
 
 int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig);
@@ -99,17 +99,14 @@ int shifter_set_capability_boundingset_null();
   *
   * \param user username of target user, must not be NULL, nor point to "root"
   * \param group gid of primary group for target user, must not be 0
-  * \param groups pointer to group array, can point to a NULL pointer (groups
-  *     itself must not be NULL)
   * \param pointer to ngroups, can be pointer to an zero-value integer (ngroups
   *     itself must not be NULL)
   *
-  * \returns 0 upon success, non-zero (usually negative) upon failure
+  * \returns 0-terminated array of gids (malloc'd, user responsible for 
+  *     freeing it)
   *
-  * If *group is NULL, then it will be allocated
-  *
-  * Upon successful run, *groups will be populated with the  valid gids for the
-  * user and ngroups will be set to the number of groups to consider (the
+  * Upon successful run, will be return array populated with the valid gids for
+  * the user and ngroups will be set to the number of groups to consider (the
   * usable extent of the array).
   *
   * This function will fail if the user appears to belong to more than 512
@@ -117,9 +114,10 @@ int shifter_set_capability_boundingset_null();
   *
   * If the resulting group list contains any gid 0 entries, these will be
   * replaced with the non-zero value for group (the primary gid for the
-  * user)
+  * user).  Note that the final entry in the list will be zero, but this is to
+  * be used to signal termination NOT a valid entry. Ever.
   */
-int shifter_getgrouplist(const char *user, gid_t group, gid_t **groups, int *ngroups);
+gid_t *shifter_getgrouplist(const char *user, gid_t group, int *ngroups);
 
 /** shifter_copyenv
   * copy current process environ into a newly allocated array with newly
@@ -141,6 +139,22 @@ int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *f
 int makeUdiMountPrivate(UdiRootConfig *udiConfig);
 char **getSupportedFilesystems();
 int supportsFilesystem(char *const * fsTypes, const char *fsType);
+
+/** shifter_find_process_by_cmdline
+ *  discover a process id which was started with a particular command
+ *  (relies on there only being one process of interest running on the
+ *   machine)
+ *
+ * @param command string to match command line
+ * @returns pid of discovered process, -1 upon error, 0 if not found
+ */
+pid_t shifter_find_process_by_cmdline(const char *command);
+
+/** shifter_realpath
+ *  perform standard realpath operation, but ensure that any symlinks resolve
+ *  within the container
+ */
+char *shifter_realpath(const char *path, UdiRootConfig *config);
 
 #ifdef __cplusplus
 }
