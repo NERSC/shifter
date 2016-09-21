@@ -119,6 +119,20 @@ TEST(PathListTestGroup, appendPathTest) {
     strPath = NULL;
 
     pathList_free(basePath);
+
+    basePath = pathList_init("/");
+    CHECK(basePath != NULL);
+    CHECK(basePath->path == NULL);
+    CHECK(basePath->absolute == 1);
+
+    CHECK(pathList_append(basePath, "this/is/a/test") == 0);
+    strPath = pathList_string(basePath);
+    CHECK(strPath != NULL);
+    CHECK(strcmp(strPath, "/this/is/a/test") == 0);
+    free(strPath);
+    strPath = NULL;
+
+    pathList_free(basePath);
 }
 
 TEST(PathListTestGroup, resolveSymLink) {
