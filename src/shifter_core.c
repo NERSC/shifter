@@ -874,7 +874,11 @@ _writeHostFile_error:
     return 1;
 }
 
-int mountImageVFS(ImageData *imageData, const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig) {
+int mountImageVFS(ImageData *imageData,
+                  const char *username,
+                  const char *gpu_id,
+                  const char *minNodeSpec,
+                  UdiRootConfig *udiConfig) {
     struct stat statData;
     char udiRoot[PATH_MAX];
     char *sshPath = NULL;
@@ -988,17 +992,21 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
 
     /* copy image /etc into place */
     BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
-    
+
     /* execute hook to activate GPU support */
-    /*
-    FIXME: some cleanup is required here:
-    1. get rid of absolute script location
-    2. factor out in dedicated function?
-    */
+    if (gpu_id != NULL)
     {
+        char *gpu_script = strdup("bin/activate_gpu_support.sh");
+
+        size_t gpu_path_size = strlen(udiConfig->udiRootPath) + strlen(gpu_script) + 2;
+        char *full_gpu_path = (char *) malloc(sizeof(char *) * gpu_path_size);
+        sprintf(full_gpu_path, "%s/%s", udiConfig->udiRootPath, "/", gpu_script);
+
         char *args[] = {
             strdup("/bin/sh"),
-            strdup("/opt/shifter/udiRoot/bin/activate_gpu_support.sh"),
+            full_gpu_path,
+            gpu_id,
+            udiConfig->udiMountPoint,
             NULL
         };
         int ret = forkAndExecv(args);
@@ -1006,6 +1014,7 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
         for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
             free(*argsPtr);
         }
+        free(gpu_script);
         if (ret != 0) {
             fprintf(stderr, "activate_gpu_support hook failed\n");
             ret = 1;
@@ -1032,8 +1041,8 @@ _mountImgVfs_unclean:
  *  Some Linux systems default their mounts to "shared" mounts, which means
  *  that mount option changes Shifter makes (or unmounts) can propagate back up
  *  to the original mount, which is not desirable.  This function remounts the
- *  base udiMount point as MS_PRIVATE - which means that no external mount 
- *  changes propagate into these mountpoints, nor do these go back up the 
+ *  base udiMount point as MS_PRIVATE - which means that no external mount
+ *  changes propagate into these mountpoints, nor do these go back up the
  *  chain.  It may be desirable to allow sites to choose MS_SLAVE instead of
  *  MS_PRIVATE here, as that will allow site unmounts to propagate into shifter
  *  containers.
@@ -1122,7 +1131,7 @@ char **getSupportedFilesystems() {
     size_t listExtent = 10;
     size_t listLen = 0;
     FILE *fp = NULL;
-    
+
     if (ret == NULL) { // || buffer == NULL) {
         /* ran out of memory */
         return NULL;
@@ -1625,8 +1634,8 @@ int setupVolumeMapMounts(
 
             container_from_real = from_real;
             if (userRequested != 0) {
-                /* from_real is known to be longer than udiMountLen from 
-                 * previous check (i.e., don't remove the check!) */ 
+                /* from_real is known to be longer than udiMountLen from
+                 * previous check (i.e., don't remove the check!) */
                 container_from_real = from_real + udiMountLen;
             }
 
@@ -1639,7 +1648,7 @@ int setupVolumeMapMounts(
 
             /* the destination mount must be either in the shifter root
              * filesystem, or on the orignal device providing the container
-             * image.  Should not allow volume mounts onto other imported 
+             * image.  Should not allow volume mounts onto other imported
              * content */
             memset(&toStat, 0, sizeof(struct stat));
             if (lstat(to_real, &toStat) != 0) {
@@ -2299,7 +2308,7 @@ int _shifterCore_bindMount(UdiRootConfig *udiConfig, MountList *mountCache,
         return 1;
     }
 
-    privateRemountFlags = 
+    privateRemountFlags =
         udiConfig->mountPropagationStyle == VOLMAP_FLAG_SLAVE ?
         MS_SLAVE : MS_PRIVATE;
 
