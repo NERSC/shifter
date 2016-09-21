@@ -144,8 +144,7 @@ int pathList_append(PathList *base, const char *path) {
     PathList *newpath = pathList_init(path);
     PathComponent *ptr = NULL;
 
-    if (newpath == NULL || newpath->absolute) {
-        if (newpath) pathList_free(newpath);
+    if (newpath == NULL) {
         return -1;
     }
     if (base == NULL) {

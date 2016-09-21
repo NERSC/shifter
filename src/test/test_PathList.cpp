@@ -110,13 +110,7 @@ TEST(PathListTestGroup, appendPathTest) {
     CHECK(basePath != NULL);
     CHECK(basePath->absolute == 1);
 
-    CHECK(pathList_append(basePath, "/global/homes") != 0);
-    char *strPath = pathList_string(basePath);
-    CHECK(strPath != NULL);
-    CHECK(strcmp(strPath, "/var/udiRoot") == 0);
-    free(strPath);
-    strPath = NULL;
-
+    char *strPath = NULL;
     CHECK(pathList_append(basePath, "global/homes") == 0);
     strPath = pathList_string(basePath);
     CHECK(strPath != NULL);

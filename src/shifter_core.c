@@ -1611,14 +1611,18 @@ int setupVolumeMapMounts(
 
             /* perform some introspection on the path to get it's real location
              * and vital attributes */
-            char *from_real_shft = shifter_realpath(filtered_from, udiConfig);
-            if (from_real == NULL) {
-                fprintf(stderr, "FAILED to find real path for volume "
-                        "\"from\": %s\n", filtered_from);
-                goto _fail_check_fromvol;
+            if (userRequested != 0) {
+                char *from_real_shft = shifter_realpath(filtered_from, udiConfig);
+                if (from_real_shft == NULL) {
+                    fprintf(stderr, "FAILED to find real path for volume "
+                            "\"from\": %s\n", filtered_from);
+                    goto _fail_check_fromvol;
+                }
+                from_real = realpath(from_real_shft, NULL);
+                free(from_real_shft);
+            } else {
+                from_real = realpath(from_buffer, NULL);
             }
-            from_real = realpath(from_real_shft, NULL);
-            free(from_real_shft);
             if (from_real == NULL) {
                 fprintf(stderr, "FAILED to find real path for volume "
                         "\"from\": %s\n", from_buffer);
@@ -3406,25 +3410,31 @@ char *shifter_realpath(const char *src_path, UdiRootConfig *config) {
     PathComponent *pathPtr = NULL;
 
     if (src_path == NULL || config == NULL || config->udiMountPoint == NULL) {
+        fprintf(stderr, "shifter_realpath: invalid arguments\n");
         goto _realpath_err;
     }
     udiRootBasePath = pathList_init(config->udiMountPoint);
     if (udiRootBasePath == NULL) {
+        fprintf(stderr, "shifter_realpath: failed to build basepath\n");
         goto _realpath_err;
     }
     if (pathList_setRoot(udiRootBasePath, config->udiMountPoint) != 0) {
+        fprintf(stderr, "shifter_realpath: failed to set root in basepath\n");
         goto _realpath_err;
     }
 
     searchPath = pathList_duplicate(udiRootBasePath);
     if (searchPath == NULL) {
+        fprintf(stderr, "shifter_realpath: failed to set setup initial searchPath\n");
         goto _realpath_err;
     }
     if (pathList_append(searchPath, src_path) != 0) {
+        fprintf(stderr, "shifter_realpath: failed to set append data to searchPath\n");
         goto _realpath_err;
     }
 
     if (searchPath->relroot == NULL) {
+        fprintf(stderr, "shifter_realpath: relroot missing");
         goto _realpath_err;
     }
 
@@ -3433,10 +3443,12 @@ char *shifter_realpath(const char *src_path, UdiRootConfig *config) {
         if (currPath != NULL) free(currPath);
         currPath = pathList_stringPartial(searchPath, pathPtr);
         if (currPath == NULL) {
+            fprintf(stderr, "shifter_realpath: failed to get string of searchPath");
             goto _realpath_err;
         }
 
         if (lstat(currPath, &statData) != 0) {
+            fprintf(stderr, "shifter_realpath: failed to lstat %s\n", currPath);
             goto _realpath_err;
         }
         if (S_ISLNK(statData.st_mode)) {
@@ -3447,6 +3459,10 @@ char *shifter_realpath(const char *src_path, UdiRootConfig *config) {
             }
             lnkPath[nbytes] = '\0';
             pathPtr = pathList_symlinkSubstitute(searchPath, pathPtr, lnkPath);
+            if (pathPtr == NULL) {
+                fprintf(stderr, "FAILED to substitute symlink\n");
+                goto _realpath_err;
+            }
 
             continue;
         }

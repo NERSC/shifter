@@ -28,6 +28,7 @@ test_shifterSpank_config_SOURCES = \
     $(top_srcdir)/src/VolumeMap.c \
     $(top_srcdir)/src/ImageData.c \
     $(top_srcdir)/src/shifter_core.c \
+    $(top_srcdir)/src/PathList.c \
     $(top_srcdir)/src/MountList.c
 test_shifterSpank_config_CXXFLAGS = $(TEST_CFLAGS)
 test_shifterSpank_config_CFLAGS = $(TEST_CFLAGS)
@@ -42,6 +43,7 @@ test_shifterSpank_util_SOURCES = \
     $(top_srcdir)/src/VolumeMap.c \
     $(top_srcdir)/src/ImageData.c \
     $(top_srcdir)/src/shifter_core.c \
+    $(top_srcdir)/src/PathList.c \
     $(top_srcdir)/src/MountList.c
 test_shifterSpank_util_CXXFLAGS = $(TEST_CFLAGS)
 test_shifterSpank_util_CFLAGS = $(TEST_CFLAGS)
@@ -56,6 +58,7 @@ test_shifterSpank_prolog_SOURCES = \
     $(top_srcdir)/src/VolumeMap.c \
     $(top_srcdir)/src/ImageData.c \
     $(top_srcdir)/src/shifter_core.c \
+    $(top_srcdir)/src/PathList.c \
     $(top_srcdir)/src/MountList.c
 test_shifterSpank_prolog_CXXFLAGS = $(TEST_CFLAGS)
 test_shifterSpank_prolog_CFLAGS = $(TEST_CFLAGS)
@@ -70,6 +73,7 @@ test_shifterSpank_cgroup_SOURCES = \
     $(top_srcdir)/src/VolumeMap.c \
     $(top_srcdir)/src/ImageData.c \
     $(top_srcdir)/src/shifter_core.c \
+    $(top_srcdir)/src/PathList.c \
     $(top_srcdir)/src/MountList.c
 test_shifterSpank_cgroup_CXXFLAGS = $(TEST_CFLAGS)
 test_shifterSpank_cgroup_CFLAGS = $(TEST_CFLAGS)
