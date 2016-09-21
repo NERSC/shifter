@@ -1,5 +1,9 @@
 #!/bin/bash
 
+#setting PATH from scratch is necessary because shifter might execute this script
+#with an empty environment (after calling the clearenv function)
+export PATH=/usr/local/bin:/usr/bin:/bin:/sbin
+
 container_mount_point=/var/udiMount #TODO: replace this variable with parameter passed to the script by the shifter executable
 nvidia_libs_mount_point=$container_mount_point/gpu-support/lib/nvidia
 
@@ -32,8 +36,6 @@ check_prerequisites()
 
 add_nvidia_compute_libs_to_container()
 {
-    export PATH=/sbin:$PATH #FIXME: find out why PATH is different during shifter's execution. Should we use mount program specified in udiRoot.conf?
-
     mkdir -p $nvidia_libs_mount_point/lib
     mkdir -p $nvidia_libs_mount_point/lib64
 
@@ -61,5 +63,13 @@ add_nvidia_compute_libs_to_container()
     done
 }
 
+load_nvidia_uvm_if_necessary()
+{
+    if [ ! -e /dev/nvidia-uvm ]; then
+        nvidia-modprobe -u -c=0
+    fi
+}
+
 check_prerequisites
 add_nvidia_compute_libs_to_container
+load_nvidia_uvm_if_necessary
