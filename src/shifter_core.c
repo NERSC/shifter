@@ -876,7 +876,7 @@ _writeHostFile_error:
 
 int mountImageVFS(ImageData *imageData,
                   const char *username,
-                  const char *gpu,
+                  const char *gpu_id,
                   const char *minNodeSpec,
                   UdiRootConfig *udiConfig) {
     struct stat statData;
@@ -994,16 +994,19 @@ int mountImageVFS(ImageData *imageData,
     BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
 
     /* execute hook to activate GPU support */
-    /*
-    FIXME: some cleanup is required here:
-    1. get rid of absolute script location
-    2. factor out in dedicated function?
-    */
-    if (gpu != NULL)
+    if (gpu_id != NULL)
     {
+        char *gpu_script = strdup("bin/activate_gpu_support.sh");
+
+        size_t gpu_path_size = strlen(udiConfig->udiRootPath) + strlen(gpu_script) + 2;
+        char *full_gpu_path = (char *) malloc(sizeof(char *) * gpu_path_size);
+        sprintf(full_gpu_path, "%s/%s", udiConfig->udiRootPath, "/", gpu_script);
+
         char *args[] = {
             strdup("/bin/sh"),
-            strdup("/opt/shifter/udiRoot/bin/activate_gpu_support.sh"),
+            full_gpu_path,
+            gpu_id,
+            udiConfig->udiMountPoint,
             NULL
         };
         int ret = forkAndExecv(args);
@@ -1011,6 +1014,7 @@ int mountImageVFS(ImageData *imageData,
         for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
             free(*argsPtr);
         }
+        free(gpu_script);
         if (ret != 0) {
             fprintf(stderr, "activate_gpu_support hook failed\n");
             ret = 1;
