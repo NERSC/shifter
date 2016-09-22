@@ -233,6 +233,7 @@ int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
     flagName = strdup(sptr);
     sptr = ptr + 1;
     while (sptr < limit) {
+        char **tmp_kvArray = NULL;
         char *vptr = strchr(sptr, '=');
         ptr = strchr(sptr, ',');
         if (ptr == NULL) ptr = limit;
@@ -240,11 +241,12 @@ int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
         if (vptr != NULL) {
             *vptr++ = 0;
         }
-        kvArray = (char **) realloc(kvArray, sizeof(char *) * (kvCount + 2));
-        if (kvArray == NULL) {
+        tmp_kvArray = (char **) realloc(kvArray, sizeof(char *) * (kvCount + 2));
+        if (tmp_kvArray == NULL) {
             fprintf(stderr, "Unknown flag: couldn't parse flag name\n");
             goto __parseFlags_exit_unclean;
         }
+        kvArray = tmp_kvArray;
         kvArray[kvCount++] = sptr;
         kvArray[kvCount++] = vptr;
         sptr = ptr + 1;
@@ -537,7 +539,7 @@ int _parseVolumeMap(
         if (ret != 0) goto _parseVolumeMap_unclean;
 
         if (volMap->n >= volMap->flagsCapacity) {
-            VolumeMapFlag **tmp = (VolumeMapFlag **) realloc(volMap->flags, sizeof(VolumeMapFlag *) * (volMap->flagsCapacity + VOLUME_ALLOC_BLOCK));
+            VolumeMapFlag **tmp = (VolumeMapFlag **) realloc(volMap->flags, sizeof(VolumeMapFlag *) * (volMap->flagsCapacity + VOLUME_ALLOC_BLOCK + 1));
             if (tmp == NULL) {
                 fprintf(stderr, "Failed to allocate memory!\n");
                 goto _parseVolumeMap_unclean;
@@ -548,11 +550,10 @@ int _parseVolumeMap(
             memset(flagPtr, 0, sizeof(VolumeMapFlag *) * (volMap->flagsCapacity - volMap->n));
         }
         
-        *flagPtr++ = flags;
+        *flagPtr = flags;
+        flagPtr++;
         *flagPtr = NULL;
         flagsCapacity = 0;
-
-        if (ret != 0) goto _parseVolumeMap_unclean;
 
         if (from != NULL) free(from);
         if (to != NULL) free(to);

@@ -463,6 +463,7 @@ class DockerV2Handle(object):
             location = resp1.getheader('location')
             if resp1.status == 200:
                 break
+
             elif resp1.status == 401 and self.auth_method == 'token':
                 self.do_token_auth(resp1.getheader('WWW-Authenticate'))
                 continue

@@ -13,8 +13,7 @@ For updates and community support, please subscribe to the email list at https:/
 
 # Release Cycle
 
-Milestone tags will be labelled like YYYY.MM.vv (i.e. 2015.12.00) where vv is a minor release incremented with each snapshot
-generated.  We plan to release new major versions biannually with point releases as required.
+Shifter should be considered to be pre-release. Milestone tags will be labelled like YYYY.MM.vv (i.e. 2015.12.00) where vv is a minor release incremented with each snapshot generated.  We plan to release new major versions biannually with point releases as required.
 
 # Contributing
 

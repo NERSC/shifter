@@ -37,6 +37,7 @@
 #include "utility.h"
 #include "VolumeMap.h"
 #include "MountList.h"
+#include <fcntl.h>
 
 extern "C" {
 int _shifterCore_bindMount(UdiRootConfig *config, MountList *mounts, const char *from, const char *to, int ro, int overwrite);
@@ -67,7 +68,7 @@ int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const cha
     memset(*image, 0, sizeof(ImageData));
 
     (*image)->type = strdup("local");
-    (*image)->identifier = strdup("/");
+    parse_ImageData((*image)->type, strdup("/"), *config, *image);
     (*config)->udiMountPoint = strdup(tmpDir);
     (*config)->rootfsType = strdup(ROOTFS_TYPE);
     (*config)->etcPath = alloc_strgenf("%s/%s", basePath, "etc");
@@ -79,6 +80,7 @@ int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const cha
     (*config)->allowLocalChroot = 1;
     (*config)->target_uid = 1000;
     (*config)->target_gid = 1000;
+    (*config)->mountPropagationStyle = VOLMAP_FLAG_PRIVATE;
     return 0;
 }
 
@@ -171,6 +173,189 @@ TEST(ShifterCoreTestGroup, CopyFile_basic) {
     free(toFile);
 }
 
+int jailbreak() {
+    chdir("/");
+    int fd = open("/", O_DIRECTORY);
+    mkdir("break", 0755);
+    chdir("break");
+    chroot(".");
+    fchdir(fd);
+
+    for ( ; ; ) {
+        struct stat dot;
+        struct stat dotdot;
+
+        if (stat(".", &dot) != 0) break;
+        if (stat("..", &dotdot) != 0) break;
+
+        if (dot.st_ino == dotdot.st_ino) {
+            return chroot(".");
+        }
+        chdir("..");
+    }
+    return 1;
+}
+
+#define SETUP_CHROOT(path) \
+    CHECK(chdir(path) == 0);\
+    CHECK(chroot(".") == 0);\
+    {
+
+#define CHECK_CHROOT(statement, returndir) \
+    CHECK(statement);\
+    }\
+    CHECK(jailbreak() == 0);\
+    printf("returning to %s\n", returndir);\
+    CHECK(chdir(returndir) == 0);
+
+#define END_CHROOT(returndir) \
+    }\
+    CHECK(jailbreak() == 0);\
+    printf("returning to %s\n", returndir);\
+    CHECK(chdir(returndir) == 0);
+
+
+#ifdef NOTROOT
+IGNORE_TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
+#else
+TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
+#endif
+    int ret = 0;
+    gid_t *groups = NULL;
+    int ngroups = 0;
+    pid_t pid = 0;
+
+    char *returndir = get_current_dir_name();
+
+    /* make sure fails if user is NULL */
+    ret = shifter_getgrouplist(NULL, 1000, &groups, &ngroups);
+    CHECK(ret != 0);
+
+    /* make sure fails if user is root */
+    ret = shifter_getgrouplist("root", 1000, &groups, &ngroups);
+    CHECK(ret != 0);
+
+    /* make sure fails if group is 0 */
+    ret = shifter_getgrouplist("test", 0, &groups, &ngroups);
+    CHECK(ret != 0);
+
+    /* make sure fails if groups is NULL */
+    ret = shifter_getgrouplist("test", 1000, NULL, &ngroups);
+    CHECK(ret != 0);
+
+    /* make sure fails if ngroups is NULL */
+    ret = shifter_getgrouplist("test", 1000, &groups, NULL);
+    CHECK(ret != 0);
+
+    /* in chroot1, user dmj is in groups 10, 990, and 1000 */
+
+    SETUP_CHROOT("chroot1")
+    ret = shifter_getgrouplist("dmj", 1000, &groups, &ngroups);
+    fprintf(stderr, "got back %d groups\n", ngroups);
+    int ok[] = {10, 990, 1000};
+    int expcnt[] = {1, 1, 1};
+    int gotcnt[] = {0, 0, 0};
+
+    for (int idx = 0; idx < ngroups; idx++) {
+        fprintf(stderr, "have gid: %d\n", groups[idx]);
+        for (int grpidx = 0; grpidx < 3; grpidx++) {
+            if (groups[idx] == ok[grpidx]) {
+                gotcnt[grpidx]++;
+            }
+        }
+    }
+    for (int grpidx = 0; grpidx < 3; grpidx++) {
+        if (expcnt[grpidx] != gotcnt[grpidx]) {
+            fprintf(stderr, "%d != %d occurences for gid %d\n", expcnt[grpidx], gotcnt[grpidx], ok[grpidx]);
+            exit(1);
+        } 
+    }
+    CHECK(ret == 0);
+    CHECK(ngroups == 3);
+    END_CHROOT(returndir)
+
+    printf("currdir: %s\n", get_current_dir_name());
+
+    /* should get back the 3 correct groups plus a duplicate
+     * 1000 replacing the evil 0 inserted into chroot2 */
+    SETUP_CHROOT("chroot2")
+    ret = shifter_getgrouplist("dmj", 1000, &groups, &ngroups);
+    fprintf(stderr, "got back %d groups\n", ngroups);
+    int ok[] = {10, 990, 1000};
+    int expcnt[] = {1, 1, 2};
+    int gotcnt[] = {0, 0, 0};
+
+    for (int idx = 0; idx < ngroups; idx++) {
+        fprintf(stderr, "have gid: %d\n", groups[idx]);
+        for (int grpidx = 0; grpidx < 3; grpidx++) {
+            if (groups[idx] == ok[grpidx]) {
+                gotcnt[grpidx]++;
+            }
+        }
+    }
+    for (int grpidx = 0; grpidx < 3; grpidx++) {
+        if (expcnt[grpidx] != gotcnt[grpidx]) {
+            fprintf(stderr, "%d != %d occurences for gid %d\n", expcnt[grpidx], gotcnt[grpidx], ok[grpidx]);
+            exit(1);
+        } 
+    }
+    CHECK_CHROOT(ret == 0 && ngroups == 4, returndir)
+
+    /* make sure the realloc works correctly */
+    free(groups);
+    groups = (gid_t *) malloc(sizeof(gid_t) * 1);
+    ngroups = 1;
+  
+    /* after making buffer too small, re-run test from above */
+    SETUP_CHROOT("chroot1")
+    ret = shifter_getgrouplist("dmj", 1000, &groups, &ngroups);
+    fprintf(stderr, "got back %d groups\n", ngroups);
+    int ok[] = {10, 990, 1000};
+    int expcnt[] = {1, 1, 1};
+    int gotcnt[] = {0, 0, 0};
+
+    for (int idx = 0; idx < ngroups; idx++) {
+        fprintf(stderr, "have gid: %d\n", groups[idx]);
+        for (int grpidx = 0; grpidx < 3; grpidx++) {
+            if (groups[idx] == ok[grpidx]) {
+                gotcnt[grpidx]++;
+            }
+        }
+    }
+    for (int grpidx = 0; grpidx < 3; grpidx++) {
+        if (expcnt[grpidx] != gotcnt[grpidx]) {
+            fprintf(stderr, "%d != %d occurences for gid %d\n", expcnt[grpidx], gotcnt[grpidx], ok[grpidx]);
+            exit(1);
+        } 
+    }
+    CHECK_CHROOT(ret == 0 && ngroups == 3, returndir)
+
+    /* check case when NO group entries are present
+     * should just get the provided gid back */
+    SETUP_CHROOT("chroot3")
+    ret = shifter_getgrouplist("dmj", 1000, &groups, &ngroups);
+    fprintf(stderr, "got back %d groups\n", ngroups);
+    int ok[] = {1000};
+    int expcnt[] = {1};
+    int gotcnt[] = {0};
+
+    for (int idx = 0; idx < ngroups; idx++) {
+        fprintf(stderr, "have gid: %d\n", groups[idx]);
+        for (int grpidx = 0; grpidx < 1; grpidx++) {
+            if (groups[idx] == ok[grpidx]) {
+                gotcnt[grpidx]++;
+            }
+        }
+    }
+    for (int grpidx = 0; grpidx < 1; grpidx++) {
+        if (expcnt[grpidx] != gotcnt[grpidx]) {
+            fprintf(stderr, "%d != %d occurences for gid %d\n", expcnt[grpidx], gotcnt[grpidx], ok[grpidx]);
+            exit(1);
+        } 
+    }
+    CHECK_CHROOT(ret == 0 && ngroups == 1, returndir)
+}
+
 TEST(ShifterCoreTestGroup, setupPerNodeCacheFilename_tests) {
     int ret = 0;
     char buffer[PATH_MAX];
@@ -212,6 +397,8 @@ TEST(ShifterCoreTestGroup, setupPerNodeCacheFilename_tests) {
     ret = setupPerNodeCacheFilename(config, cache, buffer, PATH_MAX);
     CHECK(ret == -1);
 
+    free_ImageData(image, 1);
+    free_UdiRootConfig(config, 1);
     free_VolMapPerNodeCacheConfig(cache);
     cache = NULL;
 }
@@ -256,11 +443,19 @@ IGNORE_TEST(ShifterCoreTestGroup, setupPerNodeCacheBackingStore_tests) {
 TEST(ShifterCoreTestGroup, CheckSupportedFilesystems) {
     char **fsTypes = getSupportedFilesystems();
     char **ptr = NULL;
+    int haveCommonFsType = 0;
     CHECK(fsTypes != NULL);
 
+    haveCommonFsType = supportsFilesystem(fsTypes, "ext4") == 0;
+    haveCommonFsType |= supportsFilesystem(fsTypes, "xfs") == 0;
     CHECK(supportsFilesystem(fsTypes, "proc") == 0);
-    CHECK(supportsFilesystem(fsTypes, "ext4") == 0);
+    CHECK(haveCommonFsType == 1);
     CHECK(supportsFilesystem(fsTypes, "blergityboo") != 0);
+
+    for (ptr = fsTypes; ptr && *ptr; ptr++) {
+        free(*ptr);
+    }
+    free(fsTypes);
 }
 
 #ifdef NOTROOT
@@ -467,6 +662,8 @@ TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
     memset(&mounts, 0, sizeof(MountList));
     CHECK(setupLocalRootVFSConfig(&config, &image, tmpDir, cwd) == 0);
     config->allowLocalChroot = 0;
+
+    fprint_ImageData(stderr, image);
 
     rc = mountImageVFS(image, "dmj", NULL, config);
     CHECK(rc == 1);

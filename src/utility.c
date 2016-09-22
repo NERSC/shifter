@@ -77,6 +77,7 @@ int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assig
         return 1;
     }
     while (!feof(fp) && !ferror(fp)) {
+        char *tmp_value = NULL;
         nRead = getline(&linePtr, &lineSize, fp);
         if (nRead <= 0) break;
         if (linePtr[0] == '#') continue;
@@ -106,7 +107,11 @@ int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assig
 
         /* merge value and tValue */
         tValueLen = strlen(tValue);
-        value = (char *) realloc(value, sizeof(char)*(valueLen + tValueLen + 2));
+        tmp_value = (char *) realloc(value, sizeof(char)*(valueLen + tValueLen + 2));
+        if (tmp_value == NULL) {
+            goto _parseConfig_errCleanup;
+        }
+        value = tmp_value;
         ptr = value + valueLen;
         *ptr = 0;
         strncat(value, " ", valueLen + 2);

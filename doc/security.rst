@@ -1,6 +1,15 @@
 Security Considerations with Shifter
 ====================================
 
+WARNING: shifter use a great deal of root privilege to setup the container
+environment.  The "shifter" executable is setuid-root, and when run with batch
+integration the setupRoot/unsetupRoot utilities must be run as root.  We are
+working to reduce the privilege profile of starting shifter containers to
+reduce risk as much as possible.
+
+Once a process is launched into the container, processes are stripped of all
+prvilege, and should not be able to re-escalate in the future.
+
 shifter enables User Defined Image environment containers.  To do this while
 optimizing I/O on the compute nodes it does use a lot of privilege on the
 system, both privilege to mount filesystems and rewrite the userspace, and

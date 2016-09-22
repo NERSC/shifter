@@ -467,6 +467,7 @@ ImageGwImageRec *parseImageJson(json_object *json_data) {
     json_object_object_foreachC(json_data, jIt) {
         enum json_type type = json_object_get_type(jIt.val);
         int ok = 0;
+        strVal = NULL;
         if (type == json_type_string) {
             ok = jsonParseString(jIt.val, &strVal);
         } else if (type == json_type_array) {
@@ -515,7 +516,6 @@ ImageGwImageRec *parseImageJson(json_object *json_data) {
             }
         }
 
-        strVal = NULL;
         if (strVal != NULL) {
             free(strVal);
             strVal = NULL;

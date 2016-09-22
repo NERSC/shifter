@@ -57,7 +57,9 @@ extern "C" {
 #define FILE_SIZE_LIMIT 5242880
 
 int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig);
-int setupVolumeMapMounts(MountList *mountCache, VolumeMap *map, const char *fromPrefix, const char *toPrefix, dev_t createTo, UdiRootConfig *udiConfig);
+int setupVolumeMapMounts(MountList *mountCache, VolumeMap *map,
+        int userRequested, dev_t createTo, UdiRootConfig *udiConfig);
+
 int userMountFilter(char *udiRoot, char *filtered_from, char *filtered_to, char *flags);
 int isKernelModuleLoaded(const char *name);
 int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig);
@@ -91,6 +93,33 @@ int writeHostFile(const char *minNodeSpec, UdiRootConfig *udiConfig);
   * Returns 0 upon success, non-zero upon any failure
   */  
 int shifter_set_capability_boundingset_null();
+
+/** shifter_getgrouplist
+  * runs libc getgrouplist but handles memory allocation and screens out gid 0
+  *
+  * \param user username of target user, must not be NULL, nor point to "root"
+  * \param group gid of primary group for target user, must not be 0
+  * \param groups pointer to group array, can point to a NULL pointer (groups
+  *     itself must not be NULL)
+  * \param pointer to ngroups, can be pointer to an zero-value integer (ngroups
+  *     itself must not be NULL)
+  *
+  * \returns 0 upon success, non-zero (usually negative) upon failure
+  *
+  * If *group is NULL, then it will be allocated
+  *
+  * Upon successful run, *groups will be populated with the  valid gids for the
+  * user and ngroups will be set to the number of groups to consider (the
+  * usable extent of the array).
+  *
+  * This function will fail if the user appears to belong to more than 512
+  * groups, as this is considered excessive and may be a sign of trouble.
+  *
+  * If the resulting group list contains any gid 0 entries, these will be
+  * replaced with the non-zero value for group (the primary gid for the
+  * user)
+  */
+int shifter_getgrouplist(const char *user, gid_t group, gid_t **groups, int *ngroups);
 
 /** shifter_copyenv
   * copy current process environ into a newly allocated array with newly

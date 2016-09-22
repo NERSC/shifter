@@ -137,6 +137,8 @@ typedef struct _UdiRootConfig {
     char *sshPubKey;
     char *nodeIdentifier;
     char *jobIdentifier;
+    dev_t *bindMountAllowedDevices;
+    size_t bindMountAllowedDevices_sz;
 } UdiRootConfig;
 
 int parse_UdiRootConfig(const char *, UdiRootConfig *, int validateFlags);
