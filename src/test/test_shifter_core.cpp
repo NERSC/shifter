@@ -254,6 +254,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
     gid_t *groups = NULL;
     int ngroups = 0;
     pid_t pid = 0;
+    int ret = 0;
 
     /* set bad data to ensure it gets reset correctly */
     ngroups = 1;
@@ -301,15 +302,11 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
             exit(1);
         } 
     }
-<<<<<<< HEAD
-    CHECK_CHROOT(groups != NULL && ngroups == 3)
-=======
     CHECK(ret == 0);
     CHECK(ngroups == 3);
     END_CHROOT(returndir)
 
     printf("currdir: %s\n", get_current_dir_name());
->>>>>>> master
 
     /* should get back the 3 correct groups plus a duplicate
      * 1000 replacing the evil 0 inserted into chroot2 */
@@ -334,11 +331,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
             exit(1);
         } 
     }
-<<<<<<< HEAD
-    CHECK_CHROOT(groups != NULL && ngroups == 4)
-=======
     CHECK_CHROOT(ret == 0 && ngroups == 4, returndir)
->>>>>>> master
 
     /* make sure the realloc works correctly */
     free(groups);
@@ -367,11 +360,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
             exit(1);
         } 
     }
-<<<<<<< HEAD
-    CHECK_CHROOT(groups != NULL && ngroups == 3)
-=======
     CHECK_CHROOT(ret == 0 && ngroups == 3, returndir)
->>>>>>> master
 
     /* check case when NO group entries are present
      * should just get the provided gid back */
@@ -396,11 +385,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
             exit(1);
         } 
     }
-<<<<<<< HEAD
-    CHECK_CHROOT(groups != NULL && ngroups == 1)
-=======
     CHECK_CHROOT(ret == 0 && ngroups == 1, returndir)
->>>>>>> master
 }
 
 TEST(ShifterCoreTestGroup, setupPerNodeCacheFilename_tests) {
