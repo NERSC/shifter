@@ -924,9 +924,11 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
 }
 
     snprintf(udiRoot, PATH_MAX, "%s", udiConfig->udiMountPoint);
-
-    if (lstat(udiRoot, &statData) != 0) {
-        _MKDIR(udiRoot, 0755);
+    if (mkdir(udiRoot, 0755) < 0) {
+        if (errno != EEXIST) {
+            fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", udiRoot);
+            goto _mountImgVfs_unclean;
+        }
     }
 
 #define BIND_IMAGE_INTO_UDI(subtree, img, udiConfig, copyFlag) \
