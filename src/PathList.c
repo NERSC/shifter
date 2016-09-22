@@ -66,7 +66,7 @@ PathList *pathList_init(const char *path) {
     if (path_len == 0) return NULL;
 
     buffer = strdup(path);
-    if (path == NULL) {
+    if (buffer == NULL) {
         return NULL;
     }
 
