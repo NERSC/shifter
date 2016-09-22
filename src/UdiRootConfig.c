@@ -263,6 +263,8 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
             config->allowLibcPwdCalls);
     written += fprintf(fp, "populateEtcDynamically = %d\n",
             config->populateEtcDynamically);
+    written += fprintf(fp, "useOverlayFsMode = %d\n",
+            config->useOverlayFsMode);
     written += fprintf(fp, "optionalSshdAsRoot = %d\n",
             config->optionalSshdAsRoot);
     written += fprintf(fp, "autoLoadKernelModule = %d\n",
@@ -457,6 +459,8 @@ static int _assign(const char *key, const char *value, void *t_config) {
         config->allowLocalChroot = strtol(value, NULL, 10) != 0;
     } else if (strcmp(key, "allowLibcPwdCalls") == 0) {
         config->allowLibcPwdCalls = strtol(value, NULL, 10) != 0;
+    } else if (strcmp(key, "useOverlayFsMode") == 0) {
+        config->useOverlayFsMode = strtol(value, NULL, 10) != 0;
     } else if (strcmp(key, "optionalSshdAsRoot") == 0) {
         config->optionalSshdAsRoot = strtol(value, NULL, 10) != 0;
     } else if (strcmp(key, "populateEtcDynamically") == 0) {
