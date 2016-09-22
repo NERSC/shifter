@@ -375,9 +375,19 @@ PathList *pathList_duplicatePartial(PathList *origpath, PathComponent *tohere) {
         return NULL;
     }
     ret->terminal = rptr;
-    trim = rptr->child;
-    rptr->child = NULL;
-    pathList_freeComponents(trim);
+    if (rptr != NULL) {
+        trim = rptr->child;
+        rptr->child = NULL;
+        pathList_freeComponents(trim);
+    } else {
+        /* this is an exceptionally unlikely branch, but if it does happen,
+         * this will keep the ret path consistent */
+        if (ret->path != NULL) {
+            pathList_freeComponents(ret->path);
+        }
+        ret->path = NULL;
+        ret->terminal = NULL;
+    }
     return ret;
 }
 
