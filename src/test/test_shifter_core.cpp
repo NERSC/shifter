@@ -7,7 +7,7 @@
 /* Shifter, Copyright (c) 2016, The Regents of the University of California,
  * through Lawrence Berkeley National Laboratory (subject to receipt of any
  * required approvals from the U.S. Dept. of Energy).  All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *  1. Redistributions of source code must retain the above copyright notice,
@@ -19,7 +19,7 @@
  *     National Laboratory, U.S. Dept. of Energy nor the names of its
  *     contributors may be used to endorse or promote products derived from this
  *     software without specific prior written permission.
- * 
+ *
  * See LICENSE for full text.
  */
 
@@ -268,7 +268,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
         if (expcnt[grpidx] != gotcnt[grpidx]) {
             fprintf(stderr, "%d != %d occurences for gid %d\n", expcnt[grpidx], gotcnt[grpidx], ok[grpidx]);
             exit(1);
-        } 
+        }
     }
     CHECK(ret == 0);
     CHECK(ngroups == 3);
@@ -297,7 +297,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
         if (expcnt[grpidx] != gotcnt[grpidx]) {
             fprintf(stderr, "%d != %d occurences for gid %d\n", expcnt[grpidx], gotcnt[grpidx], ok[grpidx]);
             exit(1);
-        } 
+        }
     }
     CHECK_CHROOT(ret == 0 && ngroups == 4, returndir)
 
@@ -305,7 +305,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
     free(groups);
     groups = (gid_t *) malloc(sizeof(gid_t) * 1);
     ngroups = 1;
-  
+
     /* after making buffer too small, re-run test from above */
     SETUP_CHROOT("chroot1")
     ret = shifter_getgrouplist("dmj", 1000, &groups, &ngroups);
@@ -326,7 +326,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
         if (expcnt[grpidx] != gotcnt[grpidx]) {
             fprintf(stderr, "%d != %d occurences for gid %d\n", expcnt[grpidx], gotcnt[grpidx], ok[grpidx]);
             exit(1);
-        } 
+        }
     }
     CHECK_CHROOT(ret == 0 && ngroups == 3, returndir)
 
@@ -351,7 +351,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
         if (expcnt[grpidx] != gotcnt[grpidx]) {
             fprintf(stderr, "%d != %d occurences for gid %d\n", expcnt[grpidx], gotcnt[grpidx], ok[grpidx]);
             exit(1);
-        } 
+        }
     }
     CHECK_CHROOT(ret == 0 && ngroups == 1, returndir)
 }
@@ -470,7 +470,7 @@ TEST(ShifterCoreTestGroup, CopyFile_chown) {
 
     toFile = alloc_strgenf("%s/passwd", tmpDir);
     CHECK(toFile != NULL);
-    
+
     ret = _shifterCore_copyFile("/bin/cp", "/etc/passwd", toFile, 0, 2, 2, 0644);
     tmpFiles.push_back(toFile);
     CHECK(ret == 0);
@@ -522,7 +522,7 @@ TEST(ShifterCoreTestGroup, validatePrivateNamespace) {
 
     CHECK(stat("/tmp", &statInfo) == 0);
     CHECK(stat("/tmp/test_shifter_core", &statInfo) != 0);
-    
+
     child = fork();
     if (child == 0) {
         char currDir[PATH_MAX];
@@ -551,7 +551,7 @@ TEST(ShifterCoreTestGroup, validatePrivateNamespace) {
     }
 }
 
-TEST(ShifterCoreTestGroup, writeHostFile_basic) { 
+TEST(ShifterCoreTestGroup, writeHostFile_basic) {
    char tmpDirVar[] = "/tmp/shifter.XXXXXX/var";
    char hostsFilename[] = "/tmp/shifter.XXXXXX/var/hostsfile";
    FILE *fp = NULL;
@@ -622,9 +622,9 @@ TEST(ShifterCoreTestGroup, writeHostFile_basic) {
 }
 
 #ifdef NOTROOT
-IGNORE_TEST(ShifterCoreTestGroup, validateUnmounted_Basic) { 
+IGNORE_TEST(ShifterCoreTestGroup, validateUnmounted_Basic) {
 #else
-TEST(ShifterCoreTestGroup, validateUnmounted_Basic) { 
+TEST(ShifterCoreTestGroup, validateUnmounted_Basic) {
 #endif
     int rc = 0;
     MountList mounts;
@@ -638,7 +638,7 @@ TEST(ShifterCoreTestGroup, validateUnmounted_Basic) {
     CHECK(rc == 0);
 
     CHECK(_shifterCore_bindMount(&config, &mounts, "/", tmpDir, 1, 0) == 0);
-    
+
     rc = validateUnmounted(tmpDir, 0);
     CHECK(rc == 1);
 
@@ -665,7 +665,7 @@ TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
 
     fprint_ImageData(stderr, image);
 
-    rc = mountImageVFS(image, "dmj", NULL, config);
+    rc = mountImageVFS(image, "dmj", NULL, NULL, config);
     CHECK(rc == 1);
     CHECK(parse_MountList(&mounts) == 0);
     CHECK(find_MountList(&mounts, tmpDir) == NULL);
@@ -676,7 +676,7 @@ TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
     memset(&mounts, 0, sizeof(MountList));
 
     config->allowLocalChroot = 1;
-    rc = mountImageVFS(image, "dmj", NULL, config);
+    rc = mountImageVFS(image, "dmj", NULL, NULL, config);
     CHECK(rc == 0);
     CHECK(parse_MountList(&mounts) == 0);
     CHECK(find_MountList(&mounts, tmpDir) != NULL);
@@ -774,7 +774,7 @@ TEST(ShifterCoreTestGroup, copyenv_test) {
     {
         CHECK(strcmp(*eptr, *cptr) == 0);
         CHECK(*eptr != *cptr);
-    } 
+    }
     CHECK(*eptr == NULL && *cptr == NULL);
 
     for (cptr = copied_env; cptr && *cptr; cptr++) {
@@ -803,7 +803,7 @@ TEST(ShifterCoreTestGroup, setenv_test) {
 
     ret = shifter_putenv(&copied_env, tmpvar);
     CHECK(ret == 0);
-    
+
     /* make sure we cannot compare against original string */
     tmpvar[0] = 0;
     free(tmpvar);
@@ -851,7 +851,7 @@ TEST(ShifterCoreTestGroup, appendenv_test) {
 
     ret = shifter_appendenv(&copied_env, tmpvar);
     CHECK(ret == 0);
-    
+
     /* make sure we cannot compare against original string */
     tmpvar[0] = 0;
     free(tmpvar);
@@ -900,7 +900,7 @@ TEST(ShifterCoreTestGroup, prependenv_test) {
 
     ret = shifter_prependenv(&copied_env, tmpvar);
     CHECK(ret == 0);
-    
+
     /* make sure we cannot compare against original string */
     tmpvar[0] = 0;
     free(tmpvar);
@@ -949,7 +949,7 @@ TEST(ShifterCoreTestGroup, unsetenv_test) {
 
     ret = shifter_unsetenv(&copied_env, tmpvar);
     CHECK(ret == 0);
-    
+
     /* make sure we cannot compare against original string */
     tmpvar[0] = 0;
     free(tmpvar);
@@ -986,7 +986,7 @@ TEST(ShifterCoreTestGroup, setupenv_test) {
 
     memset(config, 0, sizeof(UdiRootConfig));
     memset(image, 0, sizeof(ImageData));
-   
+
     /* initialize empty environment */
     local_env = (char **) malloc(sizeof(char *) * 2);
     local_env[0] = strdup("PATH=/incorrect");
@@ -1050,11 +1050,11 @@ IGNORE_TEST(ShifterCoreTestGroup, destructUDI_test) {
 
     CHECK(setupLocalRootVFSConfig(&config, &image, tmpDir, cwd) == 0);
     config->allowLocalChroot = 1;
-    CHECK(mountImageVFS(image, "dmj", NULL, config) == 0);
+    CHECK(mountImageVFS(image, "dmj", NULL, NULL, config) == 0);
 
     CHECK(parse_MountList(&mounts) == 0);
     CHECK(find_MountList(&mounts, tmpDir) != NULL);
-    
+
     free_MountList(&mounts, 0);
     memset(&mounts, 0, sizeof(MountList));
 
