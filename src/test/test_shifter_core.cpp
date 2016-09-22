@@ -37,6 +37,7 @@
 #include "utility.h"
 #include "VolumeMap.h"
 #include "MountList.h"
+#include <fcntl.h>
 
 extern "C" {
 int _shifterCore_bindMount(UdiRootConfig *config, MountList *mounts, const char *from, const char *to, int ro, int overwrite);
@@ -203,30 +204,46 @@ TEST(ShifterCoreTestGroup, CopyFile_basic) {
     free(toFile);
 }
 
-#define SETUP_CHROOT(path) pid = fork(); \
-    if (pid == 0) { \
-         if (chdir(path) != 0) { \
-             fprintf(stderr, "FAILED to chdir to %s\n", path); \
-             exit(1); \
-         } \
-         if (chroot(".") != 0) { \
-             fprintf(stderr, "FAILED to chroot to %s\n", path); \
-             exit(1); \
-         }
+int jailbreak() {
+    chdir("/");
+    int fd = open("/", O_DIRECTORY);
+    mkdir("break", 0755);
+    chdir("break");
+    chroot(".");
+    fchdir(fd);
 
-#define CHECK_CHROOT(statement) if (!(statement)) exit(1); \
-        exit(0); \
-    } else if (pid > 0) { \
-        int status = 0; \
-        int rc = 0; \
-        waitpid(pid, &status, 0); \
-        if (WIFEXITED(status)) { \
-             rc = WEXITSTATUS(status); \
-        } else { \
-             rc = 1; \
-        } \
-        CHECK(rc == 0); \
+    for ( ; ; ) {
+        struct stat dot;
+        struct stat dotdot;
+
+        if (stat(".", &dot) != 0) break;
+        if (stat("..", &dotdot) != 0) break;
+
+        if (dot.st_ino == dotdot.st_ino) {
+            return chroot(".");
+        }
+        chdir("..");
     }
+    return 1;
+}
+
+#define SETUP_CHROOT(path) \
+    CHECK(chdir(path) == 0);\
+    CHECK(chroot(".") == 0);\
+    {
+
+#define CHECK_CHROOT(statement, returndir) \
+    CHECK(statement);\
+    }\
+    CHECK(jailbreak() == 0);\
+    printf("returning to %s\n", returndir);\
+    CHECK(chdir(returndir) == 0);
+
+#define END_CHROOT(returndir) \
+    }\
+    CHECK(jailbreak() == 0);\
+    printf("returning to %s\n", returndir);\
+    CHECK(chdir(returndir) == 0);
 
 
 #ifdef NOTROOT
@@ -240,6 +257,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
 
     /* set bad data to ensure it gets reset correctly */
     ngroups = 1;
+    char *returndir = get_current_dir_name();
 
     /* make sure fails if user is NULL */
     groups = shifter_getgrouplist(NULL, 1000, &ngroups);
@@ -283,7 +301,15 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
             exit(1);
         } 
     }
+<<<<<<< HEAD
     CHECK_CHROOT(groups != NULL && ngroups == 3)
+=======
+    CHECK(ret == 0);
+    CHECK(ngroups == 3);
+    END_CHROOT(returndir)
+
+    printf("currdir: %s\n", get_current_dir_name());
+>>>>>>> master
 
     /* should get back the 3 correct groups plus a duplicate
      * 1000 replacing the evil 0 inserted into chroot2 */
@@ -308,7 +334,11 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
             exit(1);
         } 
     }
+<<<<<<< HEAD
     CHECK_CHROOT(groups != NULL && ngroups == 4)
+=======
+    CHECK_CHROOT(ret == 0 && ngroups == 4, returndir)
+>>>>>>> master
 
     /* make sure the realloc works correctly */
     free(groups);
@@ -337,7 +367,11 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
             exit(1);
         } 
     }
+<<<<<<< HEAD
     CHECK_CHROOT(groups != NULL && ngroups == 3)
+=======
+    CHECK_CHROOT(ret == 0 && ngroups == 3, returndir)
+>>>>>>> master
 
     /* check case when NO group entries are present
      * should just get the provided gid back */
@@ -362,7 +396,11 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
             exit(1);
         } 
     }
+<<<<<<< HEAD
     CHECK_CHROOT(groups != NULL && ngroups == 1)
+=======
+    CHECK_CHROOT(ret == 0 && ngroups == 1, returndir)
+>>>>>>> master
 }
 
 TEST(ShifterCoreTestGroup, setupPerNodeCacheFilename_tests) {
