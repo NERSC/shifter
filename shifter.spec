@@ -8,6 +8,13 @@
 %{expand:%%global shifter_gid %{?shifter_gid}%{!?shifter_gid:%{shifter_uid}}}
 %endif
 
+%if 0%{!?_without_systemd:1}
+%{!?_unitdir:          %global _without_systemd --without-systemd}
+%{!?systemd_requires:  %global _without_systemd --without-systemd}
+%endif
+
+%{?_with_slurm: %global with_slurm %{_prefix}}
+
 Summary:   NERSC Shifter -- Containers for HPC
 Name:      shifter
 Version:   16.08.3
@@ -68,6 +75,9 @@ Shifter.
 %package imagegw
 Summary: Image Manager/Gateway for Shifter
 Requires(pre): shadow-utils
+%if 0%{!?_without_systemd:1}
+%{systemd_requires}
+%endif
 %if 0%{?rhel}
 Requires: squashfs-tools python-pip python-flask python-pymongo python-redis python-gunicorn munge
 %endif
@@ -118,7 +128,7 @@ test -x configure || ./autogen.sh
 %build
 ## build udiRoot (runtime) first
 %configure \
-    %{?with_slurm:--with-slurm=%{with_slurm}}
+    %{?with_slurm:--with-slurm=%{with_slurm}} %{?acflags}
 
 MAKEFLAGS=%{?_smp_mflags} %{__make}
 
@@ -127,7 +137,7 @@ MAKEFLAGS=%{?_smp_mflags} %{__make}
 %make_install
 
 # Create directory for Celery/ImageGW API logs
-%{__mkdir_p} $RPM_BUILD_ROOT%{_localstatedir}/log/%{name}_imagegw
+%{__mkdir_p} $RPM_BUILD_ROOT%{_localstatedir}/log/%{name}_imagegw{,_worker}
 
 : > $RPM_BUILD_ROOT/%{_sysconfdir}/shifter_etc_files/passwd
 : > $RPM_BUILD_ROOT/%{_sysconfdir}/shifter_etc_files/group
@@ -139,6 +149,13 @@ rm -f $RPM_BUILD_ROOT/%{_libdir}/shifter/shifter_slurm.a
 rm -f $RPM_BUILD_ROOT/%{_libdir}/shifter/shifter_slurm.la
 rm -f $RPM_BUILD_ROOT/%{_libdir}/shifter/shifter_slurm.so
 rm -f $RPM_BUILD_ROOT/%{_libexecdir}/shifter/shifter_slurm_dws_support
+%endif
+
+%if 0%{!?_without_systemd:1}
+%{__mkdir_p} $RPM_BUILD_ROOT%{_unitdir}
+%{__install} -m 0644 extra/systemd/shifter_imagegw.service $RPM_BUILD_ROOT%{_unitdir}/
+%{__install} -m 0644 extra/systemd/shifter_imagegw_worker@.service $RPM_BUILD_ROOT%{_unitdir}/
+%{__install} -m 0644 extra/systemd/shifter_imagegw_worker.target $RPM_BUILD_ROOT%{_unitdir}/
 %endif
 
 
@@ -170,7 +187,7 @@ pip install celery
 
 %files
 %defattr(-, root, root)
-%doc AUTHORS Dockerfile LICENSE NEWS README*
+%doc AUTHORS Dockerfile LICENSE NEWS README* doc extra/cle6
 
 %files runtime
 %defattr(-, root, root)
@@ -188,14 +205,18 @@ pip install celery
 
 %files imagegw
 %defattr(-, root, root)
-%doc AUTHORS LICENSE NEWS README*
+%doc AUTHORS LICENSE NEWS README* contrib extra/systemd
 %attr(0770, %{shifter_user}, %{shifter_group}) %dir %{_localstatedir}/log/%{name}_imagegw/
+%attr(0770, %{shifter_user}, %{shifter_group}) %dir %{_localstatedir}/log/%{name}_imagegw_worker/
 %{_libdir}/python2.*/site-packages/shifter_imagegw
 %{_libexecdir}/shifter/imagecli.py*
 %{_libexecdir}/shifter/imagegwapi.py*
 %{_libexecdir}/shifter/sitecustomize.py*
 %{_datadir}/shifter/requirements.txt
 %{_sysconfdir}/imagemanager.json.example
+%if 0%{!?_without_systemd:1}
+%{_unitdir}/shifter_imagegw*
+%endif
 
 %if 0%{?with_slurm:1}
 %files slurm
