@@ -158,7 +158,7 @@ int pathList_append(PathList *base, const char *path) {
             newpath->path->parent = base->terminal;
         }
     } else {
-        newpath->path = newpath->path;
+        base->path = newpath->path;
     }
     base->terminal = newpath->terminal;
     newpath->path = NULL;
