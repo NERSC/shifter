@@ -1,0 +1,4 @@
+#!/bin/bash
+title=$1
+exec -a "$title" sleep 100
+

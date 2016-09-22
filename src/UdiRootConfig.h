@@ -133,6 +133,8 @@ typedef struct _UdiRootConfig {
     /* current execution context */
     uid_t target_uid;
     gid_t target_gid;
+    gid_t *auxiliary_gids;
+    int nauxiliary_gids;
     char *username;
     char *sshPubKey;
     char *nodeIdentifier;

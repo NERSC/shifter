@@ -172,11 +172,12 @@ int main(int argc, char **argv) {
 
     nGroups = getgroups(0, NULL);
     if (nGroups > 0) {
-        gidList = (gid_t *) malloc(sizeof(gid_t) * nGroups);
+        gidList = (gid_t *) malloc(sizeof(gid_t) * (nGroups + 1));
         if (gidList == NULL) {
             fprintf(stderr, "Failed to allocate memory for group list\n");
             exit(1);
         }
+        memset(gidList, 0, sizeof(gid_t) * (nGroups + 1));
         if (getgroups(nGroups, gidList) == -1) {
             fprintf(stderr, "Failed to get supplementary group list\n");
             exit(1);
@@ -187,6 +188,9 @@ int main(int argc, char **argv) {
             }
         }
     }
+    udiConfig.auxiliary_gids = gidList;
+    udiConfig.nauxiliary_gids = nGroups;
+
 
     if (eUid != 0 && eGid != 0) {
         fprintf(stderr, "%s\n", "Not running with root privileges, will fail.");
@@ -227,6 +231,10 @@ int main(int argc, char **argv) {
     /* chroot into the jail */
     if (chroot(udiRoot) != 0) {
         perror("Could not chroot: ");
+        exit(1);
+    }
+    if (chdir("/") != 0) {
+        perror("Could not chdir to new root: ");
         exit(1);
     }
 

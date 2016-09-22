@@ -37,6 +37,7 @@
 #include "utility.h"
 #include "VolumeMap.h"
 #include "MountList.h"
+#include <fcntl.h>
 
 extern "C" {
 int _shifterCore_bindMount(UdiRootConfig *config, MountList *mounts, const char *from, const char *to, int ro, int overwrite);
@@ -134,7 +135,38 @@ TEST_GROUP(ShifterCoreTestGroup) {
 
 };
 
+TEST(ShifterCoreTestGroup, check_find_process_by_cmdline) {
+    const char *basepath = getenv("srcdir");
+    if (basepath == NULL) {
+        basepath = ".";
+    }
+    char *cmd = alloc_strgenf("%s/shifter_sleep_test", basepath);
+    char *args[] = {cmd, cmd, NULL};
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        execv(args[0], args);
+        exit(127);
+    }
+    CHECK(pid > 0);
+    usleep(10000);
+
+    pid_t discovered = shifter_find_process_by_cmdline(cmd);
+    printf("pid: %d, discovered: %d, %s\n", pid, discovered, cmd);
+    CHECK(pid == discovered);
+
+    CHECK(kill(pid, SIGTERM) == 0);
+
+    CHECK(shifter_find_process_by_cmdline(NULL) == -1);
+
+    free(cmd);
+};
+
+#ifdef NOTROOT
+IGNORE_TEST(ShifterCoreTestGroup, CopyFile_basic) {
+#else
 TEST(ShifterCoreTestGroup, CopyFile_basic) {
+#endif
     char *toFile = NULL;
     char *ptr = NULL;
     int ret = 0;
@@ -172,30 +204,46 @@ TEST(ShifterCoreTestGroup, CopyFile_basic) {
     free(toFile);
 }
 
-#define SETUP_CHROOT(path) pid = fork(); \
-    if (pid == 0) { \
-         if (chdir(path) != 0) { \
-             fprintf(stderr, "FAILED to chdir to %s\n", path); \
-             exit(1); \
-         } \
-         if (chroot(".") != 0) { \
-             fprintf(stderr, "FAILED to chroot to %s\n", path); \
-             exit(1); \
-         }
+int jailbreak() {
+    chdir("/");
+    int fd = open("/", O_DIRECTORY);
+    mkdir("break", 0755);
+    chdir("break");
+    chroot(".");
+    fchdir(fd);
 
-#define CHECK_CHROOT(statement) if (!(statement)) exit(1); \
-        exit(0); \
-    } else if (pid > 0) { \
-        int status = 0; \
-        int rc = 0; \
-        waitpid(pid, &status, 0); \
-        if (WIFEXITED(status)) { \
-             rc = WEXITSTATUS(status); \
-        } else { \
-             rc = 1; \
-        } \
-        CHECK(rc == 0); \
+    for ( ; ; ) {
+        struct stat dot;
+        struct stat dotdot;
+
+        if (stat(".", &dot) != 0) break;
+        if (stat("..", &dotdot) != 0) break;
+
+        if (dot.st_ino == dotdot.st_ino) {
+            return chroot(".");
+        }
+        chdir("..");
     }
+    return 1;
+}
+
+#define SETUP_CHROOT(path) \
+    CHECK(chdir(path) == 0);\
+    CHECK(chroot(".") == 0);\
+    {
+
+#define CHECK_CHROOT(statement, returndir) \
+    CHECK(statement);\
+    }\
+    CHECK(jailbreak() == 0);\
+    printf("returning to %s\n", returndir);\
+    CHECK(chdir(returndir) == 0);
+
+#define END_CHROOT(returndir) \
+    }\
+    CHECK(jailbreak() == 0);\
+    printf("returning to %s\n", returndir);\
+    CHECK(chdir(returndir) == 0);
 
 
 #ifdef NOTROOT
@@ -203,35 +251,38 @@ IGNORE_TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
 #else
 TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
 #endif
-    int ret = 0;
     gid_t *groups = NULL;
     int ngroups = 0;
     pid_t pid = 0;
+    int ret = 0;
+
+    /* set bad data to ensure it gets reset correctly */
+    ngroups = 1;
+    char *returndir = get_current_dir_name();
 
     /* make sure fails if user is NULL */
-    ret = shifter_getgrouplist(NULL, 1000, &groups, &ngroups);
-    CHECK(ret != 0);
+    groups = shifter_getgrouplist(NULL, 1000, &ngroups);
+    CHECK(groups == NULL && ngroups == 0);
 
     /* make sure fails if user is root */
-    ret = shifter_getgrouplist("root", 1000, &groups, &ngroups);
-    CHECK(ret != 0);
+    ngroups = 1;
+    groups = shifter_getgrouplist("root", 1000, &ngroups);
+    CHECK(groups == NULL && ngroups == 0);
 
     /* make sure fails if group is 0 */
-    ret = shifter_getgrouplist("test", 0, &groups, &ngroups);
-    CHECK(ret != 0);
-
-    /* make sure fails if groups is NULL */
-    ret = shifter_getgrouplist("test", 1000, NULL, &ngroups);
-    CHECK(ret != 0);
+    ngroups = 1;
+    groups = shifter_getgrouplist("test", 0, &ngroups);
+    CHECK(groups == NULL && ngroups == 0);
 
     /* make sure fails if ngroups is NULL */
-    ret = shifter_getgrouplist("test", 1000, &groups, NULL);
-    CHECK(ret != 0);
+    groups = shifter_getgrouplist("test", 1000, NULL);
+    CHECK(groups == NULL);
 
     /* in chroot1, user dmj is in groups 10, 990, and 1000 */
+    ngroups = 0;
 
     SETUP_CHROOT("chroot1")
-    ret = shifter_getgrouplist("dmj", 1000, &groups, &ngroups);
+    groups = shifter_getgrouplist("dmj", 1000, &ngroups);
     fprintf(stderr, "got back %d groups\n", ngroups);
     int ok[] = {10, 990, 1000};
     int expcnt[] = {1, 1, 1};
@@ -251,12 +302,16 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
             exit(1);
         } 
     }
-    CHECK_CHROOT(ret == 0 && ngroups == 3)
+    CHECK(ret == 0);
+    CHECK(ngroups == 3);
+    END_CHROOT(returndir)
+
+    printf("currdir: %s\n", get_current_dir_name());
 
     /* should get back the 3 correct groups plus a duplicate
      * 1000 replacing the evil 0 inserted into chroot2 */
     SETUP_CHROOT("chroot2")
-    ret = shifter_getgrouplist("dmj", 1000, &groups, &ngroups);
+    groups = shifter_getgrouplist("dmj", 1000, &ngroups);
     fprintf(stderr, "got back %d groups\n", ngroups);
     int ok[] = {10, 990, 1000};
     int expcnt[] = {1, 1, 2};
@@ -276,7 +331,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
             exit(1);
         } 
     }
-    CHECK_CHROOT(ret == 0 && ngroups == 4)
+    CHECK_CHROOT(ret == 0 && ngroups == 4, returndir)
 
     /* make sure the realloc works correctly */
     free(groups);
@@ -285,7 +340,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
   
     /* after making buffer too small, re-run test from above */
     SETUP_CHROOT("chroot1")
-    ret = shifter_getgrouplist("dmj", 1000, &groups, &ngroups);
+    groups = shifter_getgrouplist("dmj", 1000, &ngroups);
     fprintf(stderr, "got back %d groups\n", ngroups);
     int ok[] = {10, 990, 1000};
     int expcnt[] = {1, 1, 1};
@@ -305,12 +360,12 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
             exit(1);
         } 
     }
-    CHECK_CHROOT(ret == 0 && ngroups == 3)
+    CHECK_CHROOT(ret == 0 && ngroups == 3, returndir)
 
     /* check case when NO group entries are present
      * should just get the provided gid back */
     SETUP_CHROOT("chroot3")
-    ret = shifter_getgrouplist("dmj", 1000, &groups, &ngroups);
+    groups = shifter_getgrouplist("dmj", 1000, &ngroups);
     fprintf(stderr, "got back %d groups\n", ngroups);
     int ok[] = {1000};
     int expcnt[] = {1};
@@ -330,7 +385,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
             exit(1);
         } 
     }
-    CHECK_CHROOT(ret == 0 && ngroups == 1)
+    CHECK_CHROOT(ret == 0 && ngroups == 1, returndir)
 }
 
 TEST(ShifterCoreTestGroup, setupPerNodeCacheFilename_tests) {
@@ -1010,6 +1065,43 @@ TEST(ShifterCoreTestGroup, setupenv_test) {
     CHECK(ptr - local_env == 2);
 
     free_ImageData(image, 1);
+    free_UdiRootConfig(config, 1);
+}
+
+TEST(ShifterCoreTestGroup, shifterRealpath_test) {
+    UdiRootConfig *config = (UdiRootConfig *) malloc(sizeof(UdiRootConfig));
+    memset(config, 0, sizeof(UdiRootConfig));
+    char buffer[PATH_MAX];
+
+    config->udiMountPoint = strdup(tmpDir);
+
+    snprintf(buffer, PATH_MAX, "%s/test", tmpDir);
+    mkdir(buffer, 0755);
+    snprintf(buffer, PATH_MAX, "%s/test/path", tmpDir);
+    mkdir(buffer, 0755);
+    snprintf(buffer, PATH_MAX, "%s/test/path/rellink", tmpDir);
+    symlink("../../../../../../../../test", buffer);
+    snprintf(buffer, PATH_MAX, "%s/test/path/abslink", tmpDir);
+    symlink("/test/path", buffer);
+
+    char *result = shifter_realpath("test/path", config);
+    CHECK(result != NULL);
+    snprintf(buffer, PATH_MAX, "%s/test/path", tmpDir);
+    CHECK(strcmp(result, buffer) == 0);
+    free(result);
+
+    result = shifter_realpath("test/path/rellink/path", config);
+    CHECK(result != NULL);
+    snprintf(buffer, PATH_MAX, "%s/test/path", tmpDir);
+    CHECK(strcmp(result, buffer) == 0);
+    free(result);
+
+    result = shifter_realpath("test/path/abslink", config);
+    CHECK(result != NULL);
+    snprintf(buffer, PATH_MAX, "%s/test/path", tmpDir);
+    CHECK(strcmp(result, buffer) == 0);
+
+    free(result);
     free_UdiRootConfig(config, 1);
 }
 

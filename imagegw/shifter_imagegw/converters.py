@@ -1,153 +1,127 @@
 #!/usr/bin/python
 
+# Shifter, Copyright (c) 2015, The Regents of the University of California,
+# through Lawrence Berkeley National Laboratory (subject to receipt of any
+# required approvals from the U.S. Dept. of Energy).  All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#  1. Redistributions of source code must retain the above copyright notice,
+#     this list of conditions and the following disclaimer.
+#  2. Redistributions in binary form must reproduce the above copyright notice,
+#     this list of conditions and the following disclaimer in the documentation
+#     and/or other materials provided with the distribution.
+#  3. Neither the name of the University of California, Lawrence Berkeley
+#     National Laboratory, U.S. Dept. of Energy nor the names of its
+#     contributors may be used to endorse or promote products derived from this
+#     software without specific prior written permission.`
+#
+# See LICENSE for full text.
+
+"""
+Convert module that handles converting an unpacked image into a compatibable format
+for shifter.
+"""
+
 import os
 import subprocess
 import shutil
 import tempfile
 from shifter_imagegw.util import program_exists
 
-"""
-Shifter, Copyright (c) 2015, The Regents of the University of California,
-through Lawrence Berkeley National Laboratory (subject to receipt of any
-required approvals from the U.S. Dept. of Energy).  All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
- 1. Redistributions of source code must retain the above copyright notice,
-    this list of conditions and the following disclaimer.
- 2. Redistributions in binary form must reproduce the above copyright notice,
-    this list of conditions and the following disclaimer in the documentation
-    and/or other materials provided with the distribution.
- 3. Neither the name of the University of California, Lawrence Berkeley
-    National Laboratory, U.S. Dept. of Energy nor the names of its
-    contributors may be used to endorse or promote products derived from this
-    software without specific prior written permission.`
-
-See LICENSE for full text.
-"""
-
-def generateExt4Image(expandedPath, imagePath):
+def generate_ext4_image(expand_path, image_path):
     """
     Creates an ext4 based image
     """
-    raise NotImplementedError('ext4 support is note implemented yet')
+    message = 'ext4 support is note implemented yet %s %s'%(expand_path, image_path)
+    raise NotImplementedError(message)
+    return False
 
-    ## create sparsefile for the image
-    # TODO: compute size
-    size=100*1024*1024*1024
-    ret = subprocess.call(["dd", "of=%s" % imagePath, "bs=1", "count=0", "seek=%d" % (size)], stdout=fdnull, stderr=fdnull)
-    if ret != 0:
-        # error handling
-        pass
-    ret = subprocess.call(["mke2fs", "-F", imagePath], stdout=fdnull, stderr=fdnull)
-    if ret != 0:
-        # error handling
-        pass
-
-    ## prepare a mount point and mount the image file
-    mntPoint = tempfile.mkdtemp()
-    ret = subprocess.call(["mount", "-o", "loop", imagePath, mntPoint], stdout=fdnull, stderr=fdnull)
-    if ret != 0:
-        return None
-    # TODO: copy contents
-
-    loopDevice = None
-    fd = open("/proc/mounts", "r")
-    for line in fd:
-        (device, t_mntPoint, stuff) = line.split(' ', 2)
-        if t_mntPoint == mntPoint and re.match('/dev/loop\d+', device) is not None:
-            loopDevice = device
-            break
-    fd.close()
-    ret = subprocess.call(["umount", mntPoint], stdout=fdnull, stderr=fdnull)
-    if loopDevice is not None:
-        subprocess.call(['losetup', '-d', loopDevice])
-    return True
-
-def generateCramFSImage(expandedPath, imagePath):
+def generate_cramfs_image(expand_path, image_path):
     """
     Creates a CramFS based image
     """
-    program_exists ('mkfs.cramfs')
-    ret = subprocess.call(["mkfs.cramfs", expandedPath, imagePath], stdout=fdnull, stderr=fdnull)
+    program_exists('mkfs.cramfs')
+    cmd = ["mkfs.cramfs", expand_path, image_path]
+    ret = subprocess.call(cmd)
     if ret != 0:
         # error handling
         pass
     try:
-        shutil.rmtree(expandedPath)
+        shutil.rmtree(expand_path)
     except:
         # error handling
         pass
 
     return True
 
-def generateSquashFSImage(expandedPath, imagePath):
+def generate_squashfs_image(expand_path, image_path):
     """
     Creates a SquashFS based image
     """
     # This will raise an exception if mksquashfs tool is not found
     # it should be handled by the calling function
-    program_exists ('mksquashfs')
+    program_exists('mksquashfs')
 
-    ret = subprocess.call(["mksquashfs", expandedPath, imagePath, "-all-root"])
+    ret = subprocess.call(["mksquashfs", expand_path, image_path, "-all-root"])
     if ret != 0:
         # error handling
         pass
     try:
-        shutil.rmtree(expandedPath)
+        shutil.rmtree(expand_path)
     except:
         # error handling
         pass
 
     return True
 
-def convert(format,expandedPath,imagePath):
-    if os.path.exists(imagePath):
+def convert(fmt, expand_path, image_path):
+    """ do the conversion """
+    if os.path.exists(image_path):
         print "file already exists"
         return True
 
-    (dirname,fname) = os.path.split(imagePath)
-    (imageTempFd,imageTempPath) = tempfile.mkstemp('.partial', fname, dirname)
-    os.close(imageTempFd)
-    os.unlink(imageTempPath)
+    (dirname, fname) = os.path.split(image_path)
+    (temp_fd, temp_path) = tempfile.mkstemp('.partial', fname, dirname)
+    os.close(temp_fd)
+    os.unlink(temp_path)
 
     try:
-        success=False
-        if format=='squashfs':
-            success=generateSquashFSImage(expandedPath,imageTempPath)
-        elif format=='cramfs':
-            success=generateCramFSImage(expandedPath,imageTempPath)
-        elif format=='ext4':
-            success=generateExt4Image(expandedPath,imageTempPath)
+        success = False
+        if fmt == 'squashfs':
+            success = generate_squashfs_image(expand_path, temp_path)
+        elif fmt == 'cramfs':
+            success = generate_cramfs_image(expand_path, temp_path)
+        elif fmt == 'ext4':
+            success = generate_ext4_image(expand_path, temp_path)
         else:
-            raise NotImplementedError("%s not a supported format"%format)
+            raise NotImplementedError("%s not a supported format" % fmt)
     except:
-        os.unlink(imageTempPath)
+        os.unlink(temp_path)
         raise
 
     if not success:
         return False
     try:
-        os.rename(imageTempPath, imagePath)
+        os.rename(temp_path, image_path)
     except:
         return False
 
     # Some error must have occurred
     return True
 
-def writemeta(format,meta,metafile):
-
-    with open(metafile, 'w') as mf:
+def writemeta(fmt, meta, metafile):
+    """ write the metadata file """
+    with open(metafile, 'w') as meta_fd:
         # write out ENV, ENTRYPOINT, WORKDIR and format
-        mf.write("FORMAT: %s\n"%(format))
+        meta_fd.write("FORMAT: %s\n" % (fmt))
         if 'entrypoint' in meta and meta['entrypoint'] is not None:
-            mf.write("ENTRY: %s\n"%(meta['entrypoint']))
+            meta_fd.write("ENTRY: %s\n" % (meta['entrypoint']))
         if 'workdir' in meta and meta['workdir'] is not None:
-            mf.write("WORKDIR: %s\n"%(meta['workdir']))
+            meta_fd.write("WORKDIR: %s\n" % (meta['workdir']))
         if 'env' in meta and meta['env'] is not None:
-            for kv in meta['env']:
-                mf.write("ENV: %s\n"%(kv))
-        mf.close()
+            for keyval in meta['env']:
+                meta_fd.write("ENV: %s\n" % (keyval))
+        meta_fd.close()
     # Some error must have occurred
     return True
-

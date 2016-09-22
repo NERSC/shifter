@@ -6,7 +6,7 @@ api:
    - mongo
    - redis
   volumes:
-   - /imagegw:/data
+   - imagegw:/data
    - ./test/config:/config
   command: munge:systema:munge munge:systemb:munge api
 mongo:
@@ -39,7 +39,7 @@ workera:
    - redis
    - systema:systema
   volumes:
-   - /imagegw:/data
+   - imagegw:/data
    - ./test/config/:/config
   command: worker:systema
 #workerb:
@@ -48,7 +48,7 @@ workera:
 #   - api
 #   - redis
 #  volumes:
-#   - /imagegw:/data
+#   - imagegw:/data
 #   - ./test/config/:/config
 #  command: worker:systemb
 #flower:

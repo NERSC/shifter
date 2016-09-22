@@ -10,6 +10,7 @@ SHIFTER_SLURM_DWS_SUPPORT_SOURCES = \
 	$(top_srcdir)/src/utility.c \
 	$(top_srcdir)/src/VolumeMap.c \
 	$(top_srcdir)/src/MountList.c \
+	$(top_srcdir)/src/PathList.c \
 	$(top_srcdir)/src/shifter_core.c
 
 

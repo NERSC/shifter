@@ -78,6 +78,9 @@ Requires(pre): shadow-utils
 %if 0%{!?_without_systemd:1}
 %{systemd_requires}
 %endif
+%if 0%{?rhel}
+Requires: squashfs-tools python-pip python-flask python-pymongo python-redis python-gunicorn munge
+%endif
 
 %description imagegw
 Shifter enables container images for HPC. In a nutshell, Shifter
@@ -177,6 +180,10 @@ exit 0
 getent passwd > %{_sysconfdir}/shifter_etc_files/passwd
 getent group > %{_sysconfdir}/shifter_etc_files/group
 
+%post imagegw
+%if 0%{?rhel}
+pip install celery
+%endif
 
 %files
 %defattr(-, root, root)
