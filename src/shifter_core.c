@@ -1000,13 +1000,13 @@ int mountImageVFS(ImageData *imageData,
 
         size_t gpu_path_size = strlen(udiConfig->udiRootPath) + strlen(gpu_script) + 2;
         char *full_gpu_path = (char *) malloc(sizeof(char *) * gpu_path_size);
-        sprintf(full_gpu_path, "%s/%s", udiConfig->udiRootPath, "/", gpu_script);
+        sprintf(full_gpu_path, "%s/%s", udiConfig->udiRootPath, gpu_script);
 
         char *args[] = {
             strdup("/bin/sh"),
             full_gpu_path,
-            gpu_id,
-            udiConfig->udiMountPoint,
+            strdup(gpu_id),
+            strdup(udiConfig->udiMountPoint),
             NULL
         };
         int ret = forkAndExecv(args);
@@ -1317,6 +1317,7 @@ int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig) {
     udiRoot[PATH_MAX-1] = 0;
 
     if (stat(udiRoot, &statData) != 0) {
+        printf("attempted to stat %s", udiRoot);
         fprintf(stderr, "FAILED to stat udiRoot %s\n", udiRoot);
         return 1;
     }
