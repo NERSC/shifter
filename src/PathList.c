@@ -453,6 +453,10 @@ PathComponent *pathList_appendComponents(
     while (compPtr) {
         newComp = (PathComponent *) malloc(sizeof(PathComponent));
         if (newComp == NULL) {
+            if (retComp != NULL) {
+                pathList_freeComponents(retComp);
+                retComp = NULL;
+            }
             return NULL;
         }
         newComp->item = strdup(compPtr->item);
