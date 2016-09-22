@@ -3140,7 +3140,7 @@ int shifter_unsetenv(char ***env, char *var) {
     return _shifter_unsetenv(env, var);
 }
 
-int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig, char* gpuSupportEnv0, char* gpuSupportEnv1) {
+int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig, char* gpuSupportEnv0, char* gpuSupportEnv1, char* gpuSupportEnv2) {
     char **envPtr = NULL;
     if (env == NULL || *env == NULL || image == NULL || udiConfig == NULL) {
         return 1;
@@ -3162,6 +3162,7 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig, ch
     }
     shifter_prependenv(env, gpuSupportEnv0);
     shifter_prependenv(env, gpuSupportEnv1);
+    shifter_prependenv(env, gpuSupportEnv2);
     return 0;
 }
 
