@@ -6,6 +6,13 @@ the run time environment for the application 2) an image gateway service that pu
 format suitable for the HPC system (typically squashfs) 3) and example scripts/plugins to integrate Shifter with various batch
 scheduler systems.
 
+<a href="https://travis-ci.org/NERSC/shifter">
+  <img alt="TravisCI Build Status" src="https://travis-ci.org/NERSC/shifter.svg?branch=master" />
+</a>
+<a href="https://scan.coverity.com/projects/nersc-shifter">
+  <img alt="Coverity Scan Build Status" src="https://scan.coverity.com/projects/9990/badge.svg"/>
+</a>
+
 
 # Mailing List
 
@@ -32,3 +39,4 @@ https://www.nersc.gov/research-and-development/user-defined-images/
 # Documentation
 
 https://github.com/NERSC/shifter/tree/master/doc
+

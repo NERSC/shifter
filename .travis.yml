@@ -9,7 +9,7 @@ before_install:
   - sudo add-apt-repository "deb http://us.archive.ubuntu.com/ubuntu/ precise universe multiverse"
   - sudo add-apt-repository -y ppa:ondrej/php5
   - sudo apt-get update -qq
-  - sudo apt-get install -qq libjson-c2 libjson-c-dev libmunge2 libmunge-dev libcurl4-openssl-dev autoconf automake libtool curl make valgrind xfsprogs squashfs-tools libcap-dev
+  - sudo apt-get install -qq libjson-c2 libjson-c-dev munge libmunge2 libmunge-dev libcurl4-openssl-dev autoconf automake libtool curl make valgrind xfsprogs squashfs-tools libcap-dev
   - sudo modprobe squashfs
   - sudo modprobe xfs
   - cat /proc/filesystems
@@ -20,6 +20,7 @@ install:
   - LOC=$(dirname $(which coveralls) ); sudo mv $LOC/coveralls $LOC/cpp-coveralls
   - pip install coveralls
   - pip install coveralls-merge
+  - pip install pexpect
 # command to run tests
 before_script:
   - cp imagegw/test.json.example test.json
@@ -38,8 +39,14 @@ script:
   - export DO_ROOT_DANGEROUS_TESTS=1
   - ../../extra/CI/test_script.sh
   - cd ../..
+  - export ORIGPATH=$PATH
   - export PATH=$PWD/imagegw/test:$PATH
   - PYTHONPATH=$PWD/imagegw nosetests -s --with-coverage imagegw/test
+  - export PATH=$ORIGPATH
+  - export BUILDDIR=$(pwd)
+  - cd /
+  - $BUILDDIR/extra/CI/integration_test.sh
+  - cd $BUILDDIR
 services:
   - mongodb
   - redis

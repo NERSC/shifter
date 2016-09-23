@@ -30,7 +30,7 @@ See LICENSE for full text.
 class ImageMngrTestCase(unittest.TestCase):
 
     def setUp(self):
-        from shifter_imagegw import imagemngr
+        from shifter_imagegw.imagemngr import ImageMngr
         self.configfile='test.json'
         with open(self.configfile) as config_file:
             self.config = json.load(config_file)
@@ -39,7 +39,7 @@ class ImageMngrTestCase(unittest.TestCase):
         db=self.config['MongoDB']
         self.images=client[db].images
         self.images.drop()
-        self.m=imagemngr.imagemngr(self.config)
+        self.m=ImageMngr(self.config)
         self.system='systema'
         self.itype='docker'
         self.tag='test'
@@ -64,12 +64,11 @@ class ImageMngrTestCase(unittest.TestCase):
         """
         self.stop_worker()
 
-    def start_worker(self,TESTMODE=1,system='systema'):
+    def start_worker(self,testmode=1,system='systema'):
         # Start a celery worker.
         pid=os.fork()
         if pid==0:  # Child process
             os.environ['GWCONFIG']='test.json'
-            #os.environ['TESTMODE']='%d'%(TESTMODE)
             os.execvp('celery',['celery','-A','shifter_imagegw.imageworker',
                 'worker','--quiet',
                 '-Q','%s'%(system),
@@ -157,13 +156,13 @@ class ImageMngrTestCase(unittest.TestCase):
     def test_noadmin(self):
         s=self.m.new_session(self.auth,self.system)
         assert s is not None
-        resp=self.m.isadmin(s,self.system)
+        resp=self.m._isadmin(s,self.system)
         assert resp is False
 
     def test_admin(self):
         s=self.m.new_session(self.authadmin,self.system)
         assert s is not None
-        resp=self.m.isadmin(s,self.system)
+        resp=self.m._isadmin(s,self.system)
         assert resp is True
 
 
@@ -262,8 +261,8 @@ class ImageMngrTestCase(unittest.TestCase):
         assert rec['tag'].count('testtag')==1
 
     def test_0isasystem(self):
-        assert self.m.isasystem(self.system) is True
-        assert self.m.isasystem('bogus') is False
+        assert self.m._isasystem(self.system) is True
+        assert self.m._isasystem('bogus') is False
 
     def test_0resetexp(self):
         record={'system':self.system,
@@ -279,7 +278,7 @@ class ImageMngrTestCase(unittest.TestCase):
             }
         id=self.images.insert(record.copy())
         assert id is not None
-        expire=self.m.resetexpire(id)
+        expire=self.m._resetexpire(id)
         assert expire>time.time()
         rec=self.images.find_one({'_id':id})
         assert rec['expiration']==expire
@@ -287,33 +286,33 @@ class ImageMngrTestCase(unittest.TestCase):
     def test_0pullable(self):
         # An old READY image
         rec={'last_pull':0,'status':'READY'}
-        assert self.m.pullable(rec) is True
+        assert self.m._pullable(rec) is True
         rec={'last_pull':time.time(),'status':'READY'}
         # A recent READY image
-        assert self.m.pullable(rec) is False
+        assert self.m._pullable(rec) is False
 
         rec={'last_pull':time.time(),'last_heartbeat':0,'status':'READY'}
         # A recent READY image but an old heartbeat (maybe re-pulled)
-        assert self.m.pullable(rec) is False
+        assert self.m._pullable(rec) is False
 
 
         # A failed image
         rec={'last_pull':0,'status':'FAILURE'}
-        assert self.m.pullable(rec) is True
+        assert self.m._pullable(rec) is True
         # recent pull
         rec={'last_pull':time.time(),'status':'FAILURE'}
-        assert self.m.pullable(rec) is False
+        assert self.m._pullable(rec) is False
 
         # A hung pull
         rec={'last_pull':0,'last_heartbeat':time.time()-7200,'status':'PULLING'}
-        assert self.m.pullable(rec) is True
+        assert self.m._pullable(rec) is True
         # recent pull
         rec={'last_pull':time.time(),'status':'PULLING'}
-        assert self.m.pullable(rec) is False
+        assert self.m._pullable(rec) is False
 
         # A hung pull
         rec={'last_pull':0,'last_heartbeat':time.time(),'status':'PULLING'}
-        assert self.m.pullable(rec) is False
+        assert self.m._pullable(rec) is False
 
     def test_0complete_pull(self):
         # Test complete_pull
@@ -387,7 +386,7 @@ class ImageMngrTestCase(unittest.TestCase):
         rec2['status']='FAILURE'
         id2=self.images.insert(rec2)
         session=self.m.new_session(self.auth,self.system)
-        li=self.m.list(session,self.system)
+        li=self.m.imglist(session,self.system)
         assert len(li)==1
         l=li[0]
         assert '_id' in l
@@ -488,12 +487,12 @@ class ImageMngrTestCase(unittest.TestCase):
         # Do the pull
         self.start_worker()
         session=self.m.new_session(self.auth,self.system)
-        rec=self.m.pull(session,pr,TESTMODE=1)#,delay=False)
+        rec=self.m.pull(session,pr,testmode=1)#,delay=False)
         assert rec is not None
         assert '_id' in rec
         id=rec['_id']
         # Re-pull the same thing.  Should give the same record
-        rec=self.m.pull(session,pr,TESTMODE=1)#,delay=False)
+        rec=self.m.pull(session,pr,testmode=1)#,delay=False)
         assert rec is not None
         assert '_id' in rec
         id2=rec['_id']
@@ -524,7 +523,7 @@ class ImageMngrTestCase(unittest.TestCase):
         # Do the pull
         self.start_worker()
         session=self.m.new_session(self.auth,self.system)
-        rec=self.m.pull(session,pr,TESTMODE=1)#,delay=False)
+        rec=self.m.pull(session,pr,testmode=1)#,delay=False)
         assert rec is not None
         id=rec['_id']
         # Confirm record
@@ -540,7 +539,7 @@ class ImageMngrTestCase(unittest.TestCase):
         assert 'ENV' in imagerec
         # Cause a failure
         self.images.drop()
-        rec=self.m.pull(session,pr,TESTMODE=2)
+        rec=self.m.pull(session,pr,testmode=2)
         time.sleep(10)
         assert rec is not None
         id=rec['_id']
@@ -570,8 +569,8 @@ class ImageMngrTestCase(unittest.TestCase):
         # Do the pull
         self.start_worker()
         session=self.m.new_session(self.auth,self.system)
-        rec1=self.m.pull(session,pr1,TESTMODE=1)#,delay=False)
-        rec2=self.m.pull(session,pr2,TESTMODE=1)#,delay=False)
+        rec1=self.m.pull(session,pr1,testmode=1)#,delay=False)
+        rec2=self.m.pull(session,pr2,testmode=1)#,delay=False)
         assert rec1 is not None
         id1=rec1['_id']
         assert rec2 is not None
@@ -601,7 +600,7 @@ class ImageMngrTestCase(unittest.TestCase):
         file,metafile=self.create_fakeimage(system,record['id'],self.format)
         session=self.m.new_session(self.authadmin,system)
         er={'system':system,'tag':self.tag,'itype':self.itype}
-        rec=self.m.expire(session,er,TESTMODE=1)#,delay=False)
+        rec=self.m.expire(session,er,testmode=1)#,delay=False)
         assert rec is not None
         time.sleep(2)
         state=self.m.get_state(id)
@@ -640,7 +639,7 @@ class ImageMngrTestCase(unittest.TestCase):
         file,metafile=self.create_fakeimage(self.system,record['id'],self.format)
         session=self.m.new_session(self.auth,self.system)
         er={'system':self.system,'tag':self.tag,'itype':self.itype}
-        rec=self.m.expire(session,er,TESTMODE=1)#,delay=False)
+        rec=self.m.expire(session,er,testmode=1)#,delay=False)
         assert rec is not None
         time.sleep(2)
         state=self.m.get_state(id)
@@ -655,7 +654,7 @@ class ImageMngrTestCase(unittest.TestCase):
         id=self.images.insert(record)
         assert id is not None
         session=self.m.new_session(self.authadmin,self.system)
-        self.m.autoexpire(session,self.system,TESTMODE=1)
+        self.m.autoexpire(session,self.system,testmode=1)
         state=self.m.get_state(id)
         assert state is None
 
@@ -665,7 +664,7 @@ class ImageMngrTestCase(unittest.TestCase):
         id=self.images.insert(record)
         assert id is not None
         session=self.m.new_session(self.authadmin,self.system)
-        self.m.autoexpire(session,self.system,TESTMODE=1)
+        self.m.autoexpire(session,self.system,testmode=1)
         state=self.m.get_state(id)
         assert state=='ENQUEUED'
 
@@ -680,7 +679,7 @@ class ImageMngrTestCase(unittest.TestCase):
         # Create a bogus image file
         file,metafile=self.create_fakeimage(self.system,record['id'],self.format)
         session=self.m.new_session(self.authadmin,self.system)
-        self.m.autoexpire(session,self.system,TESTMODE=1)#,delay=False)
+        self.m.autoexpire(session,self.system,testmode=1)#,delay=False)
         time.sleep(2)
         state=self.m.get_state(id)
         assert state=='EXPIRED'
@@ -697,7 +696,7 @@ class ImageMngrTestCase(unittest.TestCase):
         # Create a bogus image file
         file,metafile=self.create_fakeimage(self.system,record['id'],self.format)
         session=self.m.new_session(self.authadmin,self.system)
-        self.m.autoexpire(session,self.system,TESTMODE=1)#,delay=False)
+        self.m.autoexpire(session,self.system,testmode=1)#,delay=False)
         time.sleep(2)
         state=self.m.get_state(id)
         assert state=='READY'
@@ -715,7 +714,7 @@ class ImageMngrTestCase(unittest.TestCase):
         # Create a bogus image file
         file,metafile=self.create_fakeimage(self.system,record['id'],self.format)
         session=self.m.new_session(self.authadmin,self.system)
-        self.m.autoexpire(session,self.system,TESTMODE=1)#,delay=False)
+        self.m.autoexpire(session,self.system,testmode=1)#,delay=False)
         time.sleep(2)
         state=self.m.get_state(id)
         assert state=='READY'

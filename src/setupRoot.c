@@ -114,6 +114,13 @@ int main(int argc, char **argv) {
     }
     udiConfig.target_uid = config.uid;
     udiConfig.target_gid = config.gid;
+    udiConfig.auxiliary_gids = shifter_getgrouplist(config.user, udiConfig.target_gid, &(udiConfig.nauxiliary_gids));
+
+    if (udiConfig.auxiliary_gids == NULL || udiConfig.nauxiliary_gids == 0) {
+        fprintf(stderr, "FAILED to lookup auxiliary gids. Exiting.\n");
+        exit(1);
+    }
+
     if (config.verbose) {
         fprint_SetupRootConfig(stdout, &config);
         fprint_UdiRootConfig(stdout, &udiConfig);

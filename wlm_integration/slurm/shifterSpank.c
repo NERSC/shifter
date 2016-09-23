@@ -62,7 +62,7 @@ static void _log(logLevel level, const char *format, ...) {
         dbuffer = (char *) malloc(sizeof(char) * (bytes + 2));
         va_list ap;
         va_start(ap, format);
-        bytes = vsnprintf(dbuffer, (bytes + 2), format, ap);
+        vsnprintf(dbuffer, (bytes + 2), format, ap);
         va_end(ap);
         bufptr = dbuffer;
     }
@@ -109,7 +109,7 @@ shifterSpank_config *shifterSpank_init(
             ssconfig->extern_setup = strdup(ptr);
         } else if (strncasecmp("extern_cgroup=", argv[idx], 14) == 0) {
             char *ptr = argv[idx] + 14;
-            ssconfig->extern_cgroup = atoi(ptr);
+            ssconfig->extern_cgroup = (int) strtol(ptr, NULL, 10);
         } else if (strncasecmp("memory_cgroup=", argv[idx], 14) == 0) {
             char *ptr = argv[idx] + 14;
             snprintf(buffer, PATH_MAX, "%s", ptr);
@@ -117,10 +117,10 @@ shifterSpank_config *shifterSpank_init(
             ssconfig->memory_cgroup = strdup(ptr);
         } else if (strncasecmp("enable_ccm=", argv[idx], 11) == 0) {
             char *ptr = argv[idx] + 11;
-            ssconfig->ccmEnabled = atoi(ptr);
+            ssconfig->ccmEnabled = (int) strtol(ptr, NULL, 10);
         } else if (strncasecmp("enable_sshd=", argv[idx], 12) == 0) {
             char *ptr = argv[idx] + 12;
-            ssconfig->sshdEnabled = atoi(ptr);
+            ssconfig->sshdEnabled = (int) strtol(ptr, NULL, 10);
         }
     }
 
@@ -327,7 +327,6 @@ int forkAndExecvLogToSlurm(const char *appname, char **args) {
             }
         }
 
-
         /* wait on the child */
         _log(LOG_ERROR, "waiting on %s\n", appname);
         waitpid(pid, &status, 0);
@@ -369,8 +368,8 @@ endf:
 int generateSshKey(shifterSpank_config *ssconfig) {
     struct stat st_data;
 
-    char filename[1024];
-    char buffer[4096];
+    char filename[PATH_MAX];
+    char buffer[PATH_MAX];
     struct passwd pwd;
     struct passwd *ptr = NULL;
     int generateKey = 0;
@@ -379,33 +378,77 @@ int generateSshKey(shifterSpank_config *ssconfig) {
     size_t n_linePtr = 0;
     FILE *fp = NULL;
 
-    getpwuid_r(getuid(), &pwd, buffer, 4096, &ptr);
+    getpwuid_r(getuid(), &pwd, buffer, sizeof(buffer), &ptr);
     if (ptr == NULL) {
         _log(LOG_ERROR, "FAIL cannot lookup current_user");
         return 1;
     }
-    snprintf(filename, 1024, "%s/.udiRoot/id_rsa.key", pwd.pw_dir);
+    int bytes = snprintf(filename, sizeof(filename), "%s/.udiRoot/id_rsa.key",
+            pwd.pw_dir);
+    if (bytes <= 0 || bytes >= sizeof(filename)) {
+        _log(LOG_ERROR, "FAIL cannot write out path, too long\n");
+        return 1;
+    }
 
     memset(&st_data, 0, sizeof(struct stat));
     if (stat(filename, &st_data) != 0) {
         generateKey = 1;
     }
-    snprintf(filename, 1024, "%s/.udiRoot/id_rsa.key.pub", pwd.pw_dir);
+
+    bytes = snprintf(filename, sizeof(filename), "%s/.udiRoot/id_rsa.key.pub",
+            pwd.pw_dir);
+    if (bytes <= 0 || bytes >= sizeof(filename)) {
+        _log(LOG_ERROR, "FAIL cannot write out path, too long");
+        return 1;
+    }
+
     memset(&st_data, 0, sizeof(struct stat));
     if (stat(filename, &st_data) != 0) {
         generateKey = 1;
     }
 
     if (generateKey) {
-        char cmd[1024];
-        snprintf(filename, 1024, "%s/.udiRoot", pwd.pw_dir);
-        mkdir(filename, 0700); // intentionally ignoring errors for this
-        snprintf(filename, 1024, "%s/.udiRoot/id_rsa.key", pwd.pw_dir);
-        snprintf(cmd, 1024, "ssh-keygen -t rsa -f %s -N '' >/dev/null 2>/dev/null", filename);
+        char cmd[PATH_MAX];
+        bytes = snprintf(filename, sizeof(filename), "%s/.udiRoot",
+                pwd.pw_dir);
+        if (bytes <= 0 || bytes >= sizeof(filename)) {
+            _log(LOG_ERROR, "FAILED directory path too long");
+            rc = 1;
+            goto generateSshKey_exit;
+        }
+        if (mkdir(filename, 0700) == -1) {
+            if (errno != EEXIST) {
+                _log(LOG_ERROR, "FAILED to create directory for udiRoot keys "
+                        "%s: %s", filename, strerror(errno));
+                rc = 1;
+                goto generateSshKey_exit;
+            }
+        }
+        bytes = snprintf(filename, sizeof(filename), "%s/.udiRoot/id_rsa.key",
+                pwd.pw_dir);
+        if (bytes <= 0 || bytes >= sizeof(filename)) {
+            _log(LOG_ERROR, "FAILED path too long");
+            rc = 1;
+            goto generateSshKey_exit;
+        }
+        bytes = snprintf(cmd, sizeof(cmd),
+                "ssh-keygen -t rsa -f %s -N '' >/dev/null 2>/dev/null",
+                filename);
+        if (bytes <= 0 || bytes >= sizeof(cmd)) {
+            _log(LOG_ERROR, "FAILED command too long");
+            rc = 1;
+            goto generateSshKey_exit;
+        }
         rc = system(cmd);
     }
     if (rc == 0) {
-        snprintf(filename, 1024, "%s/.udiRoot/id_rsa.key.pub", pwd.pw_dir);
+        bytes = snprintf(filename, sizeof(filename),
+                "%s/.udiRoot/id_rsa.key.pub", pwd.pw_dir);
+        if (bytes <= 0 || bytes >= sizeof(filename)) {
+            _log(LOG_ERROR, "FAILED path too long");
+            rc = 1;
+            goto generateSshKey_exit;
+        }
         fp = fopen(filename, "r");
         if (fp == NULL) {
             _log(LOG_ERROR, "FAILED to open udiRoot pubkey: %s", filename);
@@ -426,9 +469,6 @@ int generateSshKey(shifterSpank_config *ssconfig) {
 generateSshKey_exit:
     if (linePtr != NULL) {
         free(linePtr);
-    }
-    if (fp != NULL) {
-        fclose(fp);
     }
     return rc;
 }
@@ -472,24 +512,48 @@ int doExternStepTaskSetup(shifterSpank_config *ssconfig) {
         }
         if (memory_cgroup_path) {
             char buffer[PATH_MAX];
+            FILE *fp = NULL;
             char *tasks = alloc_strgenf("%s/tasks", memory_cgroup_path);
-            FILE *fp = fopen(tasks, "r");
+            if (tasks == NULL) {
+                goto _mem_cgrp_term;
+            }
+
+            fp = fopen(tasks, "r");
+            if (fp == NULL) {
+                goto _mem_cgrp_term;
+            }
             stepd_fd = wrap_spank_stepd_connect(ssconfig, dir, hostname, jobid, SLURM_EXTERN_CONT, &protocol);
+            if (stepd_fd < 0) {
+                goto _mem_cgrp_term;
+            }
             while (fgets(buffer, PATH_MAX, fp) != NULL) {
-                pid_t pid = atoi(buffer);
+                pid_t pid = (pid_t) strtol(buffer, NULL, 10);
                 if (pid == 0) continue;
                 _log(LOG_INFO, "shifterSpank: moving pid %d to extern step via fd %d\n", pid, stepd_fd);
                 wrap_spank_stepd_add_extern_pid(ssconfig, stepd_fd, protocol, pid);
             }
-            free(tasks);
-            fclose(fp);
+_mem_cgrp_term:
+            if (tasks != NULL) {
+                free(tasks);
+                tasks = NULL;
+            }
+            if (fp != NULL) {
+                fclose(fp);
+                fp = NULL;
+            }
+            free(memory_cgroup_path);
         } else {
             /* move sshd into slurm proctrack */
             int sshd_pid = findSshd();
-            if (sshd_pid > 0) {
-                stepd_fd = wrap_spank_stepd_connect(ssconfig, dir, hostname, jobid, SLURM_EXTERN_CONT, &protocol);
-                int ret = wrap_spank_stepd_add_extern_pid(ssconfig, stepd_fd, protocol, sshd_pid);
-                _log(LOG_INFO, "shifterSpank: moved sshd (pid %d) into slurm controlled extern_step (ret: %d) via fd %d\n", sshd_pid, ret, stepd_fd);
+            stepd_fd = wrap_spank_stepd_connect(ssconfig, dir, hostname, jobid,
+                    SLURM_EXTERN_CONT, &protocol);
+
+            if (sshd_pid > 2 && stepd_fd >= 0) {
+                int ret = wrap_spank_stepd_add_extern_pid(ssconfig, stepd_fd,
+                        protocol, sshd_pid);
+                _log(LOG_INFO, "shifterSpank: moved sshd (pid %d) into slurm "
+                        "controlled extern_step (ret: %d) via fd %d\n",
+                        sshd_pid, ret, stepd_fd);
             }
         }
     }
@@ -506,7 +570,11 @@ int doExternStepTaskSetup(shifterSpank_config *ssconfig) {
     _log(LOG_INFO, "shifterSpank: done with extern step setup");
     snprintf(buffer, PATH_MAX, "%s/var/shifterExtern.complete", ssconfig->udiConfig->udiMountPoint);
     int fd = open(buffer, O_CREAT|O_WRONLY|O_TRUNC, 0644);
-    close(fd);
+    if (fd >= 0) {
+        close(fd);
+    } else {
+        _log(LOG_ERROR, "shifterSpank: failed to create %s: %s", buffer, strerror(errno));
+    }
     return rc;
 }
 
@@ -713,7 +781,11 @@ int cgroup_record_components(shifterSpank_config *ssconfig, const char *path, vo
 #if 0
     _log(LOG_DEBUG, "sz: %lu, diff: %lu, *comp_ptr=%lu, %s", sz, diff, *comp_ptr, path);
 #endif 
-    *comp_ptr = (char **) realloc(*comp_ptr, sizeof(char*) * sz);
+    char **tmp = (char **) realloc(*comp_ptr, sizeof(char*) * sz);
+    if (tmp == NULL) {
+        return 1;
+    }
+    *comp_ptr = tmp;
     ptr = *comp_ptr + diff;
     *ptr = strdup(path);
     ptr++;
@@ -748,16 +820,26 @@ char *setup_memory_cgroup(
     char *cgroup_path = NULL;
     size_t cgroup_path_sz = 0;
     size_t cgroup_path_cap = 0;
-    char **cptr = components;
+    char **cptr = NULL;
 
     cgroup_path = alloc_strcatf(cgroup_path, &cgroup_path_sz, &cgroup_path_cap, "%s", ssconfig->memory_cgroup);
 
     for (cptr = components; cptr && *cptr; cptr++) {
         cgroup_path = alloc_strcatf(cgroup_path, &cgroup_path_sz, &cgroup_path_cap, "/%s", *cptr);
-        if (action != NULL) {
-            action(ssconfig, cgroup_path, data);
+        if (cgroup_path == NULL) {
+            return NULL;
         }
+        if (action != NULL) {
+            if (action(ssconfig, cgroup_path, data) != 0) {
+                free(cgroup_path);
+                cgroup_path = NULL;
+                break;
+            }
+        }
+    }
+    for (cptr = components; cptr && *cptr; cptr++) {
         free(*cptr);
+        *cptr = NULL;
     }
     return cgroup_path;
 }
@@ -766,7 +848,7 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     int rc = SUCCESS;
 
     char *ptr = NULL;
-    int idx = 0;
+    size_t idx = 0;
     uint32_t job;
     uid_t uid = 0;
     gid_t gid = 0;
@@ -782,7 +864,6 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     char *nodelist = NULL;
     char *username = NULL;
     char *uid_str = NULL;
-    char *gid_str = NULL;
     char *sshPubKey = NULL;
     size_t tasksPerNode = 0;
     pid_t pid = 0;
@@ -876,42 +957,34 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
 
     uid_str = getenv("SLURM_JOB_UID");
     if (uid_str != NULL) {
-        uid = strtoul(uid_str, NULL, 10);
+        uid = (uid_t) strtol(uid_str, NULL, 10);
     } else {
         if (wrap_spank_get_uid(ssconfig, &uid) == ERROR) {
             PROLOG_ERROR("FAILED to get job uid!", ERROR);
         }
     }
+    if (uid <= 0) {
+        PROLOG_ERROR("Job uid is invalid!", ERROR);
+    }
 
-    gid_str = getenv("SHIFTER_GID");
-    if (gid_str != NULL) {
-        gid = strtoul(gid_str, NULL, 10);
-    } else {
-        if (wrap_spank_get_gid(ssconfig, &gid) == ERROR) {
-            _log(LOG_DEBUG, "shifter prolog: failed to get gid from environment, trying getpwuid_r on %d", uid);
-            char buffer[4096];
-            struct passwd pw, *result;
-            while (1) {
-                rc = getpwuid_r(uid, &pw, buffer, 4096, &result);
-                if (rc == EINTR) continue;
-                if (rc != 0) result = NULL;
-                break;
-            }
-            if (result != NULL) {
-                gid = result->pw_gid;
-                _log(LOG_DEBUG, "shifter prolog: got gid from getpwuid_r: %s", username);
-            } else {
-                PROLOG_ERROR("FAILED to get job gid!", ERROR);
-            }
+    if (wrap_spank_get_gid(ssconfig, &gid) == ERROR) {
+        char buffer[4096];
+        struct passwd pw, *result;
+        while (1) {
+            rc = getpwuid_r(uid, &pw, buffer, 4096, &result);
+            if (rc == EINTR) continue;
+            if (rc != 0) result = NULL;
+            break;
+        }
+        if (result != NULL) {
+            gid = result->pw_gid;
+            _log(LOG_DEBUG, "shifter prolog: got gid from getpwuid_r: %s", username);
+        } else {
+            PROLOG_ERROR("FAILED to get job gid!", ERROR);
         }
     }
 
-    /* try to get username from environment first, then fallback to getpwuid */
-    username = getenv("SLURM_JOB_USER");
-    if (username != NULL && strcmp(username, "(null)") != 0) {
-        username = strdup(username);
-        _log(LOG_DEBUG, "shifter prolog: got username from environment: %s", username);
-    } else if (uid != 0) {
+    if (uid != 0) {
         /* getpwuid may not be optimal on cray compute node, but oh well */
         _log(LOG_DEBUG, "shifter prolog: failed to get username from environment, trying getpwuid_r on %d", uid);
         char buffer[4096];
@@ -936,7 +1009,11 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
         char *ptr = ssconfig->volume;
         for ( ; ; ) {
             char *limit = strchr(ptr, ';');
-            volArgs = (char **) realloc(volArgs,sizeof(char *) * (n_volArgs + 2));
+            char **tmp = (char **) realloc(volArgs, sizeof(char *) * (n_volArgs + 2));
+            if (tmp == NULL) {
+                PROLOG_ERROR("FAILED to allocate memory for volArgs!", ERROR);
+            }
+            volArgs = tmp;
             if (limit != NULL) *limit = 0;
             volArgs[n_volArgs++] = strdup(ptr);
             volArgs[n_volArgs] = NULL;
@@ -951,14 +1028,20 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     snprintf(setupRootPath, PATH_MAX, "%s/sbin/setupRoot", ssconfig->udiConfig->udiRootPath);
     strncpy_StringArray(setupRootPath, strlen(setupRootPath), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     if (uid != 0) {
-        snprintf(buffer, PATH_MAX, "%u", uid);
+        int bytes = snprintf(buffer, sizeof(buffer), "%u", uid);
+        if (bytes <= 0 || bytes >= sizeof(buffer)) {
+            PROLOG_ERROR("FAILED to write uid into job!\n", ERROR);
+        }
         strncpy_StringArray("-U", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
-        strncpy_StringArray(buffer, strlen(buffer), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+        strncpy_StringArray(buffer, bytes, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
     if (gid != 0) {
-        snprintf(buffer, PATH_MAX, "%u", gid);
+        int bytes = snprintf(buffer, sizeof(buffer), "%u", gid);
+        if (bytes <= 0 || bytes >= sizeof(buffer)) {
+            PROLOG_ERROR("FAILED to write gid into setupRoot args!", ERROR);
+        }
         strncpy_StringArray("-G", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
-        strncpy_StringArray(buffer, strlen(buffer), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+        strncpy_StringArray(buffer, bytes, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
     if (username != NULL) {
         strncpy_StringArray("-u", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
@@ -1023,7 +1106,7 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     
 _prolog_exit_unclean:
     if (setupRootArgs != NULL) {
-        char **ptr = setupRootArgs;
+        char **ptr = NULL;
         for (ptr = setupRootArgs; ptr && *ptr; ptr++) {
             free(*ptr);
         }
@@ -1069,31 +1152,52 @@ int shifterSpank_job_epilog(shifterSpank_config *ssconfig) {
     char **cgroup_components = NULL;
     if (ssconfig->memory_cgroup) {
         memory_cgroup_path = setup_memory_cgroup(ssconfig, job, uid, cgroup_record_components, (void *) &cgroup_components);
-    }
-    if (memory_cgroup_path != NULL) {
-        char **ptr = NULL;
-        char *line = NULL;
-        size_t line_sz = 0;
-        ssize_t bytes = 0;
-        char *tasks = alloc_strgenf("%s/tasks", memory_cgroup_path);
-        FILE *fp = NULL;
+        if (memory_cgroup_path != NULL && cgroup_components != NULL) {
+            char **ptr = NULL;
+            char *line = NULL;
+            size_t line_sz = 0;
+            ssize_t bytes = 0;
+            char *tasks = alloc_strgenf("%s/tasks", memory_cgroup_path);
+            FILE *fp = NULL;
 
-        /* kill all the processes in the cgroup tasks */
-        fp = fopen(tasks, "r");
-        if (fp != NULL) {
-            while ((bytes = getline(&line, &line_sz, fp)) >= 0) {
-                pid_t pid = atoi(line);
-                if (pid == 0) continue;
-                kill(pid, 9); 
+            /* kill all the processes in the cgroup tasks */
+            fp = fopen(tasks, "r");
+            if (fp != NULL) {
+                while ((bytes = getline(&line, &line_sz, fp)) >= 0) {
+                    pid_t pid = (pid_t) strtol(line, NULL, 10);
+                    if (pid == 0) continue;
+                    kill(pid, 9); 
+                }
+                fclose(fp);
+                fp = NULL;
             }
-        }
+            free(tasks);
+            tasks = NULL;
 
-        /* remove the empty cgroups */
-        for (ptr = cgroup_components; ptr && *ptr; ptr++) { }
-        for (ptr-- ; ptr && *ptr && ptr > cgroup_components; ptr--) {
-            rmdir(*ptr);
+            /* remove the empty cgroups */
+            for (ptr = cgroup_components; ptr && *ptr; ptr++) { }
+            if (ptr > cgroup_components) {
+                for ( ; ptr && *ptr && (ptr > cgroup_components); ptr--) {
+                    rmdir(*ptr);
+                    free(*ptr);
+                    *ptr = NULL;
+                }
+            }
+            free(cgroup_components);
+            cgroup_components = NULL;
         }
-        
+        if (memory_cgroup_path != NULL) {
+            free(memory_cgroup_path);
+            memory_cgroup_path = NULL;
+        }
+        if (cgroup_components != NULL) {
+            char **ptr = NULL;
+            for (ptr = cgroup_components; ptr && *ptr; ptr++) {
+                free(*ptr);
+                *ptr = NULL;
+            }
+            free(cgroup_components);
+        }
     }
 
     snprintf(path, PATH_MAX, "%s/sbin/unsetupRoot", ssconfig->udiConfig->udiRootPath);
@@ -1105,7 +1209,7 @@ int shifterSpank_job_epilog(shifterSpank_config *ssconfig) {
     }
 
     _log(LOG_DEBUG, "shifter_epilog: done with unsetupRoot");
-    
+
 _epilog_exit_unclean:
     return rc;
 }
@@ -1198,6 +1302,9 @@ int shifterSpank_task_init_privileged(shifterSpank_config *ssconfig) {
         if (chroot(ssconfig->udiConfig->udiMountPoint) != 0) {
             TASKINITPRIV_ERROR("FAILED to chroot to designated image", ERROR);
         }
+        if (chdir("/") != 0) {
+            TASKINITPRIV_ERROR("FAILED to chdir to new chroot", ERROR);
+        }
 
         if (wrap_spank_get_supplementary_gids(ssconfig, &gids, &ngids) == ERROR) {
             TASKINITPRIV_ERROR("FAILED to obtain group ids", ERROR);
@@ -1258,8 +1365,16 @@ int shifterSpank_task_init_privileged(shifterSpank_config *ssconfig) {
         if (setgroups(n_existing_suppl_gids, existing_suppl_gids) != 0) {
             TASKINITPRIV_ERROR("FAILED to drop supplementary gids", ERROR);
         }
+        if (existing_suppl_gids != NULL) {
+            free(existing_suppl_gids);
+            existing_suppl_gids = NULL;
+        }
     }
 _taskInitPriv_exit_unclean:
     free_ImageData(&imageData, 0);
+    if (existing_suppl_gids != NULL) {
+        free(existing_suppl_gids);
+        existing_suppl_gids = NULL;
+    }
     return rc;
 }

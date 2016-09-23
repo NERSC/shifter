@@ -1,3 +1,24 @@
+16.08.3
+==========
+* Perform volume mount realpath() and lstat() verfication with user privileges,
+  to ensure user has access to content at container construction time
+* Add shifter_realpath() to calculate user volume mount paths relative to
+  alternate root (accounts for symlinks that might inadvertently (or
+  intentionally) try to pull user volume mounts out of the container.
+* Fix buffer overrun in volume map flag parsing code
+* Clean up clang & coverity-found issues
+* Improve error handling in shifter core logic
+* Improve shifter imagegw logging
+* Address pylint-found errors (a few minor bugs)
+
+16.08.2
+===========
+* Fix slurm tests (was missing some build options) and clear up some warnings
+* Fix errant xfs dependency in tests
+* Force user-level sshd to get group identities from external environment
+* Add additional checks to ensure bind mounts stay within approved paths and
+  validate that mount points are directories better
+
 16.08.1
 ===========
 * Fixed bug in user volume mount flag parsing that could segfault

@@ -10,7 +10,10 @@ SHIFTER_SLURM_DWS_SUPPORT_SOURCES = \
 	$(top_srcdir)/src/utility.c \
 	$(top_srcdir)/src/VolumeMap.c \
 	$(top_srcdir)/src/MountList.c \
+	$(top_srcdir)/src/PathList.c \
 	$(top_srcdir)/src/shifter_core.c
 
 
 shifter_slurm_dws_support_SOURCES = $(SHIFTER_SLURM_DWS_SUPPORT_SOURCES)
+
+EXTRA_DIST = cle6 systemd

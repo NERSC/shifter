@@ -48,6 +48,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdarg.h>
+#include <stdint.h>
 
 #include "utility.h"
 
@@ -64,8 +65,6 @@ int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assig
     char *key_alloc = NULL;
     char *value = NULL;
     char *tValue = NULL;
-    size_t valueLen = 0;
-    size_t tValueLen = 0;
     int ret = 0;
 
     if (filename == NULL || obj == NULL || assign_fp == NULL) {
@@ -97,6 +96,9 @@ int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assig
             tValue = shifter_trim(linePtr);
             multiline = 0;
         }
+        if (tValue == NULL) {
+            goto _parseConfig_errCleanup;
+        }
 
         /* check to see if value extends over multiple lines */
         if (tValue[strlen(tValue) - 1] == '\\') {
@@ -106,17 +108,20 @@ int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assig
         }
 
         /* merge value and tValue */
-        tValueLen = strlen(tValue);
-        tmp_value = (char *) realloc(value, sizeof(char)*(valueLen + tValueLen + 2));
-        if (tmp_value == NULL) {
-            goto _parseConfig_errCleanup;
+        if (value == NULL) {
+            value = strdup(tValue);
+        } else {
+            if (asprintf(&tmp_value, "%s %s", value, tValue) < 0) {
+                goto _parseConfig_errCleanup;
+            }
+            if (tmp_value == NULL) {
+                goto _parseConfig_errCleanup;
+            }
+            free(value);
+            value = tmp_value;
+            tmp_value = NULL;
         }
-        value = tmp_value;
-        ptr = value + valueLen;
-        *ptr = 0;
-        strncat(value, " ", valueLen + 2);
-        strncat(value, tValue, valueLen + tValueLen + 2);
-        valueLen += tValueLen + 1;
+        tValue = NULL;
 
         /* if value is complete, assign */
         if (multiline == 0) {
@@ -134,7 +139,6 @@ int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assig
             key = NULL;
             key_alloc = NULL;
             value = NULL;
-            valueLen = 0;
         }
     }
     if (linePtr != NULL) {
@@ -206,6 +210,11 @@ int strncpy_StringArray(const char *str, size_t n, char ***wptr,
             || capacity == NULL || allocationBlock == 0 ||
             *wptr < *array || *wptr - *capacity > *array) {
         fprintf(stderr, "ERROR: invalid input to strncpy_StringArray\n");
+        return 1;
+    }
+    if (n == SIZE_MAX) {
+        fprintf(stderr, "ERROR: input string is too big, would not be able to "
+                "append terminator\n");
         return 1;
     }
 
@@ -370,6 +379,10 @@ char *alloc_strgenf(const char *format, ...) {
     if (status == 0) {
         return string;
     }
+    if (string != NULL) {
+        free(string);
+        string = NULL;
+    }
     return NULL;
 }
 
@@ -412,7 +425,7 @@ char *userInputPathFilter(const char *input, int allowSlash) {
 
 char *cleanPath(const char *path) {
     if (!path) return NULL;
-    size_t len = strlen(path) + 1;
+    ssize_t len = strlen(path) + 1;
 
     char *ret = (char *) malloc(sizeof(char) * len);
     memset(ret, 0, sizeof(char) * len);

@@ -138,7 +138,6 @@ char **_tokenizeVolumeMapInput(char *input) {
 
     /* parse the tokens */
     tk_ptr = tokens;
-    sptr = input;
     for (ptr = input, sptr = input; sptr < limit; ptr++) {
         /* delimiter */
         if (*ptr == ':' || *ptr == '\0') {
@@ -175,8 +174,13 @@ ssize_t parseBytes(const char *input) {
     const char *scale = "bkmgtpe";
     char *ptr = NULL;
     const char *sptr = NULL;
-    double a = strtod(input, &ptr);
+    double a = 0.0;
     char expLetter = 0;
+
+    if (input == NULL) {
+        return -1;
+    }
+    a = strtod(input, &ptr);
     if (ptr == NULL || *ptr == 0) {
         expLetter = 'b';
     } else {

@@ -72,12 +72,12 @@ class GWTestCase(unittest.TestCase):
         self.stop_worker()
 
 
-    def start_worker(self,TESTMODE=1,system='systema'):
+    def start_worker(self,testmode=1,system='systema'):
         # Start a celery worker.
         pid=os.fork()
         if pid==0:  # Child process
             os.environ['CONFIG']='test.json'
-            os.environ['TESTMODE']='%d'%(TESTMODE)
+            os.environ['TESTMODE']='%d'%(testmode)
             os.execvp('celery',['celery','-A','shifter_imagegw.imageworker',
                 'worker','--quiet',
                 '-Q','%s'%(system),
