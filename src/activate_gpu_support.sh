@@ -1,11 +1,13 @@
 #!/bin/bash
 
-#setting PATH from scratch is necessary because shifter might execute this script
+#here is necessary to set PATH manually because shifter might execute this script
 #with an empty environment (after calling the clearenv function)
 export PATH=/usr/local/bin:/usr/bin:/bin:/sbin
 
-container_mount_point=/var/udiMount #TODO: replace this variable with parameter passed to the script by the shifter executable
+#TODO: replace these variables with parameters passed to the script by the shifter executable
+container_mount_point=/var/udiMount
 nvidia_libs_mount_point=$container_mount_point/gpu-support/lib/nvidia
+nvidia_bins_mount_point=$container_mount_point/gpu-support/bin/nvidia
 
 #the NVIDIA compute libraries that will be bind mounted into the container
 nvidia_compute_libs="cuda \
@@ -14,6 +16,13 @@ nvidia_compute_libs="cuda \
                     nvidia-encode \
                     nvidia-ml \
                     nvidia-fatbinaryloader"
+
+#the NVIDIA binaries that will be bind mounted into the container
+nvidia_binaries="nvidia-cuda-mps-control \
+               nvidia-cuda-mps-server \
+               nvidia-debugdump \
+               nvidia-persistenced \
+               nvidia-smi"
 
 __log()
 {
@@ -42,7 +51,7 @@ add_nvidia_compute_libs_to_container()
     for lib in $nvidia_compute_libs; do
         local lib_paths=$( ldconfig -p | grep "lib${lib}.so" | awk '{print $4}' )
         if [ -z "$lib_paths" ]; then
-            __log WARN "Could not find library: $lib"
+            __log WARN "could not find library: $lib"
             continue
         fi
         
@@ -63,6 +72,22 @@ add_nvidia_compute_libs_to_container()
     done
 }
 
+add_nvidia_binaries_to_container()
+{
+    mkdir -p $nvidia_bins_mount_point
+
+    for bin in $nvidia_binaries; do
+        local bin_path="$( which $bin )"
+        if [ -z $bin_path ]; then
+            __log WARN "could not find binary: $bin"
+            continue
+        fi
+        local bin_mount_point=$nvidia_bins_mount_point/$bin
+        touch $bin_mount_point
+        mount --bind $bin_path $bin_mount_point
+    done
+}
+
 load_nvidia_uvm_if_necessary()
 {
     if [ ! -e /dev/nvidia-uvm ]; then
@@ -72,4 +97,5 @@ load_nvidia_uvm_if_necessary()
 
 check_prerequisites
 add_nvidia_compute_libs_to_container
+add_nvidia_binaries_to_container
 load_nvidia_uvm_if_necessary
