@@ -24,6 +24,7 @@ systema:
   image: shifter-test
   links:
    - api
+   - registry
   ports:
    - "2222:22"
   volumes:
@@ -38,10 +39,17 @@ workera:
    - api
    - redis
    - systema:systema
+   - registry
   volumes:
    - imagegw:/data
    - ./test/config/:/config
   command: worker:systema
+registry:
+  image: registry
+  ports:
+   - "5000:5000"
+  volumes:
+  - registry:/var/lib/registry
 #workerb:
 #  image: imagegwapi
 #  links:
