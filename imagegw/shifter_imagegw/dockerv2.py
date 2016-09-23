@@ -90,7 +90,7 @@ def _setup_http_conn(url, cacert=None):
     (protocol, url) = url.split('://', 1)
     conn = None
     if protocol == 'http':
-        port=80
+        port = 80
     else:
         port = 443
     if url.find('/') >= 0:
@@ -98,8 +98,8 @@ def _setup_http_conn(url, cacert=None):
     else:
         server = url
     if ':' in server:
-        (server, ports) = server.split(':')
-        port=int(ports)
+        (server, portstr) = server.split(':', 1)
+        port = int(portstr)
     if protocol == 'http':
         conn = httplib.HTTPConnection(server, port=port)
     elif protocol == 'https':
