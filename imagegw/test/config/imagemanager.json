@@ -1,6 +1,6 @@
 {
     "WorkerThreads":8,
-    "LogLevel":"info",
+    "LogLevel":"debug",
     "DefaultLustreReplication": 1,
     "DefaultOstCount": 16,
     "DefaultImageLocation": "index.docker.io",
@@ -19,9 +19,9 @@
             "remotetype": "dockerv2",
             "authentication": "http"
         },
-        "registry.services.nersc.gov": {
+        "registry": {
             "remotetype": "dockerv2",
-            "sslcacert": "/config/nersc.pem",
+            "url" : "http://registry:5000/",
             "authentication": "http"
         }
     },

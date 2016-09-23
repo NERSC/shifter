@@ -89,21 +89,25 @@ def _setup_http_conn(url, cacert=None):
     """Prepare http connection object and return it."""
     (protocol, url) = url.split('://', 1)
     conn = None
-    port = 443
+    if protocol == 'http':
+        port=80
+    else:
+        port = 443
     if url.find('/') >= 0:
         (server, _) = url.split('/', 1)
     else:
         server = url
     if ':' in server:
-        (server, port) = server.split(':')
+        (server, ports) = server.split(':')
+        port=int(ports)
     if protocol == 'http':
-        conn = httplib.HTTPConnection(server)
+        conn = httplib.HTTPConnection(server, port=port)
     elif protocol == 'https':
         try:
             ssl_context = ssl.create_default_context()
             if cacert is not None:
                 ssl_context = ssl.create_default_context(cafile=cacert)
-            conn = httplib.HTTPSConnection(server, context=ssl_context)
+            conn = httplib.HTTPSConnection(server, port=port, context=ssl_context)
         except AttributeError:
             conn = httplib.HTTPSConnection(server, port, None, cacert)
     else:
