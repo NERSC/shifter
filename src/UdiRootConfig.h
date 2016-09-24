@@ -104,6 +104,7 @@ typedef struct _UdiRootConfig {
     int autoLoadKernelModule;
     int mountUdiRootWritable;
     int useOverlayFsMode;
+    char *overlayMountPoint;
     int optionalSshdAsRoot;
     size_t maxGroupCount;
     size_t gatewayTimeout;

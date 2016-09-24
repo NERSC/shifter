@@ -899,6 +899,56 @@ _writeHostFile_error:
     return 1;
 }
 
+int setupOverlay(ImageData *imageData, UdiRootConfig *udiConfig) {
+    char *options = NULL;
+    char *upper = NULL;
+    char *work = NULL;
+    if (udiConfig->overlayMountPoint == NULL) {
+        fprintf(stderr, "Cannot use overlayfs mode, no "
+                "\"overlayMountPoint\" defined in udiRoot.conf\n");
+        goto _setup_overlay_error;
+    }
+    if (mkdir(udiConfig->overlayMountPoint, 0755) != 0) {
+        if (errno != EEXIST) {
+            goto _setup_overlay_error;
+        }
+    }
+    if (mount(NULL, udiConfig->overlayMountPoint,
+                udiConfig->rootfsType, MS_NOSUID|MS_NODEV, NULL) != 0) 
+    {
+        fprintf(stderr, "FAILED to mount rootfs on %s\n",
+                udiConfig->overlayMountPoint);
+        goto _setup_overlay_error;
+    }
+    upper = alloc_strgenf("%s/upper", udiConfig->overlayMountPoint);
+    work = alloc_strgenf("%s/work", udiConfig->overlayMountPoint);
+    if (upper == NULL || work == NULL) {
+        fprintf(stderr, "FAILED to allocate strings for upper and work dirs in "
+                "overlay.\n");
+        goto _setup_overlay_error;
+    }
+
+    options = alloc_strgenf("lowerdir=%s,upperdir=%s,workdir=%s",
+            imageData->useLoopMount ? udiConfig->loopMountPoint : imageData->filename,
+            upper, work);
+    if (mount(NULL, udiConfig->udiMountPoint, "overlayfs", MS_NOSUID|MS_NODEV,
+                options) != 0)
+    {
+        fprintf(stderr, "FAILED to mount overlay on %s with options %s\n",
+                udiConfig->udiMountPoint, options);
+        goto _setup_overlay_error;
+    }
+    free(options);
+    free(upper);
+    free(work);
+    return 0;
+_setup_overlay_error:
+    if (options != NULL) {
+        free(options);
+    }
+    return 1;
+}
+
 int mountImageVFS(ImageData *imageData, const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig) {
     struct stat statData;
     char udiRoot[PATH_MAX];
@@ -936,12 +986,18 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
         fprintf(stderr, "FAILED To setup \"%s\" in %s\n", subtree, udiRoot); \
         goto _mountImgVfs_unclean; \
     }
-
-    /* mount a new rootfs to work in */
-    if (mount(NULL, udiRoot, udiConfig->rootfsType, MS_NOSUID|MS_NODEV, NULL) != 0) {
-        fprintf(stderr, "FAILED to mount rootfs on %s\n", udiRoot);
-        perror("   --- REASON: ");
-        goto _mountImgVfs_unclean;
+    if (useOverlayFsMode) {
+        if (setupOverlay(imageData, udiConfig) != 0) {
+            fprintf(stderr, "FAILED to setup overlay!\n");
+            goto _mountImgVfs_unclean;
+        }
+    } else {
+        /* mount a new rootfs to work in */
+        if (mount(NULL, udiRoot, udiConfig->rootfsType, MS_NOSUID|MS_NODEV, NULL) != 0) {
+            fprintf(stderr, "FAILED to mount rootfs on %s\n", udiRoot);
+            perror("   --- REASON: ");
+            goto _mountImgVfs_unclean;
+        }
     }
     if (makeUdiMountPrivate(udiConfig) != 0) {
         fprintf(stderr, "FAILED to mark the udi as a private mount\n");
@@ -992,28 +1048,29 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
     udiConfig->bindMountAllowedDevices[2] = tmpDev;
     udiConfig->bindMountAllowedDevices_sz = 3;
 
+    if (!useOverlayFsMode) {
+        /* get our needs injected first */
+        if (prepareSiteModifications(username, minNodeSpec, udiConfig) != 0) {
+            fprintf(stderr, "FAILED to properly setup site modifications\n");
+            goto _mountImgVfs_unclean;
+        }
 
-    /* get our needs injected first */
-    if (prepareSiteModifications(username, minNodeSpec, udiConfig) != 0) {
-        fprintf(stderr, "FAILED to properly setup site modifications\n");
-        goto _mountImgVfs_unclean;
+        /* copy/bind mount pieces into prepared site */
+        BIND_IMAGE_INTO_UDI("/", imageData, udiConfig, 0);
+        BIND_IMAGE_INTO_UDI("/var", imageData, udiConfig, 0);
+        BIND_IMAGE_INTO_UDI("/opt", imageData, udiConfig, 0);
+
+        /* setup sshd configuration */
+        sshPath = alloc_strgenf("%s/etc/ssh", udiRoot);
+        if (sshPath != NULL) {
+            _MKDIR(sshPath, 0755);
+            free(sshPath);
+            sshPath = NULL;
+        }
+
+        /* copy image /etc into place */
+        BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
     }
-
-    /* copy/bind mount pieces into prepared site */
-    BIND_IMAGE_INTO_UDI("/", imageData, udiConfig, 0);
-    BIND_IMAGE_INTO_UDI("/var", imageData, udiConfig, 0);
-    BIND_IMAGE_INTO_UDI("/opt", imageData, udiConfig, 0);
-
-    /* setup sshd configuration */
-    sshPath = alloc_strgenf("%s/etc/ssh", udiRoot);
-    if (sshPath != NULL) {
-        _MKDIR(sshPath, 0755);
-        free(sshPath);
-        sshPath = NULL;
-    }
-
-    /* copy image /etc into place */
-    BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
 
 
 #undef BIND_IMAGE_INTO_UDI
