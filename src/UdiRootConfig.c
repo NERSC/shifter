@@ -263,6 +263,10 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
             config->allowLibcPwdCalls);
     written += fprintf(fp, "populateEtcDynamically = %d\n",
             config->populateEtcDynamically);
+    written += fprintf(fp, "useOverlayFsMode = %d\n",
+            config->useOverlayFsMode);
+    written += fprintf(fp, "overlayMountPoint = %s\n",
+            (config->overlayMountPoint ? config->overlayMountPoint : ""));
     written += fprintf(fp, "optionalSshdAsRoot = %d\n",
             config->optionalSshdAsRoot);
     written += fprintf(fp, "autoLoadKernelModule = %d\n",
@@ -362,6 +366,10 @@ int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
         if (config->rootfsType == NULL || strlen(config->rootfsType) == 0) {
             VAL_ERROR("\"rootfsType\" is not defined", UDIROOT_VAL_PARSE);
         }
+        if (config->useOverlayFsMode && !config->overlayMountPoint) {
+            VAL_ERROR("\"overlayMountPoint\" must be defined when "
+                    "\"useOverlayMode\" is enabled", UDIROOT_VAL_PARSE);
+        }
     }
     if (validateFlags & UDIROOT_VAL_FILEVAL) {
         struct stat statData;
@@ -457,6 +465,10 @@ static int _assign(const char *key, const char *value, void *t_config) {
         config->allowLocalChroot = strtol(value, NULL, 10) != 0;
     } else if (strcmp(key, "allowLibcPwdCalls") == 0) {
         config->allowLibcPwdCalls = strtol(value, NULL, 10) != 0;
+    } else if (strcmp(key, "useOverlayFsMode") == 0) {
+        config->useOverlayFsMode = strtol(value, NULL, 10) != 0;
+    } else if (strcmp(key, "overlayMountPoint") == 0) {
+        config->overlayMountPoint = strdup(value);
     } else if (strcmp(key, "optionalSshdAsRoot") == 0) {
         config->optionalSshdAsRoot = strtol(value, NULL, 10) != 0;
     } else if (strcmp(key, "populateEtcDynamically") == 0) {

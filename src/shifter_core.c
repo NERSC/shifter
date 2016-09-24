@@ -289,6 +289,156 @@ _bindImgUDI_unclean:
     return rc;
 }
 
+/** vacate_path
+ * goal of this function is to remove (files) or rename (directories) that
+ * the supplied path within certain constraints
+ *
+ * Constraint:  * file or directory must be on one of the devices approved
+ *                for bind mounts (implying they are within the container)
+ *              * can only be regular files, symlinks, or directories
+ *
+ * Limitations: * files/links are unlinked
+ *              * directories are renamed to a random name (using mkdtemp)
+ */
+int vacate_path(const char *path, UdiRootConfig *config) {
+    struct stat statData;
+    size_t idx = 0;
+    int flag = 0;
+
+    if (path == NULL || config == NULL) {
+        return 1;
+    }
+    if (lstat(path, &statData) != 0) {
+        /* path already doesn't exist */
+        return 0;
+    }
+
+    flag = 0;
+    for (idx = 0; idx < config->bindMountAllowedDevices_sz; idx++) {
+        if (statData.st_dev == config->bindMountAllowedDevices[idx]) {
+            flag = 1;
+            break;
+        }
+    }
+    if (flag == 0) {
+        /* path is not on an allowed device */
+        fprintf(stderr, "FAILED: cannot remove path %s, not on an approved "
+                "device.\n", path);
+        return 1;
+    }
+    if (S_ISREG(statData.st_mode) || S_ISLNK(statData.st_mode)) {
+        if (unlink(path) != 0) {
+            if (errno != ENOENT) {
+                fprintf(stderr, "FAILED to unlink path %s: %s\n", path,
+                        strerror(errno));
+                return 1;
+            }
+        }
+        return 0;
+    }
+    if (S_ISDIR(statData.st_mode)) {
+        char *actual_path = realpath(path, NULL);
+        char *parent_path = NULL;
+        char *new_path = (char *) malloc(sizeof(char) * PATH_MAX);
+        char *last_comp = NULL;
+        int bytes = 0;
+        int ret = 1; /* assume error condition */
+        PathList *pathList = pathList_init(actual_path);
+
+        if (pathList != NULL && pathList->terminal != NULL) {
+            last_comp = strdup(pathList->terminal->item);
+        }
+        pathList_trimLast(pathList);
+        parent_path = pathList_string(pathList);
+        pathList_free(pathList);
+
+        if (parent_path == NULL || last_comp == NULL) {
+            fprintf(stderr, "Memory allocation error!\n");
+            goto _vacate_dir_end;
+        }
+
+        bytes = snprintf(new_path, PATH_MAX, "%s/%s.XXXXXX", parent_path, last_comp);
+        if (bytes < 0 || bytes >= PATH_MAX) {
+            fprintf(stderr, "FAILED to generate correct temp path template\n");
+            goto _vacate_dir_end;
+        }
+        if (mkdtemp(new_path) == NULL) {
+            fprintf(stderr, "FAILED to generate tempdir: %s: %s\n",
+                    new_path, strerror(errno));
+            goto _vacate_dir_end;
+        }
+        if (rmdir(new_path) != 0) {
+            fprintf(stderr, "FAILED to remove tempdir: %s: %s\n",
+                    new_path, strerror(errno));
+            goto _vacate_dir_end;
+        }
+        if (rename(actual_path, new_path) != 0) {
+            fprintf(stderr, "FAILED to rename %s to %s: %s\n", actual_path,
+                    new_path, strerror(errno));
+            goto _vacate_dir_end;
+        }
+        ret = 0;
+_vacate_dir_end:
+        if (new_path != NULL) {
+            free(new_path);
+            new_path = NULL;
+        }
+        if (actual_path != NULL) {
+            free(actual_path);
+            actual_path = NULL;
+        }
+        if (parent_path != NULL) {
+            free(parent_path);
+            parent_path = NULL;
+        }
+        if (last_comp != NULL) {
+            free(last_comp);
+            last_comp = NULL;
+        }
+        return ret;
+
+    }
+    fprintf(stderr, "ERROR: path %s is not allowed to be removed, wrong type\n",
+            path);
+    return 1;
+}
+
+int vacate_container_path(const char *path, UdiRootConfig *config) {
+    char *cpath = NULL;
+    int ret = 0;
+    size_t udi_len = 0;
+    if (path == NULL || config == NULL) {
+        return 1;
+    }
+    udi_len = strlen(config->udiMountPoint);
+    if (udi_len == 0 || udi_len >= PATH_MAX) {
+        return 1;
+    }
+    if (path[0] != '/') {
+        return 1;
+    }
+
+    if (strncmp(path, config->udiMountPoint, udi_len) != 0) {
+        cpath = alloc_strgenf("%s/%s", config->udiMountPoint, path);
+        ret = vacate_path(cpath, config);
+    } else {
+        if (path[udi_len - 1] != '/') {
+            fprintf(stderr, "ERROR, path to vacate is invalid: %s; '/' must "
+                    "follow %s", path, config->udiMountPoint);
+            ret = 1;
+            goto _vacate_container_path_end;
+        }
+        ret = vacate_path(path, config);
+    }
+
+_vacate_container_path_end:
+    if (cpath != NULL) {
+        free(cpath);
+        cpath = NULL;
+    }
+    return ret;
+}
+
 /*! Copy a file or link as correctly as possible */
 /*!
  * Copy file (or symlink) from source to dest.
@@ -451,10 +601,12 @@ int prepareSiteModifications(const char *username,
 
     /* create all the directories needed for initial setup */
 #define _MKDIR(dir, perm) if (mkdir(dir, perm) != 0) { \
-    fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", dir); \
-    perror("   --- REASON: "); \
-    ret = 1; \
-    goto _prepSiteMod_unclean; \
+    if (errno != EEXIST) { \
+        fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", dir); \
+        perror("   --- REASON: "); \
+        ret = 1; \
+        goto _prepSiteMod_unclean; \
+    } \
 }
 #define _BINDMOUNT(mountCache, from, to, flags, overwrite) if (_shifterCore_bindMount(udiConfig, mountCache, from, to, flags, overwrite) != 0) { \
     fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from, to); \
@@ -524,6 +676,10 @@ int prepareSiteModifications(const char *username,
         snprintf(dest, PATH_MAX, "%s/etc/%s", udiRoot, *fnamePtr);
         source[PATH_MAX - 1] = 0;
         dest[PATH_MAX - 1] = 0;
+        if (vacate_path(dest, udiConfig) != 0) {
+            fprintf(stderr, "FAILED to unlink %s\n", dest);
+            goto _prepSiteMod_unclean;
+        }
         if (_shifterCore_copyFile(udiConfig->cpPath, source, dest, 1, 0, 0, 0644) != 0) {
             fprintf(stderr, "Failed to copy %s to %s\n", source, dest);
             goto _prepSiteMod_unclean;
@@ -534,7 +690,7 @@ int prepareSiteModifications(const char *username,
     for (fnamePtr = mandatorySiteEtcFiles; *fnamePtr != NULL; fnamePtr++) {
         char path[PATH_MAX];
         snprintf(path, PATH_MAX, "%s/etc/%s", udiRoot, *fnamePtr);
-        if (stat(path, &statData) == 0) {
+        if (vacate_path(path, udiConfig) != 0) {
             fprintf(stderr, "%s already exists! ALERT!\n", path);
             goto _prepSiteMod_unclean;
         }
@@ -574,15 +730,14 @@ int prepareSiteModifications(const char *username,
                     goto _fail_copy_etcPath;
                 }
 
-                if (lstat(mntBuffer, &statData) == 0) {
-                    fprintf(stderr, "Couldn't copy %s because file already exists.\n", mntBuffer);
+                if (vacate_path(mntBuffer, udiConfig) != 0) {
+                    fprintf(stderr, "FAILED to remove %s\n", mntBuffer);
                     goto _fail_copy_etcPath;
-                } else {
-                    ret = _shifterCore_copyFile(udiConfig->cpPath, srcBuffer, mntBuffer, 0, 0, 0, 0644);
-                    if (ret != 0) {
-                        fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
-                        goto _fail_copy_etcPath;
-                    }
+                }
+                ret = _shifterCore_copyFile(udiConfig->cpPath, srcBuffer, mntBuffer, 0, 0, 0, 0644);
+                if (ret != 0) {
+                    fprintf(stderr, "Failed to copy %s to %s.\n", srcBuffer, mntBuffer);
+                    goto _fail_copy_etcPath;
                 }
                 continue;
 _fail_copy_etcPath:
@@ -617,6 +772,10 @@ _fail_copy_etcPath:
 
         /* write out container etc/passwd */
         snprintf(srcBuffer, PATH_MAX, "%s/etc/passwd", udiRoot);
+        if (vacate_path(srcBuffer, udiConfig) != 0) {
+            fprintf(stderr, "FAILED to clean up %s\n", srcBuffer);
+            goto _prepSiteMod_unclean;
+        }
         fp = fopen(srcBuffer, "w");
         if (fp == NULL) {
             fprintf(stderr, "Couldn't open passwd file for writing\n");
@@ -629,6 +788,10 @@ _fail_copy_etcPath:
 
         /* write out container etc/group */
         snprintf(srcBuffer, PATH_MAX, "%s/etc/group", udiRoot);
+        if (vacate_path(srcBuffer, udiConfig) != 0) {
+            fprintf(stderr, "FAILED to clean up %s\n", srcBuffer);
+            goto _prepSiteMod_unclean;
+        }
         fp = fopen(srcBuffer, "w");
         if (fp == NULL) {
             fprintf(stderr, "Couldn't open group file for writing\n");
@@ -640,6 +803,10 @@ _fail_copy_etcPath:
 
         /* write out container etc/nsswitch.conf */
         snprintf(srcBuffer, PATH_MAX, "%s/etc/nsswitch.conf", udiRoot);
+        if (vacate_path(srcBuffer, udiConfig) != 0) {
+            fprintf(stderr, "FAILED to clean up %s\n", srcBuffer);
+            goto _prepSiteMod_unclean;
+        }
         fp = fopen(srcBuffer, "w");
         if (fp == NULL) {
             fprintf(stderr, "Couldn't open nsswitch.conf for writing\n");
@@ -660,6 +827,10 @@ _fail_copy_etcPath:
     /* no valid reason for a user to provide their own /etc/shadow */
     /* populate /etc/shadow with an empty file */
     snprintf(srcBuffer, PATH_MAX, "%s/etc/shadow", udiRoot);
+    if (vacate_path(srcBuffer, udiConfig) != 0) {
+        fprintf(stderr, "FAILED to clean up %s\n", srcBuffer);
+        goto _prepSiteMod_unclean;
+    }
     FILE *fp = fopen(srcBuffer, "w");
     if (fp == NULL) {
         fprintf(stderr, "Couldn't open shadow file for writing\n");
@@ -694,6 +865,10 @@ _fail_copy_etcPath:
         char toGroupFile[PATH_MAX];
         snprintf(fromGroupFile, PATH_MAX, "%s/etc/group", udiRoot);
         snprintf(toGroupFile, PATH_MAX, "%s/etc/group.orig", udiRoot);
+        if (vacate_path(toGroupFile, udiConfig) != 0) {
+            fprintf(stderr, "FAILED to clean up %s\n", toGroupFile);
+            goto _prepSiteMod_unclean;
+        }
         fromGroupFile[PATH_MAX - 1] = 0;
         toGroupFile[PATH_MAX - 1] = 0;
         mvArgs[0] = strdup(udiConfig->mvPath);
@@ -728,6 +903,11 @@ _fail_copy_etcPath:
         mntBuffer[PATH_MAX-1] = 0;
         snprintf(finalPath, PATH_MAX, "%s/udiImage", mntBuffer);
         finalPath[PATH_MAX-1] = 0;
+
+        if (vacate_path(finalPath, udiConfig) != 0) {
+            fprintf(stderr, "FAILED to clean up %s\n", finalPath);
+            goto _prepSiteMod_unclean;
+        }
 
         if (stat(mntBuffer, &statData) != 0) {
             fprintf(stderr, "FAILED to stat udiImage target directory: %s\n", mntBuffer);
@@ -899,13 +1079,164 @@ _writeHostFile_error:
     return 1;
 }
 
-int mountImageVFS(ImageData *imageData, const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig) {
+int setup_overlay(ImageData *imageData, UdiRootConfig *udiConfig) {
+    char *options = NULL;
+    char *upper = NULL;
+    char *work = NULL;
+    const char *lower = NULL;
+    if (udiConfig->overlayMountPoint == NULL) {
+        fprintf(stderr, "Cannot use overlayfs mode, no "
+                "\"overlayMountPoint\" defined in udiRoot.conf\n");
+        goto _setup_overlay_error;
+    }
+    if (mkdir(udiConfig->overlayMountPoint, 0755) != 0) {
+        if (errno != EEXIST) {
+            goto _setup_overlay_error;
+        }
+    }
+    if (mount(NULL, udiConfig->overlayMountPoint,
+                udiConfig->rootfsType, MS_NOSUID|MS_NODEV, NULL) != 0) 
+    {
+        fprintf(stderr, "FAILED to mount rootfs on %s\n",
+                udiConfig->overlayMountPoint);
+        goto _setup_overlay_error;
+    }
+    upper = alloc_strgenf("%s/upper", udiConfig->overlayMountPoint);
+    work = alloc_strgenf("%s/work", udiConfig->overlayMountPoint);
+    if (upper == NULL || work == NULL) {
+        fprintf(stderr, "FAILED to allocate strings for upper and work dirs in "
+                "overlay.\n");
+        goto _setup_overlay_error;
+    }
+
+    if (mkdir(upper, 0755) != 0) {
+        fprintf(stderr, "FAILED to create upper layer dir: %s: %s\n", upper,
+                strerror(errno));
+        goto _setup_overlay_error;
+    }
+    if (mkdir(work, 0755) != 0) {
+        fprintf(stderr, "FAILED to create work dir: %s: %s\n", work,
+                strerror(errno));
+        goto _setup_overlay_error;
+    }
+
+    if (imageData->useLoopMount) {
+        lower = udiConfig->loopMountPoint;
+    } else {
+        lower = imageData->filename;
+    }
+
+    options = alloc_strgenf("nosuid,nodev,lowerdir=%s,upperdir=%s,workdir=%s",
+            lower, upper, work);
+    if (options == NULL) {
+        fprintf(stderr, "FAILED to allocate options string for overlay\n");
+        goto _setup_overlay_error;
+    }
+
+    char *args[] = {
+        alloc_strgenf("%s/mount", LIBEXECDIR),
+        strdup("-n"),
+        strdup("-t"),
+        strdup("overlay"),
+        strdup("-o"),
+        strdup(options),
+        strdup("none"),
+        strdup(udiConfig->udiMountPoint),
+        NULL
+    };
+    char **argsPtr = NULL;
+    int ret = 0;
     struct stat statData;
+    for (argsPtr = args; argsPtr - args < 8; argsPtr++) {
+        if (argsPtr == NULL || *argsPtr == NULL) {
+            ret = 1;
+        }
+    }
+    if (lstat(args[0], &statData) != 0) {
+        fprintf(stderr, "ERROR: mount executable missing at %s\n", args[0]);
+        goto _setup_overlay_error;
+    }
+    if (ret == 0) {
+        ret = forkAndExecvSilent(args);
+    }
+    for (argsPtr = args; argsPtr && *argsPtr; argsPtr++) {
+        free(*argsPtr);
+    }
+    if (ret != 0) {
+        fprintf(stderr, "ERROR: failed to mount overlay on %s with options "
+                "%s\n", udiConfig->udiMountPoint, options);
+        goto _setup_overlay_error;
+    }
+
+    if (add_allowed_write_device_by_path(udiConfig->overlayMountPoint,
+                udiConfig) != 0)
+    {
+        fprintf(stderr, "FAILED to add target overlay dev as allowed mount "
+                "device\n");
+        goto _setup_overlay_error;
+    }
+    if (add_allowed_write_device_by_path(lower, udiConfig) != 0) {
+        fprintf(stderr, "FAILED to add lower overlay dev as allowed mount "
+                "device\n");
+        goto _setup_overlay_error;
+    }
+    if (add_allowed_write_device_by_path(udiConfig->udiMountPoint,
+                udiConfig) != 0)
+    {
+        fprintf(stderr, "FAILED to add root udi dev as allowed mount device\n");
+        goto _setup_overlay_error;
+    }
+    free(options);
+    free(upper);
+    free(work);
+    return 0;
+_setup_overlay_error:
+    if (options != NULL) {
+        free(options);
+    }
+    return 1;
+}
+
+int setup_initial_bindvfs(ImageData *imageData, UdiRootConfig *udiConfig) {
+    const char *dest_path = NULL;
+
+    /* mount a new rootfs to work in */
+    if (mount(NULL, udiConfig->udiMountPoint, udiConfig->rootfsType,
+                MS_NOSUID|MS_NODEV, NULL) != 0)
+    {
+        fprintf(stderr, "FAILED to mount rootfs on %s: %s\n",
+                udiConfig->udiMountPoint, strerror(errno));
+        goto _setup_initial_bindvfs_error;
+    }
+
+    /* authorize destination device */
+    if (add_allowed_write_device_by_path(udiConfig->udiMountPoint, udiConfig)
+            != 0)
+    {
+        fprintf(stderr, "FAILED to add target udi Root dev as allowed "
+                "mount device\n");
+        goto _setup_initial_bindvfs_error;
+    }
+
+    /* authorize source device */
+    if (imageData->useLoopMount) {
+        dest_path = udiConfig->loopMountPoint;
+    } else {
+        dest_path = imageData->filename;
+    }
+    if (add_allowed_write_device_by_path(dest_path, udiConfig) != 0) {
+        fprintf(stderr, "FAILED to add source image dev as allowed mount "
+                "device\n");
+        goto _setup_initial_bindvfs_error;
+    }
+    return 0;
+_setup_initial_bindvfs_error:
+    return 1;
+}
+
+int mountImageVFS(ImageData *imageData, const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig) {
     char udiRoot[PATH_MAX];
     char *sshPath = NULL;
-    dev_t destRootDev = 0;
-    dev_t srcRootDev = 0;
-    dev_t tmpDev = 0;
 
     umask(022);
 
@@ -924,9 +1255,11 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
 }
 
     snprintf(udiRoot, PATH_MAX, "%s", udiConfig->udiMountPoint);
-
-    if (lstat(udiRoot, &statData) != 0) {
-        _MKDIR(udiRoot, 0755);
+    if (mkdir(udiRoot, 0755) < 0) {
+        if (errno != EEXIST) {
+            fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", udiRoot);
+            goto _mountImgVfs_unclean;
+        }
     }
 
 #define BIND_IMAGE_INTO_UDI(subtree, img, udiConfig, copyFlag) \
@@ -934,12 +1267,16 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
         fprintf(stderr, "FAILED To setup \"%s\" in %s\n", subtree, udiRoot); \
         goto _mountImgVfs_unclean; \
     }
-
-    /* mount a new rootfs to work in */
-    if (mount(NULL, udiRoot, udiConfig->rootfsType, MS_NOSUID|MS_NODEV, NULL) != 0) {
-        fprintf(stderr, "FAILED to mount rootfs on %s\n", udiRoot);
-        perror("   --- REASON: ");
-        goto _mountImgVfs_unclean;
+    if (udiConfig->useOverlayFsMode) {
+        if (setup_overlay(imageData, udiConfig) != 0) {
+            fprintf(stderr, "FAILED to setup overlay!\n");
+            goto _mountImgVfs_unclean;
+        }
+    } else {
+        if (setup_initial_bindvfs(imageData, udiConfig) != 0) {
+            fprintf(stderr, "FAILED to setup UDI via bind mounts\n");
+            goto _mountImgVfs_unclean;
+        }
     }
     if (makeUdiMountPrivate(udiConfig) != 0) {
         fprintf(stderr, "FAILED to mark the udi as a private mount\n");
@@ -951,67 +1288,34 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
         goto _mountImgVfs_unclean;
     }
 
-    /* get destination device */
-    if (lstat(udiRoot, &statData) != 0) {
-        fprintf(stderr, "FAILED to stat %s\n", udiRoot);
-        goto _mountImgVfs_unclean;
-    }
-    destRootDev = statData.st_dev;
-
-    /* work out source device */
-    if (imageData->useLoopMount) {
-        if (lstat(udiConfig->loopMountPoint, &statData) != 0) {
-            fprintf(stderr, "FAILED to stat loop mount point.\n");
-            goto _mountImgVfs_unclean;
-        }
-    } else {
-        if (lstat(imageData->filename, &statData) != 0) {
-            fprintf(stderr, "FAILED to stat udi source.\n");
-            goto _mountImgVfs_unclean;
-        }
-    }
-    srcRootDev = statData.st_dev;
-
-    if (lstat("/tmp", &statData) != 0) {
-        fprintf(stderr, "FAILED to stat /tmp\n");
-        goto _mountImgVfs_unclean;
-    }
-    tmpDev = statData.st_dev;
-
-    /* authorize destRootDev, srcRootDev, and tmpDev  as the only allowed
-     * volume mount targets */
-    udiConfig->bindMountAllowedDevices = malloc(3 * sizeof(dev_t));
-    if (udiConfig->bindMountAllowedDevices == NULL) {
-        fprintf(stderr, "FAILED to allocate memory\n");
-        goto _mountImgVfs_unclean;
-    }
-    udiConfig->bindMountAllowedDevices[0] = destRootDev;
-    udiConfig->bindMountAllowedDevices[1] = srcRootDev;
-    udiConfig->bindMountAllowedDevices[2] = tmpDev;
-    udiConfig->bindMountAllowedDevices_sz = 3;
-
-
     /* get our needs injected first */
     if (prepareSiteModifications(username, minNodeSpec, udiConfig) != 0) {
         fprintf(stderr, "FAILED to properly setup site modifications\n");
         goto _mountImgVfs_unclean;
     }
-
-    /* copy/bind mount pieces into prepared site */
-    BIND_IMAGE_INTO_UDI("/", imageData, udiConfig, 0);
-    BIND_IMAGE_INTO_UDI("/var", imageData, udiConfig, 0);
-    BIND_IMAGE_INTO_UDI("/opt", imageData, udiConfig, 0);
-
-    /* setup sshd configuration */
-    sshPath = alloc_strgenf("%s/etc/ssh", udiRoot);
-    if (sshPath != NULL) {
-        _MKDIR(sshPath, 0755);
-        free(sshPath);
-        sshPath = NULL;
+    if (add_allowed_write_device_by_path("/tmp", udiConfig) != 0) {
+        fprintf(stderr, "FAILED to add /tmp dev to allowed container "
+                "devices.\n");
+        goto _mountImgVfs_unclean;
     }
 
-    /* copy image /etc into place */
-    BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
+    if (!udiConfig->useOverlayFsMode) {
+        /* copy/bind mount pieces into prepared site */
+        BIND_IMAGE_INTO_UDI("/", imageData, udiConfig, 0);
+        BIND_IMAGE_INTO_UDI("/var", imageData, udiConfig, 0);
+        BIND_IMAGE_INTO_UDI("/opt", imageData, udiConfig, 0);
+
+        /* setup sshd configuration */
+        sshPath = alloc_strgenf("%s/etc/ssh", udiRoot);
+        if (sshPath != NULL) {
+            _MKDIR(sshPath, 0755);
+            free(sshPath);
+            sshPath = NULL;
+        }
+
+        /* copy image /etc into place */
+        BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
+    }
 
 
 #undef BIND_IMAGE_INTO_UDI
@@ -3060,6 +3364,14 @@ int destructUDI(UdiRootConfig *udiConfig, int killSsh) {
         if (validateUnmounted(loopMount, 0) != 0) {
             continue;
         }
+        if (udiConfig->overlayMountPoint != NULL) {
+            if (unmountTree(&mounts, udiConfig->overlayMountPoint) != 0) {
+                continue;
+            }
+            if (validateUnmounted(udiConfig->overlayMountPoint, 0) != 0) {
+                continue;
+            }
+        }
         rc = 0; /* mark success */
         break;
     }
@@ -3368,7 +3680,6 @@ int _shifter_get_max_capability(unsigned long *_maxCap) {
     return 1;
 }
 
-
 int shifter_set_capability_boundingset_null() {
     unsigned long maxCap = CAP_LAST_CAP;
     unsigned long idx = 0;
@@ -3487,4 +3798,32 @@ _realpath_err:
         free(currPath);
     }
     return NULL;
+}
+
+int add_allowed_write_device(dev_t devid, UdiRootConfig *config) {
+    dev_t *tmpptr = NULL;
+    size_t idx = 0;
+    if (config == NULL) return -1;
+
+    idx = config->bindMountAllowedDevices_sz;
+    tmpptr = (dev_t *) realloc(config->bindMountAllowedDevices,
+            sizeof(dev_t) * (idx + 1));
+
+    if (tmpptr == NULL) return -1;
+    config->bindMountAllowedDevices = tmpptr;
+    config->bindMountAllowedDevices[idx] = devid;
+    config->bindMountAllowedDevices_sz++;
+    return 0;
+}
+
+int add_allowed_write_device_by_path(const char *path, UdiRootConfig *config) {
+    struct stat statData;
+    if (!path || !config) return -1;
+
+    if (lstat(path, &statData) != 0){
+        fprintf(stderr, "FAILED to stat target path, %s: %s\n", path,
+                strerror(errno));
+        return -1;
+    }
+    return add_allowed_write_device(statData.st_dev, config);
 }

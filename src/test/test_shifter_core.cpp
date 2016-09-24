@@ -30,6 +30,8 @@
 
 #include <grp.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <dirent.h>
 
 #include "ImageData.h"
 #include "UdiRootConfig.h"
@@ -88,6 +90,7 @@ int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const cha
 TEST_GROUP(ShifterCoreTestGroup) {
     bool isRoot;
     char *tmpDir;
+    char *tmpfsDir;
     char cwd[PATH_MAX];
     vector<string> tmpFiles;
     vector<string> tmpDirs;
@@ -110,6 +113,7 @@ TEST_GROUP(ShifterCoreTestGroup) {
         if (mkdtemp(tmpDir) == NULL) {
             fprintf(stderr, "WARNING mkdtemp failed, some tests will crash.\n");
         }
+        tmpfsDir = NULL;
     }
 
     void teardown() {
@@ -131,8 +135,31 @@ TEST_GROUP(ShifterCoreTestGroup) {
         rmdir(tmpDir);
         free(tmpDir);
         free_MountList(&mounts, 0);
+
+        if (tmpfsDir != NULL) {
+            umount2(tmpfsDir, UMOUNT_NOFOLLOW|MNT_DETACH);
+            rmdir(tmpfsDir);
+            free(tmpfsDir);
+            tmpfsDir = NULL;
+        }
     }
 
+    int setupTmpfsDir() {
+        char *tmpmnt = strdup("/mnt/shifter_core_tmpfs.XXXXXX");
+        if (mkdtemp(tmpmnt) == NULL) {
+            fprintf(stderr, "FAILED To generate tmpdir on %s\n", tmpmnt);
+            free(tmpmnt);
+            return 1;
+        }
+        if (mount(NULL, tmpmnt, "tmpfs", MS_NOSUID|MS_NODEV, NULL) != 0) {
+            fprintf(stderr, "FAILED to mount tmpfs on %s\n", tmpmnt);
+            free(tmpmnt);
+            return 1;
+        }
+        tmpfsDir = tmpmnt;
+        return 0;
+
+    }
 };
 
 TEST(ShifterCoreTestGroup, check_find_process_by_cmdline) {
@@ -161,6 +188,96 @@ TEST(ShifterCoreTestGroup, check_find_process_by_cmdline) {
 
     free(cmd);
 };
+
+#ifdef NOTROOT
+IGNORE_TEST(ShifterCoreTestGroup, VacatePath_test) {
+#else
+TEST(ShifterCoreTestGroup, VacatePath_test) {
+#endif
+    UdiRootConfig config;
+    memset(&config, 0, sizeof(UdiRootConfig));
+    CHECK(this->setupTmpfsDir() == 0);
+    CHECK(this->tmpfsDir != NULL);
+
+    struct stat statData;
+    dev_t root_dev = 0;
+    dev_t tmpfs_dev = 0;
+
+    CHECK(stat("/", &statData) == 0);
+    root_dev = statData.st_dev;
+
+    CHECK(stat(this->tmpfsDir, &statData) == 0);
+    tmpfs_dev = statData.st_dev;
+
+    char *fname = alloc_strgenf("%s/test_file", this->tmpfsDir);
+
+    /* before the file exists, it vacate_path should return successfully 
+       because the file is not present */
+    CHECK(vacate_path(fname, &config) == 0);
+
+    FILE *fp = fopen(fname, "w");
+    CHECK(fp != NULL);
+
+    fprintf(fp, "test file!\n");
+    fclose(fp);
+    CHECK(access(fname, R_OK) == 0);
+
+    config.udiMountPoint = strdup(this->tmpfsDir);
+    config.bindMountAllowedDevices = (dev_t *) malloc(sizeof(dev_t) * 2); //allocate extra for later
+    config.bindMountAllowedDevices_sz = 1;
+    config.bindMountAllowedDevices[0] = tmpfs_dev;
+
+    int ret = vacate_path(fname, &config);
+    CHECK(ret == 0);
+    CHECK(access(fname, R_OK) != 0);
+    CHECK(errno == ENOENT);
+
+    fp = fopen(fname, "w");
+    CHECK(fp != NULL);
+    fprintf(fp, "test file!\n");
+    fclose(fp);
+    CHECK(access(fname, R_OK) == 0);
+
+    /* ensure that bindMountAllowedDevices_sz is honored */
+    config.bindMountAllowedDevices_sz = 0;
+    ret = vacate_path(fname, &config);
+    CHECK(ret != 0);
+    CHECK(access(fname, R_OK) == 0);
+
+    /* setup wrong device to intentionally fail vacate path */
+    config.bindMountAllowedDevices_sz = 1;
+    config.bindMountAllowedDevices[0] = root_dev;
+    ret = vacate_path(fname, &config);
+    CHECK(ret != 0);
+    CHECK(access(fname, R_OK) == 0);
+
+    /* add correct device in second position to delete file again */
+    config.bindMountAllowedDevices[0] = root_dev;
+    config.bindMountAllowedDevices[1] = tmpfs_dev;
+    config.bindMountAllowedDevices_sz = 2;
+    ret = vacate_path(fname, &config);
+    CHECK(ret == 0);
+    CHECK(access(fname, R_OK) != 0);
+    CHECK(errno == ENOENT);
+
+    char *dirname = alloc_strgenf("%s/temp_dir", this->tmpfsDir);
+    CHECK(mkdir(dirname, 0755) == 0);
+    CHECK(access(dirname, R_OK) == 0);
+
+    CHECK(vacate_path(dirname, &config) == 0);
+    CHECK(access(dirname, R_OK) != 0);
+    CHECK(errno == ENOENT);
+
+    DIR *dp = opendir(this->tmpfsDir);
+    struct dirent *dep;
+    int counter = 0;
+    while ((dep = readdir(dp)) != NULL) {
+        CHECK(strcmp(dep->d_name, "temp_dir") != 0);
+        counter++;
+    }
+    closedir(dp);
+    CHECK(counter == 3); /* ., .., the renamed dir */
+}
 
 #ifdef NOTROOT
 IGNORE_TEST(ShifterCoreTestGroup, CopyFile_basic) {

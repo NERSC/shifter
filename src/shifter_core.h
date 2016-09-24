@@ -140,6 +140,12 @@ int makeUdiMountPrivate(UdiRootConfig *udiConfig);
 char **getSupportedFilesystems();
 int supportsFilesystem(char *const * fsTypes, const char *fsType);
 
+int vacate_path(const char *path, UdiRootConfig *config);
+int vacate_container_path(const char *path, UdiRootConfig *config);
+
+int add_allowed_write_device(dev_t, UdiRootConfig *);
+int add_allowed_write_device_by_path(const char *, UdiRootConfig *);
+
 /** shifter_find_process_by_cmdline
  *  discover a process id which was started with a particular command
  *  (relies on there only being one process of interest running on the

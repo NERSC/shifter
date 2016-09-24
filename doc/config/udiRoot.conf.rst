@@ -269,4 +269,23 @@ If the optional sshd is executed, it is, by default executed as the user.
 Setting optionalSshdAsRoot to a non-zero value will cause the sshd to be
 executed with root privilege.  This can be useful on some environments where
 root privilege is required to allocate ptys.  Most modern systems will not
-require this option enabled.
+require this option enabled. USING THIS IS NOT RECOMMENDED.
+
+useOverlayFsMode
+----------------
+Enabling this mode will have shifter use overlayfs support for constructing
+the runtime container instead of the default bind-mount method.  The primary
+advantage of this method is that shifter can more flexibly construct the
+container, volume mount points can access more locations within the container,
+content is more editable during setup.  This could in principle allow portions
+to be "writable", however permissions would need to allow this.  You must 
+specify a value for "overlayMountPoint" if "useOverlayFsMode" is enabled.
+
+overlayMountPoint
+-----------------
+If useOverlayFsMode is enabled, then the overlayMountPoint specifies a
+directory shifter will mount a tmpfs (or whatever the type of filesystem that
+the rootfsType configurable specifies).  Within that temporary filesystem,
+the upper layer and working directories will be mounted.  This is done in tmpfs
+or similar to allow the filesystem to be garbage collected when the shifter
+processes end.

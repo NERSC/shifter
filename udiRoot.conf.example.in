@@ -282,3 +282,11 @@ system=mycluster
 # certainly be set to "docker" for most systems.
 #
 defaultImageType=docker
+
+#useOverlayFsMode (optional)
+# Default is 0. Setting to 1 enables overlayfs functionality.
+# useOverlayFsMode=0
+
+#overlayMountPoint (required if useOverlayFsMode=1)
+# Specify mount point for setting up overlay working spaces
+# overlayMountPoint=/var/udiOverlay
