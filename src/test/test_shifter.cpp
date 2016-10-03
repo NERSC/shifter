@@ -32,14 +32,9 @@
 
 #include <CppUTest/CommandLineTestRunner.h>
 
-#define main __main__
-#include "shifter.c"
-#undef main
-
-// Commenting out declaration: adoptPATH() is included in shifter.c
-// extern "C" {
-// extern int adoptPATH(char **env);
-// }
+extern "C" {
+    extern int adoptPATH(char **env);
+}
 
 extern char** environ;
 
@@ -138,32 +133,6 @@ TEST(ShifterTestGroup, LocalPutEnv_basic) {
     free(testenv2Ptr);
 }
 #endif
-
-
-TEST(ShifterTestGroup, parseGPUopt_test)
-{
-    struct options opts;
-    UdiRootConfig udiConfig;
-
-    /* Test that the --gpu option is correctly parsed */
-    memset(&opts, 0, sizeof(struct options));
-    memset(&udiConfig, 0, sizeof(UdiRootConfig));
-    udiConfig.udiRootPath = strdup("/opt/shifter/udiRoot");
-    udiConfig.etcPath = strdup("/etc/shifter/shifter_etc_files");
-    char **tmpargv = (char **) malloc(sizeof(char *) * 3);
-    tmpargv[0] = strdup("shifter");
-    tmpargv[1] = strdup("--gpu=0");
-    tmpargv[2] = strdup("--image=docker:debian:jessie");
-    fprintf(stdout, "%s %s %s\n", tmpargv[0],tmpargv[1], tmpargv[2]);
-    CHECK (parse_options(3, tmpargv, &opts, &udiConfig) == 0);
-    CHECK (strcmp(opts.gpu, "0") == 0);
-
-    free(tmpargv[0]);
-    free(tmpargv[1]);
-    free(tmpargv[2]);
-    free(tmpargv);
-}
-
 
 int main(int argc, char **argv) {
     return CommandLineTestRunner::RunAllTests(argc, argv);
