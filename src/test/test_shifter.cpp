@@ -1,14 +1,14 @@
 /**
  *  @file shifter.c
  *  @brief setuid utility to setup and interactively enter a shifter env
- * 
+ *
  * @author Douglas M. Jacobsen <dmjacobsen@lbl.gov>
  */
 
 /* Shifter, Copyright (c) 2015, The Regents of the University of California,
  * through Lawrence Berkeley National Laboratory (subject to receipt of any
  * required approvals from the U.S. Dept. of Energy).  All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *  1. Redistributions of source code must retain the above copyright notice,
@@ -20,7 +20,7 @@
  *     National Laboratory, U.S. Dept. of Energy nor the names of its
  *     contributors may be used to endorse or promote products derived from this
  *     software without specific prior written permission.
- * 
+ *
  * See LICENSE for full text.
  */
 
@@ -32,9 +32,16 @@
 
 #include <CppUTest/CommandLineTestRunner.h>
 
-extern "C" {
-extern int adoptPATH(char **env);
-}
+#define main __main__
+#include "shifter.c"
+#undef main
+
+// Commenting out declaration: adoptPATH() is included in shifter.c
+// extern "C" {
+// extern int adoptPATH(char **env);
+// }
+
+extern char** environ;
 
 TEST_GROUP(ShifterTestGroup) {
 };
@@ -42,7 +49,7 @@ TEST_GROUP(ShifterTestGroup) {
 TEST(ShifterTestGroup, CopyEnv_basic) {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();
     setenv("TESTENV0", "gfedcba", 1);
-    char **origEnv = shifter_copyenv();
+    char **origEnv = shifter_copyenv(environ, 0);
     CHECK(origEnv != NULL);
     clearenv();
     setenv("TESTENV1", "abcdefg", 1);
@@ -131,6 +138,31 @@ TEST(ShifterTestGroup, LocalPutEnv_basic) {
     free(testenv2Ptr);
 }
 #endif
+
+
+TEST(ShifterTestGroup, parseGPUopt_test)
+{
+    struct options opts;
+    UdiRootConfig udiConfig;
+
+    /* Test that the --gpu option is correctly parsed */
+    memset(&opts, 0, sizeof(struct options));
+    memset(&udiConfig, 0, sizeof(UdiRootConfig));
+    udiConfig.udiRootPath = strdup("/opt/shifter/udiRoot");
+    udiConfig.etcPath = strdup("/etc/shifter/shifter_etc_files");
+    char **tmpargv = (char **) malloc(sizeof(char *) * 3);
+    tmpargv[0] = strdup("shifter");
+    tmpargv[1] = strdup("--gpu=0");
+    tmpargv[2] = strdup("--image=docker:debian:jessie");
+    fprintf(stdout, "%s %s %s\n", tmpargv[0],tmpargv[1], tmpargv[2]);
+    CHECK (parse_options(3, tmpargv, &opts, &udiConfig) == 0);
+    CHECK (strcmp(opts.gpu, "0") == 0);
+
+    free(tmpargv[0]);
+    free(tmpargv[1]);
+    free(tmpargv[2]);
+    free(tmpargv);
+}
 
 
 int main(int argc, char **argv) {

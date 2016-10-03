@@ -44,6 +44,8 @@ int _shifterCore_bindMount(UdiRootConfig *config, MountList *mounts, const char 
 int _shifterCore_copyFile(const char *cpPath, const char *source, const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode);
 }
 
+extern char** environ;
+
 #ifdef NOTROOT
 #define ISROOT 0
 #else
@@ -795,7 +797,7 @@ TEST(ShifterCoreTestGroup, copyenv_test) {
     char **cptr = NULL;
     setenv("ABCD", "DCBA", 1);
 
-    copied_env = shifter_copyenv();
+    copied_env = shifter_copyenv(environ, 0);
     CHECK(copied_env != NULL);
 
     /* environment variables should be identical and in
@@ -827,7 +829,7 @@ TEST(ShifterCoreTestGroup, setenv_test) {
     size_t newcnt = 0;
 
     unsetenv("FAKE_ENV_VAR_FOR_TEST");
-    copied_env = shifter_copyenv();
+    copied_env = shifter_copyenv(environ, 0);
     CHECK(copied_env != NULL);
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         cnt++;
@@ -875,7 +877,7 @@ TEST(ShifterCoreTestGroup, appendenv_test) {
     size_t newcnt = 0;
 
     setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
-    copied_env = shifter_copyenv();
+    copied_env = shifter_copyenv(environ, 0);
     CHECK(copied_env != NULL);
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         cnt++;
@@ -924,7 +926,7 @@ TEST(ShifterCoreTestGroup, prependenv_test) {
     size_t newcnt = 0;
 
     setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
-    copied_env = shifter_copyenv();
+    copied_env = shifter_copyenv(environ, 0);
     CHECK(copied_env != NULL);
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         cnt++;
@@ -973,7 +975,7 @@ TEST(ShifterCoreTestGroup, unsetenv_test) {
     size_t newcnt = 0;
 
     setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
-    copied_env = shifter_copyenv();
+    copied_env = shifter_copyenv(environ, 0);
     CHECK(copied_env != NULL);
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         cnt++;
@@ -1048,21 +1050,27 @@ TEST(ShifterCoreTestGroup, setupenv_test) {
     image->env[1] = NULL;
 
     /* test target */
-    int ret = shifter_setupenv(&local_env, image, config);
+    int ret = shifter_setupenv(&local_env, image, config,
+                               strdup("LD_LIBRARY_PATH=/gpu-support/lib/nvidia/lib"),
+                               strdup("LD_LIBRARY_PATH=/gpu-support/lib/nvidia/lib64"),
+                               strdup("PATH=/gpu-support/bin/nvidia"));
 
     CHECK(ret == 0);
 
     int found = 0;
     for (ptr = local_env ; ptr && *ptr; ptr++) {
-        if (strcmp(*ptr, "PATH=/sbin:/usr/bin:/opt/udiImage/bin") == 0) {
+        if (strcmp(*ptr, "PATH=/gpu-support/bin/nvidia:/sbin:/usr/bin:/opt/udiImage/bin") == 0) {
             found++;
         }
         if (strcmp(*ptr, "SHIFTER_RUNTIME=1") == 0) {
             found++;
         }
+        if (strcmp(*ptr, "LD_LIBRARY_PATH=/gpu-support/lib/nvidia/lib64:/gpu-support/lib/nvidia/lib") == 0) {
+            found++;
+        }
     }
-    CHECK(found == 2);
-    CHECK(ptr - local_env == 2);
+    CHECK(found == 3);
+    CHECK(ptr - local_env == 3);
 
     free_ImageData(image, 1);
     free_UdiRootConfig(config, 1);
