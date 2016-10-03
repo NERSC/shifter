@@ -1583,7 +1583,7 @@ int setupVolumeMapMounts(
         }
 
         /* if this is not a per-node cache (i.e., is a standand volume mount),
-         * then validate the user has permissions to view the content, by 
+         * then validate the user has permissions to view the content, by
          * performing realpath() and lstat() as the user */
         if (!(flagsInEffect & VOLMAP_FLAG_PERNODECACHE)) {
             uid_t orig_euid = geteuid();
@@ -1593,7 +1593,7 @@ int setupVolumeMapMounts(
             int switch_user_stage = 0;
 
             /* switch privileges if this is a user mount to ensure we only
-             * grant access to resources the user can reach at time of 
+             * grant access to resources the user can reach at time of
              * invocation */
             if (userRequested != 0) {
                 if (udiConfig->auxiliary_gids == NULL ||
@@ -1789,8 +1789,8 @@ _pass_check_fromvol:
                     fprintf(stderr, "Invalid source %s, not allowed, fail.\n", from_real);
                     goto _handleVolMountError;
                 } else {
-                    /* from_real is known to be longer than udiMountLen from 
-                     * previous check (i.e., don't remove the check!) */ 
+                    /* from_real is known to be longer than udiMountLen from
+                     * previous check (i.e., don't remove the check!) */
                     container_from_real = from_real + udiMountLen;
                 }
             } else {
@@ -3342,7 +3342,7 @@ int shifter_unsetenv(char ***env, char *var) {
     return _shifter_unsetenv(env, var);
 }
 
-int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig, char* gpuSupportEnv0, char* gpuSupportEnv1, char* gpuSupportEnv2) {
+int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
     char **envPtr = NULL;
     if (env == NULL || *env == NULL || image == NULL || udiConfig == NULL) {
         return 1;
@@ -3362,9 +3362,27 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig, ch
     for (envPtr = udiConfig->siteEnvUnset; envPtr && *envPtr; envPtr++) {
         shifter_unsetenv(env, *envPtr);
     }
-    shifter_prependenv(env, gpuSupportEnv0);
-    shifter_prependenv(env, gpuSupportEnv1);
-    shifter_prependenv(env, gpuSupportEnv2);
+    if (udiConfig->nvidiaBinPath != NULL) {
+        size_t envVar_size = strlen(udiConfig->nvidiaBinPath) + 6;
+        char *envVar = (char *) malloc(sizeof(char *) * envVar_size);
+        sprintf(envVar, "PATH=%s", udiConfig->nvidiaBinPath);
+        shifter_appendenv(env, envVar);
+        free(envVar);
+    }
+    if (udiConfig->nvidiaLibPath != NULL) {
+        size_t envVar_size = strlen(udiConfig->nvidiaLibPath) + 17;
+        char *envVar = (char *) malloc(sizeof(char *) * envVar_size);
+        sprintf(envVar, "LD_LIBRARY_PATH=%s", udiConfig->nvidiaLibPath);
+        shifter_appendenv(env, envVar);
+        free(envVar);
+    }
+    if (udiConfig->nvidiaLib64Path != NULL) {
+        size_t envVar_size = strlen(udiConfig->nvidiaLib64Path) + 17;
+        char *envVar = (char *) malloc(sizeof(char *) * envVar_size);
+        sprintf(envVar, "LD_LIBRARY_PATH=%s", udiConfig->nvidiaLib64Path);
+        shifter_appendenv(env, envVar);
+        free(envVar);
+    }
     return 0;
 }
 
@@ -3517,7 +3535,7 @@ char *shifter_realpath(const char *src_path, UdiRootConfig *config) {
 
             continue;
         }
-        pathPtr = pathPtr->child; 
+        pathPtr = pathPtr->child;
     }
     if (currPath) free(currPath);
     currPath = pathList_string(searchPath);

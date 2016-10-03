@@ -102,7 +102,7 @@ int shifter_set_capability_boundingset_null();
   * \param pointer to ngroups, can be pointer to an zero-value integer (ngroups
   *     itself must not be NULL)
   *
-  * \returns 0-terminated array of gids (malloc'd, user responsible for 
+  * \returns 0-terminated array of gids (malloc'd, user responsible for
   *     freeing it)
   *
   * Upon successful run, will be return array populated with the valid gids for
@@ -132,7 +132,7 @@ int shifter_putenv(char ***env, char *var);
 int shifter_appendenv(char ***env, char *var);
 int shifter_prependenv(char ***env, char *var);
 int shifter_unsetenv(char ***env, char *var);
-int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig, char* gpuSupportEnv0, char* gpuSupportEnv1, char* gpuSupportEnv2);
+int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig);
 struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config);
 struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config);
 

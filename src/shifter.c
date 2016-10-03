@@ -277,17 +277,9 @@ int main(int argc, char **argv) {
     }
 
     /* set the environment variables */
-    /*
-    FIXME: we definitely need some cleanup here. Ideas:
-    1. group the GPU-specific LD_LIBRARY_PATH and PATH variables into udiConfig or a new gpuSupportConfig structure
-    2. should the user be able to specify the name of the gpu-support folder??? (through udiRoot.conf)
-    */
     shifter_setupenv(&environ_copy,
                      &imageData,
-                     &udiConfig,
-                     strdup("LD_LIBRARY_PATH=/gpu-support/lib/nvidia/lib"),
-                     strdup("LD_LIBRARY_PATH=/gpu-support/lib/nvidia/lib64"),
-                     strdup("PATH=/gpu-support/bin/nvidia"));
+                     &udiConfig);
 
     /* immediately set PATH to container PATH to get search right */
     adoptPATH(environ_copy);
