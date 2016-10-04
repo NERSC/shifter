@@ -1088,7 +1088,7 @@ TEST(ShifterCoreTestGroup, setupenv_gpu_test) {
     config->siteEnv = (char **) malloc(sizeof(char *) * 2);
     config->siteEnv[0] = strdup("SHIFTER_RUNTIME=1");
     config->siteEnv[1] = NULL;
-    
+
     config->nvidiaBinPath = strdup("/gpu-support/nvidia/bin");
 
     config->nvidiaLibPath = strdup("/gpu-support/nvidia/lib");
@@ -1107,13 +1107,13 @@ TEST(ShifterCoreTestGroup, setupenv_gpu_test) {
 
     int found = 0;
     for (ptr = local_env ; ptr && *ptr; ptr++) {
-        if (strcmp(*ptr, "PATH=/usr/bin:/gpu-support/nvidia/bin") == 0) {
+        if (strcmp(*ptr, "PATH=/gpu-support/nvidia/bin:/usr/bin") == 0) {
             found++;
         }
         if (strcmp(*ptr, "SHIFTER_RUNTIME=1") == 0) {
             found++;
         }
-        if (strcmp(*ptr, "LD_LIBRARY_PATH=/gpu-support/nvidia/lib:/gpu-support/nvidia/lib64") == 0) {
+        if (strcmp(*ptr, "LD_LIBRARY_PATH=/gpu-support/nvidia/lib64:/gpu-support/nvidia/lib") == 0) {
             found++;
         }
     }
