@@ -1026,6 +1026,22 @@ int mountImageVFS(ImageData *imageData,
         char *full_gpu_path = (char *) malloc(sizeof(char *) * gpu_path_size);
         sprintf(full_gpu_path, "%s/%s", udiConfig->udiRootPath, gpu_script);
 
+        if (udiConfig->nvidiaBinPath == NULL) {
+            fprintf(stderr, "GPU support requested but no target path specified for mounting NVIDIA binaries\n");
+            ret = 1;
+            goto _mountImgVfs_unclean;
+        }
+        if (udiConfig->nvidiaLibPath == NULL) {
+            fprintf(stderr, "GPU support requested but no target path specified for mounting NVIDIA libraries\n");
+            ret = 1;
+            goto _mountImgVfs_unclean;
+        }
+        if (udiConfig->nvidiaLib64Path == NULL) {
+            fprintf(stderr, "GPU support requested but no target path specified for mounting NVIDIA 64-bit libraries\n");
+            ret = 1;
+            goto _mountImgVfs_unclean;
+        }
+
         char *args[] = {
             strdup("/bin/sh"),
             full_gpu_path,
