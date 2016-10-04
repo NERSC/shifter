@@ -282,3 +282,27 @@ system=mycluster
 # certainly be set to "docker" for most systems.
 #
 defaultImageType=docker
+
+
+#nvidiaBinPath (required for GPU support)
+#
+# Absolute path to where the NVIDIA binaries required for GPU support will be
+# bind-mounted inside the container.
+#
+#nvidiaBinPath=/gpu-support/nvidia/bin
+
+
+#nvidiaLibPath (required for GPU support)
+#
+# Absolute path to where the NVIDIA libraries required for GPU support will be
+# bind-mounted inside the container.
+#
+#nvidiaLibPath=/gpu-support/nvidia/lib
+
+
+#nvidiaLib64Path (required for GPU support)
+#
+# Absolute path to where the NVIDIA 64-bit libraries required for GPU support
+# will be bind-mounted inside the container.
+#
+#nvidiaLib64Path=/gpu-support/nvidia/lib64
