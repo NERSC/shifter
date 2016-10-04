@@ -1031,6 +1031,9 @@ int mountImageVFS(ImageData *imageData,
             full_gpu_path,
             strdup(gpu_id),
             strdup(udiConfig->udiMountPoint),
+            strdup(udiConfig->nvidiaBinPath),
+            strdup(udiConfig->nvidiaLibPath),
+            strdup(udiConfig->nvidiaLib64Path),
             NULL
         };
         int ret = forkAndExecv(args);
