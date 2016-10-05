@@ -32,9 +32,7 @@
 
 #include <CppUTest/CommandLineTestRunner.h>
 
-extern "C" {
-    extern int adoptPATH(char **env);
-}
+#include "shifter.c"
 
 extern char** environ;
 
@@ -82,6 +80,20 @@ TEST(ShifterTestGroup, adoptPATH_test) {
     free(tmpenv[2]);
     free(tmpenv);
 }
+
+TEST(ShifterTestGroup, parseGPUenv_test)
+{
+    struct options opts;
+    memset(&opts, 0, sizeof(struct options));
+
+    opts.gpu = strdup("0");
+    setenv("CUDA_VISIBLE_DEVICES", "0,1", 1);
+
+    parse_gpu_env(&opts);
+
+    CHECK (strcmp(opts.gpu, "0,1") == 0);
+}
+
 
 #if 0
 TEST(ShifterTestGroup, LocalPutEnv_basic) {

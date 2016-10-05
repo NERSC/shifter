@@ -83,6 +83,7 @@ struct options {
 static void _usage(int);
 int parse_options(int argc, char **argv, struct options *opts, UdiRootConfig *);
 int parse_environment(struct options *opts, UdiRootConfig *);
+int parse_gpu_env(struct options *opts);
 int fprint_options(FILE *, struct options *);
 void free_options(struct options *, int freeStruct);
 int isImageLoaded(ImageData *, struct options *, UdiRootConfig *);
@@ -133,6 +134,12 @@ int main(int argc, char **argv) {
     /* parse config file and command line options */
     if (parse_options(argc, argv, &opts, &udiConfig) != 0) {
         fprintf(stderr, "FAILED to parse command line arguments.\n");
+        exit(1);
+    }
+
+    /* parse environment variables for GPU support */
+    if (parse_gpu_env(&opts) != 0) {
+        fprintf(stderr, "FAILED to parse CUDA GPU environment variables.\n");
         exit(1);
     }
 
@@ -608,6 +615,22 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
     return 0;
 }
 
+int parse_gpu_env(struct options *opts) {
+    char *envPtr = NULL;
+
+    /* CUDA_VISIBLE_DEVICES is set by the SLURM gres plugin when GPUs are
+     * requested for the allocation.
+     * As a design decision, the environment variable overrides
+     * the --gpu command line option.
+     */
+    if ((envPtr = getenv("CUDA_VISIBLE_DEVICES")) != NULL) {
+        if (opts->gpu != NULL)
+
+        opts->gpu = strdup(envPtr);
+    }
+
+    return 0;
+}
 
 static void _usage(int status) {
     printf("\n"
