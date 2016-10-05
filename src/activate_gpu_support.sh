@@ -47,12 +47,20 @@ parse_command_line_arguments()
         log ERROR "internal error: received bad number of command line arguments"
         exit 1
     fi
-    
-    gpu_ids=$(echo $1 | sed 's/,/ /g')
+    nvidia_devices=$(echo $1 | tr , '\n' | sed 's/^/\/dev\/nvidia/')
     container_mount_point=$2
     nvidia_bin_path=$3
     nvidia_lib_path=$4
     nvidia_lib64_path=$5
+}
+
+validate_command_line_arguments()
+{
+    for device in $nvidia_devices; do
+        if [ ! -e $device ]; then
+            log ERROR "received bad GPU ID. Cannot find device $device"
+        fi
+    done
 
     if [ ! -d $container_mount_point ]; then
         log ERROR "internal error: received invalid value for 'mount point' command line argument"
@@ -132,6 +140,7 @@ load_nvidia_uvm_if_necessary()
 }
 
 parse_command_line_arguments $*
+validate_command_line_arguments
 check_prerequisites
 add_nvidia_compute_libs_to_container
 add_nvidia_binaries_to_container
