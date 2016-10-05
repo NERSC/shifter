@@ -624,7 +624,10 @@ int parse_gpu_env(struct options *opts) {
      * the --gpu command line option.
      */
     if ((envPtr = getenv("CUDA_VISIBLE_DEVICES")) != NULL) {
-        if (opts->gpu != NULL)
+        if (opts->gpu != NULL) {
+            free(opts->gpu);
+        }
+
 
         opts->gpu = strdup(envPtr);
     }
