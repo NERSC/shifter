@@ -64,6 +64,7 @@ int userMountFilter(char *udiRoot, char *filtered_from, char *filtered_to, char 
 int isKernelModuleLoaded(const char *name);
 int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig);
 int mountImageVFS(ImageData *imageData, const char *username, const char *gpu_id, const char *minNodeSpec, UdiRootConfig *udiConfig);
+int execute_hook_to_activate_gpu_support(const char* gpu_ids, UdiRootConfig* udiConfig);
 int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig);
 int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat format, UdiRootConfig *udiConfig, int readonly);
 int destructUDI(UdiRootConfig *udiConfig, int killSshd);

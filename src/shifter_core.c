@@ -1017,51 +1017,11 @@ int mountImageVFS(ImageData *imageData,
     /* copy image /etc into place */
     BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
 
-    /* execute hook to activate GPU support */
-    if (gpu_ids != NULL)
+    if(execute_hook_to_activate_gpu_support(gpu_ids, udiConfig) != 0)
     {
-        char *gpu_script = strdup("bin/activate_gpu_support.sh");
-
-        size_t gpu_path_size = strlen(udiConfig->udiRootPath) + strlen(gpu_script) + 2;
-        char *full_gpu_path = (char *) malloc(sizeof(char *) * gpu_path_size);
-        sprintf(full_gpu_path, "%s/%s", udiConfig->udiRootPath, gpu_script);
-
-        if (udiConfig->nvidiaBinPath == NULL) {
-            fprintf(stderr, "GPU support requested but the configuration file doesn't specify the path where the NVIDIA binaries shall be mounted\n");
-            goto _mountImgVfs_unclean;
-        }
-        if (udiConfig->nvidiaLibPath == NULL) {
-            fprintf(stderr, "GPU support requested but the configuration file doesn't specify the path where the NVIDIA libraries shall be mounted\n");
-            goto _mountImgVfs_unclean;
-        }
-        if (udiConfig->nvidiaLib64Path == NULL) {
-            fprintf(stderr, "GPU support requested but the configuration file doesn't specify the path where the NVIDIA 64-bit libraries shall be mounted\n");
-            goto _mountImgVfs_unclean;
-        }
-
-        char *args[] = {
-            strdup("/bin/sh"),
-            full_gpu_path,
-            strdup(gpu_ids),
-            strdup(udiConfig->udiMountPoint),
-            strdup(udiConfig->nvidiaBinPath),
-            strdup(udiConfig->nvidiaLibPath),
-            strdup(udiConfig->nvidiaLib64Path),
-            NULL
-        };
-        int ret = forkAndExecv(args);
-        char **argsPtr;
-        for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
-            free(*argsPtr);
-        }
-        free(gpu_script);
-        if (ret != 0) {
-            fprintf(stderr, "activate_gpu_support hook failed\n");
-            ret = 1;
-            goto _mountImgVfs_unclean;
-        }
+        fprintf(stderr, "activate_gpu_support hook failed\n");
+        goto _mountImgVfs_unclean;
     }
-
 #undef BIND_IMAGE_INTO_UDI
 #undef _MKDIR
 
@@ -1072,6 +1032,55 @@ _mountImgVfs_unclean:
         free(sshPath);
     }
     return 1;
+}
+
+int execute_hook_to_activate_gpu_support(const char* gpu_ids, UdiRootConfig* udiConfig)
+{
+    char *gpu_script = "bin/activate_gpu_support.sh";
+    size_t gpu_path_size = strlen(udiConfig->udiRootPath) + strlen(gpu_script) + 2;
+    char *full_gpu_path = (char *) malloc(sizeof(char) * gpu_path_size);
+    sprintf(full_gpu_path, "%s/%s", udiConfig->udiRootPath, gpu_script);
+
+    if (udiConfig->nvidiaBinPath == NULL) {
+        fprintf(stderr, "GPU support requested but the configuration file doesn't specify the path where the NVIDIA binaries shall be mounted\n");
+        return 1; 
+    }
+    if (udiConfig->nvidiaLibPath == NULL) {
+        fprintf(stderr, "GPU support requested but the configuration file doesn't specify the path where the NVIDIA libraries shall be mounted\n");
+        return 1;
+    }
+    if (udiConfig->nvidiaLib64Path == NULL) {
+        fprintf(stderr, "GPU support requested but the configuration file doesn't specify the path where the NVIDIA 64-bit libraries shall be mounted\n");
+        return 1; 
+    }
+   
+    char* args[8];
+    if(gpu_ids != NULL && strcmp(gpu_ids, "")!=0)
+    {
+        args[0] = strdup("/bin/sh");
+        args[1] = full_gpu_path;
+        args[2] = strdup(gpu_ids);
+        args[3] = strdup(udiConfig->udiMountPoint);
+        args[4] = strdup(udiConfig->nvidiaBinPath);
+        args[5] = strdup(udiConfig->nvidiaLibPath);
+        args[6] = strdup(udiConfig->nvidiaLib64Path);
+        args[7] = NULL;
+    }
+    else
+    {
+        args[0] = strdup("/bin/sh");
+        args[1] = full_gpu_path;
+        args[2] = NULL;
+    } 
+    
+    int ret = forkAndExecv(args); 
+    char** p;
+    for (p=args; *p != NULL; p++)
+    {
+        free(*p);
+    }
+
+    return ret;
 }
 
 /** makeUdiMountPrivate
