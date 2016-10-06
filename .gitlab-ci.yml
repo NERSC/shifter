@@ -1,0 +1,53 @@
+
+before_script:
+  - export num_of_processors=$(grep -c ^processor /proc/cpuinfo)
+  - export num_of_processors=$((num_of_processors-2))
+  - export num_of_processors=$((num_of_processors>1?num_of_processors:1))
+
+stages:
+  - build
+  - test
+
+build:
+  stage: build
+  script:
+    - ./gitlab-ci-build.sh
+
+unit_tests_and_valgring_tests_udiroot:
+  stage: test
+  script:
+    - ./gitlab-ci-build.sh
+    - MAKEFLAGS="-j$num_of_processors" make check
+    #we cannot run tests as roon on our gitlab CI
+    #
+    #- export DO_ROOT_TESTS=1
+    #- export DO_ROOT_DANGEROUS_TESTS=1
+    - cd src/test
+    - ../../extra/CI/test_script.sh
+
+unit_tests_imagegw:
+  stage: test
+  script:
+    - ./gitlab-ci-build.sh
+    - mkdir -p /tmp/imagegw /tmp/systema /tmp/systemb
+    - export PATH=$PWD/imagegw/test:$PATH
+    - export PYTHONPATH=$PWD/imagegw
+    - nosetests -s --with-coverage imagegw/test
+
+#These tests are commented out because integration_test.sh
+#requires a considerable refactoring in order to run on our gitlab CI.
+#
+#We didn't forget about these tests tough, they are just executed less frequently then the others.
+#The tests are executed on travis CI every time we push something to the github fork.
+##integration_tests:
+#  stage: test
+#  script:
+#    - export installation_path=$(pwd)/installation
+#    - export BUILDDIR=$(pwd)
+#    - mkdir -p $installation_path/etc/shifter
+#    - ./autogen.sh
+#    - ./configure --prefix=$installation_path --sysconfdir=$installation_path/etc/shifter --disable-staticsshd --without-slurm
+#    - MAKEFLAGS="-j$num_of_processors" make
+#    - make install
+#    - cd /
+#    - $BUILDDIR/extra/CI/integration_test.sh
