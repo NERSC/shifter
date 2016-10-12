@@ -785,10 +785,22 @@ _fail_copy_etcPath:
     mntBuffer[PATH_MAX-1] = 0;
     _BINDMOUNT(&mountCache, "/sys", mntBuffer, 0, 1);
 
-    /* mount /dev */
+    /* bind mount /dev contents
+     * note that here we bind mount one by one each file and folder in /dev,
+     * instead of bind mounting the entire /dev at once.
+     * This allows the GPU support part of the program to unmount
+     * the unused GPU device files from the container.
+     * */
+    const char* src = "/dev";
     snprintf(mntBuffer, PATH_MAX, "%s/dev", udiRoot);
     mntBuffer[PATH_MAX-1] = 0;
-    _BINDMOUNT(&mountCache, "/dev", mntBuffer, 0, 1);
+    if(bindmount_directory_contents(udiConfig, &mountCache, src, mntBuffer) != 0)
+    {
+        fprintf(stderr, "FAILED to bind mount %s contents. Exiting.\n", src);
+        perror("   --- REASON: ");
+        ret = 1;
+        goto _prepSiteMod_unclean;
+    }
 
     /* mount /tmp */
     snprintf(mntBuffer, PATH_MAX, "%s/tmp", udiRoot);
@@ -812,16 +824,16 @@ _prepSiteMod_unclean:
 
 /*! Write out hostsfile into image */
 /*!
- * Writes out an MPI-style hostsfile, e.g., one element per task.
+ * writes out an mpi-style hostsfile, e.g., one element per task.
  *     nid00001
  *     nid00001
  *     nid00002
  *     nid00002
- * For a two node/four task job.
- * Written to /var/hostsfile within the image.
+ * for a two node/four task job.
+ * written to /var/hostsfile within the image.
  *
- * \param minNodeSpec string formatted like "nid00001/2 nid00002/2" for above
- * \param udiConfig UDI configuration object
+ * \param minnodespec string formatted like "nid00001/2 nid00002/2" for above
+ * \param udiconfig udi configuration object
  *
  * \returns 0 upon success, 1 upon failure
  */
@@ -897,6 +909,163 @@ _writeHostFile_error:
         fclose(fp);
     }
     return 1;
+}
+
+/*! bind mount all files and folders in the specified source directory to the dest directory */
+int bindmount_directory_contents(   UdiRootConfig *udi_config, MountList* mount_cache,
+                                    const char* src_dir, const char* dest_dir)
+{
+    //for each file/folder to be bind mounted...
+    DIR* dir = opendir(src_dir);
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != NULL)
+    {
+        if( strcmp(".", entry->d_name)==0
+            || strcmp("..", entry->d_name)==0
+            // let's skip /dev/stdout: if shifter stdout is being piped
+            // (e.g. shifter --image=docker:ubuntu:14.04 ls /dev -l | grep stdout)
+            // the target of /dev/stdout is a pipe and cannot be mounted.
+            || (strcmp("/dev", src_dir)==0 && strcmp("stdout", entry->d_name)==0))
+            continue;
+
+        char src_abs_entry[PATH_MAX];
+        snprintf(src_abs_entry, PATH_MAX, "%s/%s", src_dir, entry->d_name);
+        
+        int is_symlink_conversion_required;
+        if(is_symlink(src_abs_entry, &is_symlink_conversion_required) != 0)
+        {
+            fprintf(stderr, "FAILED to retrieve symlink information\n");
+            closedir(dir);
+            return 1;
+        }
+        
+        if(is_symlink_conversion_required)
+        {
+            if(convert_symlink_to_target(src_dir, src_abs_entry) != 0)
+            {
+                fprintf(stderr, "FAILED to convert symlink to target\n");
+                closedir(dir);
+                return 1;
+            }
+        }
+        
+        char dest_abs_entry[PATH_MAX];
+        snprintf(dest_abs_entry, PATH_MAX, "%s/%s", dest_dir, entry->d_name);
+       
+        if(create_mount_point(src_abs_entry, dest_abs_entry) != 0)
+        {
+            fprintf(stderr, "FAILED to create mount point\n");
+            closedir(dir);
+            return 1;
+        }
+
+        //do the bind mount
+        int mount_flags=0;
+        int overwrite_mounts=0;
+        if(_shifterCore_bindMount(udi_config, mount_cache, src_abs_entry, dest_abs_entry, mount_flags, overwrite_mounts) != 0)
+        {
+            closedir(dir);
+            fprintf(stderr, "FAILED to bind mount %s to %s\n", src_abs_entry, dest_abs_entry);
+            perror("   --- REASON: ");
+            return 1;
+        }
+    }
+    closedir(dir);
+    return 0;
+}
+
+/*! If the file specified by path is a symlink the output parameter is_link will be 1, otherwise 0. */
+int is_symlink(char* path, int* is_link)
+{
+    struct stat sb;
+    
+    if (lstat(path, &sb) == -1)
+    {
+        fprintf(stderr, "FAILED to stat file %s.\n", path);
+        perror("    --- REASON: ");
+        return 1;
+    }
+
+    *is_link = S_ISLNK(sb.st_mode);
+    return 0;
+}
+
+/*!
+ * Converts the given symlink to its target.
+ * \param src_dir Absolute path to the directory containing the symlink.
+ * \param symlink Absolute path to the symlink. This is also the output
+ * parameter that will contain the absolute path of the symlink's target.
+ *
+ * \returns 0 upon success, 1 upon failure
+ */
+int convert_symlink_to_target(const char* src_dir, char* symlink)
+{
+    int not_done;
+    do
+    {
+        char target[PATH_MAX];
+        ssize_t target_length = readlink(symlink, target, PATH_MAX-1);
+        if(target_length == -1)
+        {
+            fprintf(stderr, "cannot readlink %s\n", symlink);
+            perror("   --- REASON: ");
+            return 1;
+        }
+        target[target_length] = 0;
+        if(strncmp(target, "/", 1)==0)
+        {
+            strncpy(symlink, target, PATH_MAX);
+        }
+        else
+        {
+            snprintf(symlink, PATH_MAX, "%s/%s", src_dir, target);
+        }
+    
+        if(is_symlink(symlink, &not_done) != 0)
+        {
+            return 1;
+        }
+
+    } while(not_done);
+
+    return 0;
+}
+
+/*! Create an empty file at location specified by "to"
+ * where the file specified by "from" will be mounted.*/
+int create_mount_point(const char* from, const char* to)
+{
+    struct stat sb;
+    if (stat(from, &sb) == -1)
+    {
+        fprintf(stderr, "cannot stat file %s\n", from);
+        perror("    --- REASON: ");
+        return 1;
+    }
+
+    if(S_ISDIR(sb.st_mode)) //directory
+    {
+        if(mkdir(to, 0755) != 0)
+        {
+            fprintf(stderr, "FAILED to mkdir %s\n", to);
+            perror("   --- REASON: ");
+            return 1;
+        }
+    }
+    else //file
+    {
+        int flags = O_RDWR | O_CREAT;
+        mode_t mode=0;
+        int fd = open(to, flags, mode);
+        if(fd==-1)
+        {
+            fprintf(stderr, "FAILED to create file %s\n", to);
+            perror("   --- REASON: ");
+            return 1;
+        }
+        close(fd);
+    }
+    return 0;
 }
 
 int mountImageVFS(ImageData *imageData,
@@ -1017,51 +1186,11 @@ int mountImageVFS(ImageData *imageData,
     /* copy image /etc into place */
     BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
 
-    /* execute hook to activate GPU support */
-    if (gpu_ids != NULL)
+    if(execute_hook_to_activate_gpu_support(gpu_ids, udiConfig) != 0)
     {
-        char *gpu_script = strdup("bin/activate_gpu_support.sh");
-
-        size_t gpu_path_size = strlen(udiConfig->udiRootPath) + strlen(gpu_script) + 2;
-        char *full_gpu_path = (char *) malloc(sizeof(char *) * gpu_path_size);
-        sprintf(full_gpu_path, "%s/%s", udiConfig->udiRootPath, gpu_script);
-
-        if (udiConfig->nvidiaBinPath == NULL) {
-            fprintf(stderr, "GPU support requested but the configuration file doesn't specify the path where the NVIDIA binaries shall be mounted\n");
-            goto _mountImgVfs_unclean;
-        }
-        if (udiConfig->nvidiaLibPath == NULL) {
-            fprintf(stderr, "GPU support requested but the configuration file doesn't specify the path where the NVIDIA libraries shall be mounted\n");
-            goto _mountImgVfs_unclean;
-        }
-        if (udiConfig->nvidiaLib64Path == NULL) {
-            fprintf(stderr, "GPU support requested but the configuration file doesn't specify the path where the NVIDIA 64-bit libraries shall be mounted\n");
-            goto _mountImgVfs_unclean;
-        }
-
-        char *args[] = {
-            strdup("/bin/sh"),
-            full_gpu_path,
-            strdup(gpu_ids),
-            strdup(udiConfig->udiMountPoint),
-            strdup(udiConfig->nvidiaBinPath),
-            strdup(udiConfig->nvidiaLibPath),
-            strdup(udiConfig->nvidiaLib64Path),
-            NULL
-        };
-        int ret = forkAndExecv(args);
-        char **argsPtr;
-        for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
-            free(*argsPtr);
-        }
-        free(gpu_script);
-        if (ret != 0) {
-            fprintf(stderr, "activate_gpu_support hook failed\n");
-            ret = 1;
-            goto _mountImgVfs_unclean;
-        }
+        fprintf(stderr, "activate_gpu_support hook failed\n");
+        goto _mountImgVfs_unclean;
     }
-
 #undef BIND_IMAGE_INTO_UDI
 #undef _MKDIR
 
@@ -1072,6 +1201,56 @@ _mountImgVfs_unclean:
         free(sshPath);
     }
     return 1;
+}
+
+int execute_hook_to_activate_gpu_support(const char* gpu_ids, UdiRootConfig* udiConfig)
+{
+    char *gpu_script = "bin/activate_gpu_support.sh";
+    size_t gpu_path_size = strlen(udiConfig->udiRootPath) + strlen(gpu_script) + 2;
+    char *full_gpu_path = (char *) malloc(sizeof(char) * gpu_path_size);
+    sprintf(full_gpu_path, "%s/%s", udiConfig->udiRootPath, gpu_script);
+
+    if (udiConfig->nvidiaBinPath == NULL) {
+        fprintf(stderr, "GPU support requested but the configuration file doesn't specify the path where the NVIDIA binaries shall be mounted\n");
+        return 1; 
+    }
+    if (udiConfig->nvidiaLibPath == NULL) {
+        fprintf(stderr, "GPU support requested but the configuration file doesn't specify the path where the NVIDIA libraries shall be mounted\n");
+        return 1;
+    }
+    if (udiConfig->nvidiaLib64Path == NULL) {
+        fprintf(stderr, "GPU support requested but the configuration file doesn't specify the path where the NVIDIA 64-bit libraries shall be mounted\n");
+        return 1; 
+    }
+   
+    char* args[8];
+    if(gpu_ids != NULL && strcmp(gpu_ids, "")!=0)
+    {
+        args[0] = strdup("/bin/sh");
+        args[1] = full_gpu_path;
+        args[2] = strdup(gpu_ids);
+        args[3] = strdup(udiConfig->udiMountPoint);
+        args[4] = strdup(udiConfig->nvidiaBinPath);
+        args[5] = strdup(udiConfig->nvidiaLibPath);
+        args[6] = strdup(udiConfig->nvidiaLib64Path);
+        args[7] = NULL;
+    }
+    else
+    {
+        args[0] = strdup("/bin/sh");
+        args[1] = full_gpu_path;
+        args[2] = strdup(udiConfig->udiMountPoint);
+        args[3] = NULL;
+    } 
+    
+    int ret = forkAndExecv(args); 
+    char** p;
+    for (p=args; *p != NULL; p++)
+    {
+        free(*p);
+    }
+
+    return ret;
 }
 
 /** makeUdiMountPrivate

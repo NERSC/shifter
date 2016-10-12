@@ -127,21 +127,19 @@ int main(int argc, char **argv) {
         fprintf(stderr, "FAILED to parse environment\n");
         exit(1);
     }
-
-    /* destroy this environment */
-    clearenv();
-
     /* parse config file and command line options */
     if (parse_options(argc, argv, &opts, &udiConfig) != 0) {
         fprintf(stderr, "FAILED to parse command line arguments.\n");
         exit(1);
     }
-
     /* parse environment variables for GPU support */
     if (parse_gpu_env(&opts) != 0) {
         fprintf(stderr, "FAILED to parse CUDA GPU environment variables.\n");
         exit(1);
     }
+
+    /* destroy this environment */
+    clearenv();
 
     /* discover information about this image */
     if (parse_ImageData(opts.imageType, opts.imageIdentifier, &udiConfig, &imageData) != 0) {
@@ -627,8 +625,6 @@ int parse_gpu_env(struct options *opts) {
         if (opts->gpu != NULL) {
             free(opts->gpu);
         }
-
-
         opts->gpu = strdup(envPtr);
     }
 
