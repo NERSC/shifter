@@ -922,10 +922,13 @@ int bindmount_directory_contents(   UdiRootConfig *udi_config, MountList* mount_
     {
         if( strcmp(".", entry->d_name)==0
             || strcmp("..", entry->d_name)==0
-            // let's skip /dev/stdout: if shifter stdout is being piped
-            // (e.g. shifter --image=docker:ubuntu:14.04 ls /dev -l | grep stdout)
-            // the target of /dev/stdout is a pipe and cannot be mounted.
-            || (strcmp("/dev", src_dir)==0 && strcmp("stdout", entry->d_name)==0))
+            // let's skip the symlinks /dev/stdout, /dev/stdin and /dev/stderr,
+            // because when some piping is being performed
+            // (e.g. shifter --image=docker:ubuntu:14.04 ls /dev -l | grep something))
+            // the target of the symlink cannot be mounted
+            || (strcmp("/dev", src_dir)==0 && strcmp("stdout", entry->d_name)==0)
+            || (strcmp("/dev", src_dir)==0 && strcmp("stdin", entry->d_name)==0)
+            || (strcmp("/dev", src_dir)==0 && strcmp("stderr", entry->d_name)==0))
             continue;
 
         char src_abs_entry[PATH_MAX];
