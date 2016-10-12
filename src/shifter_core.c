@@ -1227,7 +1227,9 @@ int execute_hook_to_activate_gpu_support(const char* gpu_ids, UdiRootConfig* udi
     }
    
     char* args[8];
-    if(gpu_ids != NULL && strcmp(gpu_ids, "")!=0)
+    if( gpu_ids != NULL
+        && strcmp(gpu_ids, "") != 0
+        && strcmp(gpu_ids, "NoDevFiles") != 0)
     {
         args[0] = strdup("/bin/sh");
         args[1] = full_gpu_path;

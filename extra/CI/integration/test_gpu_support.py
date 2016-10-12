@@ -34,8 +34,13 @@ class TestGPUSupport(unittest.TestCase):
         self.assertEqual(devices, ["nvidia0", "nvidia1"])
 
     #CUDA_VISIBLE_DEVICES= ==> container can see no GPU
-    def test_deactivate_gpus_with_environment_variable(self):
+    def test_deactivate_gpus_with_environment_variablei_0(self):
         devices = self._get_nvidia_devices(environment_variable_gpus="")
+        self.assertEqual(devices, [])
+    
+    #CUDA_VISIBLE_DEVICES=NoDevFiles ==> container can see no GPU
+    def test_deactivate_gpus_with_environment_variable_1(self):
+        devices = self._get_nvidia_devices(environment_variable_gpus="NoDevFiles")
         self.assertEqual(devices, [])
 
     #CUDA_VISIBLE_DEVICES=0 ==> container can see /dev/nvidia0
@@ -57,9 +62,14 @@ class TestGPUSupport(unittest.TestCase):
     def test_environment_variable_overrides_command_line_option_0(self):
         devices = self._get_nvidia_devices(cmdline_gpus="0,1", environment_variable_gpus="")
         self.assertEqual(devices, [])
+    
+    #CUDA_VISIBLE_DEVICES=NoDevFiles and --gpu=0,1 ==> container can see no GPU
+    def test_environment_variable_overrides_command_line_option_1(self):
+        devices = self._get_nvidia_devices(cmdline_gpus="0,1", environment_variable_gpus="NoDevFiles")
+        self.assertEqual(devices, [])
 
     #CUDA_VISIBLE_DEVICES=0 and --gpu=0,1 ==> container can see /dev/nvidia0
-    def test_environment_variable_overrides_command_line_option_1(self):
+    def test_environment_variable_overrides_command_line_option_2(self):
         devices = self._get_nvidia_devices(cmdline_gpus="0,1", environment_variable_gpus="0")
         self.assertEqual(devices, ["nvidia0"])
 
