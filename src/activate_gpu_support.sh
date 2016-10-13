@@ -174,6 +174,18 @@ get_host_device_file()
     echo $1 | sed 's/^/\/dev\//'
 }
 
+is_value_not_in_list()
+{
+    local element=$1
+    local list=$2
+    for list_element in $list; do
+        if [ "$element" = "$list_element" ]; then
+            return 1
+        fi
+    done
+    return 0
+}
+
 remove_unused_nvidia_devices()
 {
         
@@ -187,7 +199,7 @@ remove_unused_nvidia_devices()
         for device in $(ls /dev | grep -E 'nvidia[0-9]+'); do
             local host_device_file=$(get_host_device_file $device)
             local container_device_file=$(get_container_device_file $device)
-            if [[ ! $nvidia_devices =~ $host_device_file ]]; then
+            if is_value_not_in_list $host_device_file "$nvidia_devices" ; then
                 umount $container_device_file
                 rm $container_device_file #remove NVIDIA devices not in the list
             fi

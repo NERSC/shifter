@@ -1238,7 +1238,7 @@ int execute_hook_to_activate_gpu_support(const char* gpu_ids, UdiRootConfig* udi
             return 1;
         }
 
-        args[0] = strdup("/bin/sh");
+        args[0] = strdup("/bin/bash");
         args[1] = full_gpu_path;
         args[2] = strdup(gpu_ids);
         args[3] = strdup(udiConfig->udiMountPoint);
@@ -1249,7 +1249,7 @@ int execute_hook_to_activate_gpu_support(const char* gpu_ids, UdiRootConfig* udi
     }
     else
     {
-        args[0] = strdup("/bin/sh");
+        args[0] = strdup("/bin/bash");
         args[1] = full_gpu_path;
         args[2] = strdup(udiConfig->udiMountPoint);
         args[3] = NULL;
