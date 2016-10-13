@@ -151,7 +151,7 @@ TEST(ShifterCoreTestGroup, check_find_process_by_cmdline) {
         exit(127);
     }
     CHECK(pid > 0);
-    usleep(10000);
+    usleep(1000000);
 
     pid_t discovered = shifter_find_process_by_cmdline(cmd);
     printf("pid: %d, discovered: %d, %s\n", pid, discovered, cmd);
