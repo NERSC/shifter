@@ -69,6 +69,16 @@ sudo cp "$BUILDDIR/etc_files/nsswitch.conf" /etc/shifter/shifter_etc_files/nsswi
 cat /etc/shifter/udiRoot.conf | egrep -v '^#'
 sudo mkdir -p $LIBEXECDIR/opt/udiImage
 
+echo "setting up requirements for GPU support"
+sudo /bin/bash -c "echo nvidiaBinPath=/gpu-support/nvidia/bin >> /etc/shifter/udiRoot.conf"
+sudo /bin/bash -c "echo nvidiaLibPath=/gpu-support/nvidia/lib >> /etc/shifter/udiRoot.conf"
+sudo /bin/bash -c "echo nvidiaLib64Path=/gpu-support/nvidia/lib64 >> /etc/shifter/udiRoot.conf"
+#dummy required command line tools
+sudo touch /bin/nvidia-smi
+sudo chmod 755 /bin/nvidia-smi
+sudo touch /bin/nvidia-modprobe
+sudo chmod 755 /bin/nvidia-modprobe
+
 ## need to sleep a bit to let celery and gunicorn get started
 sleep 10
 

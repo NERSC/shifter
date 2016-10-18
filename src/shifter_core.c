@@ -1212,26 +1212,33 @@ int execute_hook_to_activate_gpu_support(const char* gpu_ids, UdiRootConfig* udi
     size_t gpu_path_size = strlen(udiConfig->udiRootPath) + strlen(gpu_script) + 2;
     char *full_gpu_path = (char *) malloc(sizeof(char) * gpu_path_size);
     sprintf(full_gpu_path, "%s/%s", udiConfig->udiRootPath, gpu_script);
-
-    if (udiConfig->nvidiaBinPath == NULL) {
-        fprintf(stderr, "GPU support requested but the configuration file doesn't specify the path where the NVIDIA binaries shall be mounted\n");
-        return 1; 
-    }
-    if (udiConfig->nvidiaLibPath == NULL) {
-        fprintf(stderr, "GPU support requested but the configuration file doesn't specify the path where the NVIDIA libraries shall be mounted\n");
-        return 1;
-    }
-    if (udiConfig->nvidiaLib64Path == NULL) {
-        fprintf(stderr, "GPU support requested but the configuration file doesn't specify the path where the NVIDIA 64-bit libraries shall be mounted\n");
-        return 1; 
-    }
    
     char* args[8];
-    if( gpu_ids != NULL
-        && strcmp(gpu_ids, "") != 0
-        && strcmp(gpu_ids, "NoDevFiles") != 0)
+    int container_needs_to_access_gpus = gpu_ids != NULL
+                                        && strcmp(gpu_ids, "") != 0
+                                        && strcmp(gpu_ids, "NoDevFiles") != 0;
+    if(container_needs_to_access_gpus)
     {
-        args[0] = strdup("/bin/sh");
+        if (udiConfig->nvidiaBinPath == NULL)
+        {
+            fprintf(stderr, "GPU support requested but the configuration file doesn't "
+                            "specify the path where the NVIDIA binaries shall be mounted\n");
+            return 1; 
+        }
+        if (udiConfig->nvidiaLibPath == NULL)
+        {
+            fprintf(stderr, "GPU support requested but the configuration file doesn't "
+                            "specify the path where the NVIDIA libraries shall be mounted\n");
+            return 1;
+        }
+        if (udiConfig->nvidiaLib64Path == NULL)
+        {
+            fprintf(stderr, "GPU support requested but the configuration file doesn't "
+                            "specify the path where the NVIDIA 64-bit libraries shall be mounted\n");
+            return 1;
+        }
+
+        args[0] = strdup("/bin/bash");
         args[1] = full_gpu_path;
         args[2] = strdup(gpu_ids);
         args[3] = strdup(udiConfig->udiMountPoint);
@@ -1242,7 +1249,7 @@ int execute_hook_to_activate_gpu_support(const char* gpu_ids, UdiRootConfig* udi
     }
     else
     {
-        args[0] = strdup("/bin/sh");
+        args[0] = strdup("/bin/bash");
         args[1] = full_gpu_path;
         args[2] = strdup(udiConfig->udiMountPoint);
         args[3] = NULL;

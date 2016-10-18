@@ -72,6 +72,7 @@ int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const cha
     (*image)->type = strdup("local");
     parse_ImageData((*image)->type, strdup("/"), *config, *image);
     (*config)->udiMountPoint = strdup(tmpDir);
+    (*config)->udiRootPath = alloc_strgenf("/usr", basePath);
     (*config)->rootfsType = strdup(ROOTFS_TYPE);
     (*config)->etcPath = alloc_strgenf("%s/%s", basePath, "etc");
     (*config)->cpPath = strdup("/bin/cp");
@@ -151,7 +152,7 @@ TEST(ShifterCoreTestGroup, check_find_process_by_cmdline) {
         exit(127);
     }
     CHECK(pid > 0);
-    usleep(10000);
+    usleep(1000000);
 
     pid_t discovered = shifter_find_process_by_cmdline(cmd);
     printf("pid: %d, discovered: %d, %s\n", pid, discovered, cmd);
