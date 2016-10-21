@@ -1214,10 +1214,7 @@ int execute_hook_to_activate_gpu_support(const char* gpu_ids, UdiRootConfig* udi
     sprintf(full_gpu_path, "%s/%s", udiConfig->udiRootPath, gpu_script);
    
     char* args[8];
-    int container_needs_to_access_gpus = gpu_ids != NULL
-                                        && strcmp(gpu_ids, "") != 0
-                                        && strcmp(gpu_ids, "NoDevFiles") != 0;
-    if(container_needs_to_access_gpus)
+    if(is_gpu_support_enabled(gpu_ids))
     {
         if (udiConfig->nvidiaBinPath == NULL)
         {
@@ -1263,6 +1260,13 @@ int execute_hook_to_activate_gpu_support(const char* gpu_ids, UdiRootConfig* udi
     }
 
     return ret;
+}
+
+int is_gpu_support_enabled(const char* gpu_ids)
+{
+    return  gpu_ids != NULL
+            && strcmp(gpu_ids, "") != 0
+            && strcmp(gpu_ids, "NoDevFiles") != 0;
 }
 
 /** makeUdiMountPrivate
@@ -3569,27 +3573,54 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
     for (envPtr = udiConfig->siteEnvUnset; envPtr && *envPtr; envPtr++) {
         shifter_unsetenv(env, *envPtr);
     }
-    if (udiConfig->nvidiaBinPath != NULL) {
-        size_t envVar_size = strlen(udiConfig->nvidiaBinPath) + 6;
-        char *envVar = (char *) malloc(sizeof(char *) * envVar_size);
-        sprintf(envVar, "PATH=%s", udiConfig->nvidiaBinPath);
-        shifter_prependenv(env, envVar);
-        free(envVar);
+    return 0;
+}
+
+int shifter_setupenv_gpu_support(char ***env, UdiRootConfig *udiConfig, const char* gpu_ids)
+{
+    if(is_gpu_support_enabled(gpu_ids)==0)
+        return 0;
+    
+    if (udiConfig->nvidiaBinPath == NULL)
+    {
+        fprintf(stderr, "GPU support requested but the configuration file doesn't "
+                        "specify the path where the NVIDIA binaries shall be mounted\n");
+        return 1; 
     }
-    if (udiConfig->nvidiaLibPath != NULL) {
-        size_t envVar_size = strlen(udiConfig->nvidiaLibPath) + 17;
-        char *envVar = (char *) malloc(sizeof(char *) * envVar_size);
-        sprintf(envVar, "LD_LIBRARY_PATH=%s", udiConfig->nvidiaLibPath);
-        shifter_prependenv(env, envVar);
-        free(envVar);
+    if (udiConfig->nvidiaLibPath == NULL)
+    {
+        fprintf(stderr, "GPU support requested but the configuration file doesn't "
+                        "specify the path where the NVIDIA libraries shall be mounted\n");
+        return 1;
     }
-    if (udiConfig->nvidiaLib64Path != NULL) {
-        size_t envVar_size = strlen(udiConfig->nvidiaLib64Path) + 17;
-        char *envVar = (char *) malloc(sizeof(char *) * envVar_size);
-        sprintf(envVar, "LD_LIBRARY_PATH=%s", udiConfig->nvidiaLib64Path);
-        shifter_prependenv(env, envVar);
-        free(envVar);
+    if (udiConfig->nvidiaLib64Path == NULL)
+    {
+        fprintf(stderr, "GPU support requested but the configuration file doesn't "
+                        "specify the path where the NVIDIA 64-bit libraries shall be mounted\n");
+        return 1;
     }
+
+    size_t envVar_size;
+    char* envVar;
+
+    envVar_size = strlen(udiConfig->nvidiaBinPath) + 6;
+    envVar = (char *) malloc(sizeof(char *) * envVar_size);
+    sprintf(envVar, "PATH=%s", udiConfig->nvidiaBinPath);
+    shifter_prependenv(env, envVar);
+    free(envVar);
+    
+    envVar_size = strlen(udiConfig->nvidiaLibPath) + 17;
+    envVar = (char *) malloc(sizeof(char *) * envVar_size);
+    sprintf(envVar, "LD_LIBRARY_PATH=%s", udiConfig->nvidiaLibPath);
+    shifter_prependenv(env, envVar);
+    free(envVar);
+    
+    envVar_size = strlen(udiConfig->nvidiaLib64Path) + 17;
+    envVar = (char *) malloc(sizeof(char *) * envVar_size);
+    sprintf(envVar, "LD_LIBRARY_PATH=%s", udiConfig->nvidiaLib64Path);
+    shifter_prependenv(env, envVar);
+    free(envVar);
+
     return 0;
 }
 

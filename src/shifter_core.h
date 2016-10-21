@@ -65,6 +65,7 @@ int isKernelModuleLoaded(const char *name);
 int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig);
 int mountImageVFS(ImageData *imageData, const char *username, const char *gpu_id, const char *minNodeSpec, UdiRootConfig *udiConfig);
 int execute_hook_to_activate_gpu_support(const char* gpu_ids, UdiRootConfig* udiConfig);
+int is_gpu_support_enabled(const char* gpu_ids);
 int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig);
 int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat format, UdiRootConfig *udiConfig, int readonly);
 int destructUDI(UdiRootConfig *udiConfig, int killSshd);
@@ -138,6 +139,7 @@ int shifter_appendenv(char ***env, char *var);
 int shifter_prependenv(char ***env, char *var);
 int shifter_unsetenv(char ***env, char *var);
 int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig);
+int shifter_setupenv_gpu_support(char ***env, UdiRootConfig *udiConfig, const char* gpu_ids);
 struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config);
 struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config);
 
