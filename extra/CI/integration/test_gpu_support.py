@@ -224,13 +224,13 @@ class TestGPUDevices(unittest.TestCase):
         return [device for device in devices if expr.match(device) is not None]
 
     def _get_gpu_libraries_in_container(self):
-        if self._container_has_gpu_support():
+        if self._is_gpu_support_in_container_enabled():
             return self._get_command_output_in_container(["ls", "/gpu-support/nvidia/lib64"])
         else:
             return []
 
     def _get_gpu_binaries_in_container(self):
-        if self._container_has_gpu_support():
+        if self._is_gpu_support_in_container_enabled():
             return self._get_command_output_in_container(["ls", "/gpu-support/nvidia/bin"])
         else:
             return []
@@ -246,7 +246,7 @@ class TestGPUDevices(unittest.TestCase):
         gpu_paths = [path for path in paths if expr.match(path) is not None]
         return gpu_paths
 
-    def _container_has_gpu_support(self):
+    def _is_gpu_support_in_container_enabled(self):
         return "gpu-support" in self._get_command_output_in_container(["ls", "/"])
 
     def _get_command_output_in_container(self, command):
