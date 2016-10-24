@@ -71,7 +71,7 @@ struct options {
     gid_t tgtGid;
     char *username;
     char *workdir;
-    char *gpu;
+    char *gpu_ids;
     char **args;
     char **env;
     VolumeMap volumeMap;
@@ -282,9 +282,14 @@ int main(int argc, char **argv) {
     }
 
     /* set the environment variables */
-    shifter_setupenv(&environ_copy,
-                     &imageData,
-                     &udiConfig);
+    if (shifter_setupenv(&environ_copy, &imageData, &udiConfig) != 0) {
+        fprintf(stderr, "Failed to setup container environment variables\n");
+    }
+
+    /* set the environment variables related to the GPU support */
+    if (shifter_setupenv_gpu_support(&environ_copy, &udiConfig, opts.gpu_ids) != 0) {
+        fprintf(stderr, "Failed to setup container's GPU support environment variables\n");
+    }
 
     /* immediately set PATH to container PATH to get search right */
     adoptPATH(environ_copy);
@@ -463,7 +468,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                         break;
                     }
 
-                    config->gpu = strdup(optarg);
+                    config->gpu_ids = strdup(optarg);
                     break;
                 }
             case 'h':
@@ -622,10 +627,10 @@ int parse_gpu_env(struct options *opts) {
      * the --gpu command line option.
      */
     if ((envPtr = getenv("CUDA_VISIBLE_DEVICES")) != NULL) {
-        if (opts->gpu != NULL) {
-            free(opts->gpu);
+        if (opts->gpu_ids != NULL) {
+            free(opts->gpu_ids);
         }
-        opts->gpu = strdup(envPtr);
+        opts->gpu_ids = strdup(envPtr);
     }
 
     return 0;
@@ -806,7 +811,7 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
             goto _loadImage_error;
         }
     }
-    if (mountImageVFS(image, opts->username, opts->gpu, NULL, udiConfig) != 0) {
+    if (mountImageVFS(image, opts->username, opts->gpu_ids, NULL, udiConfig) != 0) {
         fprintf(stderr, "FAILED to mount image into UDI\n");
         goto _loadImage_error;
     }

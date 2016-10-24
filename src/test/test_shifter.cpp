@@ -86,12 +86,12 @@ TEST(ShifterTestGroup, parseGPUenv_test)
     struct options opts;
     memset(&opts, 0, sizeof(struct options));
 
-    opts.gpu = strdup("0");
+    opts.gpu_ids = strdup("0");
     setenv("CUDA_VISIBLE_DEVICES", "0,1", 1);
 
     parse_gpu_env(&opts);
 
-    CHECK (strcmp(opts.gpu, "0,1") == 0);
+    CHECK (strcmp(opts.gpu_ids, "0,1") == 0);
 }
 
 
