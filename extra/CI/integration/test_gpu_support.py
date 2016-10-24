@@ -14,21 +14,19 @@ class TestGPUDevices(unittest.TestCase):
     """
 
     _GPU_DEVICES = ["nvidia0", "nvidia1"]
-
     _GPU_LIBS = [   "libcuda.so", \
                     "libnvcuvid.so", \
                     "libnvidia-compiler.so", \
                     "libnvidia-encode.so", \
                     "libnvidia-ml.so", \
                     "libnvidia-fatbinaryloader.so"]
-
-    _GPU_LD_LIB_PATHS = ["/gpu-support/nvidia/lib", "/gpu-support/nvidia/lib64"]
-
     _GPU_BINS = [   "nvidia-cuda-mps-control", \
                     "nvidia-cuda-mps-server", \
                     "nvidia-debugdump", \
                     "nvidia-persistenced", \
                     "nvidia-smi"]
+    _GPU_ENV_LD_LIB_PATH = ["/gpu-support/nvidia/lib", "/gpu-support/nvidia/lib64"]
+    _GPU_ENV_PATH = ["/gpu-support/nvidia/bin"]
 
     _created_gpu_devices = []
     _created_gpu_libs = []
@@ -92,120 +90,133 @@ class TestGPUDevices(unittest.TestCase):
 
     #no CUDA_VISIBLE_DEVICES + no --gpu option ==> container can see no GPU
     def test_no_environment_variable_and_no_command_line_option(self):
-        devices, libs, bins, ld_lib_paths = self._get_gpu_properties_in_container()
+        devices, libs, bins, env_ld_lib_path, env_path = self._get_gpu_properties_in_container()
         self.assertEqual(devices, [])
         self.assertEqual(libs, [])
         self.assertEqual(bins, [])
-        self.assertEqual(ld_lib_paths, [])
+        self.assertEqual(env_ld_lib_path, [])
+        self.assertEqual(env_path, [])
 
     #--gpu=0 ==> container can see /dev/nvidia0"
     def test_activate_gpu0_with_command_line_option(self):
         self.cmdline_gpus="0"
-        devices, libs, bins, ld_lib_paths = self._get_gpu_properties_in_container()
+        devices, libs, bins, env_ld_lib_path, env_path = self._get_gpu_properties_in_container()
         self.assertEqual(devices, ["nvidia0"])
         self._assert_is_subset(subset=self._GPU_LIBS, superset=libs)
         self._assert_is_subset(subset=self._GPU_BINS, superset=bins)
-        self._assert_is_subset(subset=self._GPU_LD_LIB_PATHS, superset=ld_lib_paths)
+        self._assert_is_subset(subset=self._GPU_ENV_LD_LIB_PATH, superset=env_ld_lib_path)
+        self._assert_is_subset(subset=self._GPU_ENV_PATH, superset=env_path)
 
     #--gpu=1 ==> container can see /dev/nvidia1"
     def test_activate_gpu1_with_command_line_option(self):
         self.cmdline_gpus="1"
-        devices, libs, bins, ld_lib_paths = self._get_gpu_properties_in_container()
+        devices, libs, bins, env_ld_lib_path, env_path = self._get_gpu_properties_in_container()
         self.assertEqual(devices, ["nvidia1"])
         self._assert_is_subset(subset=self._GPU_LIBS, superset=libs)
         self._assert_is_subset(subset=self._GPU_BINS, superset=bins) 
-        self._assert_is_subset(subset=self._GPU_LD_LIB_PATHS, superset=ld_lib_paths)
+        self._assert_is_subset(subset=self._GPU_ENV_LD_LIB_PATH, superset=env_ld_lib_path)
+        self._assert_is_subset(subset=self._GPU_ENV_PATH, superset=env_path)
 
     #--gpu=0,1 ==> container can see both GPUs
     def test_activate_gpu0_and_gpu1_with_command_line_option(self):
         self.cmdline_gpus="0,1"
-        devices, libs, bins, ld_lib_paths = self._get_gpu_properties_in_container()
+        devices, libs, bins, env_ld_lib_path, env_path = self._get_gpu_properties_in_container()
         self.assertEqual(devices, ["nvidia0", "nvidia1"])
         self._assert_is_subset(subset=self._GPU_LIBS, superset=libs)
         self._assert_is_subset(subset=self._GPU_BINS, superset=bins)
-        self._assert_is_subset(subset=self._GPU_LD_LIB_PATHS, superset=ld_lib_paths)
+        self._assert_is_subset(subset=self._GPU_ENV_LD_LIB_PATH, superset=env_ld_lib_path)
+        self._assert_is_subset(subset=self._GPU_ENV_PATH, superset=env_path)
 
     #CUDA_VISIBLE_DEVICES= ==> container can see no GPU
     def test_deactivate_gpus_with_environment_variablei_0(self):
         self.environment_variable_gpus=""
-        devices, libs, bins, ld_lib_paths = self._get_gpu_properties_in_container()
+        devices, libs, bins, env_ld_lib_path, env_path = self._get_gpu_properties_in_container()
         self.assertEqual(devices, [])
         self.assertEqual(libs, [])
         self.assertEqual(bins, [])
-        self.assertEqual(ld_lib_paths, [])
+        self.assertEqual(env_ld_lib_path, [])
+        self.assertEqual(env_path, [])
     
     #CUDA_VISIBLE_DEVICES=NoDevFiles ==> container can see no GPU
     def test_deactivate_gpus_with_environment_variable_1(self):
         self.environment_variable_gpus="NoDevFiles"
-        devices, libs, bins, ld_lib_paths = self._get_gpu_properties_in_container()
+        devices, libs, bins, env_ld_lib_path, env_path = self._get_gpu_properties_in_container()
         self.assertEqual(devices, [])
         self.assertEqual(libs, [])
         self.assertEqual(libs, [])
-        self.assertEqual(ld_lib_paths, [])
+        self.assertEqual(env_ld_lib_path, [])
+        self.assertEqual(env_path, [])
 
     #CUDA_VISIBLE_DEVICES=0 ==> container can see /dev/nvidia0
     def test_activate_gpu0_with_environment_variable(self):
         self.environment_variable_gpus="0"
-        devices, libs, bins, ld_lib_paths = self._get_gpu_properties_in_container()
+        devices, libs, bins, env_ld_lib_path, env_path = self._get_gpu_properties_in_container()
         self.assertEqual(devices, ["nvidia0"])
         self._assert_is_subset(subset=self._GPU_LIBS, superset=libs)
         self._assert_is_subset(subset=self._GPU_BINS, superset=bins)
-        self._assert_is_subset(subset=self._GPU_LD_LIB_PATHS, superset=ld_lib_paths)
+        self._assert_is_subset(subset=self._GPU_ENV_LD_LIB_PATH, superset=env_ld_lib_path)
+        self._assert_is_subset(subset=self._GPU_ENV_PATH, superset=env_path)
 
     #CUDA_VISIBLE_DEVICES=1 ==> container can see /dev/nvidia1
     def test_activate_gpu0_with_environment_variable(self):
         self.environment_variable_gpus="1"
-        devices, libs, bins, ld_lib_paths = self._get_gpu_properties_in_container()
+        devices, libs, bins, env_ld_lib_path, env_path = self._get_gpu_properties_in_container()
         self.assertEqual(devices, ["nvidia1"])
         self._assert_is_subset(subset=self._GPU_LIBS, superset=libs)
         self._assert_is_subset(subset=self._GPU_BINS, superset=bins)
-        self._assert_is_subset(subset=self._GPU_LD_LIB_PATHS, superset=ld_lib_paths)
+        self._assert_is_subset(subset=self._GPU_ENV_LD_LIB_PATH, superset=env_ld_lib_path)
+        self._assert_is_subset(subset=self._GPU_ENV_PATH, superset=env_path)
 
     #CUDA_VISIBLE_DEVICES=0,1 ==> container can see both GPUs
     def test_activate_gpu0_and_gpu1_with_environment_variable(self):
         self.environment_variable_gpus="0,1"
-        devices, libs, bins, ld_lib_paths = self._get_gpu_properties_in_container()
+        devices, libs, bins, env_ld_lib_path, env_path = self._get_gpu_properties_in_container()
         self.assertEqual(devices, ["nvidia0", "nvidia1"])
         self._assert_is_subset(subset=self._GPU_LIBS, superset=libs)
         self._assert_is_subset(subset=self._GPU_BINS, superset=bins)
-        self._assert_is_subset(subset=self._GPU_LD_LIB_PATHS, superset=ld_lib_paths)
+        self._assert_is_subset(subset=self._GPU_ENV_LD_LIB_PATH, superset=env_ld_lib_path)
+        self._assert_is_subset(subset=self._GPU_ENV_PATH, superset=env_path)
 
 
     #CUDA_VISIBLE_DEVICES= and --gpu=0,1 ==> container can see no GPU
     def test_environment_variable_overrides_command_line_option_0(self):
         self.cmdline_gpus="0,1"
         self.environment_variable_gpus=""
-        devices, libs, bins, ld_lib_paths = self._get_gpu_properties_in_container()
+        devices, libs, bins, env_ld_lib_path, env_path = self._get_gpu_properties_in_container()
         self.assertEqual(devices, [])
         self.assertEqual(libs, [])
         self.assertEqual(bins, [])
-        self.assertEqual(ld_lib_paths, [])
+        self.assertEqual(env_ld_lib_path, [])
+        self.assertEqual(env_path, [])
     
     #CUDA_VISIBLE_DEVICES=NoDevFiles and --gpu=0,1 ==> container can see no GPU
     def test_environment_variable_overrides_command_line_option_1(self):
         self.cmdline_gpus="0,1"
         self.environment_variable_gpus="NoDevFiles"
-        devices, libs, bins, ld_lib_paths = self._get_gpu_properties_in_container()
+        devices, libs, bins, env_ld_lib_path, env_path = self._get_gpu_properties_in_container()
         self.assertEqual(devices, [])
         self.assertEqual(libs, [])
         self.assertEqual(bins, [])
-        self.assertEqual(ld_lib_paths, [])
+        self.assertEqual(env_ld_lib_path, [])
+        self.assertEqual(env_path, [])
 
     #CUDA_VISIBLE_DEVICES=0 and --gpu=0,1 ==> container can see /dev/nvidia0
     def test_environment_variable_overrides_command_line_option_2(self):
         self.cmdline_gpus="0,1"
         self.environment_variable_gpus="0"
-        devices, libs, bins, ld_lib_paths = self._get_gpu_properties_in_container()
+        devices, libs, bins, env_ld_lib_path, env_path = self._get_gpu_properties_in_container()
         self.assertEqual(devices, ["nvidia0"])
         self._assert_is_subset(subset=self._GPU_LIBS, superset=libs)
         self._assert_is_subset(subset=self._GPU_BINS, superset=bins)
-        self._assert_is_subset(subset=self._GPU_LD_LIB_PATHS, superset=ld_lib_paths)
+        self._assert_is_subset(subset=self._GPU_ENV_LD_LIB_PATH, superset=env_ld_lib_path)
+        self._assert_is_subset(subset=self._GPU_ENV_PATH, superset=env_path)
 
     def _get_gpu_properties_in_container(self):
         return (self._get_gpu_devices_in_container(), \
                 self._get_gpu_libraries_in_container(), \
                 self._get_gpu_binaries_in_container(), \
-                self._get_gpu_ld_library_paths_in_container())
+                self._get_gpu_paths_in_container_environment_variable("LD_LIBRARY_PATH"), \
+                self._get_gpu_paths_in_container_environment_variable("PATH"))
 
     def _get_gpu_devices_in_container(self):
         devices = self._get_command_output_in_container(["ls", "/dev"])
@@ -224,9 +235,9 @@ class TestGPUDevices(unittest.TestCase):
         else:
             return []
 
-    def _get_gpu_ld_library_paths_in_container(self):
+    def _get_gpu_paths_in_container_environment_variable(self, variable_name):
         output = self._get_command_output_in_container(["env"])
-        expr = re.compile("LD_LIBRARY_PATH=")
+        expr = re.compile(variable_name + "=")
         paths = None
         for out in output:
             if expr.match(out) is not None:
