@@ -931,26 +931,10 @@ int bindmount_directory_contents(   UdiRootConfig *udi_config, MountList* mount_
             || (strcmp("/dev", src_dir)==0 && strcmp("stderr", entry->d_name)==0))
             continue;
 
+        char tmp[PATH_MAX];
         char src_abs_entry[PATH_MAX];
-        snprintf(src_abs_entry, PATH_MAX, "%s/%s", src_dir, entry->d_name);
-        
-        int is_symlink_conversion_required;
-        if(is_symlink(src_abs_entry, &is_symlink_conversion_required) != 0)
-        {
-            fprintf(stderr, "FAILED to retrieve symlink information\n");
-            closedir(dir);
-            return 1;
-        }
-        
-        if(is_symlink_conversion_required)
-        {
-            if(convert_symlink_to_target(src_dir, src_abs_entry) != 0)
-            {
-                fprintf(stderr, "FAILED to convert symlink to target\n");
-                closedir(dir);
-                return 1;
-            }
-        }
+        snprintf(tmp, PATH_MAX, "%s/%s", src_dir, entry->d_name);
+        realpath(tmp, src_abs_entry); //convert symlinks to target 
         
         char dest_abs_entry[PATH_MAX];
         snprintf(dest_abs_entry, PATH_MAX, "%s/%s", dest_dir, entry->d_name);
@@ -974,63 +958,6 @@ int bindmount_directory_contents(   UdiRootConfig *udi_config, MountList* mount_
         }
     }
     closedir(dir);
-    return 0;
-}
-
-/*! If the file specified by path is a symlink the output parameter is_link will be 1, otherwise 0. */
-int is_symlink(char* path, int* is_link)
-{
-    struct stat sb;
-    
-    if (lstat(path, &sb) == -1)
-    {
-        fprintf(stderr, "FAILED to stat file %s.\n", path);
-        perror("    --- REASON: ");
-        return 1;
-    }
-
-    *is_link = S_ISLNK(sb.st_mode);
-    return 0;
-}
-
-/*!
- * Converts the given symlink to its target.
- * \param src_dir Absolute path to the directory containing the symlink.
- * \param symlink Absolute path to the symlink. This is also the output
- * parameter that will contain the absolute path of the symlink's target.
- *
- * \returns 0 upon success, 1 upon failure
- */
-int convert_symlink_to_target(const char* src_dir, char* symlink)
-{
-    int not_done;
-    do
-    {
-        char target[PATH_MAX];
-        ssize_t target_length = readlink(symlink, target, PATH_MAX-1);
-        if(target_length == -1)
-        {
-            fprintf(stderr, "cannot readlink %s\n", symlink);
-            perror("   --- REASON: ");
-            return 1;
-        }
-        target[target_length] = 0;
-        if(strncmp(target, "/", 1)==0)
-        {
-            strncpy(symlink, target, PATH_MAX);
-        }
-        else
-        {
-            snprintf(symlink, PATH_MAX, "%s/%s", src_dir, target);
-        }
-    
-        if(is_symlink(symlink, &not_done) != 0)
-        {
-            return 1;
-        }
-
-    } while(not_done);
-
     return 0;
 }
 
