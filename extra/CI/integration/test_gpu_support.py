@@ -238,7 +238,7 @@ class TestGPUDevices(unittest.TestCase):
     def _get_gpu_paths_in_container_environment_variable(self, variable_name):
         output = self._get_command_output_in_container(["env"])
         expr = re.compile(variable_name + "=")
-        paths = None
+        paths = []
         for out in output:
             if expr.match(out) is not None:
                 paths = out.split("=")[1].split(":")
