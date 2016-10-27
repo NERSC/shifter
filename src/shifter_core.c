@@ -789,7 +789,6 @@ _fail_copy_etcPath:
     if(bindmount_dev_contents(udiConfig, &mountCache) != 0)
     {
         fprintf(stderr, "FAILED to bind mount /dev contents. Exiting.\n");
-        perror("   --- REASON: ");
         ret = 1;
         goto _prepSiteMod_unclean;
     }
