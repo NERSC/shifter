@@ -935,22 +935,22 @@ int bindmount_dev_contents(UdiRootConfig *udi_config, MountList* mount_cache)
             || strcmp("stderr", entry->d_name)==0)
             continue;
 
-        char src_abs_entry[PATH_MAX];
-        char src_abs_entry_target[PATH_MAX];
-        snprintf(src_abs_entry, PATH_MAX, "/dev/%s", entry->d_name);
-        realpath(src_abs_entry, src_abs_entry_target); //convert symlink to target if necessary
+        char src_entry[PATH_MAX];
+        char src_entry_target[PATH_MAX];
+        snprintf(src_entry, PATH_MAX, "/dev/%s", entry->d_name);
+        realpath(src_entry, src_entry_target); //convert symlink to target if necessary
 
-        char dest_abs_entry[PATH_MAX];
-        snprintf(dest_abs_entry, PATH_MAX, "%s/dev/%s", udi_config->udiMountPoint, entry->d_name);
+        char dest_entry[PATH_MAX];
+        snprintf(dest_entry, PATH_MAX, "%s/dev/%s", udi_config->udiMountPoint, entry->d_name);
        
-        int is_symlink = strcmp(src_abs_entry, src_abs_entry_target) != 0;
+        int is_symlink = strcmp(src_entry, src_entry_target) != 0;
         if(is_symlink)
         {
             //create symlink
-            if(symlink(src_abs_entry_target, dest_abs_entry) != 0)
+            if(symlink(src_entry_target, dest_entry) != 0)
             {
                 closedir(dir);
-                fprintf(stderr, "FAILED to create symlink (target: %s, path: %s)", src_abs_entry_target, dest_abs_entry);
+                fprintf(stderr, "FAILED to create symlink (target: %s, path: %s)", src_entry_target, dest_entry);
                 perror(" --- REASON: ");
                 return 1;
             }
@@ -958,7 +958,7 @@ int bindmount_dev_contents(UdiRootConfig *udi_config, MountList* mount_cache)
         else
         {
             //do bind mount
-            if(create_mount_point(src_abs_entry, dest_abs_entry) != 0)
+            if(create_mount_point(src_entry, dest_entry) != 0)
             {
                 closedir(dir);
                 fprintf(stderr, "FAILED to create mount point\n");
@@ -967,10 +967,10 @@ int bindmount_dev_contents(UdiRootConfig *udi_config, MountList* mount_cache)
 
             int mount_flags=0;
             int overwrite_mounts=0;
-            if(_shifterCore_bindMount(udi_config, mount_cache, src_abs_entry, dest_abs_entry, mount_flags, overwrite_mounts) != 0)
+            if(_shifterCore_bindMount(udi_config, mount_cache, src_entry, dest_entry, mount_flags, overwrite_mounts) != 0)
             {
                 closedir(dir);
-                fprintf(stderr, "FAILED to bind mount %s to %s\n", src_abs_entry, dest_abs_entry);
+                fprintf(stderr, "FAILED to bind mount %s to %s\n", src_entry, dest_entry);
                 perror("   --- REASON: ");
                 return 1;
             }
