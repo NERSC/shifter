@@ -938,7 +938,13 @@ int bindmount_dev_contents(UdiRootConfig *udi_config, MountList* mount_cache)
         char src_entry[PATH_MAX];
         char src_entry_target[PATH_MAX];
         snprintf(src_entry, PATH_MAX, "/dev/%s", entry->d_name);
-        realpath(src_entry, src_entry_target); //convert symlink to target if necessary
+        if(realpath(src_entry, src_entry_target) == NULL) //convert symlink to target if necessary
+        {
+            closedir(dir);
+            fprintf(stderr, "FAILED to call realpath (argument: %s)", src_entry);
+            perror(" --- REASON: ");
+            return 1;
+        }
 
         char dest_entry[PATH_MAX];
         snprintf(dest_entry, PATH_MAX, "%s/dev/%s", udi_config->udiMountPoint, entry->d_name);
