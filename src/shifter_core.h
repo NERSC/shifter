@@ -71,7 +71,7 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
 int destructUDI(UdiRootConfig *udiConfig, int killSshd);
 int bindImageIntoUDI(const char *relpath, ImageData *imageData, UdiRootConfig *udiConfig, int copyFlag);
 int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig);
-int bindmount_directory_contents(UdiRootConfig*, MountList*, const char*, const char*);
+int bindmount_dev_contents(UdiRootConfig*, MountList*);
 int is_symlink(char*, int*);
 int convert_symlink_to_target(const char*, char*);
 int create_mount_point(const char*, const char*);
