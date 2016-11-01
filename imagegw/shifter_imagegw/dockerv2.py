@@ -529,7 +529,8 @@ class DockerV2Handle(object):
 
             return [x for x in layer_members \
                     if (not x.name == to_remove
-                        and not x.name.startswith(prefix_to_remove))]
+                        and not x.name.startswith(prefix_to_remove)
+			and not x.isdev())]
 
         layer_paths = []
         tar_file_refs = []
