@@ -133,6 +133,18 @@ def _pull_dockerv2(request, location, repo, tag, updater):
             options['cacert'] = cacert
         options['baseUrl'] = url
 
+        if 'authMethod' in params:
+            options['authMethod'] = params['authMethod']
+
+        if location in request['session']['tokens']:
+            userpass = request['session']['tokens'][location]
+            options['username'] = userpass.split(':')[0]
+            options['password'] = ''.join(userpass.split(':')[1:])
+        elif request['default']:
+            userpass = request['session']['tokens']['default']
+            options['username'] = userpass.split(':')[0]
+            options['password'] = ''.join(userpass.split(':')[1:])
+
         imageident = '%s:%s' % (repo, tag)
         dock = dockerv2.DockerV2Handle(imageident, options, updater=updater)
         updater.update_status("PULLING", 'Getting manifest')
@@ -172,10 +184,12 @@ def pull_image(request, updater=DEFAULT_UPDATER):
     # See if there is a location specified
     location = CONFIG['DefaultImageLocation']
     tag = request['tag']
+    request['default'] = 1
     if tag.find('/') > 0:
         parts = tag.split('/')
         if parts[0] in CONFIG['Locations']:
             # This is a location
+            request['default'] = 0
             location = parts[0]
             tag = '/'.join(parts[1:])
 
