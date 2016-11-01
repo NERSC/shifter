@@ -136,8 +136,8 @@ def _pull_dockerv2(request, location, repo, tag, updater):
         if 'authMethod' in params:
             options['authMethod'] = params['authMethod']
 
-        if 'session' in request and 'tokens' in request['session'] 
-            and request['session']['tokens']:
+        if ('session' in request and 'tokens' in request['session'] 
+            and request['session']['tokens']):
             if location in request['session']['tokens']:
                 userpass = request['session']['tokens'][location]
                 options['username'] = userpass.split(':')[0]
