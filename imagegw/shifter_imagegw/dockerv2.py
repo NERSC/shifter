@@ -542,7 +542,7 @@ class DockerV2Handle(object):
 
             tfname = '%s.tar' % layer['fsLayer']['blobSum']
             tfname = os.path.join(cachedir, tfname)
-            tfp = tarfile.open(tfname, 'r:gz')
+            tfp = tarfile.open(tfname, 'r:gz', errorlevel=0)
             tar_file_refs.append(tfp)
 
             ## get directory of tar contents
