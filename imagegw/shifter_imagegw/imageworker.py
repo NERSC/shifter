@@ -136,14 +136,16 @@ def _pull_dockerv2(request, location, repo, tag, updater):
         if 'authMethod' in params:
             options['authMethod'] = params['authMethod']
 
-        if location in request['session']['tokens']:
-            userpass = request['session']['tokens'][location]
-            options['username'] = userpass.split(':')[0]
-            options['password'] = ''.join(userpass.split(':')[1:])
-        elif request['default']:
-            userpass = request['session']['tokens']['default']
-            options['username'] = userpass.split(':')[0]
-            options['password'] = ''.join(userpass.split(':')[1:])
+        if 'session' in request and 'tokens' in request['session'] 
+            and request['session']['tokens']:
+            if location in request['session']['tokens']:
+                userpass = request['session']['tokens'][location]
+                options['username'] = userpass.split(':')[0]
+                options['password'] = ''.join(userpass.split(':')[1:])
+            elif request['default']:
+                userpass = request['session']['tokens']['default']
+                options['username'] = userpass.split(':')[0]
+                options['password'] = ''.join(userpass.split(':')[1:])
 
         imageident = '%s:%s' % (repo, tag)
         dock = dockerv2.DockerV2Handle(imageident, options, updater=updater)
