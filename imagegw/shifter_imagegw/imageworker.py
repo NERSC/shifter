@@ -142,7 +142,7 @@ def _pull_dockerv2(request, location, repo, tag, updater):
                 userpass = request['session']['tokens'][location]
                 options['username'] = userpass.split(':')[0]
                 options['password'] = ''.join(userpass.split(':')[1:])
-            elif request['default']:
+            elif request['default'] and 'default' in request['session']['tokens']:
                 userpass = request['session']['tokens']['default']
                 options['username'] = userpass.split(':')[0]
                 options['password'] = ''.join(userpass.split(':')[1:])
