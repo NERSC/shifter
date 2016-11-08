@@ -785,19 +785,10 @@ _fail_copy_etcPath:
     mntBuffer[PATH_MAX-1] = 0;
     _BINDMOUNT(&mountCache, "/sys", mntBuffer, 0, 1);
 
-    /* bind mount /dev contents
-     * note that here we bind mount one by one each file and folder in /dev,
-     * instead of bind mounting the entire /dev at once.
-     * This allows the GPU support part of the program to unmount
-     * the unused GPU device files from the container.
-     * */
-    const char* src = "/dev";
-    snprintf(mntBuffer, PATH_MAX, "%s/dev", udiRoot);
-    mntBuffer[PATH_MAX-1] = 0;
-    if(bindmount_directory_contents(udiConfig, &mountCache, src, mntBuffer) != 0)
+    /* mount /dev */
+    if(bindmount_dev_contents(udiConfig, &mountCache) != 0)
     {
-        fprintf(stderr, "FAILED to bind mount %s contents. Exiting.\n", src);
-        perror("   --- REASON: ");
+        fprintf(stderr, "FAILED to bind mount /dev contents. Exiting.\n");
         ret = 1;
         goto _prepSiteMod_unclean;
     }
@@ -911,126 +902,86 @@ _writeHostFile_error:
     return 1;
 }
 
-/*! bind mount all files and folders in the specified source directory to the dest directory */
-int bindmount_directory_contents(   UdiRootConfig *udi_config, MountList* mount_cache,
-                                    const char* src_dir, const char* dest_dir)
+/*! Bind mount the contents of /dev into the container.
+ * Note that here we bind mount one by one each file and folder in /dev,
+ * instead of bind mounting the entire /dev at once. This allows
+ * unmounting device files without propagating changes into the host.
+ * E.g. the GPU support part of Shifter umounts the unused GPU devices,
+ * in order to prevent the container from accessing them.
+ */
+int bindmount_dev_contents(UdiRootConfig *udi_config, MountList* mount_cache)
 {
     //for each file/folder to be bind mounted...
-    DIR* dir = opendir(src_dir);
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != NULL)
+    DIR* dir = opendir("/dev");
+    if(dir == NULL)
     {
-        if( strcmp(".", entry->d_name)==0
-            || strcmp("..", entry->d_name)==0
-            // let's skip the symlinks /dev/stdout, /dev/stdin and /dev/stderr,
-            // because when some piping is being performed
-            // (e.g. shifter --image=docker:ubuntu:14.04 ls /dev -l | grep something))
-            // the target of the symlink cannot be mounted
-            || (strcmp("/dev", src_dir)==0 && strcmp("stdout", entry->d_name)==0)
-            || (strcmp("/dev", src_dir)==0 && strcmp("stdin", entry->d_name)==0)
-            || (strcmp("/dev", src_dir)==0 && strcmp("stderr", entry->d_name)==0))
-            continue;
-
-        char src_abs_entry[PATH_MAX];
-        snprintf(src_abs_entry, PATH_MAX, "%s/%s", src_dir, entry->d_name);
-        
-        int is_symlink_conversion_required;
-        if(is_symlink(src_abs_entry, &is_symlink_conversion_required) != 0)
-        {
-            fprintf(stderr, "FAILED to retrieve symlink information\n");
-            closedir(dir);
-            return 1;
-        }
-        
-        if(is_symlink_conversion_required)
-        {
-            if(convert_symlink_to_target(src_dir, src_abs_entry) != 0)
-            {
-                fprintf(stderr, "FAILED to convert symlink to target\n");
-                closedir(dir);
-                return 1;
-            }
-        }
-        
-        char dest_abs_entry[PATH_MAX];
-        snprintf(dest_abs_entry, PATH_MAX, "%s/%s", dest_dir, entry->d_name);
-       
-        if(create_mount_point(src_abs_entry, dest_abs_entry) != 0)
-        {
-            fprintf(stderr, "FAILED to create mount point\n");
-            closedir(dir);
-            return 1;
-        }
-
-        //do the bind mount
-        int mount_flags=0;
-        int overwrite_mounts=0;
-        if(_shifterCore_bindMount(udi_config, mount_cache, src_abs_entry, dest_abs_entry, mount_flags, overwrite_mounts) != 0)
-        {
-            closedir(dir);
-            fprintf(stderr, "FAILED to bind mount %s to %s\n", src_abs_entry, dest_abs_entry);
-            perror("   --- REASON: ");
-            return 1;
-        }
-    }
-    closedir(dir);
-    return 0;
-}
-
-/*! If the file specified by path is a symlink the output parameter is_link will be 1, otherwise 0. */
-int is_symlink(char* path, int* is_link)
-{
-    struct stat sb;
-    
-    if (lstat(path, &sb) == -1)
-    {
-        fprintf(stderr, "FAILED to stat file %s.\n", path);
-        perror("    --- REASON: ");
+        fprintf(stderr, "FAILED to opendir /dev");
+        perror(" --- REASON:");
         return 1;
     }
 
-    *is_link = S_ISLNK(sb.st_mode);
-    return 0;
-}
-
-/*!
- * Converts the given symlink to its target.
- * \param src_dir Absolute path to the directory containing the symlink.
- * \param symlink Absolute path to the symlink. This is also the output
- * parameter that will contain the absolute path of the symlink's target.
- *
- * \returns 0 upon success, 1 upon failure
- */
-int convert_symlink_to_target(const char* src_dir, char* symlink)
-{
-    int not_done;
-    do
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != NULL)
     {
-        char target[PATH_MAX];
-        ssize_t target_length = readlink(symlink, target, PATH_MAX-1);
-        if(target_length == -1)
+        // skip some special files
+        // note: stdin, stdout, stderr shall be skipped, otherwise
+        // the system call "realpath" could fail when piping is performed
+        // (e.g. shifter --image=image-name:latest ls /home | grep username)
+        if( strcmp(".", entry->d_name)==0 
+            || strcmp("..", entry->d_name)==0
+            || strcmp("stdin", entry->d_name)==0
+            || strcmp("stdout", entry->d_name)==0
+            || strcmp("stderr", entry->d_name)==0)
+            continue;
+
+        char src_entry[PATH_MAX];
+        char src_entry_target[PATH_MAX];
+        snprintf(src_entry, PATH_MAX, "/dev/%s", entry->d_name);
+        if(realpath(src_entry, src_entry_target) == NULL) //convert symlink to target if necessary
         {
-            fprintf(stderr, "cannot readlink %s\n", symlink);
-            perror("   --- REASON: ");
+            closedir(dir);
+            fprintf(stderr, "FAILED to call realpath (argument: %s)", src_entry);
+            perror(" --- REASON: ");
             return 1;
         }
-        target[target_length] = 0;
-        if(strncmp(target, "/", 1)==0)
+
+        char dest_entry[PATH_MAX];
+        snprintf(dest_entry, PATH_MAX, "%s/dev/%s", udi_config->udiMountPoint, entry->d_name);
+       
+        int is_symlink = strcmp(src_entry, src_entry_target) != 0;
+        if(is_symlink)
         {
-            strncpy(symlink, target, PATH_MAX);
+            //create symlink
+            if(symlink(src_entry_target, dest_entry) != 0)
+            {
+                closedir(dir);
+                fprintf(stderr, "FAILED to create symlink (target: %s, path: %s)", src_entry_target, dest_entry);
+                perror(" --- REASON: ");
+                return 1;
+            }
         }
         else
         {
-            snprintf(symlink, PATH_MAX, "%s/%s", src_dir, target);
-        }
-    
-        if(is_symlink(symlink, &not_done) != 0)
-        {
-            return 1;
-        }
+            //do bind mount
+            if(create_mount_point(src_entry, dest_entry) != 0)
+            {
+                closedir(dir);
+                fprintf(stderr, "FAILED to create mount point\n");
+                return 1;
+            }
 
-    } while(not_done);
-
+            int mount_flags=0;
+            int overwrite_mounts=0;
+            if(_shifterCore_bindMount(udi_config, mount_cache, src_entry, dest_entry, mount_flags, overwrite_mounts) != 0)
+            {
+                closedir(dir);
+                fprintf(stderr, "FAILED to bind mount %s to %s\n", src_entry, dest_entry);
+                perror("   --- REASON: ");
+                return 1;
+            }
+        }
+    }
+    closedir(dir);
     return 0;
 }
 
