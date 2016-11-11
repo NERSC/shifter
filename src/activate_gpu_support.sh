@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#here is necessary to set PATH manually because shifter might execute this script
-#with an empty environment (after calling the clearenv function)
+#here is necessary to set PATH manually because shifter executes
+#this script with an empty environment
 export PATH=/usr/local/bin:/usr/bin:/bin:/sbin
 
 is_gpu_support_enabled=
@@ -13,12 +13,12 @@ nvidia_lib64_path=
 
 #the NVIDIA compute libraries that will be bind mounted into the container
 nvidia_compute_libs="cuda \
-                    nvcuvid \
                     nvidia-compiler \
                     nvidia-ptxjitcompiler \
                     nvidia-encode \
                     nvidia-ml \
-                    nvidia-fatbinaryloader"
+                    nvidia-fatbinaryloader \
+                    nvidia-opencl"
 
 #the NVIDIA binaries that will be bind mounted into the container
 nvidia_binaries="nvidia-cuda-mps-control \
