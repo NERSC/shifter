@@ -15,6 +15,7 @@ nvidia_lib64_path=
 nvidia_compute_libs="cuda \
                     nvcuvid \
                     nvidia-compiler \
+                    nvidia-ptxjitcompiler \
                     nvidia-encode \
                     nvidia-ml \
                     nvidia-fatbinaryloader"
