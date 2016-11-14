@@ -617,17 +617,17 @@ static int _assign(const char *key, const char *value, void *t_config) {
         char* subPath;
         subPath_size = strlen(config->siteResources) + 9;
         subPath = (char *) malloc(sizeof(char *) * subPath_size);
-        sprintf(subPath, "%s/gpu/bin", udiConfig->siteResources);
+        sprintf(subPath, "%s/gpu/bin", config->siteResources);
         config->gpuBinPath = strdup(subPath);
         free(subPath);
         subPath_size = strlen(config->siteResources) + 9;
         subPath = (char *) malloc(sizeof(char *) * subPath_size);
-        sprintf(subPath, "%s/gpu/lib", udiConfig->siteResources);
+        sprintf(subPath, "%s/gpu/lib", config->siteResources);
         config->gpuLibPath = strdup(subPath);
         free(subPath);
         subPath_size = strlen(config->siteResources) + 11;
         subPath = (char *) malloc(sizeof(char *) * subPath_size);
-        sprintf(subPath, "%s/gpu/lib64", udiConfig->siteResources);
+        sprintf(subPath, "%s/gpu/lib64", config->siteResources);
         config->gpuLib64Path = strdup(subPath);
         free(subPath);
     } else if (strcmp(key, "nodeContextPrefix") == 0) {
