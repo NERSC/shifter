@@ -116,9 +116,7 @@ typedef struct _UdiRootConfig {
     char *ddPath;
     char *mkfsXfsPath;
 
-    char *nvidiaBinPath;
-    char *nvidiaLibPath;
-    char *nvidiaLib64Path;
+    char *siteResources;
 
     /* support variables for above */
     size_t siteEnv_capacity;
@@ -145,6 +143,11 @@ typedef struct _UdiRootConfig {
     char *jobIdentifier;
     dev_t *bindMountAllowedDevices;
     size_t bindMountAllowedDevices_sz;
+
+    /* subdirectory paths for site-specific dependencies */
+    char *gpuBinPath;
+    char *gpuLibPath;
+    char *gpuLib64Path;
 } UdiRootConfig;
 
 int parse_UdiRootConfig(const char *, UdiRootConfig *, int validateFlags);

@@ -25,8 +25,8 @@ class TestGPUDevices(unittest.TestCase):
                     "nvidia-debugdump", \
                     "nvidia-persistenced", \
                     "nvidia-smi"}
-    _GPU_ENV_LD_LIB_PATH = {"/gpu-support/nvidia/lib", "/gpu-support/nvidia/lib64"}
-    _GPU_ENV_PATH = {"/gpu-support/nvidia/bin"}
+    _GPU_ENV_LD_LIB_PATH = {"/site-resources/gpu/lib", "/site-resources/gpu/lib64"}
+    _GPU_ENV_PATH = {"/site-resources/gpu/bin"}
 
     _created_gpu_devices = set()
     _created_gpu_libs = set()
@@ -113,7 +113,7 @@ class TestGPUDevices(unittest.TestCase):
         devices, libs, bins, env_ld_lib_path, env_path = self._get_gpu_properties_in_container()
         self.assertEqual(devices, {"nvidia1"})
         self._assert_is_subset(subset=self._GPU_LIBS, superset=libs)
-        self._assert_is_subset(subset=self._GPU_BINS, superset=bins) 
+        self._assert_is_subset(subset=self._GPU_BINS, superset=bins)
         self.assertEqual(self._GPU_ENV_LD_LIB_PATH, env_ld_lib_path)
         self.assertEqual(self._GPU_ENV_PATH, env_path)
 
@@ -136,7 +136,7 @@ class TestGPUDevices(unittest.TestCase):
         self.assertEqual(bins, set())
         self.assertEqual(env_ld_lib_path, set())
         self.assertEqual(env_path, set())
-    
+
     #CUDA_VISIBLE_DEVICES=NoDevFiles ==> container can see no GPU
     def test_deactivate_gpus_with_environment_variable_1(self):
         self.environment_variable_gpus="NoDevFiles"
@@ -188,7 +188,7 @@ class TestGPUDevices(unittest.TestCase):
         self.assertEqual(bins, set())
         self.assertEqual(env_ld_lib_path, set())
         self.assertEqual(env_path, set())
-    
+
     #CUDA_VISIBLE_DEVICES=NoDevFiles and --gpu=0,1 ==> container can see no GPU
     def test_environment_variable_overrides_command_line_option_1(self):
         self.cmdline_gpus="0,1"
@@ -225,13 +225,13 @@ class TestGPUDevices(unittest.TestCase):
 
     def _get_gpu_libraries_in_container(self):
         if self._is_gpu_support_in_container_enabled():
-            return set(self._get_command_output_in_container(["ls", "/gpu-support/nvidia/lib64"]))
+            return set(self._get_command_output_in_container(["ls", "/site-resources/gpu/lib64"]))
         else:
             return set()
 
     def _get_gpu_binaries_in_container(self):
         if self._is_gpu_support_in_container_enabled():
-            return set(self._get_command_output_in_container(["ls", "/gpu-support/nvidia/bin"]))
+            return set(self._get_command_output_in_container(["ls", "/site-resources/gpu/bin"]))
         else:
             return set()
 

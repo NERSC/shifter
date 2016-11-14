@@ -31,6 +31,6 @@ siteEnv=SHIFTER_RUNTIME=1 \
 siteEnvAppend=PATH=/opt/udiImage/bin\
               MANPATH=/opt/udiImage/share/man
 siteEnvPrepend=PKG_CONFIG_PATH=/this/is/fake
-nvidiaBinPath=/gpu-support/nvidia/bin
-nvidiaLibPath=/gpu-support/nvidia/lib
-nvidiaLib64Path=/gpu-support/nvidia/lib64
+gpuBinPath=/site-resources/gpu/bin
+gpuLibPath=/site-resources/gpu/lib
+gpuLib64Path=/site-resources/gpu/lib64
