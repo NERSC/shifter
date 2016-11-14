@@ -911,7 +911,6 @@ _writeHostFile_error:
  */
 int bindmount_dev_contents(UdiRootConfig *udi_config, MountList* mount_cache)
 {
-    //for each file/folder to be bind mounted...
     DIR* dir = opendir("/dev");
     if(dir == NULL)
     {
@@ -920,12 +919,13 @@ int bindmount_dev_contents(UdiRootConfig *udi_config, MountList* mount_cache)
         return 1;
     }
 
+    //for each file/folder in /dev
     struct dirent* entry;
     while ((entry = readdir(dir)) != NULL)
     {
         // skip some special files
         // note: stdin, stdout, stderr shall be skipped, otherwise
-        // the system call "realpath" could fail when piping is performed
+        // the "realpath" function could fail when piping is performed
         // (e.g. shifter --image=image-name:latest ls /home | grep username)
         if( strcmp(".", entry->d_name)==0 
             || strcmp("..", entry->d_name)==0
@@ -937,7 +937,8 @@ int bindmount_dev_contents(UdiRootConfig *udi_config, MountList* mount_cache)
         char src_entry[PATH_MAX];
         char src_entry_target[PATH_MAX];
         snprintf(src_entry, PATH_MAX, "/dev/%s", entry->d_name);
-        if(realpath(src_entry, src_entry_target) == NULL) //convert symlink to target if necessary
+        //convert symlink to target if necessary
+        if(realpath(src_entry, src_entry_target) == NULL)
         {
             closedir(dir);
             fprintf(stderr, "FAILED to call realpath (argument: %s)", src_entry);
@@ -985,8 +986,8 @@ int bindmount_dev_contents(UdiRootConfig *udi_config, MountList* mount_cache)
     return 0;
 }
 
-/*! Create an empty file at location specified by "to"
- * where the file specified by "from" will be mounted.*/
+/*! Create an empty file/directory at location specified by "to"
+ * where the file/direcory specified by "from" will be mounted.*/
 int create_mount_point(const char* from, const char* to)
 {
     struct stat sb;
