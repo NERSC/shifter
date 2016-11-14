@@ -1182,6 +1182,7 @@ TEST(ShifterCoreTestGroup, setupenv_gpu_support_test) {
     config->siteEnv = (char **) malloc(sizeof(char *) * 2);
     config->siteEnv[0] = NULL;
 
+    config->siteResources = strdup("/site-resources");
     config->gpuBinPath = strdup("/site-resources/gpu/bin");
     config->gpuLibPath = strdup("/site-resources/gpu/lib");
     config->gpuLib64Path = strdup("/site-resources/gpu/lib64");
