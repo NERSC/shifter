@@ -1,13 +1,14 @@
-language: python
 sudo: true
+dist: trusty
+language: python
 python:
   - "2.7"
 # command to install dependencies
 env:
   - PATH
 before_install:
+  - sudo chmod 755 /var/log
   - sudo add-apt-repository "deb http://us.archive.ubuntu.com/ubuntu/ precise universe multiverse"
-  - sudo add-apt-repository -y ppa:ondrej/php5
   - sudo apt-get update -qq
   - sudo apt-get install -qq libjson-c2 libjson-c-dev munge libmunge2 libmunge-dev libcurl4-openssl-dev autoconf automake libtool curl make valgrind xfsprogs squashfs-tools libcap-dev
   - sudo modprobe squashfs
