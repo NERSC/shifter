@@ -796,7 +796,7 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
     /* all of the mounts visible to us are now in our private namespace; since
      * we'll be changing things, need to ensure that nothing is mounted with
      * MS_SHARED, which would cause our changes to propagate out to the outside
-     * system.  If we used MS_PRIVATE it would prevent us from receiving
+     * system.  If we used MS_PRIVATE it would prevent us from receiving 
      * external events even if downstream bindmounts made by the container
      * specify MS_SLAVE.  Thus setting MS_SLAVE forces the one-way propagation
      * of mount/umounts that are desirable here
