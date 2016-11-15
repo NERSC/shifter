@@ -618,14 +618,18 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
     return 0;
 }
 
+
+/**
+ * Determine if GPU support is requested through the CUDA_VISIBLE_DEVICES
+ * environment variable.
+ * CUDA_VISIBLE_DEVICES is also set by the SLURM workload manager generic
+ * resources (GRES) plugin.
+ * As a design decision, the environment variable overrides
+ * the --gpu command line option.
+ */
 int parse_gpu_env(struct options *opts) {
     char *envPtr = NULL;
 
-    /* CUDA_VISIBLE_DEVICES is set by the SLURM gres plugin when GPUs are
-     * requested for the allocation.
-     * As a design decision, the environment variable overrides
-     * the --gpu command line option.
-     */
     if ((envPtr = getenv("CUDA_VISIBLE_DEVICES")) != NULL) {
         if (opts->gpu_ids != NULL) {
             free(opts->gpu_ids);
