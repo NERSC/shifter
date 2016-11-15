@@ -7,9 +7,9 @@ export PATH=/usr/local/bin:/usr/bin:/bin:/sbin
 is_gpu_support_enabled=
 gpu_ids=
 container_mount_point=
-nvidia_bin_path=
-nvidia_lib_path=
-nvidia_lib64_path=
+gpu_bin_path=
+gpu_lib_path=
+gpu_lib64_path=
 
 #the NVIDIA compute libraries that will be bind mounted into the container
 nvidia_compute_libs="cuda \
@@ -48,9 +48,9 @@ parse_command_line_arguments()
       is_gpu_support_enabled=true
       nvidia_devices=$(echo $1 | tr , '\n' | sed 's/^/\/dev\/nvidia/')
       container_mount_point=$2
-      nvidia_bin_path=$3
-      nvidia_lib_path=$4
-      nvidia_lib64_path=$5
+      gpu_bin_path=$3
+      gpu_lib_path=$4
+      gpu_lib64_path=$5
     elif [ $# -eq 1 ]; then
       is_gpu_support_enabled=false
       container_mount_point=$1
@@ -98,9 +98,9 @@ add_nvidia_compute_libs_to_container()
         return
     fi
 
-    local lib_path_container=$container_mount_point/$nvidia_lib_path
-    local lib64_path_container=$container_mount_point/$nvidia_lib64_path
-    
+    local lib_path_container=$container_mount_point/$gpu_lib_path
+    local lib64_path_container=$container_mount_point/$gpu_lib64_path
+
     mkdir -p $lib_path_container
     exit_if_previous_command_failed
     mkdir -p $lib64_path_container
@@ -112,7 +112,7 @@ add_nvidia_compute_libs_to_container()
             log WARN "could not find library: $lib"
             continue
         fi
-        
+
         for lib_host in $libs_host; do
             local arch=$( file -L $lib_host | awk '{print $3}' | cut -d- -f1 )
             if [ "$arch" = "32" ]; then
@@ -123,7 +123,7 @@ add_nvidia_compute_libs_to_container()
                 log ERROR "found/parsed invalid CPU architecture of NVIDIA library"
                 exit 1
             fi
-            
+
             touch $lib_container
             mount --bind $lib_host $lib_container
         done
@@ -136,7 +136,7 @@ add_nvidia_binaries_to_container()
         return
     fi
 
-    local bins_path_container=$container_mount_point/$nvidia_bin_path
+    local bins_path_container=$container_mount_point/$gpu_bin_path
 
     mkdir -p $bins_path_container
     exit_if_previous_command_failed
@@ -189,7 +189,7 @@ is_value_not_in_list()
 
 remove_unused_nvidia_devices()
 {
-        
+
     if [ $is_gpu_support_enabled = false ]; then
         for device in $(ls /dev | grep -E 'nvidia'); do
             local container_device_file=$(get_container_device_file $device)

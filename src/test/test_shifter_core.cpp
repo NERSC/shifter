@@ -800,17 +800,17 @@ struct directory_entry
         : path(path)
         , realpath(realpath)
     {}
-    
+
     bool operator==(const directory_entry& rhs) const
     {
         return path == rhs.path && realpath == rhs.realpath;
     }
-    
+
     bool operator<(const directory_entry& rhs) const
     {
         return path < rhs.path;
     }
-    
+
     std::string path;
     std::string realpath;   //this value is different than path when the entry
                             //is a symlink (it takes the value of the symlink's target)
@@ -831,8 +831,8 @@ std::vector<directory_entry> get_sorted_directory_entries(const std::string& dir
             || std::string("stdout") == entry->d_name
             || std::string("stderr") == entry->d_name)
             continue;
-       
-        std::string entry_abs_path = dir_name + "/" + entry->d_name; 
+
+        std::string entry_abs_path = dir_name + "/" + entry->d_name;
         char entry_realpath[PATH_MAX];
         CHECK(realpath(entry_abs_path.c_str(), entry_realpath) != NULL);
         entries.push_back(directory_entry(entry_abs_path, entry_realpath));
@@ -847,23 +847,23 @@ TEST(ShifterCoreTestGroup, bindmount_dev_contents)
 IGNORE_TEST(ShifterCoreTestGroup, bindmount_dev_contents)
 #endif
 {
-    MountList mounts = {}; 
+    MountList mounts = {};
     UdiRootConfig config = {};
     config.udiMountPoint = tmpDir;
     std::string container_dev_path = std::string(tmpDir) + "/dev";
-    
+
     CHECK(mkdir(container_dev_path.c_str(), 0755) == 0);
     CHECK(parse_MountList(&mounts) == 0);
     CHECK(bindmount_dev_contents(&config, &mounts) == 0);
-    
+
     // get entries in /dev (host) and bind mounted /dev (container)
     std::vector<directory_entry> host_entries = get_sorted_directory_entries("/dev");
     std::vector<directory_entry> container_entries = get_sorted_directory_entries(container_dev_path);
-   
-    // check value of entries 
+
+    // check value of entries
     CHECK( host_entries.size() > 0 );
     CHECK( host_entries.size() == container_entries.size() );
-   
+
     typedef std::vector<directory_entry>::const_iterator dir_entry_it;
     for(dir_entry_it host_entry=host_entries.begin(), container_entry=container_entries.begin();
         host_entry != host_entries.end();
@@ -1182,9 +1182,10 @@ TEST(ShifterCoreTestGroup, setupenv_gpu_support_test) {
     config->siteEnv = (char **) malloc(sizeof(char *) * 2);
     config->siteEnv[0] = NULL;
 
-    config->nvidiaBinPath = strdup("/gpu-support/nvidia/bin");
-    config->nvidiaLibPath = strdup("/gpu-support/nvidia/lib");
-    config->nvidiaLib64Path = strdup("/gpu-support/nvidia/lib64");
+    config->siteResources = strdup("/site-resources");
+    config->gpuBinPath = strdup("/site-resources/gpu/bin");
+    config->gpuLibPath = strdup("/site-resources/gpu/lib");
+    config->gpuLib64Path = strdup("/site-resources/gpu/lib64");
 
 
     const char* gpu_ids = "0";
@@ -1197,10 +1198,10 @@ TEST(ShifterCoreTestGroup, setupenv_gpu_support_test) {
     int found = 0;
     char **ptr = NULL;
     for (ptr = local_env ; ptr && *ptr; ptr++) {
-        if (strcmp(*ptr, "PATH=/gpu-support/nvidia/bin:/usr/bin") == 0) {
+        if (strcmp(*ptr, "PATH=/site-resources/gpu/bin:/usr/bin") == 0) {
             found++;
         }
-        if (strcmp(*ptr, "LD_LIBRARY_PATH=/gpu-support/nvidia/lib64:/gpu-support/nvidia/lib:/usr/lib") == 0) {
+        if (strcmp(*ptr, "LD_LIBRARY_PATH=/site-resources/gpu/lib64:/site-resources/gpu/lib:/usr/lib") == 0) {
             found++;
         }
     }

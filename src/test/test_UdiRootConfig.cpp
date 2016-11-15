@@ -57,9 +57,9 @@ TEST(UdiRootConfigTestGroup, ParseUdiRootConfig_basic) {
     CHECK(strcmp(config.loopMountPoint, "/var/loopUdiMount") == 0);
     CHECK(strcmp(config.rootfsType, "tmpfs") == 0);
     CHECK(strcmp(config.system, "testSystem") == 0);
-    CHECK(strcmp(config.nvidiaBinPath, "/gpu-support/nvidia/bin") == 0);
-    CHECK(strcmp(config.nvidiaLibPath, "/gpu-support/nvidia/lib") == 0);
-    CHECK(strcmp(config.nvidiaLib64Path, "/gpu-support/nvidia/lib64") == 0);
+    CHECK(strcmp(config.gpuBinPath, "/site-resources/gpu/bin") == 0);
+    CHECK(strcmp(config.gpuLibPath, "/site-resources/gpu/lib") == 0);
+    CHECK(strcmp(config.gpuLib64Path, "/site-resources/gpu/lib64") == 0);
     free_UdiRootConfig(&config, 0);
 }
 
