@@ -8,7 +8,7 @@ Introduction: GPU support / Native performance for container images
 
 Containers allow applications to be portable accross platforms by packing the application in a complete filesystem that has everything needed for execution: code, libraries, system tools, environment variables, etc. Therefore, a container can ensure that an application always run under the same software environment.
 
-To achieve a degree of portability, shifter (as the container runtime) has to provide the same interfaces and behavior independently of the hardware and target platform the container is executing in. This ensures that containarized CPU-based applications can be seamlessly deployed across platforms. However, this often means that hardware accelerated features that require specialized system drivers that are optimized for specific target system cannot be natively supported without breaking portability.
+To achieve a degree of portability, shifter (as the container runtime) has to provide the same interfaces and behavior independently of the hardware and target platform the container is executing on. This ensures that containerized CPU-based applications can be seamlessly deployed across platforms. However, this often means that hardware accelerated features that require specialized system drivers that are optimized for specific target system cannot be natively supported without breaking portability.
 
 In order to mantain the portability that images provide while supporting site-optimized system features we implement a solution that relies on drivers that provide ABI compatibility and mount system specific features at the container's startup. In other words, the driver that is used by a container to allow the application to run on a laptop can be swapped at startup by the shifter runtime and instead an ABI compatible version is loaded that is optimized for the infrastructure of the supercomputer, therefore allowing the same container to achieve native performance.
 
@@ -91,7 +91,7 @@ Create links to system directories and additional required directories:
 Shifter's runtime configuration parameters
 ++++++++++++++++++++++++++++++++++++++++++
 
-At run time, Shifter takes its configuration options from a file named *udiRoot.conf*. This file must be placed in the directory specified with *--sysconfdir* when running shifter's configure script. For reference, a template with a base configuration named *udiroot.conf.example* can be found inside the sources directory (in the directory indicated by *$SHIFTER_SYSCONFDIR*).
+At run time, Shifter takes its configuration options from a file named *udiRoot.conf*. This file must be placed in the directory specified with *--sysconfdir* when running shifter's configure script. For reference, a template with a base configuration named *udiroot.conf.example* can be found inside the sources directory.
 
 To illustrate the configuration process, consider the following parameters that were modified from the template configuration (*udiroot.conf.example*) to support the install on our local cluster named *Greina*:
 
@@ -129,7 +129,7 @@ The Image Gateway can run on any node in your cluster. The requirement for the I
 Software dependencies for the Image Gateway
 +++++++++++++++++++++++++++++++++++++++++++
 
-The Image Gateway depends on *MongoDB* server, *Redis*, *squashfs-tools*, virtualenv (to further install all other python dependencies on a virtual environment), and python2.7. It is recommended to also install the dependencies needed by the shifter runtime, as of this time we have verified which of Shifter's dependencies can be omitted as they are not needed by the image gateway.
+The Image Gateway depends on *MongoDB* server, *Redis*, *squashfs-tools*, virtualenv (to further install all other python dependencies on a virtual environment), and python2.7. It is recommended to also install the dependencies needed by the shifter runtime, as of this time we have not verified which of Shifter's dependencies can be omitted as they are not needed by the image gateway.
 
 For RHEL/CentOS/Scientific Linux systems:
 
@@ -159,7 +159,7 @@ We need to create three directories:
 
 1. Where to install the Image Gateway
 2. Where the Image Gateway will cache images
-3. Where the Image Gateway will expand images. **Note: For performance reasons this should be located in a local file system** (we experienced a **40x** slowdown of pulling and expending images when the images were expanded on a Lustre parallel file system!).
+3. Where the Image Gateway will expand images. **Note: For performance reasons this should be located in a local file system** (we experienced a **40x** slowdown of pulling and expanding images when the images were expanded on a Lustre parallel file system!).
 
 .. code-block:: bash
 
@@ -179,7 +179,9 @@ Copy the contents of *shifter-master/imagegw* subdirectory to *$IMAGEGW_PATH*:
 
 Next step is to prepare a python virtualenv in the Image Gateway installation directory. If this directory is owned by root, the virtualenv and the python requirements need to be also installed as root.
 
+
 **Note**
+
 * Installing packages in the virtualenv as a regular user using `sudo pip install` will override the virtualenv settings and install the packages into the system's Python environment.
 * Creating the virtualenv in a different folder (e.g. your `/home` directory), installing the packages and copying the virtualenv folder to the Image Gateway path will make the virtualenv refer to the directory where you created it, causing errors with the workers and configuration parameters.
 
@@ -222,7 +224,7 @@ Copy the following files from the virtual-cluster installation resources:
 Configure
 +++++++++
 
-For configuration parameters, the Image Gateway uses a file named *imagemanager.json*. The configuration file must be located in the directory that was specified in Shifter's *$SHIFTER_SYSCONFDIR* (*--sysconfdir* when running shifter's *configure* script). A base template file named *imagemanager.json.example* can be found inside the sources directory (*$SHIFTER_SYSCONFDIR* from the initial shifter installation).
+For configuration parameters, the Image Gateway uses a file named *imagemanager.json*. The configuration file must be located in the directory that was specified in Shifter's *$SHIFTER_SYSCONFDIR* (*--sysconfdir* when running shifter's *configure* script). A base template file named *imagemanager.json.example* can be found inside the sources directory.
 
 As a reference of configuration parameters consider the following entries as they were used when installing in our local cluster (Greina):
 
