@@ -70,9 +70,7 @@ cat /etc/shifter/udiRoot.conf | egrep -v '^#'
 sudo mkdir -p $LIBEXECDIR/opt/udiImage
 
 echo "setting up requirements for GPU support"
-sudo /bin/bash -c "echo gpuBinPath=/site-resources/gpu/bin >> /etc/shifter/udiRoot.conf"
-sudo /bin/bash -c "echo gpuLibPath=/site-resources/gpu/lib >> /etc/shifter/udiRoot.conf"
-sudo /bin/bash -c "echo gpuLib64Path=/site-resources/gpu/lib64 >> /etc/shifter/udiRoot.conf"
+sudo /bin/bash -c "echo siteResources=/site-resources >> /etc/shifter/udiRoot.conf"
 #dummy required command line tools
 sudo touch /bin/nvidia-smi
 sudo chmod 755 /bin/nvidia-smi
