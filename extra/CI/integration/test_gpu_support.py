@@ -242,12 +242,13 @@ class TestGPUDevices(unittest.TestCase):
         for out in output:
             if expr.match(out) is not None:
                 paths = out.split("=")[1].split(":")
-        expr = re.compile("/gpu-support")
+        expr = re.compile("/site-resources/gpu")
         gpu_paths = {path for path in paths if expr.match(path) is not None}
         return gpu_paths
 
     def _is_gpu_support_in_container_enabled(self):
-        return "gpu-support" in self._get_command_output_in_container(["ls", "/"])
+        return "site-resources" in self._get_command_output_in_container(["ls", "/"]) \
+            and "gpu" in self._get_command_output_in_container(["ls", "/site-resources"])
 
     def _get_command_output_in_container(self, command):
         environment = os.environ.copy()
