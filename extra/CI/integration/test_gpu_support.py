@@ -15,11 +15,12 @@ class TestGPUDevices(unittest.TestCase):
 
     _GPU_DEVICES = {"nvidia0", "nvidia1"}
     _GPU_LIBS = {   "libcuda.so", \
-                    "libnvcuvid.so", \
                     "libnvidia-compiler.so", \
+                    "libnvidia-ptxjitcompiler.so", \
                     "libnvidia-encode.so", \
                     "libnvidia-ml.so", \
-                    "libnvidia-fatbinaryloader.so"}
+                    "libnvidia-fatbinaryloader.so", \
+                    "libnvidia-opencl.so" }
     _GPU_BINS = {   "nvidia-cuda-mps-control", \
                     "nvidia-cuda-mps-server", \
                     "nvidia-debugdump", \
