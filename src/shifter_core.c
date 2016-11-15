@@ -815,16 +815,16 @@ _prepSiteMod_unclean:
 
 /*! Write out hostsfile into image */
 /*!
- * writes out an mpi-style hostsfile, e.g., one element per task.
+ * Writes out an MPI-style hostsfile, e.g., one element per task.
  *     nid00001
  *     nid00001
  *     nid00002
  *     nid00002
- * for a two node/four task job.
- * written to /var/hostsfile within the image.
+ * For a two node/four task job.
+ * Written to /var/hostsfile within the image.
  *
- * \param minnodespec string formatted like "nid00001/2 nid00002/2" for above
- * \param udiconfig udi configuration object
+ * \param minNodeSpec string formatted like "nid00001/2 nid00002/2" for above
+ * \param udiConfig UDI configuration object
  *
  * \returns 0 upon success, 1 upon failure
  */
