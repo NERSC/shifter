@@ -529,7 +529,8 @@ class DockerV2Handle(object):
 
             return [x for x in layer_members \
                     if (not x.name == to_remove
-                        and not x.name.startswith(prefix_to_remove))]
+                        and not x.name.startswith(prefix_to_remove)
+			and not x.isdev())]
 
         layer_paths = []
         tar_file_refs = []
@@ -541,7 +542,7 @@ class DockerV2Handle(object):
 
             tfname = '%s.tar' % layer['fsLayer']['blobSum']
             tfname = os.path.join(cachedir, tfname)
-            tfp = tarfile.open(tfname, 'r:gz')
+            tfp = tarfile.open(tfname, 'r:gz', errorlevel=0)
             tar_file_refs.append(tfp)
 
             ## get directory of tar contents
