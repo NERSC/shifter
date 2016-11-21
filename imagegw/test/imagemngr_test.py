@@ -602,7 +602,7 @@ class ImageMngrTestCase(unittest.TestCase):
         er={'system':system,'tag':self.tag,'itype':self.itype}
         rec=self.m.expire(session,er,testmode=1)#,delay=False)
         assert rec is not None
-        time.sleep(2)
+        time.sleep(4)
         state=self.m.get_state(id)
         assert state=='EXPIRED'
         assert os.path.exists(file) is False
@@ -622,7 +622,7 @@ class ImageMngrTestCase(unittest.TestCase):
         er={'system':system,'tag':self.tag,'itype':self.itype}
         rec=self.m.expire(session,er)#,delay=False)
         assert rec is not None
-        time.sleep(2)
+        time.sleep(4)
         state=self.m.get_state(id)
         assert state=='EXPIRED'
         assert os.path.exists(file) is False
@@ -641,7 +641,7 @@ class ImageMngrTestCase(unittest.TestCase):
         er={'system':self.system,'tag':self.tag,'itype':self.itype}
         rec=self.m.expire(session,er,testmode=1)#,delay=False)
         assert rec is not None
-        time.sleep(2)
+        time.sleep(4)
         state=self.m.get_state(id)
         assert state=='READY'
         assert os.path.exists(file) is True
@@ -680,7 +680,7 @@ class ImageMngrTestCase(unittest.TestCase):
         file,metafile=self.create_fakeimage(self.system,record['id'],self.format)
         session=self.m.new_session(self.authadmin,self.system)
         self.m.autoexpire(session,self.system,testmode=1)#,delay=False)
-        time.sleep(2)
+        time.sleep(4)
         state=self.m.get_state(id)
         assert state=='EXPIRED'
         assert os.path.exists(file) is False
@@ -697,7 +697,7 @@ class ImageMngrTestCase(unittest.TestCase):
         file,metafile=self.create_fakeimage(self.system,record['id'],self.format)
         session=self.m.new_session(self.authadmin,self.system)
         self.m.autoexpire(session,self.system,testmode=1)#,delay=False)
-        time.sleep(2)
+        time.sleep(4)
         state=self.m.get_state(id)
         assert state=='READY'
         assert os.path.exists(file) is True
@@ -715,7 +715,7 @@ class ImageMngrTestCase(unittest.TestCase):
         file,metafile=self.create_fakeimage(self.system,record['id'],self.format)
         session=self.m.new_session(self.authadmin,self.system)
         self.m.autoexpire(session,self.system,testmode=1)#,delay=False)
-        time.sleep(2)
+        time.sleep(4)
         state=self.m.get_state(id)
         assert state=='READY'
         assert os.path.exists(file) is True
