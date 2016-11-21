@@ -786,9 +786,12 @@ _fail_copy_etcPath:
     _BINDMOUNT(&mountCache, "/sys", mntBuffer, 0, 1);
 
     /* mount /dev */
-    snprintf(mntBuffer, PATH_MAX, "%s/dev", udiRoot);
-    mntBuffer[PATH_MAX-1] = 0;
-    _BINDMOUNT(&mountCache, "/dev", mntBuffer, 0, 1);
+    if(bindmount_dev_contents(udiConfig, &mountCache) != 0)
+    {
+        fprintf(stderr, "FAILED to bind mount /dev contents. Exiting.\n");
+        ret = 1;
+        goto _prepSiteMod_unclean;
+    }
 
     /* mount /tmp */
     snprintf(mntBuffer, PATH_MAX, "%s/tmp", udiRoot);
@@ -899,7 +902,132 @@ _writeHostFile_error:
     return 1;
 }
 
-int mountImageVFS(ImageData *imageData, const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig) {
+/*! Bind mount the contents of /dev into the container.
+ * Note that here we bind mount one by one each file and folder in /dev,
+ * instead of bind mounting the entire /dev at once. This allows
+ * unmounting device files without propagating changes into the host.
+ * E.g. the GPU support part of Shifter umounts the unused GPU devices,
+ * in order to prevent the container from accessing them.
+ */
+int bindmount_dev_contents(UdiRootConfig *udi_config, MountList* mount_cache)
+{
+    DIR* dir = opendir("/dev");
+    if(dir == NULL)
+    {
+        fprintf(stderr, "FAILED to opendir /dev");
+        perror(" --- REASON:");
+        return 1;
+    }
+
+    //for each file/folder in /dev
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != NULL)
+    {
+        // skip some special files
+        // note: stdin, stdout, stderr shall be skipped, otherwise
+        // the "realpath" function could fail when piping is performed
+        // (e.g. shifter --image=image-name:latest ls /home | grep username)
+        if( strcmp(".", entry->d_name)==0
+            || strcmp("..", entry->d_name)==0
+            || strcmp("stdin", entry->d_name)==0
+            || strcmp("stdout", entry->d_name)==0
+            || strcmp("stderr", entry->d_name)==0)
+            continue;
+
+        char src_entry[PATH_MAX];
+        char src_entry_target[PATH_MAX];
+        snprintf(src_entry, PATH_MAX, "/dev/%s", entry->d_name);
+        //convert symlink to target if necessary
+        if(realpath(src_entry, src_entry_target) == NULL)
+        {
+            closedir(dir);
+            fprintf(stderr, "FAILED to call realpath (argument: %s)", src_entry);
+            perror(" --- REASON: ");
+            return 1;
+        }
+
+        char dest_entry[PATH_MAX];
+        snprintf(dest_entry, PATH_MAX, "%s/dev/%s", udi_config->udiMountPoint, entry->d_name);
+
+        int is_symlink = strcmp(src_entry, src_entry_target) != 0;
+        if(is_symlink)
+        {
+            //create symlink
+            if(symlink(src_entry_target, dest_entry) != 0)
+            {
+                closedir(dir);
+                fprintf(stderr, "FAILED to create symlink (target: %s, path: %s)", src_entry_target, dest_entry);
+                perror(" --- REASON: ");
+                return 1;
+            }
+        }
+        else
+        {
+            //do bind mount
+            if(create_mount_point(src_entry, dest_entry) != 0)
+            {
+                closedir(dir);
+                fprintf(stderr, "FAILED to create mount point\n");
+                return 1;
+            }
+
+            int mount_flags=0;
+            int overwrite_mounts=0;
+            if(_shifterCore_bindMount(udi_config, mount_cache, src_entry, dest_entry, mount_flags, overwrite_mounts) != 0)
+            {
+                closedir(dir);
+                fprintf(stderr, "FAILED to bind mount %s to %s\n", src_entry, dest_entry);
+                perror("   --- REASON: ");
+                return 1;
+            }
+        }
+    }
+    closedir(dir);
+    return 0;
+}
+
+/*! Create an empty file/directory at location specified by "to"
+ * where the file/direcory specified by "from" will be mounted.*/
+int create_mount_point(const char* from, const char* to)
+{
+    struct stat sb;
+    if (stat(from, &sb) == -1)
+    {
+        fprintf(stderr, "cannot stat file %s\n", from);
+        perror("    --- REASON: ");
+        return 1;
+    }
+
+    if(S_ISDIR(sb.st_mode)) //directory
+    {
+        if(mkdir(to, 0755) != 0)
+        {
+            fprintf(stderr, "FAILED to mkdir %s\n", to);
+            perror("   --- REASON: ");
+            return 1;
+        }
+    }
+    else //file
+    {
+        int flags = O_RDWR | O_CREAT;
+        mode_t mode=0;
+        int fd = open(to, flags, mode);
+        if(fd==-1)
+        {
+            fprintf(stderr, "FAILED to create file %s\n", to);
+            perror("   --- REASON: ");
+            return 1;
+        }
+        close(fd);
+    }
+    return 0;
+}
+
+int mountImageVFS(ImageData *imageData,
+                  const char *username,
+                  const char *gpu_ids,
+                  const char *minNodeSpec,
+                  UdiRootConfig *udiConfig) {
     struct stat statData;
     char udiRoot[PATH_MAX];
     char *sshPath = NULL;
@@ -1013,7 +1141,11 @@ int mountImageVFS(ImageData *imageData, const char *username, const char *minNod
     /* copy image /etc into place */
     BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
 
-
+    if(execute_hook_to_activate_gpu_support(gpu_ids, udiConfig) != 0)
+    {
+        fprintf(stderr, "activate_gpu_support hook failed\n");
+        goto _mountImgVfs_unclean;
+    }
 #undef BIND_IMAGE_INTO_UDI
 #undef _MKDIR
 
@@ -1024,6 +1156,58 @@ _mountImgVfs_unclean:
         free(sshPath);
     }
     return 1;
+}
+
+int execute_hook_to_activate_gpu_support(const char* gpu_ids, UdiRootConfig* udiConfig)
+{
+    char *gpu_script = "bin/activate_gpu_support.sh";
+    size_t gpu_path_size = strlen(udiConfig->udiRootPath) + strlen(gpu_script) + 2;
+    char *full_gpu_path = (char *) malloc(sizeof(char) * gpu_path_size);
+    sprintf(full_gpu_path, "%s/%s", udiConfig->udiRootPath, gpu_script);
+
+    char* args[8];
+    if(is_gpu_support_enabled(gpu_ids))
+    {
+        if (udiConfig->siteResources == NULL)
+        {
+            fprintf(stderr, "GPU support requested but the configuration file "
+                            "doesn't specify the path where the site-specific "
+                            "dependencies shall be mounted\n");
+            return 1;
+        }
+
+        args[0] = strdup("/bin/bash");
+        args[1] = full_gpu_path;
+        args[2] = strdup(gpu_ids);
+        args[3] = strdup(udiConfig->udiMountPoint);
+        args[4] = strdup(udiConfig->gpuBinPath);
+        args[5] = strdup(udiConfig->gpuLibPath);
+        args[6] = strdup(udiConfig->gpuLib64Path);
+        args[7] = NULL;
+    }
+    else
+    {
+        args[0] = strdup("/bin/bash");
+        args[1] = full_gpu_path;
+        args[2] = strdup(udiConfig->udiMountPoint);
+        args[3] = NULL;
+    }
+
+    int ret = forkAndExecv(args);
+    char** p;
+    for (p=args; *p != NULL; p++)
+    {
+        free(*p);
+    }
+
+    return ret;
+}
+
+int is_gpu_support_enabled(const char* gpu_ids)
+{
+    return  gpu_ids != NULL
+            && strcmp(gpu_ids, "") != 0
+            && strcmp(gpu_ids, "NoDevFiles") != 0;
 }
 
 /** makeUdiMountPrivate
@@ -3193,6 +3377,18 @@ static int _shifter_unsetenv(char ***env, char *var) {
     return 0;
 }
 
+static void _shifter_create_new_env_variable(char ***env, char *var)
+{
+    char** ptr;
+    char** new_env = shifter_copyenv(*env, 1);
+    for(ptr=new_env; *ptr!=NULL; ++ptr)
+    {}
+    *ptr = strdup(var);
+    ++ptr;
+    *ptr = NULL;
+    *env = new_env;
+}
+
 static int _shifter_putenv(char ***env, char *var, int mode) {
     size_t namelen = 0;
     size_t envsize = 0;
@@ -3207,7 +3403,12 @@ static int _shifter_putenv(char ***env, char *var, int mode) {
     }
     namelen = ptr - var;
     pptr = _shifter_findenv(env, var, namelen, &envsize);
-    if (pptr != NULL) {
+    if (pptr == NULL)
+    {
+        _shifter_create_new_env_variable(env, var);
+    }
+    else
+    {
         char *value = strchr(*pptr, '=');
         if (value != NULL) {
             value++;
@@ -3256,20 +3457,19 @@ static int _shifter_putenv(char ***env, char *var, int mode) {
     return 0;
 }
 
-extern char **environ;
-char **shifter_copyenv(void) {
+char **shifter_copyenv(char **source_environ, int reserve) {
     char **outenv = NULL;
     char **ptr = NULL;
     char **wptr = NULL;
 
-    if (environ == NULL) {
+    if (source_environ == NULL) {
         return NULL;
     }
 
-    for (ptr = environ; *ptr != NULL; ++ptr) {
+    for (ptr = source_environ; *ptr != NULL; ++ptr) {
     }
-    outenv = (char **) malloc(sizeof(char*) * ((ptr - environ) + 1));
-    ptr = environ;
+    outenv = (char **) malloc(sizeof(char*) * ((ptr - source_environ) + reserve + 1));
+    ptr = source_environ;
     wptr = outenv;
     for ( ; *ptr != NULL; ptr++) {
         *wptr++ = strdup(*ptr);
@@ -3314,6 +3514,43 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
     for (envPtr = udiConfig->siteEnvUnset; envPtr && *envPtr; envPtr++) {
         shifter_unsetenv(env, *envPtr);
     }
+    return 0;
+}
+
+int shifter_setupenv_gpu_support(char ***env, UdiRootConfig *udiConfig, const char* gpu_ids)
+{
+    if(is_gpu_support_enabled(gpu_ids)==0)
+        return 0;
+
+    if (udiConfig->siteResources == NULL)
+    {
+        fprintf(stderr, "GPU support requested but the configuration file "
+                        "doesn't specify the path where the site-specific "
+                        "dependencies shall be mounted\n");
+        return 1;
+    }
+
+    size_t envVar_size;
+    char* envVar;
+
+    envVar_size = strlen(udiConfig->gpuBinPath) + 6;
+    envVar = (char *) malloc(sizeof(char *) * envVar_size);
+    sprintf(envVar, "PATH=%s", udiConfig->gpuBinPath);
+    shifter_prependenv(env, envVar);
+    free(envVar);
+
+    envVar_size = strlen(udiConfig->gpuLibPath) + 17;
+    envVar = (char *) malloc(sizeof(char *) * envVar_size);
+    sprintf(envVar, "LD_LIBRARY_PATH=%s", udiConfig->gpuLibPath);
+    shifter_prependenv(env, envVar);
+    free(envVar);
+
+    envVar_size = strlen(udiConfig->gpuLib64Path) + 17;
+    envVar = (char *) malloc(sizeof(char *) * envVar_size);
+    sprintf(envVar, "LD_LIBRARY_PATH=%s", udiConfig->gpuLib64Path);
+    shifter_prependenv(env, envVar);
+    free(envVar);
+
     return 0;
 }
 

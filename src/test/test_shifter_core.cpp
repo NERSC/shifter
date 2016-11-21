@@ -24,6 +24,8 @@
  */
 
 #include <CppUTest/CommandLineTestRunner.h>
+#include <exception>
+#include <algorithm>
 #include <vector>
 #include <string>
 #include <iostream>
@@ -43,6 +45,8 @@ extern "C" {
 int _shifterCore_bindMount(UdiRootConfig *config, MountList *mounts, const char *from, const char *to, int ro, int overwrite);
 int _shifterCore_copyFile(const char *cpPath, const char *source, const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode);
 }
+
+extern char** environ;
 
 #ifdef NOTROOT
 #define ISROOT 0
@@ -70,6 +74,7 @@ int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const cha
     (*image)->type = strdup("local");
     parse_ImageData((*image)->type, strdup("/"), *config, *image);
     (*config)->udiMountPoint = strdup(tmpDir);
+    (*config)->udiRootPath = alloc_strgenf("/usr", basePath);
     (*config)->rootfsType = strdup(ROOTFS_TYPE);
     (*config)->etcPath = alloc_strgenf("%s/%s", basePath, "etc");
     (*config)->cpPath = strdup("/bin/cp");
@@ -149,7 +154,7 @@ TEST(ShifterCoreTestGroup, check_find_process_by_cmdline) {
         exit(127);
     }
     CHECK(pid > 0);
-    usleep(10000);
+    usleep(1000000);
 
     pid_t discovered = shifter_find_process_by_cmdline(cmd);
     printf("pid: %d, discovered: %d, %s\n", pid, discovered, cmd);
@@ -697,7 +702,7 @@ TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
 
     fprint_ImageData(stderr, image);
 
-    rc = mountImageVFS(image, "dmj", NULL, config);
+    rc = mountImageVFS(image, "dmj", NULL, NULL, config);
     CHECK(rc == 1);
     CHECK(parse_MountList(&mounts) == 0);
     CHECK(find_MountList(&mounts, tmpDir) == NULL);
@@ -708,7 +713,7 @@ TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
     memset(&mounts, 0, sizeof(MountList));
 
     config->allowLocalChroot = 1;
-    rc = mountImageVFS(image, "dmj", NULL, config);
+    rc = mountImageVFS(image, "dmj", NULL, NULL, config);
     CHECK(rc == 0);
     CHECK(parse_MountList(&mounts) == 0);
     CHECK(find_MountList(&mounts, tmpDir) != NULL);
@@ -789,13 +794,106 @@ IGNORE_TEST(ShifterCoreTestGroup, mountDangerousImage) {
 
 }
 
+struct directory_entry
+{
+    directory_entry(const std::string& path, const std::string& realpath)
+        : path(path)
+        , realpath(realpath)
+    {}
+
+    bool operator==(const directory_entry& rhs) const
+    {
+        return path == rhs.path && realpath == rhs.realpath;
+    }
+
+    bool operator<(const directory_entry& rhs) const
+    {
+        return path < rhs.path;
+    }
+
+    std::string path;
+    std::string realpath;   //this value is different than path when the entry
+                            //is a symlink (it takes the value of the symlink's target)
+};
+
+std::vector<directory_entry> get_sorted_directory_entries(const std::string& dir_name)
+{
+    DIR* dir = opendir(dir_name.c_str());
+    CHECK(dir != NULL);
+
+    std::vector<directory_entry> entries;
+    dirent* entry;
+    while ((entry = readdir(dir)) != NULL)
+    {
+        if( std::string(".") == entry->d_name
+            || std::string("..") == entry->d_name
+            || std::string("stdin") == entry->d_name
+            || std::string("stdout") == entry->d_name
+            || std::string("stderr") == entry->d_name)
+            continue;
+
+        std::string entry_abs_path = dir_name + "/" + entry->d_name;
+        char entry_realpath[PATH_MAX];
+        CHECK(realpath(entry_abs_path.c_str(), entry_realpath) != NULL);
+        entries.push_back(directory_entry(entry_abs_path, entry_realpath));
+    }
+    std::sort(entries.begin(), entries.end());
+    return entries;
+}
+
+#if ISROOT
+TEST(ShifterCoreTestGroup, bindmount_dev_contents)
+#else
+IGNORE_TEST(ShifterCoreTestGroup, bindmount_dev_contents)
+#endif
+{
+    MountList mounts = {};
+    UdiRootConfig config = {};
+    config.udiMountPoint = tmpDir;
+    std::string container_dev_path = std::string(tmpDir) + "/dev";
+
+    CHECK(mkdir(container_dev_path.c_str(), 0755) == 0);
+    CHECK(parse_MountList(&mounts) == 0);
+    CHECK(bindmount_dev_contents(&config, &mounts) == 0);
+
+    // get entries in /dev (host) and bind mounted /dev (container)
+    std::vector<directory_entry> host_entries = get_sorted_directory_entries("/dev");
+    std::vector<directory_entry> container_entries = get_sorted_directory_entries(container_dev_path);
+
+    // check value of entries
+    CHECK( host_entries.size() > 0 );
+    CHECK( host_entries.size() == container_entries.size() );
+
+    typedef std::vector<directory_entry>::const_iterator dir_entry_it;
+    for(dir_entry_it host_entry=host_entries.begin(), container_entry=container_entries.begin();
+        host_entry != host_entries.end();
+        ++host_entry, ++container_entry)
+    {
+        bool is_symlink = (host_entry->path != host_entry->realpath);
+        if(is_symlink)
+        {
+            CHECK(tmpDir + host_entry->path == container_entry->path);
+            CHECK(host_entry->realpath == container_entry->realpath);
+        }
+        else
+        {
+            CHECK(tmpDir + host_entry->path == container_entry->path);
+            CHECK(tmpDir + host_entry->realpath == container_entry->realpath);
+        }
+    }
+
+    // clean up
+    CHECK(unmountTree(&mounts, tmpDir) == 0);
+    free_MountList(&mounts, 0);
+}
+
 TEST(ShifterCoreTestGroup, copyenv_test) {
     char **copied_env = NULL;
     char **eptr = NULL;
     char **cptr = NULL;
     setenv("ABCD", "DCBA", 1);
 
-    copied_env = shifter_copyenv();
+    copied_env = shifter_copyenv(environ, 0);
     CHECK(copied_env != NULL);
 
     /* environment variables should be identical and in
@@ -827,7 +925,7 @@ TEST(ShifterCoreTestGroup, setenv_test) {
     size_t newcnt = 0;
 
     unsetenv("FAKE_ENV_VAR_FOR_TEST");
-    copied_env = shifter_copyenv();
+    copied_env = shifter_copyenv(environ, 0);
     CHECK(copied_env != NULL);
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         cnt++;
@@ -875,7 +973,7 @@ TEST(ShifterCoreTestGroup, appendenv_test) {
     size_t newcnt = 0;
 
     setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
-    copied_env = shifter_copyenv();
+    copied_env = shifter_copyenv(environ, 0);
     CHECK(copied_env != NULL);
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         cnt++;
@@ -924,7 +1022,7 @@ TEST(ShifterCoreTestGroup, prependenv_test) {
     size_t newcnt = 0;
 
     setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
-    copied_env = shifter_copyenv();
+    copied_env = shifter_copyenv(environ, 0);
     CHECK(copied_env != NULL);
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         cnt++;
@@ -973,7 +1071,7 @@ TEST(ShifterCoreTestGroup, unsetenv_test) {
     size_t newcnt = 0;
 
     setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
-    copied_env = shifter_copyenv();
+    copied_env = shifter_copyenv(environ, 0);
     CHECK(copied_env != NULL);
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         cnt++;
@@ -1068,6 +1166,51 @@ TEST(ShifterCoreTestGroup, setupenv_test) {
     free_UdiRootConfig(config, 1);
 }
 
+TEST(ShifterCoreTestGroup, setupenv_gpu_support_test) {
+    UdiRootConfig *config = (UdiRootConfig *) malloc(sizeof(UdiRootConfig));
+    char **local_env = NULL;
+
+    memset(config, 0, sizeof(UdiRootConfig));
+
+    /* initialize empty environment */
+    local_env = (char **) malloc(sizeof(char *) * 2);
+    local_env[0] = strdup("PATH=/usr/bin");
+    local_env[1] = strdup("LD_LIBRARY_PATH=/usr/lib");
+    local_env[2] = NULL;
+
+    /* copy arrays into config */
+    config->siteEnv = (char **) malloc(sizeof(char *) * 2);
+    config->siteEnv[0] = NULL;
+
+    config->siteResources = strdup("/site-resources");
+    config->gpuBinPath = strdup("/site-resources/gpu/bin");
+    config->gpuLibPath = strdup("/site-resources/gpu/lib");
+    config->gpuLib64Path = strdup("/site-resources/gpu/lib64");
+
+
+    const char* gpu_ids = "0";
+
+    /* test target */
+    int ret = shifter_setupenv_gpu_support(&local_env, config, gpu_ids);
+
+    CHECK(ret == 0);
+
+    int found = 0;
+    char **ptr = NULL;
+    for (ptr = local_env ; ptr && *ptr; ptr++) {
+        if (strcmp(*ptr, "PATH=/site-resources/gpu/bin:/usr/bin") == 0) {
+            found++;
+        }
+        if (strcmp(*ptr, "LD_LIBRARY_PATH=/site-resources/gpu/lib64:/site-resources/gpu/lib:/usr/lib") == 0) {
+            found++;
+        }
+    }
+    CHECK(found == 2);
+    CHECK(ptr - local_env == 2);
+
+    free_UdiRootConfig(config, 1);
+}
+
 TEST(ShifterCoreTestGroup, shifterRealpath_test) {
     UdiRootConfig *config = (UdiRootConfig *) malloc(sizeof(UdiRootConfig));
     memset(config, 0, sizeof(UdiRootConfig));
@@ -1119,7 +1262,7 @@ IGNORE_TEST(ShifterCoreTestGroup, destructUDI_test) {
 
     CHECK(setupLocalRootVFSConfig(&config, &image, tmpDir, cwd) == 0);
     config->allowLocalChroot = 1;
-    CHECK(mountImageVFS(image, "dmj", NULL, config) == 0);
+    CHECK(mountImageVFS(image, "dmj", NULL, NULL, config) == 0);
 
     CHECK(parse_MountList(&mounts) == 0);
     CHECK(find_MountList(&mounts, tmpDir) != NULL);

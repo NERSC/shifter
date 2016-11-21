@@ -32,9 +32,9 @@
 
 #include <CppUTest/CommandLineTestRunner.h>
 
-extern "C" {
-extern int adoptPATH(char **env);
-}
+#include "shifter.c"
+
+extern char** environ;
 
 TEST_GROUP(ShifterTestGroup) {
 };
@@ -42,7 +42,7 @@ TEST_GROUP(ShifterTestGroup) {
 TEST(ShifterTestGroup, CopyEnv_basic) {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();
     setenv("TESTENV0", "gfedcba", 1);
-    char **origEnv = shifter_copyenv();
+    char **origEnv = shifter_copyenv(environ, 0);
     CHECK(origEnv != NULL);
     clearenv();
     setenv("TESTENV1", "abcdefg", 1);
@@ -80,6 +80,20 @@ TEST(ShifterTestGroup, adoptPATH_test) {
     free(tmpenv[2]);
     free(tmpenv);
 }
+
+TEST(ShifterTestGroup, parseGPUenv_test)
+{
+    struct options opts;
+    memset(&opts, 0, sizeof(struct options));
+
+    opts.gpu_ids = strdup("0");
+    setenv("CUDA_VISIBLE_DEVICES", "0,1", 1);
+
+    parse_gpu_env(&opts);
+
+    CHECK (strcmp(opts.gpu_ids, "0,1") == 0);
+}
+
 
 #if 0
 TEST(ShifterTestGroup, LocalPutEnv_basic) {
@@ -131,7 +145,6 @@ TEST(ShifterTestGroup, LocalPutEnv_basic) {
     free(testenv2Ptr);
 }
 #endif
-
 
 int main(int argc, char **argv) {
     return CommandLineTestRunner::RunAllTests(argc, argv);

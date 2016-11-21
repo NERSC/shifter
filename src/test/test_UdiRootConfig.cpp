@@ -53,7 +53,13 @@ TEST(UdiRootConfigTestGroup, ParseUdiRootConfig_basic) {
     int ret = parse_UdiRootConfig("test_udiRoot.conf", &config, 0);
     printf("value: %d\n", ret);
     CHECK(ret == 0);
+    CHECK(strcmp(config.udiMountPoint, "/var/udiMount") == 0);
+    CHECK(strcmp(config.loopMountPoint, "/var/loopUdiMount") == 0);
+    CHECK(strcmp(config.rootfsType, "tmpfs") == 0);
     CHECK(strcmp(config.system, "testSystem") == 0);
+    CHECK(strcmp(config.gpuBinPath, "/site-resources/gpu/bin") == 0);
+    CHECK(strcmp(config.gpuLibPath, "/site-resources/gpu/lib") == 0);
+    CHECK(strcmp(config.gpuLib64Path, "/site-resources/gpu/lib64") == 0);
     free_UdiRootConfig(&config, 0);
 }
 

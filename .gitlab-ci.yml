@@ -1,0 +1,44 @@
+stages:
+  - test
+  - cleanup
+
+travis_ci_tests:
+  stage: test
+  script:
+    # ADAPT THIS VARIABLE TO YOUR PROJECT:
+    # Set here the location of the project folder inside the VM.
+    # This should be in the form /build/<project owner>/<project name>
+    - project_folder=/build/mkean/shifter
+    # create virtual machine
+    - cd ..
+    - rm -rf travis-for-gitlab-vm
+    - git clone https://madra.cscs.ch/mkean/travis-for-gitlab.git travis-for-gitlab-vm
+    - cd travis-for-gitlab-vm
+    - vagrant up
+    # convert .travis.yml to bash script
+    - vagrant ssh -c "cd $project_folder && printf 'y\\n' | travis lint"
+    - vagrant ssh -c "cd $project_folder && printf 'y\\n' | travis compile >travis.yml.sh"
+    - vagrant ssh -c "cd $project_folder && chmod 775 travis.yml.sh"
+    # modify travis bash script (remove python virtualenv, otherwise the tests executed as vagrant user
+    # would have a different environment from the tests executed as root)
+    - vagrant ssh -c "sed -i $project_folder/travis.yml.sh -e '/^if \\[\\[ ! -f ~\\/virtualenv/,/^fi/d'"
+    - vagrant ssh -c "sed -i $project_folder/travis.yml.sh -e '/travis_cmd source\\\\ \\\\~\\/virtualenv/d'"
+    - vagrant ssh -c "sed -i $project_folder/travis.yml.sh -e 's/travis_cmd pip\\\\ install/travis_cmd sudo\\\\ pip\\\\ install/'"
+    # modify travis bash script (dont't changedir, we will set the right working directory on our own)
+    - vagrant ssh -c "sed -i $project_folder/travis.yml.sh -e '/^mkdir -p \\\$HOME/,+1d'"
+    # modify travis bash script (get rid of git clone, checkout, etc. Gitlab has already taken care of
+    # creating a fresh checkout of the project to be tested. It is mounted under /build)
+    - vagrant ssh -c "sed -i $project_folder/travis.yml.sh -e '/^travis_fold start git.checkout/,/^travis_fold end/d'"
+    - vagrant ssh -c "sed -i $project_folder/travis.yml.sh -e '/^if \\[\\[ -f .gitmodules/,/^fi/d'"
+    # modify travis bash script (get rid of network reconfigurations)
+    - vagrant ssh -c "sed -i $project_folder/travis.yml.sh -e '/^echo \"options rotate/,/^done/d'"
+    # execute travis bash script (all child processes are killed at the end of the execution, otherwise
+    # the ssh command could hang and never terminate. That happens if any child process keeps stdin, stdout or stderr open)
+    - vagrant ssh -c "cd $project_folder && ./travis.yml.sh; RET=\$?; ps -o pid,cmd -g \$\$ | sed 1d | grep -v -w ps | grep -v -e -bash | grep -v -w sed | grep -v -w awk | grep -v -w xargs | awk '{print \$1}' | xargs sudo kill -9; exit \$RET"
+
+delete_travis_vm:
+  stage: cleanup
+  script:
+  - cd ../travis-for-gitlab-vm && vagrant destroy -f
+  - rm -rf ../travis-for-gitlab-vm
+  when: always

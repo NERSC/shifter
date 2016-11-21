@@ -139,7 +139,7 @@ int main(int argc, char **argv) {
             exit(1);
         }
     }
-    if (mountImageVFS(&image, config.user, config.minNodeSpec, &udiConfig) != 0) {
+    if (mountImageVFS(&image, config.user, NULL, config.minNodeSpec, &udiConfig) != 0) {
         fprintf(stderr, "FAILED to mount image into UDI\n");
         exit(1);
     }

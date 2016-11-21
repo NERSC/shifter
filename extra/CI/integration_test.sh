@@ -10,9 +10,11 @@ fi
 PYDIR=
 for libpath in lib lib64; do
     for pypath in python2.6 python2.7; do
-        if [[ -e "/usr/$libpath/$pypath/site-packages/shifter_imagegw" ]]; then
-            PYDIR="/usr/$libpath/$pypath/site-packages"
-        fi
+        for packagepath in site-packages dist-packages; do
+            if [[ -e "/usr/$libpath/$pypath/$packagepath/shifter_imagegw" ]]; then
+                PYDIR="/usr/$libpath/$pypath/$packagepath"
+            fi
+        done
     done
 done
 if [[ -z "$PYDIR" ]]; then
@@ -69,6 +71,14 @@ sudo cp "$BUILDDIR/etc_files/nsswitch.conf" /etc/shifter/shifter_etc_files/nsswi
 cat /etc/shifter/udiRoot.conf | egrep -v '^#'
 sudo mkdir -p $LIBEXECDIR/opt/udiImage
 
+echo "setting up requirements for GPU support"
+sudo /bin/bash -c "echo siteResources=/site-resources >> /etc/shifter/udiRoot.conf"
+#dummy required command line tools
+sudo touch /bin/nvidia-smi
+sudo chmod 755 /bin/nvidia-smi
+sudo touch /bin/nvidia-modprobe
+sudo chmod 755 /bin/nvidia-modprobe
+
 ## need to sleep a bit to let celery and gunicorn get started
 sleep 10
 
@@ -84,3 +94,5 @@ python $CIDIR/integration/test_shifterConfig_format.py ubuntu:16.04
 echo "Check capabilities and bounding sets"
 python $CIDIR/integration/test_capabilities.py ubuntu:16.04
 
+echo "Test GPU support"
+python $CIDIR/integration/test_gpu_support.py ubuntu:16.04
