@@ -86,4 +86,5 @@ shifterimg_CPPFLAGS = $(AM_CPPFLAGS) $(MUNGE_CPPFLAGS) $(JSON_CPPFLAGS) $(LIBCUR
 
 install-exec-hook:
 	cp activate_gpu_support.sh $(DESTDIR)$(bindir)/activate_gpu_support.sh
+	cp activate_mpi_support.sh $(DESTDIR)$(bindir)/activate_mpi_support.sh
 	/bin/chmod 4755 $(DESTDIR)$(bindir)/shifter
