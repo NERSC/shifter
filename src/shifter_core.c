@@ -1146,6 +1146,12 @@ int mountImageVFS(ImageData *imageData,
         fprintf(stderr, "activate_gpu_support hook failed\n");
         goto _mountImgVfs_unclean;
     }
+
+    if(execute_hook_to_activate_mpi_support(udiConfig) != 0)
+    {
+        fprintf(stderr, "activate_mpi_support hook failed\n");
+        goto _mountImgVfs_unclean;
+    }
 #undef BIND_IMAGE_INTO_UDI
 #undef _MKDIR
 
@@ -1208,6 +1214,31 @@ int is_gpu_support_enabled(const char* gpu_ids)
     return  gpu_ids != NULL
             && strcmp(gpu_ids, "") != 0
             && strcmp(gpu_ids, "NoDevFiles") != 0;
+}
+
+int execute_hook_to_activate_mpi_support(UdiRootConfig* udiConfig)
+{
+    char *script = "bin/activate_mpi_support.sh";
+    size_t script_path_size = strlen(udiConfig->udiRootPath) + strlen(script) + 2;
+    char *full_script_path = (char *) malloc(sizeof(char) * script_path_size);
+    sprintf(full_script_path, "%s/%s", udiConfig->udiRootPath, script);
+
+    //TODO: check whether MPI support is requested
+    //TODO: fix passed arguments
+    char* args[8];
+    args[0] = strdup("/bin/bash");
+    args[1] = full_script_path;
+    args[2] = strdup(udiConfig->udiMountPoint);
+    args[3] = NULL;
+
+    int ret = forkAndExecv(args);
+    char** p;
+    for (p=args; *p != NULL; p++)
+    {
+        free(*p);
+    }
+
+    return ret;
 }
 
 /** makeUdiMountPrivate
