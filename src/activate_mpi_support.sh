@@ -1,33 +1,24 @@
 #!/bin/bash
 
-site_mpi_libraries="
+# TODO: expose static libraries in the container too? It only makes sense
+# if the user needs to build in the running container.
+site_mpi_static_libraries="
 /cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpi.a
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpi.so
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpi.so.12
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpi.so.12.0.5
-
 /cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpicxx.a
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpicxx.so
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpicxx.so.12
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpicxx.so.12.0.5
+/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpifort.a"
 
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpifort.a
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpifort.so
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpifort.so.12
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpifort.so.12.0.5
+#TODO: add comments to explain the meaning of these tuples
+site_mpi_shared_libraries="
+libmpi.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpi.so.12.0.5
+libmpicxx.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpicxx.so.12.0.5
+libmpifort.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpifort.so.12.0.5
+libmpl.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpi.so
+libopa.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpi.so
+libmpich.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpi.so.12.0.5
+libmpichcxx.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpicxx.so.12.0.5
+libmpichf90.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpifort.so.12.0.5"
 
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpl.so
-
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpich.so
-
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libfmpich.so
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpichf90.so
-
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpichcxx.so
-
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libopa.so"
-
-site_libraries="
+site_mpi_dependency_libraries="
 /lib64/libmlx5-rdmav2.so
 /lib64/libmlx4-rdmav2.so
 /lib64/libxml2.so.2
@@ -65,8 +56,9 @@ site_configuration_files="
 
 #here is necessary to set PATH manually because shifter executes
 #this script with an empty environment
-export PATH=/usr/local/bin:/usr/bin:/bin:/sbin
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
 
+container_root_dir=/var/udiMount
 container_mpi_dir=/var/udiMount/site-resources/mpi
 container_lib_dir=/var/udiMount/site-resources/mpi/lib
 
@@ -141,8 +133,7 @@ bind_mount_files()
     mkdir -p $mount_dir
     exit_if_previous_command_failed "cannot mkdir -p $mount_dir"
 
-    for target in $targets
-    do
+    for target in $targets; do
         local mount_point=$mount_dir/$(basename $target)
 
         touch $mount_point
@@ -153,26 +144,126 @@ bind_mount_files()
     done
 }
 
-bind_mount_mpi_libraries()
+# drop parent folders and trailing version numbers from the given library name
+strip_library_name()
 {
-    bind_mount_files "$site_libraries" "$container_lib_dir"
-    bind_mount_files "$site_mpi_libraries" "$container_lib_dir"
-    bind_mount_file "/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpich.so" "$container_lib_dir/libmpich.so.12"
+    local lib_name=$1
+    local lib_name_stripped=$(basename $lib_name | sed -n -e 's/\(lib.*.so\)\(\.[0-9]\+\)*/\1/p')
+    echo $lib_name_stripped
+}
+
+are_mpi_libraries_abi_compatible()
+{
+    local site_lib=$1
+    local site_lib_version_numbers=($(echo $(basename $site_lib) | sed 's/lib.*\.so\(.*\)/\1/' | sed -e 's/^\.\(.*\)/\1/' | sed -e 's/\./ /g'))
+    local count_site_version_numbers=${#site_lib_version_numbers[*]}
+
+    local container_lib=$2
+    local container_lib_version_numbers=($(echo $(basename $container_lib) | sed 's/lib.*\.so\(.*\)/\1/' | sed -e 's/^\.\(.*\)/\1/' | sed -e 's/\./ /g'))
+    local count_container_version_numbers=${#container_lib_version_numbers[*]}
+
+    if [ $count_site_version_numbers -gt $count_container_version_numbers ]; then
+        log ERROR "internal error: missing version information about the container MPI shared library $site_lib.
+The library name should contain at least $count_site_version_numbers version numbers."
+        exit 1
+    fi
+
+    if [ $count_site_version_numbers -ge 1 ]; then
+        if [ ${site_lib_version_numbers[0]} -ne ${container_lib_version_numbers[0]} ]; then
+            return 1
+        fi
+    fi
+
+    if [ $count_site_version_numbers -ge 2 ]; then
+        if [ ${site_lib_version_numbers[1]} -lt ${container_lib_version_numbers[1]} ]; then
+            return 1
+        fi
+    fi
+
+    return 0
+}
+
+get_abi_compatible_site_mpi_library()
+{
+    local container_lib=$1
+    for site_lib in $site_mpi_shared_libraries; do
+        local site_lib_id=$(echo $site_lib | cut -d: -f1)
+        local site_lib_realpath=$(echo $site_lib | cut -d: -f2)
+        if [ $(strip_library_name $site_lib_id) = $(strip_library_name $container_lib) ]; then
+            if are_mpi_libraries_abi_compatible $site_lib_realpath $container_lib; then
+                echo $site_lib_realpath
+                return
+            fi
+        fi
+    done
+}
+
+cached_site_mpi_library_ids_stripped()
+{
+    # if cache is empty let's populate it
+    if [ -z "$cached_lib_ids" ]; then
+        for lib in $site_mpi_shared_libraries; do
+            local lib_id=$(echo $lib | cut -d: -f1)
+            local lib_id_stripped=$(strip_library_name $lib_id)
+            export cached_lib_ids="$cached_lib_ids $lib_id_stripped"
+        done
+    fi
+    echo "$cached_lib_ids"
+}
+
+corresponding_site_mpi_library_exists()
+{
+    local container_lib_stripped=$(strip_library_name $1)
+    local site_libs_stripped=$(cached_site_mpi_library_ids_stripped)
+    for site_lib_stripped in $site_libs_stripped; do
+        if [ $site_lib_stripped = $container_lib_stripped ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+override_mpi_shared_libraries()
+{
+    mkdir -p $container_lib_dir
+    exit_if_previous_command_failed "cannot mkdir -p $container_lib_dir"
+
+    local container_lib_basenames=($(chroot $container_root_dir bash -c "ldconfig -p | sed -n -e 's/.*\(lib.*\) (.*/\1/p'"))
+    local container_lib_realpaths=($(chroot $container_root_dir bash -c "ldconfig -p | sed -n -e 's/.* => \(.*\)/echo \$(realpath \1)/p' | bash"))
+
+    for i in $(seq 0 $((${#container_lib_basenames[*]}-1))); do
+        local container_lib_basename=${container_lib_basenames[$i]}
+        local container_lib_realpath=${container_lib_realpaths[$i]}
+
+        if corresponding_site_mpi_library_exists $container_lib_realpath; then
+            local site_mpi_lib=$(get_abi_compatible_site_mpi_library $container_lib_realpath)
+            if [ ! -z $site_mpi_lib ]; then
+                touch $container_lib_dir/$container_lib_basename
+                exit_if_previous_command_failed "cannot touch $container_lib_dir/$container_lib_basename"
+                mount --bind $site_mpi_lib $container_lib_dir/$container_lib_basename
+                exit_if_previous_command_failed "cannot bind mount $site_mpi_lib to $container_lib_dir/$container_lib_basename"
+            else
+                log ERROR "cannot find a site MPI library which is ABI-compatible with the container library $container_lib_realpath"
+                exit 1
+            fi
+        fi
+    done
+}
+
+bind_mount_site_mpi_dependencies()
+{
+    bind_mount_files "$site_mpi_dependency_libraries" "$container_lib_dir"
+    bind_mount_files "$site_configuration_files" "$container_root_dir/etc/libibverbs.d"
 }
 
 bind_mount_mpi_binaries()
 {
-    #TODO COMMENT THIS bind_mount_folder "/cm/shared/apps/easybuild/software/GCC/5.3.0/bin" "/var/udiMount/opt/mpi-support/bin/gcc"
     bind_mount_files "$site_binaries" "$container_mpi_dir/bin"
 }
 
-bind_mount_configuration_files()
-{
-    bind_mount_files "$site_configuration_files" "/var/udiMount/etc/libibverbs.d"
-}
-
-#parse_command_line_arguments
-#validate_command_line_arguments
-bind_mount_mpi_libraries
+cached_site_mpi_library_ids_stripped >/dev/null # make shure that this function is called
+                                                # at least once in this shell to populate the cache
+#TODO: call validate_command_line_arguments
+override_mpi_shared_libraries
+bind_mount_site_mpi_dependencies
 bind_mount_mpi_binaries
-bind_mount_configuration_files
