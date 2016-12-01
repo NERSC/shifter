@@ -98,6 +98,18 @@ validate_command_line_arguments()
     fi
 }
 
+check_container_image_dependencies()
+{
+    # we need the container image to provide these command line tools
+    command_line_tools="sed realpath"
+    for command_line_tool in $command_line_tools; do
+        if [ -z $(chroot $container_root_dir bash -c "which $command_line_tool") ]; then
+            log ERROR "missing dependency: make sure that the container image contains the program \"$command_line_tool\""
+            exit 1
+        fi
+    done
+}
+
 bind_mount_folder()
 {
     local target=$1
@@ -264,6 +276,7 @@ bind_mount_mpi_binaries()
 cached_site_mpi_library_ids_stripped >/dev/null # make shure that this function is called
                                                 # at least once in this shell to populate the cache
 #TODO: call validate_command_line_arguments
+check_container_image_dependencies
 override_mpi_shared_libraries
 bind_mount_site_mpi_dependencies
 bind_mount_mpi_binaries
