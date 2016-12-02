@@ -286,9 +286,10 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to setup container environment variables\n");
     }
 
-    /* set the environment variables related to the GPU support */
-    if (shifter_setupenv_gpu_support(&environ_copy, &udiConfig, opts.gpu_ids) != 0) {
-        fprintf(stderr, "Failed to setup container's GPU support environment variables\n");
+    /* set the environment variables related to the site resources */
+    if (shifter_setupenv_site_resources(&environ_copy, &udiConfig) != 0) {
+        fprintf(stderr, "Failed to setup container's site-resources environment variables\n");
+        exit(1);
     }
 
     /* immediately set PATH to container PATH to get search right */

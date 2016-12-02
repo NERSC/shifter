@@ -139,7 +139,9 @@ int shifter_appendenv(char ***env, char *var);
 int shifter_prependenv(char ***env, char *var);
 int shifter_unsetenv(char ***env, char *var);
 int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig);
-int shifter_setupenv_gpu_support(char ***env, UdiRootConfig *udiConfig, const char* gpu_ids);
+int shifter_setupenv_site_resources(char ***env, UdiRootConfig *udiConfig);
+int shifter_setupenv_site_resources_rec(char ***env, const char* current_folder);
+int is_shared_library(char* file_name);
 struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config);
 struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config);
 
