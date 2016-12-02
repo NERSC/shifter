@@ -1142,10 +1142,13 @@ int mountImageVFS(ImageData *imageData,
     /* copy image /etc into place */
     BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
 
-    /* make directory where the site resources are bind mounted */
-    char* site_resources_path = alloc_strgenf("%s/%s", udiConfig->udiMountPoint, udiConfig->siteResources);
-    _MKDIR(site_resources_path, 0755);
-    free(site_resources_path);
+    /* create site resources directory */
+    if(udiConfig->siteResources != NULL)
+    {
+        char* site_resources_path = alloc_strgenf("%s/%s", udiConfig->udiMountPoint, udiConfig->siteResources);
+        _MKDIR(site_resources_path, 0755);
+        free(site_resources_path);
+    }
 
     if(execute_hook_to_activate_gpu_support(gpu_ids, udiConfig) != 0)
     {
@@ -1228,6 +1231,14 @@ int execute_hook_to_activate_mpi_support(int is_mpi_support_enabled, UdiRootConf
 
     if(is_mpi_support_enabled)
     {
+        if (udiConfig->siteResources == NULL)
+        {
+            fprintf(stderr, "MPI support requested but the configuration file "
+                            "doesn't specify the path where the site-specific "
+                            "dependencies shall be mounted\n");
+            return 1;
+        }
+
         char* args[5];
         args[0] = strdup("/bin/bash");
         args[1] = alloc_strgenf("%s/bin/activate_mpi_support.sh", udiConfig->udiRootPath);
