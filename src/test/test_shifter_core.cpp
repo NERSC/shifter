@@ -1166,49 +1166,206 @@ TEST(ShifterCoreTestGroup, setupenv_test) {
     free_UdiRootConfig(config, 1);
 }
 
-TEST(ShifterCoreTestGroup, setupenv_gpu_support_test) {
-    UdiRootConfig *config = (UdiRootConfig *) malloc(sizeof(UdiRootConfig));
-    char **local_env = NULL;
-
-    memset(config, 0, sizeof(UdiRootConfig));
-
-    /* initialize empty environment */
-    local_env = (char **) malloc(sizeof(char *) * 2);
-    local_env[0] = strdup("PATH=/usr/bin");
-    local_env[1] = strdup("LD_LIBRARY_PATH=/usr/lib");
-    local_env[2] = NULL;
-
-    /* copy arrays into config */
-    config->siteEnv = (char **) malloc(sizeof(char *) * 2);
-    config->siteEnv[0] = NULL;
-
-    config->siteResources = strdup("/site-resources");
-    config->gpuBinPath = strdup("/site-resources/gpu/bin");
-    config->gpuLibPath = strdup("/site-resources/gpu/lib");
-    config->gpuLib64Path = strdup("/site-resources/gpu/lib64");
-
-
-    const char* gpu_ids = "0";
-
-    /* test target */
-    int ret = shifter_setupenv_gpu_support(&local_env, config, gpu_ids);
-
-    CHECK(ret == 0);
-
-    int found = 0;
-    char **ptr = NULL;
-    for (ptr = local_env ; ptr && *ptr; ptr++) {
-        if (strcmp(*ptr, "PATH=/site-resources/gpu/bin:/usr/bin") == 0) {
-            found++;
+bool are_environments_equal(const std::vector<std::string>& expected_env, char** actual_env)
+{
+    for(size_t i=0; i<expected_env.size(); ++i)
+    {
+        if(actual_env[i] == NULL)
+        {
+            return false;
         }
-        if (strcmp(*ptr, "LD_LIBRARY_PATH=/site-resources/gpu/lib64:/site-resources/gpu/lib:/usr/lib") == 0) {
-            found++;
+
+        if(expected_env[i] != actual_env[i])
+        {
+            return false;
         }
     }
-    CHECK(found == 2);
-    CHECK(ptr - local_env == 2);
+    return true;
+}
 
-    free_UdiRootConfig(config, 1);
+TEST(ShifterCoreTestGroup, setupenv_site_resources_test) {
+    char* site_resources_path = alloc_strgenf("%s%s", tmpDir, "/site-resources");
+    UdiRootConfig config = {};
+    config.udiMountPoint = strdup(tmpDir);
+    config.siteResources = site_resources_path;
+
+    // site resources folder is not configured
+    {
+        char* oldSiteResources = config.siteResources;
+        config.siteResources = NULL;
+        char** actual_environment;
+        actual_environment = (char **) malloc(sizeof(char *) * 3);
+        actual_environment[0] = strdup("PATH=/initial-path");
+        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
+        actual_environment[2] = NULL;
+
+        std::vector<std::string> expected_environment;
+        expected_environment.push_back("PATH=/initial-path");
+        expected_environment.push_back("LD_LIBRARY_PATH=/initial-ld-library-path");
+        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
+
+        CHECK(are_environments_equal(expected_environment, actual_environment));
+        config.siteResources = oldSiteResources;
+        free(actual_environment[0]);
+        free(actual_environment[1]);
+    }
+
+    // site resources folder is empty
+    {
+        char** actual_environment;
+        actual_environment = (char **) malloc(sizeof(char *) * 3);
+        actual_environment[0] = strdup("PATH=/initial-path");
+        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
+        actual_environment[2] = NULL;
+
+        CHECK(system((std::string("mkdir ") + site_resources_path).c_str()) == 0);
+        std::vector<std::string> expected_environment;
+        expected_environment.push_back("PATH=/initial-path");
+        expected_environment.push_back("LD_LIBRARY_PATH=/initial-ld-library-path");
+        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
+
+        CHECK(are_environments_equal(expected_environment, actual_environment));
+        CHECK(system((std::string("rm -r ") + site_resources_path).c_str()) == 0);
+        free(actual_environment[0]);
+        free(actual_environment[1]);
+        free(actual_environment);
+    }
+
+    // site resources folder contains executable file
+    {
+        char** actual_environment;
+        actual_environment = (char **) malloc(sizeof(char *) * 3);
+        actual_environment[0] = strdup("PATH=/initial-path");
+        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
+        actual_environment[2] = NULL;
+
+        std::string bins_path = std::string(site_resources_path) +  "/bins_path";
+        std::string bin = bins_path + "/executable_file";
+        CHECK(system((std::string("mkdir -p ") + bins_path).c_str()) == 0);
+        CHECK(system((std::string("touch ") + bin).c_str()) == 0);
+        CHECK(system((std::string("chmod 755 ") + bin).c_str()) == 0);
+        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
+
+        std::vector<std::string> expected_environment;
+        expected_environment.push_back("PATH=" + bins_path + ":/initial-path");
+        expected_environment.push_back("LD_LIBRARY_PATH=/initial-ld-library-path");
+
+        CHECK(are_environments_equal(expected_environment, actual_environment));
+        CHECK(system((std::string("rm -r ") + site_resources_path).c_str()) == 0);
+        free(actual_environment[0]);
+        free(actual_environment[1]);
+        free(actual_environment);
+    }
+
+    // site resources folder contains shared library (*.so)
+    {
+        char** actual_environment;
+        actual_environment = (char **) malloc(sizeof(char *) * 3);
+        actual_environment[0] = strdup("PATH=/initial-path");
+        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
+        actual_environment[2] = NULL;
+
+        std::string libs_path = std::string(site_resources_path) + "/libs_path";
+        std::string lib = libs_path + "/libtest.so";
+        CHECK(system((std::string("mkdir -p ") + libs_path).c_str()) == 0);
+        CHECK(system((std::string("touch ") + lib).c_str()) == 0);
+        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
+
+        std::vector<std::string> expected_environment;
+        expected_environment.push_back("PATH=/initial-path");
+        expected_environment.push_back("LD_LIBRARY_PATH=" + libs_path + ":/initial-ld-library-path");
+        CHECK(are_environments_equal(expected_environment, actual_environment));
+
+        CHECK(system((std::string("rm -r ") + site_resources_path).c_str()) == 0);
+        free(actual_environment[0]);
+        free(actual_environment[1]);
+        free(actual_environment);
+    }
+
+    // site resources folder contains shared library (*.so.1)
+    {
+        char** actual_environment;
+        actual_environment = (char **) malloc(sizeof(char *) * 3);
+        actual_environment[0] = strdup("PATH=/initial-path");
+        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
+        actual_environment[2] = NULL;
+
+        std::string libs_path = std::string(site_resources_path) + "/libs_path";
+        std::string lib = libs_path + "/libtest.so.1";
+        CHECK(system((std::string("mkdir -p ") + libs_path).c_str()) == 0);
+        CHECK(system((std::string("touch ") + lib).c_str()) == 0);
+        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
+
+        std::vector<std::string> expected_environment;
+        expected_environment.push_back("PATH=/initial-path");
+        expected_environment.push_back("LD_LIBRARY_PATH=" + libs_path + ":/initial-ld-library-path");
+        CHECK(are_environments_equal(expected_environment, actual_environment));
+
+        CHECK(system((std::string("rm -r ") + site_resources_path).c_str()) == 0);
+        free(actual_environment[0]);
+        free(actual_environment[1]);
+        free(actual_environment);
+    }
+
+    // site resources folder contains executable shared libraries (*.so)
+    {
+        char** actual_environment;
+        actual_environment = (char **) malloc(sizeof(char *) * 3);
+        actual_environment[0] = strdup("PATH=/initial-path");
+        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
+        actual_environment[2] = NULL;
+
+        std::string libs_path = std::string(site_resources_path) + "/libs_path";
+        std::string lib1 = libs_path + "/libtest1.so";
+        std::string lib2 = libs_path + "/libtest2.so";
+        CHECK(system((std::string("mkdir -p ") + libs_path).c_str()) == 0);
+        CHECK(system((std::string("touch ") + lib1).c_str()) == 0);
+        CHECK(system((std::string("touch ") + lib2).c_str()) == 0);
+        CHECK(system((std::string("chmod 755 ") + lib1).c_str()) == 0);
+        CHECK(system((std::string("chmod 755 ") + lib2).c_str()) == 0);
+        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
+
+        std::vector<std::string> expected_environment;
+        expected_environment.push_back("PATH=/initial-path");
+        expected_environment.push_back("LD_LIBRARY_PATH=" + libs_path + ":/initial-ld-library-path");
+        CHECK(are_environments_equal(expected_environment, actual_environment));
+
+        CHECK(system((std::string("rm -r ") + site_resources_path).c_str()) == 0);
+        free(actual_environment[0]);
+        free(actual_environment[1]);
+        free(actual_environment);
+    }
+
+    // site resources folder contains shared library and executable in deeper folder
+    {
+        char** actual_environment;
+        actual_environment = (char **) malloc(sizeof(char *) * 3);
+        actual_environment[0] = strdup("PATH=/initial-path");
+        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
+        actual_environment[2] = NULL;
+
+        std::string deep_path = std::string(site_resources_path) + "/the/deep/path";
+        std::string lib = deep_path + "/libtest.so";
+        std::string bin = deep_path + "/bintest";
+        CHECK(system((std::string("mkdir -p ") + deep_path).c_str()) == 0);
+        CHECK(system((std::string("touch ") + lib).c_str()) == 0);
+        CHECK(system((std::string("touch ") + bin).c_str()) == 0);
+        CHECK(system((std::string("chmod 755 ") + bin).c_str()) == 0);
+        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
+
+        std::vector<std::string> expected_environment;
+        expected_environment.push_back("PATH=" + deep_path + ":/initial-path");
+        expected_environment.push_back("LD_LIBRARY_PATH=" + deep_path + ":/initial-ld-library-path");
+        CHECK(are_environments_equal(expected_environment, actual_environment));
+
+        CHECK(system((std::string("rm -r ") + site_resources_path).c_str()) == 0);
+        free(actual_environment[0]);
+        free(actual_environment[1]);
+        free(actual_environment);
+    }
+
+    free(config.udiMountPoint);
+    free(config.siteResources);
 }
 
 TEST(ShifterCoreTestGroup, shifterRealpath_test) {
