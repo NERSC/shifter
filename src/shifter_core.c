@@ -1026,6 +1026,7 @@ int create_mount_point(const char* from, const char* to)
 int mountImageVFS(ImageData *imageData,
                   const char *username,
                   const char *gpu_ids,
+                  int is_mpi_support_enabled,
                   const char *minNodeSpec,
                   UdiRootConfig *udiConfig) {
     struct stat statData;
@@ -1141,13 +1142,18 @@ int mountImageVFS(ImageData *imageData,
     /* copy image /etc into place */
     BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
 
+    /* make directory where the site resources are bind mounted */
+    char* site_resources_path = alloc_strgenf("%s/%s", udiConfig->udiMountPoint, udiConfig->siteResources);
+    _MKDIR(site_resources_path, 0755);
+    free(site_resources_path);
+
     if(execute_hook_to_activate_gpu_support(gpu_ids, udiConfig) != 0)
     {
         fprintf(stderr, "activate_gpu_support hook failed\n");
         goto _mountImgVfs_unclean;
     }
 
-    if(execute_hook_to_activate_mpi_support(udiConfig) != 0)
+    if(execute_hook_to_activate_mpi_support(is_mpi_support_enabled, udiConfig) != 0)
     {
         fprintf(stderr, "activate_mpi_support hook failed\n");
         goto _mountImgVfs_unclean;
@@ -1216,26 +1222,25 @@ int is_gpu_support_enabled(const char* gpu_ids)
             && strcmp(gpu_ids, "NoDevFiles") != 0;
 }
 
-int execute_hook_to_activate_mpi_support(UdiRootConfig* udiConfig)
+int execute_hook_to_activate_mpi_support(int is_mpi_support_enabled, UdiRootConfig* udiConfig)
 {
-    char *script = "bin/activate_mpi_support.sh";
-    size_t script_path_size = strlen(udiConfig->udiRootPath) + strlen(script) + 2;
-    char *full_script_path = (char *) malloc(sizeof(char) * script_path_size);
-    sprintf(full_script_path, "%s/%s", udiConfig->udiRootPath, script);
+    int ret = 0;
 
-    //TODO: check whether MPI support is requested
-    //TODO: fix passed arguments
-    char* args[8];
-    args[0] = strdup("/bin/bash");
-    args[1] = full_script_path;
-    args[2] = strdup(udiConfig->udiMountPoint);
-    args[3] = NULL;
-
-    int ret = forkAndExecv(args);
-    char** p;
-    for (p=args; *p != NULL; p++)
+    if(is_mpi_support_enabled)
     {
-        free(*p);
+        char* args[5];
+        args[0] = strdup("/bin/bash");
+        args[1] = alloc_strgenf("%s/bin/activate_mpi_support.sh", udiConfig->udiRootPath);
+        args[2] = strdup(udiConfig->udiMountPoint);
+        args[3] = strdup(udiConfig->siteResources);
+        args[4] = NULL;
+
+        ret = forkAndExecv(args);
+        char** p;
+        for (p=args; *p != NULL; p++)
+        {
+            free(*p);
+        }
     }
 
     return ret;

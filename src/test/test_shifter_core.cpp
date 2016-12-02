@@ -702,7 +702,7 @@ TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
 
     fprint_ImageData(stderr, image);
 
-    rc = mountImageVFS(image, "dmj", NULL, NULL, config);
+    rc = mountImageVFS(image, "dmj", NULL, 0, NULL, config);
     CHECK(rc == 1);
     CHECK(parse_MountList(&mounts) == 0);
     CHECK(find_MountList(&mounts, tmpDir) == NULL);
@@ -713,7 +713,7 @@ TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
     memset(&mounts, 0, sizeof(MountList));
 
     config->allowLocalChroot = 1;
-    rc = mountImageVFS(image, "dmj", NULL, NULL, config);
+    rc = mountImageVFS(image, "dmj", NULL, 0, NULL, config);
     CHECK(rc == 0);
     CHECK(parse_MountList(&mounts) == 0);
     CHECK(find_MountList(&mounts, tmpDir) != NULL);
@@ -1262,7 +1262,7 @@ IGNORE_TEST(ShifterCoreTestGroup, destructUDI_test) {
 
     CHECK(setupLocalRootVFSConfig(&config, &image, tmpDir, cwd) == 0);
     config->allowLocalChroot = 1;
-    CHECK(mountImageVFS(image, "dmj", NULL, NULL, config) == 0);
+    CHECK(mountImageVFS(image, "dmj", NULL, 0, NULL, config) == 0);
 
     CHECK(parse_MountList(&mounts) == 0);
     CHECK(find_MountList(&mounts, tmpDir) != NULL);

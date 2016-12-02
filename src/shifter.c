@@ -72,6 +72,7 @@ struct options {
     char *username;
     char *workdir;
     char *gpu_ids;
+    int is_mpi_support_enabled;
     char **args;
     char **env;
     VolumeMap volumeMap;
@@ -379,6 +380,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         {"entrypoint", 2, 0, 0},
         {"env", 0, 0, 'e'},
         {"gpu", 1, 0, 'g'},
+        {"mpi", 0, 0, 'm'},
         {0, 0, 0, 0}
     };
     if (config == NULL) {
@@ -395,7 +397,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     optind = 1;
     for ( ; ; ) {
         int longopt_index = 0;
-        opt = getopt_long(argc, argv, "hnvV:i:e:g:", long_options, &longopt_index);
+        opt = getopt_long(argc, argv, "hnvV:i:e:g:m", long_options, &longopt_index);
         if (opt == -1) break;
 
         switch (opt) {
@@ -471,6 +473,9 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                     config->gpu_ids = strdup(optarg);
                     break;
                 }
+            case 'm':
+                config->is_mpi_support_enabled = 1;
+                break;
             case 'h':
                 _usage(0);
                 break;
@@ -645,7 +650,7 @@ static void _usage(int status) {
         "Usage:\n"
         "shifter [-h|--help] [-v|--verbose] [--image=<imageType>:<imageTag>]\n"
         "    [--entry] [-V|--volume=/path/to/bind:/mnt/in/image[:<flags>][,...]]\n"
-        "    [-g|--gpu=<deviceID>] [-- /command/to/exec/in/shifter [args...]]\n"
+        "    [-g|--gpu=<deviceID>] [-m|--mpi] [-- /command/to/exec/in/shifter [args...]]\n"
         );
     printf("\n");
     printf(
@@ -694,6 +699,9 @@ static void _usage(int status) {
 "requested using Generic Resource Scheduling, e.g.:\n"
 "    srun --gres=gpu:<NumGPUsPerNode>\n"
 "Thus, Shifter transparently supports GPUs selected by the SLURM GRES plugin.\n"
+"\n"
+"MPI support: Use the --mpi or -m options to make the site MPI libraries\n"
+"and binaries available inside the container.\n"
 "\n"
         );
     exit(status);
@@ -823,7 +831,7 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
             goto _loadImage_error;
         }
     }
-    if (mountImageVFS(image, opts->username, opts->gpu_ids, NULL, udiConfig) != 0) {
+    if (mountImageVFS(image, opts->username, opts->gpu_ids, opts->is_mpi_support_enabled, NULL, udiConfig) != 0) {
         fprintf(stderr, "FAILED to mount image into UDI\n");
         goto _loadImage_error;
     }
