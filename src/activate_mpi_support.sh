@@ -7,7 +7,17 @@ site_mpi_static_libraries="
 /cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpicxx.a
 /cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpifort.a"
 
-#TODO: add comments to explain the meaning of these tuples
+# This is a list of key-value pairs defined in the form "<key1>:<value1>..."
+# The key is the name of the container's library to be substituted.
+# The value is the full path of the site's library that will substitute the container's library.
+#
+# The MPI support machinery will check that the site's library is ABI compatible with the
+# container's library to be substituted. The compatibility check is performed by comparing the
+# version numbers specified in the libraries' file names as follows:
+# - The major numbers (first from the left) must be equal.
+# - The site's minor number (second from the left) must be greated or equal to the container's minor number.
+# - If the site's library name doesn't contain any version number, no compatibility check is performed.
+# This compatibility check is compatible with the MPICH ABI version number schema.
 site_mpi_shared_libraries="
 libmpi.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpi.so.12.0.5
 libmpicxx.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpicxx.so.12.0.5
@@ -18,6 +28,8 @@ libmpich.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmp
 libmpichcxx.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpicxx.so.12.0.5
 libmpichf90.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpifort.so.12.0.5"
 
+# This is a list of libraries that are dependencies of the site MPI libraries.
+# These libraries are always bind mounted in the container when the MPI support is active.
 site_mpi_dependency_libraries="
 /lib64/libmlx5-rdmav2.so
 /lib64/libmlx4-rdmav2.so
@@ -29,6 +41,7 @@ site_mpi_dependency_libraries="
 /lib64/libibverbs.so.1
 /lib64/libnl.so.1"
 
+# This is a list of site MPI command line tools that will be bind mounted in the container.
 site_binaries="
 /cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/hydra_nameserver
 /cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/hydra_pmi_proxy
@@ -50,6 +63,7 @@ site_binaries="
 /cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/mpirun_rsh
 /cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/mpivars"
 
+# This is a list of site configuration files that will be copied in the container.
 site_configuration_files="
 /etc/libibverbs.d/mlx4.driver
 /etc/libibverbs.d/mlx5.driver"
