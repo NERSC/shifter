@@ -58,9 +58,9 @@ site_configuration_files="
 #this script with an empty environment
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
 
-container_root_dir=/var/udiMount
-container_mpi_dir=/var/udiMount/site-resources/mpi
-container_lib_dir=/var/udiMount/site-resources/mpi/lib
+container_root_dir=
+container_lib_dir=
+container_bin_dir=
 
 log()
 {
@@ -81,21 +81,24 @@ exit_if_previous_command_failed()
 
 parse_command_line_arguments()
 {
-    if [ $# -eq 3 ]; then
-        local site_resources_dir="$1"
-        #TODO: initialize lib, bin dir variables
-    else
+    if [ ! $# -eq 2 ]; then
         log ERROR "internal error: received bad number of command line arguments"
         exit 1
     fi
-}
 
-validate_command_line_arguments()
-{
-    if [ ! -d $container_mount_point ]; then
-        log ERROR "internal error: received invalid value for 'mount point' command line argument"
+    container_root_dir=$1
+    if [ ! -d $container_root_dir ]; then
+        log ERROR "internal error: received bad container root directory ($container_root_dir)"
         exit 1
     fi
+
+    local site_resources=$2
+    if [ ! -d $container_root_dir/$site_resources ]; then
+        log ERROR "internal error: received unexisting site-resources folder ($site_resources)"
+        exit 1
+    fi
+    container_lib_dir=$container_root_dir$site_resources/mpi/lib
+    container_bin_dir=$container_root_dir$site_resources/mpi/bin
 }
 
 check_container_image_dependencies()
@@ -270,12 +273,14 @@ bind_mount_site_mpi_dependencies()
 
 bind_mount_mpi_binaries()
 {
-    bind_mount_files "$site_binaries" "$container_mpi_dir/bin"
+    bind_mount_files "$site_binaries" "$container_bin_dir"
 }
 
-cached_site_mpi_library_ids_stripped >/dev/null # make shure that this function is called
-                                                # at least once in this shell to populate the cache
-#TODO: call validate_command_line_arguments
+# make shure that the following function is called at least once
+# in this shell (not a subshell) to populate the cache
+cached_site_mpi_library_ids_stripped >/dev/null
+
+parse_command_line_arguments $*
 check_container_image_dependencies
 override_mpi_shared_libraries
 bind_mount_site_mpi_dependencies
