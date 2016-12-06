@@ -67,7 +67,9 @@ class TestGPUDevices(unittest.TestCase):
             if not os.path.exists("/lib64/" + gpu_lib):
                 cls._created_gpu_libs.add("/lib64/" + gpu_lib)
                 subprocess.call(["sudo", "cp", path + "/gpu_support_dummy_64bit_library.so", "/lib64/" + gpu_lib])
+        subprocess.call(["sudo", "sed", "-i", "/etc/ld.so.conf", "-e", "$a/lib64"]) # append /lib64 to ld.so.conf
         subprocess.call(["sudo", "ldconfig"])
+        subprocess.call(["sudo", "sed", "-i", "/etc/ld.so.conf", "-e", "$d"]) # remove /lib64 from ld.so.conf
 
     @classmethod
     def _remove_gpu_libraries(cls):
