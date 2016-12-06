@@ -61,6 +61,7 @@ sudo /bin/bash -c "cat /etc/shifter/udiRoot.conf.example | \
          sed 's|etcPath=.*|etcPath=/etc/shifter/shifter_etc_files|g' | \
          sed 's|imageGateway=.*|imageGateway=http://localhost:5000|g' \
          > /etc/shifter/udiRoot.conf"
+sudo /bin/bash -c "echo siteResources=/site-resources >> /etc/shifter/udiRoot.conf"
 
 sudo mkdir -p /etc/shifter/shifter_etc_files
 sudo /bin/bash -c "getent passwd > /etc/shifter/shifter_etc_files/passwd"
@@ -71,9 +72,7 @@ sudo cp "$BUILDDIR/etc_files/nsswitch.conf" /etc/shifter/shifter_etc_files/nsswi
 cat /etc/shifter/udiRoot.conf | egrep -v '^#'
 sudo mkdir -p $LIBEXECDIR/opt/udiImage
 
-echo "setting up requirements for GPU support"
-sudo /bin/bash -c "echo siteResources=/site-resources >> /etc/shifter/udiRoot.conf"
-#dummy required command line tools
+echo "creating dummy command line tools for GPU support integration tests"
 sudo touch /bin/nvidia-smi
 sudo chmod 755 /bin/nvidia-smi
 sudo touch /bin/nvidia-modprobe
