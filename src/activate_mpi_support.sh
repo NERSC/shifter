@@ -115,7 +115,7 @@ parse_command_line_arguments()
     container_bin_dir=$container_root_dir$site_resources/mpi/bin
 }
 
-check_container_image_dependencies()
+check_that_image_contains_required_dependencies()
 {
     # we need the container image to provide these command line tools
     command_line_tools="sed realpath"
@@ -125,6 +125,23 @@ check_container_image_dependencies()
             exit 1
         fi
     done
+}
+
+check_that_image_contains_mpi_libraries()
+{
+    local container_lib_realpaths=$(chroot $container_root_dir bash -c "ldconfig -p | sed -n -e 's/.* => \(.*\)/echo \$(realpath \1)/p' | bash")
+
+    for container_lib_realpath in $container_lib_realpaths; do
+        if corresponding_site_mpi_library_exists $container_lib_realpath; then
+            return # the image contains an MPI library, we are good
+        fi
+    done
+
+    log ERROR "No MPI libraries found in the container. \
+The container should be configured to access the MPI libraries through the dynamic linker. \
+Hint: run 'ldconfig' inside the container to configure the dynamic linker \
+and run 'ldconfig -p' to check the configuration."
+    exit 1
 }
 
 bind_mount_folder()
@@ -177,7 +194,7 @@ bind_mount_files()
 strip_library_name()
 {
     local lib_name=$1
-    local lib_name_stripped=$(basename $lib_name | sed -n -e 's/\(lib.*.so\)\(\.[0-9]\+\)*/\1/p')
+    local lib_name_stripped=$(basename $lib_name | sed -n -e 's/\(.\+\.so\)\(\.[0-9]\+\)*$/\1/p')
     echo $lib_name_stripped
 }
 
@@ -192,7 +209,7 @@ are_mpi_libraries_abi_compatible()
     local count_container_version_numbers=${#container_lib_version_numbers[*]}
 
     if [ $count_site_version_numbers -gt $count_container_version_numbers ]; then
-        log ERROR "internal error: missing version information about the container MPI shared library $site_lib.
+        log ERROR "internal error: missing version information about the container MPI shared library $site_lib. \
 The library name should contain at least $count_site_version_numbers version numbers."
         exit 1
     fi
@@ -295,7 +312,8 @@ bind_mount_mpi_binaries()
 cached_site_mpi_library_ids_stripped >/dev/null
 
 parse_command_line_arguments $*
-check_container_image_dependencies
+check_that_image_contains_required_dependencies
+check_that_image_contains_mpi_libraries
 override_mpi_shared_libraries
 bind_mount_site_mpi_dependencies
 bind_mount_mpi_binaries
