@@ -271,23 +271,15 @@ corresponding_site_mpi_library_exists()
 
 override_mpi_shared_libraries()
 {
-    mkdir -p $container_lib_dir
-    exit_if_previous_command_failed "cannot mkdir -p $container_lib_dir"
+    local container_lib_realpaths=$(chroot $container_root_dir bash -c "ldconfig -p | sed -n -e 's/.* => \(.*\)/echo \$(realpath \1)/p' | bash")
 
-    local container_lib_basenames=($(chroot $container_root_dir bash -c "ldconfig -p | sed -n -e 's/.*\(lib.*\) (.*/\1/p'"))
-    local container_lib_realpaths=($(chroot $container_root_dir bash -c "ldconfig -p | sed -n -e 's/.* => \(.*\)/echo \$(realpath \1)/p' | bash"))
-
-    for i in $(seq 0 $((${#container_lib_basenames[*]}-1))); do
-        local container_lib_basename=${container_lib_basenames[$i]}
-        local container_lib_realpath=${container_lib_realpaths[$i]}
-
+    for container_lib_realpath in $container_lib_realpaths; do
         if corresponding_site_mpi_library_exists $container_lib_realpath; then
             local site_mpi_lib=$(get_abi_compatible_site_mpi_library $container_lib_realpath)
+            local mount_point=$container_root_dir/$container_lib_realpath
             if [ ! -z $site_mpi_lib ]; then
-                touch $container_lib_dir/$container_lib_basename
-                exit_if_previous_command_failed "cannot touch $container_lib_dir/$container_lib_basename"
-                mount --bind $site_mpi_lib $container_lib_dir/$container_lib_basename
-                exit_if_previous_command_failed "cannot bind mount $site_mpi_lib to $container_lib_dir/$container_lib_basename"
+                mount --bind $site_mpi_lib $mount_point
+                exit_if_previous_command_failed "cannot bind mount $site_mpi_lib to $mount_point"
             else
                 log ERROR "cannot find a site MPI library which is ABI-compatible with the container library $container_lib_realpath"
                 exit 1
