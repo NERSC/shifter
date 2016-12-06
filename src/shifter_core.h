@@ -63,9 +63,15 @@ int setupVolumeMapMounts(MountList *mountCache, VolumeMap *map,
 int userMountFilter(char *udiRoot, char *filtered_from, char *filtered_to, char *flags);
 int isKernelModuleLoaded(const char *name);
 int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig);
-int mountImageVFS(ImageData *imageData, const char *username, const char *gpu_id, int is_mpi_support_enabled, const char *minNodeSpec, UdiRootConfig *udiConfig);
+int mountImageVFS(ImageData *imageData,
+                  const char *username,
+                  const char *gpu_id,
+                  int is_mpi_support_enabled,
+                  int verbose,
+                  const char *minNodeSpec,
+                  UdiRootConfig *udiConfig);
 int execute_hook_to_activate_gpu_support(const char* gpu_ids, UdiRootConfig* udiConfig);
-int execute_hook_to_activate_mpi_support(int is_mpi_support_enabled, UdiRootConfig* udiConfig);
+int execute_hook_to_activate_mpi_support(int is_mpi_support_enabled, int verbose, UdiRootConfig* udiConfig);
 int is_gpu_support_enabled(const char* gpu_ids);
 int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig);
 int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat format, UdiRootConfig *udiConfig, int readonly);

@@ -1027,6 +1027,7 @@ int mountImageVFS(ImageData *imageData,
                   const char *username,
                   const char *gpu_ids,
                   int is_mpi_support_enabled,
+                  int verbose,
                   const char *minNodeSpec,
                   UdiRootConfig *udiConfig) {
     struct stat statData;
@@ -1156,7 +1157,7 @@ int mountImageVFS(ImageData *imageData,
         goto _mountImgVfs_unclean;
     }
 
-    if(execute_hook_to_activate_mpi_support(is_mpi_support_enabled, udiConfig) != 0)
+    if(execute_hook_to_activate_mpi_support(is_mpi_support_enabled, verbose, udiConfig) != 0)
     {
         fprintf(stderr, "activate_mpi_support hook failed\n");
         goto _mountImgVfs_unclean;
@@ -1225,7 +1226,7 @@ int is_gpu_support_enabled(const char* gpu_ids)
             && strcmp(gpu_ids, "NoDevFiles") != 0;
 }
 
-int execute_hook_to_activate_mpi_support(int is_mpi_support_enabled, UdiRootConfig* udiConfig)
+int execute_hook_to_activate_mpi_support(int is_mpi_support_enabled, int verbose, UdiRootConfig* udiConfig)
 {
     int ret = 0;
 
@@ -1239,12 +1240,13 @@ int execute_hook_to_activate_mpi_support(int is_mpi_support_enabled, UdiRootConf
             return 1;
         }
 
-        char* args[5];
+        char* args[6];
         args[0] = strdup("/bin/bash");
         args[1] = alloc_strgenf("%s/bin/activate_mpi_support.sh", udiConfig->udiRootPath);
         args[2] = strdup(udiConfig->udiMountPoint);
         args[3] = strdup(udiConfig->siteResources);
-        args[4] = NULL;
+        args[4] = verbose ? strdup("verbose-on") : strdup("verbose-off");
+        args[5] = NULL;
 
         ret = forkAndExecv(args);
         char** p;
