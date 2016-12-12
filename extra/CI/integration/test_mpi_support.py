@@ -89,7 +89,6 @@ class TestMPISupport(unittest.TestCase):
         cls._modify_mpi_dependency_libs_in_site_configuration_file()
         cls._modify_mpi_bins_in_site_configuration_file()
         cls._modify_mpi_config_files_in_site_configuration_file()
-        print subprocess.check_output(["cat", cls._SHIFTER_MPI_CONFIGURATION_FILE])
 
     @classmethod
     def _modify_mpi_libs_in_site_configuration_file(cls):
