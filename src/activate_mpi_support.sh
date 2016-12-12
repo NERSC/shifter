@@ -42,7 +42,7 @@ site_mpi_dependency_libraries="
 /lib64/libnl.so.1"
 
 # This is a list of site MPI command line tools that will be bind mounted in the container.
-site_binaries="
+site_mpi_binaries="
 /cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/hydra_nameserver
 /cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/hydra_pmi_proxy
 /cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/mpicc
@@ -162,13 +162,22 @@ bind_mount_file_into_container()
     exit_if_previous_command_failed "Cannot mount --bind $target $mount_point"
 }
 
-bind_mount_files_into_container()
+bind_mount_files_into_given_folder_of_container()
 {
     local targets=$1
     local container_mount_dir=$2
 
     for target in $targets; do
         local container_mount_point=$container_mount_dir/$(basename $target)
+        bind_mount_file_into_container $target $container_mount_point
+    done
+}
+
+bind_mount_files_at_same_location_in_container()
+{
+    local targets=$1
+    for target in $targets; do
+        local container_mount_point=$target
         bind_mount_file_into_container $target $container_mount_point
     done
 }
@@ -252,7 +261,7 @@ corresponding_site_mpi_library_exists()
     return 1
 }
 
-override_mpi_shared_libraries()
+override_mpi_shared_libraries_of_container()
 {
     log INFO "Scanning container's ld.so.cache for MPI libraries"
     local container_lib_realpaths=$(chroot $container_root_dir bash -c "ldconfig -p | sed -n -e 's/.* => \(.*\)/echo \$(realpath \1)/p' | bash")
@@ -281,23 +290,13 @@ and run 'ldconfig -p' to check the configuration."
     fi
 }
 
-bind_mount_site_mpi_dependencies()
-{
-    bind_mount_files_into_container "$site_mpi_dependency_libraries" "$container_mpi_lib_dir"
-    bind_mount_files_into_container "$site_configuration_files" "/etc/libibverbs.d"
-}
-
-bind_mount_mpi_binaries()
-{
-    bind_mount_files_into_container "$site_binaries" "$container_mpi_bin_dir"
-}
-
 # make sure that the following function is called at least once
 # in this shell (not a subshell) to populate the cache
 cached_site_mpi_library_ids_stripped >/dev/null
 
 parse_command_line_arguments $*
 check_that_image_contains_required_dependencies
-override_mpi_shared_libraries
-bind_mount_site_mpi_dependencies
-bind_mount_mpi_binaries
+override_mpi_shared_libraries_of_container
+bind_mount_files_into_given_folder_of_container "$site_mpi_dependency_libraries" "$container_mpi_lib_dir"
+bind_mount_files_into_given_folder_of_container "$site_mpi_binaries" "$container_mpi_bin_dir"
+bind_mount_files_at_same_location_in_container "$site_configuration_files"
