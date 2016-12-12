@@ -12,8 +12,8 @@ class TestMPISupport(unittest.TestCase):
     """
     _created_site_resources = set()
 
-    #_SHIFTER_MPI_CONFIGURATION_FILE = "/usr/bin/activate_mpi_support.sh"
-    _SHIFTER_MPI_CONFIGURATION_FILE = "/opt/shifter/udiRoot/bin/activate_mpi_support.sh"
+    _SHIFTER_MPI_CONFIGURATION_FILE = "/usr/bin/activate_mpi_support.sh"
+    #_SHIFTER_MPI_CONFIGURATION_FILE = "/opt/shifter/udiRoot/bin/activate_mpi_support.sh"
 
     _SITE_LIBS_PREFIX = os.path.dirname(os.path.abspath(__file__))
     _SITE_BINS_PREFIX = os.path.dirname(os.path.abspath(__file__))
@@ -38,7 +38,7 @@ class TestMPISupport(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        #cls._pull_docker_images()
+        cls._pull_docker_images()
         cls._create_site_resources()
         cls._modify_site_configuration_file()
 
