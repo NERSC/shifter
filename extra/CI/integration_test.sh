@@ -95,3 +95,6 @@ python $CIDIR/integration/test_capabilities.py ubuntu:16.04
 
 echo "Test GPU support"
 python $CIDIR/integration/test_gpu_support.py ubuntu:16.04
+
+echo "Test MPI support"
+python $CIDIR/integration/test_mpi_support.py
