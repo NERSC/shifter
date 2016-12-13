@@ -26,8 +26,8 @@ class TestGPUDevices(unittest.TestCase):
                     "nvidia-debugdump", \
                     "nvidia-persistenced", \
                     "nvidia-smi"}
-    _GPU_ENV_LD_LIB_PATH = {"/site-resources/gpu/lib", "/site-resources/gpu/lib64"}
-    _GPU_ENV_PATH = {"/site-resources/gpu/bin"}
+    _GPU_ENV_LD_LIB_PATH = {"/opt/shifter/site-resources/gpu/lib", "/opt/shifter/site-resources/gpu/lib64"}
+    _GPU_ENV_PATH = {"/opt/shifter/site-resources/gpu/bin"}
 
     _created_gpu_devices = set()
     _created_gpu_libs = set()
@@ -231,13 +231,13 @@ class TestGPUDevices(unittest.TestCase):
 
     def _get_gpu_libraries_in_container(self):
         if self._is_gpu_support_in_container_enabled():
-            return set(self._get_command_output_in_container(["ls", "/site-resources/gpu/lib64"]))
+            return set(self._get_command_output_in_container(["ls", "/opt/shifter/site-resources/gpu/lib64"]))
         else:
             return set()
 
     def _get_gpu_binaries_in_container(self):
         if self._is_gpu_support_in_container_enabled():
-            return set(self._get_command_output_in_container(["ls", "/site-resources/gpu/bin"]))
+            return set(self._get_command_output_in_container(["ls", "/opt/shifter/site-resources/gpu/bin"]))
         else:
             return set()
 
@@ -248,13 +248,17 @@ class TestGPUDevices(unittest.TestCase):
         for out in output:
             if expr.match(out) is not None:
                 paths = out.split("=")[1].split(":")
-        expr = re.compile("/site-resources/gpu")
+        expr = re.compile("/opt/shifter/site-resources/gpu")
         gpu_paths = {path for path in paths if expr.match(path) is not None}
         return gpu_paths
 
     def _is_gpu_support_in_container_enabled(self):
-        return "site-resources" in self._get_command_output_in_container(["ls", "/"]) \
-            and "gpu" in self._get_command_output_in_container(["ls", "/site-resources"])
+        return self._file_exists_in_container("/opt/shifter/site-resources/gpu")
+
+    def _file_exists_in_container(self, file_path):
+        command = ["bash", "-c", "if [ -e " + file_path + " ]; then echo \"file exists\"; fi"]
+        out = self._get_command_output_in_container(command)
+        return out == ["file exists"]
 
     def _get_command_output_in_container(self, command):
         environment = os.environ.copy()
@@ -267,7 +271,14 @@ class TestGPUDevices(unittest.TestCase):
         full_command += command
 
         out = subprocess.check_output(full_command, env=environment)
-        return [line for line in out.split('\n')]
+        return self._command_output_without_trailing_new_lines(out)
+
+    def _command_output_without_trailing_new_lines(self, out):
+        lines = [line for line in out.split('\n')]
+        # remove empty trailing elements due to trailing new lines
+        while len(lines)>0 and lines[-1]=="":
+            lines.pop()
+        return lines
 
     def _assert_is_subset(self, subset, superset):
         #dirty conversion to dictionaries required here

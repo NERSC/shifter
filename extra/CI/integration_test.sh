@@ -61,7 +61,6 @@ sudo /bin/bash -c "cat /etc/shifter/udiRoot.conf.example | \
          sed 's|etcPath=.*|etcPath=/etc/shifter/shifter_etc_files|g' | \
          sed 's|imageGateway=.*|imageGateway=http://localhost:5000|g' \
          > /etc/shifter/udiRoot.conf"
-sudo /bin/bash -c "echo siteResources=/site-resources >> /etc/shifter/udiRoot.conf"
 
 sudo mkdir -p /etc/shifter/shifter_etc_files
 sudo /bin/bash -c "getent passwd > /etc/shifter/shifter_etc_files/passwd"

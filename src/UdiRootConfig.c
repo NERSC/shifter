@@ -386,6 +386,9 @@ int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
         if (config->rootfsType == NULL || strlen(config->rootfsType) == 0) {
             VAL_ERROR("\"rootfsType\" is not defined", UDIROOT_VAL_PARSE);
         }
+        if (config->siteResources == NULL || strlen(config->siteResources) == 0) {
+            VAL_ERROR("\"siteResources\" is not defined", UDIROOT_VAL_PARSE);
+        }
     }
     if (validateFlags & UDIROOT_VAL_FILEVAL) {
         struct stat statData;
@@ -425,6 +428,10 @@ int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
             } else if (!(statData.st_mode & S_IXUSR)) {
                 VAL_ERROR("Specified \"mkfsXfsPath\" is not executable.", UDIROOT_VAL_FILEVAL);
             }
+        }
+        if (config->siteResources[0] != '/') {
+            // note: we will find out later, through "mkdir", whether it is a valid path name or not
+            VAL_ERROR("Specified \"siteResources\" is not an absolute path.", UDIROOT_VAL_FILEVAL);
         }
     }
     return 0;

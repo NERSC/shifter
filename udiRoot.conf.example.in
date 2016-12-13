@@ -284,9 +284,9 @@ system=mycluster
 defaultImageType=docker
 
 
-#siteResources (required for GPU support)
+#siteResources (required)
 #
 # Absolute path to where site-specific resources will be bind-mounted inside the
 # container to enable features like native MPI or GPU support.
 #
-#siteResources=/site-resources
+siteResources=/opt/shifter/site-resources
