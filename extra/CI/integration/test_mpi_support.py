@@ -10,7 +10,7 @@ class TestMPISupport(unittest.TestCase):
     binaries, configuration files, environment variables) are correctly
     set inside the container.
     """
-    _created_site_resources = set()
+    _created_site_resources = set() # keep track of created resources to delete them at end of test
 
     _SHIFTER_MPI_CONFIGURATION_FILE = "/usr/bin/activate_mpi_support.sh"
 
@@ -22,8 +22,8 @@ class TestMPISupport(unittest.TestCase):
     _SITE_MPI_BINS = { "mpirun" }
     _SITE_MPI_CONFIGURATION_FILES = { "/etc/dummy-mpi-config-file" }
 
-    _EXPECTED_CONTAINER_MPI_ENV_LD_LIB_PATH = "/site-resources/mpi/lib"
-    _EXPECTED_CONTAINER_MPI_ENV_PATH = { "/site-resources/gpu/bin" }
+    _EXPECTED_CONTAINER_MPI_ENV_LD_LIB_PATH = { "/site-resources/mpi/lib" }
+    _EXPECTED_CONTAINER_MPI_ENV_PATH = { "/site-resources/mpi/bin" }
 
     _CONTAINER_IMAGES = { \
         "mpich-compatible1" : "rukkal/shifter-mpi-support-test:mpich-compatible1", \
@@ -140,6 +140,8 @@ class TestMPISupport(unittest.TestCase):
         self.assertEqual(properties["mpi-dependency-libs"], set())
         self.assertEqual(properties["mpi-bins"], set())
         self.assertEqual(properties["mpi-config-files"], set())
+        self.assertEqual(properties["mpi-env-ld-library-path"], set())
+        self.assertEqual(properties["mpi-env-path"], set())
 
     def test_mpich_compatible_1(self):
         self._mpi_command_line_option = True
@@ -149,6 +151,8 @@ class TestMPISupport(unittest.TestCase):
         self.assertEqual(properties["mpi-dependency-libs"], self._SITE_MPI_DEPENDENCY_LIBS)
         self.assertEqual(properties["mpi-bins"], self._SITE_MPI_BINS)
         self.assertEqual(properties["mpi-config-files"], self._SITE_MPI_CONFIGURATION_FILES)
+        self.assertEqual(properties["mpi-env-ld-library-path"], self._EXPECTED_CONTAINER_MPI_ENV_LD_LIB_PATH)
+        self.assertEqual(properties["mpi-env-path"], self._EXPECTED_CONTAINER_MPI_ENV_PATH)
 
     def test_mpich_compatible_2(self):
         self._mpi_command_line_option = True
@@ -205,7 +209,9 @@ class TestMPISupport(unittest.TestCase):
         return {"mpi-libs" : self._get_mpi_libs_in_container(), \
                 "mpi-dependency-libs" : self._get_mpi_dependency_libs_in_container(), \
                 "mpi-bins" : self._get_mpi_bins_in_container(), \
-                "mpi-config-files" : self._get_mpi_config_files_in_container() }
+                "mpi-config-files" : self._get_mpi_config_files_in_container() , \
+                "mpi-env-ld-library-path" : self._get_mpi_paths_in_container_environment_variable("LD_LIBRARY_PATH"), \
+                "mpi-env-path" : self._get_mpi_paths_in_container_environment_variable("PATH") }
 
     def _get_mpi_libs_in_container(self):
         site_mpi_libs = set(self._SITE_MPI_LIBS.keys())
@@ -237,6 +243,17 @@ class TestMPISupport(unittest.TestCase):
             if self._file_exists_in_container(site_config_file):
                 config_files_in_container.add(site_config_file)
         return config_files_in_container
+
+    def _get_mpi_paths_in_container_environment_variable(self, variable_name):
+        output = self._get_command_output_in_container(["env"])
+        expr = re.compile(variable_name + "=")
+        paths = []
+        for out in output:
+            if expr.match(out) is not None:
+                paths = out.split("=")[1].split(":")
+        expr = re.compile("/site-resources/mpi")
+        mpi_paths = [path for path in paths if expr.match(path) is not None]
+        return set(mpi_paths)
 
     def _is_mpi_support_in_container_enabled(self):
         return self._file_exists_in_container("/site-resources/mpi")
