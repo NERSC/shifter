@@ -1,12 +1,5 @@
 #!/bin/bash
 
-# TODO: expose static libraries in the container too? It only makes sense
-# if the user needs to build in the running container.
-site_mpi_static_libraries="
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpi.a
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpicxx.a
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpifort.a"
-
 # This is a list of key-value pairs defined in the form "<key1>:<value1>..."
 # The key is the name of the container's library to be substituted.
 # The value is the full path of the site's library that will substitute the container's library.
