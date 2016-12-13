@@ -40,7 +40,7 @@ class TestMPISupport(unittest.TestCase):
     def setUpClass(cls):
         cls._pull_docker_images()
         cls._create_site_resources()
-        cls._modify_site_configuration_file()
+        cls._modify_site_mpi_configuration_file()
 
     @classmethod
     def tearDownClass(cls):
@@ -83,7 +83,7 @@ class TestMPISupport(unittest.TestCase):
             subprocess.call(["sudo", "rm", resource])
 
     @classmethod
-    def _modify_site_configuration_file(cls):
+    def _modify_site_mpi_configuration_file(cls):
         subprocess.call(["sudo", "cp", cls._SHIFTER_MPI_CONFIGURATION_FILE, cls._SHIFTER_MPI_CONFIGURATION_FILE + ".bak"])
         cls._modify_mpi_libs_in_site_configuration_file()
         cls._modify_mpi_dependency_libs_in_site_configuration_file()
