@@ -52,6 +52,7 @@
 #include "utility.h"
 #include "VolumeMap.h"
 #include "config.h"
+#include "gpu_support.h"
 
 #define VOLUME_ALLOC_BLOCK 10
 
@@ -83,11 +84,10 @@ struct options {
 static void _usage(int);
 int parse_options(int argc, char **argv, struct options *opts, UdiRootConfig *);
 int parse_environment(struct options *opts, UdiRootConfig *);
-int parse_gpu_env(struct options *opts);
 int fprint_options(FILE *, struct options *);
 void free_options(struct options *, int freeStruct);
 int isImageLoaded(ImageData *, struct options *, UdiRootConfig *);
-int loadImage(ImageData *, struct options *, UdiRootConfig *);
+int loadImage(ImageData *, struct options *, const struct gpu_support_config*, UdiRootConfig *);
 int adoptPATH(char **environ);
 
 #ifndef _TESTHARNESS_SHIFTER
@@ -115,6 +115,7 @@ int main(int argc, char **argv) {
     struct options opts;
     UdiRootConfig udiConfig;
     ImageData imageData;
+    struct gpu_support_config gpu_config;
     memset(&opts, 0, sizeof(struct options));
     memset(&udiConfig, 0, sizeof(UdiRootConfig));
     memset(&imageData, 0, sizeof(ImageData));
@@ -133,7 +134,7 @@ int main(int argc, char **argv) {
         exit(1);
     }
     /* parse environment variables for GPU support */
-    if (parse_gpu_env(&opts) != 0) {
+    if (parse_gpu_env(&gpu_config) != 0) {
         fprintf(stderr, "FAILED to parse CUDA GPU environment variables.\n");
         exit(1);
     }
@@ -224,10 +225,12 @@ int main(int argc, char **argv) {
     }
 
     if (isImageLoaded(&imageData, &opts, &udiConfig) == 0) {
-        if (loadImage(&imageData, &opts, &udiConfig) != 0) {
+        if (loadImage(&imageData, &opts, &gpu_config, &udiConfig) != 0) {
             fprintf(stderr, "FAILED to setup image.\n");
+            free_gpu_support_config(&gpu_config);
             exit(1);
         }
+        free_gpu_support_config(&gpu_config);
     }
 
     /* switch to new / to prevent the chroot jail from being leaky */
@@ -619,28 +622,6 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
     return 0;
 }
 
-
-/**
- * Determine if GPU support is requested through the CUDA_VISIBLE_DEVICES
- * environment variable.
- * CUDA_VISIBLE_DEVICES is also set by the SLURM workload manager generic
- * resources (GRES) plugin.
- * As a design decision, the environment variable overrides
- * the --gpu command line option.
- */
-int parse_gpu_env(struct options *opts) {
-    char *envPtr = NULL;
-
-    if ((envPtr = getenv("CUDA_VISIBLE_DEVICES")) != NULL) {
-        if (opts->gpu_ids != NULL) {
-            free(opts->gpu_ids);
-        }
-        opts->gpu_ids = strdup(envPtr);
-    }
-
-    return 0;
-}
-
 static void _usage(int status) {
     printf("\n"
         "Usage:\n"
@@ -769,7 +750,7 @@ int isImageLoaded(ImageData *image, struct options *options, UdiRootConfig *udiC
 /**
  * Loads the needed image
  */
-int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) {
+int loadImage(ImageData *image, struct options *opts, const struct gpu_support_config* gpu_config, UdiRootConfig *udiConfig) {
     int retryCnt = 0;
     char chrootPath[PATH_MAX];
     snprintf(chrootPath, PATH_MAX, "%s", udiConfig->udiMountPoint);
@@ -824,7 +805,7 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
             goto _loadImage_error;
         }
     }
-    if (mountImageVFS(image, opts->username, opts->gpu_ids, NULL, udiConfig) != 0) {
+    if (mountImageVFS(image, opts->username, opts->verbose, NULL, udiConfig, gpu_config) != 0) {
         fprintf(stderr, "FAILED to mount image into UDI\n");
         goto _loadImage_error;
     }

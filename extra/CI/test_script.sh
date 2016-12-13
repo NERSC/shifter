@@ -43,4 +43,4 @@ runTest test_shifter_core shifter_core
 runTest test_shifter shifter
 runTest test_utility utility
 runTest test_VolumeMap VolumeMap
-
+runTest test_gpu_support gpu_support
