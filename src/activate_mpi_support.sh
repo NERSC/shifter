@@ -258,18 +258,23 @@ override_mpi_shared_libraries_of_container()
 {
     log INFO "Scanning container's ld.so.cache for MPI libraries"
     local container_lib_realpaths=$(chroot $container_root_dir bash -c "ldconfig -p | sed -n -e 's/.* => \(.*\)/echo \$(realpath \1)/p' | bash")
+    local container_lib_realpaths_mounted_so_far=
     local container_has_mpi_libraries=false
 
     for container_lib_realpath in $container_lib_realpaths; do
         if corresponding_site_mpi_library_exists $container_lib_realpath; then
             container_has_mpi_libraries=true
-            log INFO "Found $(basename $container_lib_realpath) in container"
             local site_mpi_lib=$(get_abi_compatible_site_mpi_library $container_lib_realpath)
-            if [ ! -z $site_mpi_lib ]; then
-                bind_mount_file_into_container $site_mpi_lib $container_lib_realpath
-            else
-                log ERROR "Cannot find a site MPI library which is ABI-compatible with the container library $container_lib_realpath"
-                exit 1
+            # skip library if has already been bind mounted
+            if [[ ! $container_lib_realpaths_mounted_so_far =~ $container_lib_realpath ]]; then
+                log INFO "Found $container_lib_realpath in container"
+                if [ ! -z $site_mpi_lib ]; then
+                    container_lib_realpaths_mounted_so_far="$container_lib_realpaths_mounted_so_far $container_lib_realpath"
+                    bind_mount_file_into_container $site_mpi_lib $container_lib_realpath
+                else
+                    log ERROR "Cannot find a site MPI library which is ABI-compatible with the container library $container_lib_realpath"
+                    exit 1
+                fi
             fi
         fi
     done
