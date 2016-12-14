@@ -49,6 +49,7 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include <linux/limits.h>
 
 #include "utility.h"
 
@@ -469,4 +470,50 @@ int pathcmp(const char *a, const char *b) {
     free(myA);
     free(myB);
     return ret;
+}
+
+/** Creates the specified directory as the bash command "mkdir -p", i.e. there is no error
+ * if the directory exists and makes parent directories as needed.
+ */
+int mkdir_p(const char* path, mode_t mode) {
+    if (strlen(path) >= PATH_MAX) {
+        fprintf(stderr, "cannot mkdir %s. Specified path is too long\n", path);
+        return 1;
+    }
+
+    char path_copy[PATH_MAX];
+    strncpy(path_copy, path, PATH_MAX);
+
+    char* begin = path_copy;
+    char* pos = begin;
+
+    if (*begin == 0 || *begin != '/') {
+        fprintf(stderr, "mkdir_p: specified a non valid absulute path\n");
+    }
+
+    // iterate though each subfolder
+    while(1) {
+        ++pos;
+        if (*pos == '/' || *pos == '\0') {
+            int is_last_subfolder = (*pos == '\0');
+            *pos = '\0';
+
+            // create subfolder if doesn't exist yet
+            struct stat sb;
+            if (stat(begin, &sb) != 0) {
+                if (mkdir(begin, mode) != 0) {
+                    fprintf(stderr, "cannot mkdir %s\n", begin);
+                    return 1;
+                }
+            }
+
+            if(is_last_subfolder) {
+                break;
+            }
+            else {
+                *pos = '/';
+            }
+        }
+    }
+    return 0;
 }

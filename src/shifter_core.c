@@ -1142,12 +1142,13 @@ int mountImageVFS(ImageData *imageData,
     BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
 
     /* create site resources directory */
-    if(udiConfig->siteResources != NULL)
-    {
-        char* site_resources_path = alloc_strgenf("%s%s", udiConfig->udiMountPoint, udiConfig->siteResources);
-        _MKDIR(site_resources_path, 0755);
+    char* site_resources_path = alloc_strgenf("%s%s", udiConfig->udiMountPoint, udiConfig->siteResources);
+    if(mkdir_p(site_resources_path, 0755) != 0) {
+        fprintf(stderr, "cannot mkdir %s\n", site_resources_path);
         free(site_resources_path);
+        goto _mountImgVfs_unclean;
     }
+    free(site_resources_path);
 
     if(execute_hook_to_activate_gpu_support(gpu_ids, udiConfig) != 0)
     {
