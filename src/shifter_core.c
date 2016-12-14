@@ -1026,6 +1026,8 @@ int create_mount_point(const char* from, const char* to)
 int mountImageVFS(ImageData *imageData,
                   const char *username,
                   const char *gpu_ids,
+                  int is_mpi_support_enabled,
+                  int verbose,
                   const char *minNodeSpec,
                   UdiRootConfig *udiConfig) {
     struct stat statData;
@@ -1141,9 +1143,23 @@ int mountImageVFS(ImageData *imageData,
     /* copy image /etc into place */
     BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
 
+    /* create site resources directory */
+    if(udiConfig->siteResources != NULL)
+    {
+        char* site_resources_path = alloc_strgenf("%s%s", udiConfig->udiMountPoint, udiConfig->siteResources);
+        _MKDIR(site_resources_path, 0755);
+        free(site_resources_path);
+    }
+
     if(execute_hook_to_activate_gpu_support(gpu_ids, udiConfig) != 0)
     {
         fprintf(stderr, "activate_gpu_support hook failed\n");
+        goto _mountImgVfs_unclean;
+    }
+
+    if(execute_hook_to_activate_mpi_support(is_mpi_support_enabled, verbose, udiConfig) != 0)
+    {
+        fprintf(stderr, "activate_mpi_support hook failed\n");
         goto _mountImgVfs_unclean;
     }
 #undef BIND_IMAGE_INTO_UDI
@@ -1208,6 +1224,39 @@ int is_gpu_support_enabled(const char* gpu_ids)
     return  gpu_ids != NULL
             && strcmp(gpu_ids, "") != 0
             && strcmp(gpu_ids, "NoDevFiles") != 0;
+}
+
+int execute_hook_to_activate_mpi_support(int is_mpi_support_enabled, int verbose, UdiRootConfig* udiConfig)
+{
+    int ret = 0;
+
+    if(is_mpi_support_enabled)
+    {
+        if (udiConfig->siteResources == NULL)
+        {
+            fprintf(stderr, "MPI support requested but the configuration file "
+                            "doesn't specify the path where the site-specific "
+                            "dependencies shall be mounted\n");
+            return 1;
+        }
+
+        char* args[6];
+        args[0] = strdup("/bin/bash");
+        args[1] = alloc_strgenf("%s/bin/activate_mpi_support.sh", udiConfig->udiRootPath);
+        args[2] = strdup(udiConfig->udiMountPoint);
+        args[3] = strdup(udiConfig->siteResources);
+        args[4] = verbose ? strdup("verbose-on") : strdup("verbose-off");
+        args[5] = NULL;
+
+        ret = forkAndExecv(args);
+        char** p;
+        for (p=args; *p != NULL; p++)
+        {
+            free(*p);
+        }
+    }
+
+    return ret;
 }
 
 /** makeUdiMountPrivate
@@ -3517,41 +3566,125 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
     return 0;
 }
 
-int shifter_setupenv_gpu_support(char ***env, UdiRootConfig *udiConfig, const char* gpu_ids)
+/*! Recursively searches the container's siteResources folder.
+ * All subfolders that contain a shared library are prepended to the container's
+ * LD_LIBRARY_PATH environment variable.
+ * All subfolders that contain an executable file are prepended to the container's
+ * PATH environment variable.
+ */
+int shifter_setupenv_site_resources(char ***env, UdiRootConfig *udiConfig)
 {
-    if(is_gpu_support_enabled(gpu_ids)==0)
-        return 0;
-
-    if (udiConfig->siteResources == NULL)
+    if (udiConfig->siteResources != NULL)
     {
-        fprintf(stderr, "GPU support requested but the configuration file "
-                        "doesn't specify the path where the site-specific "
-                        "dependencies shall be mounted\n");
+        if(shifter_setupenv_site_resources_rec(env, udiConfig->siteResources) != 0)
+        {
+            fprintf(stderr, "Failed to add the site-resources directories to the container's environment\n");
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int shifter_setupenv_site_resources_rec(char ***env, const char* current_folder)
+{
+    int return_value = 0;
+    int is_current_folder_prepended_to_path = 0;
+    int is_current_folder_prepended_to_ld_library_path = 0;
+
+    DIR* dir = opendir(current_folder);
+    if(dir == NULL)
+    {
+        fprintf(stderr, "FAILED to opendir %s\n", current_folder);
+        perror(" --- REASON");
         return 1;
     }
 
-    size_t envVar_size;
-    char* envVar;
+    //for each file/folder in current_folder
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != NULL)
+    {
+        // skip special files
+        if( strcmp(".", entry->d_name)==0
+            || strcmp("..", entry->d_name)==0)
+            continue;
 
-    envVar_size = strlen(udiConfig->gpuBinPath) + 6;
-    envVar = (char *) malloc(sizeof(char *) * envVar_size);
-    sprintf(envVar, "PATH=%s", udiConfig->gpuBinPath);
-    shifter_prependenv(env, envVar);
-    free(envVar);
+        char entry_full_path[PATH_MAX];
+        snprintf(entry_full_path, PATH_MAX, "%s/%s", current_folder, entry->d_name);
 
-    envVar_size = strlen(udiConfig->gpuLibPath) + 17;
-    envVar = (char *) malloc(sizeof(char *) * envVar_size);
-    sprintf(envVar, "LD_LIBRARY_PATH=%s", udiConfig->gpuLibPath);
-    shifter_prependenv(env, envVar);
-    free(envVar);
+        struct stat stat_result;
+        if (stat(entry_full_path, &stat_result) != 0)
+        {
+            fprintf(stderr, "failed to stat %s\n", entry_full_path);
+            perror(" --- REASON");
+            return_value = 1;
+            break;
+        }
 
-    envVar_size = strlen(udiConfig->gpuLib64Path) + 17;
-    envVar = (char *) malloc(sizeof(char *) * envVar_size);
-    sprintf(envVar, "LD_LIBRARY_PATH=%s", udiConfig->gpuLib64Path);
-    shifter_prependenv(env, envVar);
-    free(envVar);
+        // entry is folder => resursively search it
+        if((stat_result.st_mode & S_IFMT) == S_IFDIR)
+        {
+            if(shifter_setupenv_site_resources_rec(env, entry_full_path) != 0)
+            {
+                return_value = 1;
+                break;
+            }
+        }
+        // entry is executable program => add current folder to PATH
+        else if(!is_current_folder_prepended_to_path
+                && !is_shared_library(entry->d_name)
+                && (stat_result.st_mode & S_IXOTH))
+        {
+            char* env_variable = alloc_strgenf("PATH=%s", current_folder);
+            if(shifter_prependenv(env, env_variable) != 0)
+            {
+                fprintf(stderr, "Failed to prepend environment variable %s\n", env_variable);
+                free(env_variable);
+                return_value = 1;
+                break;
+            }
+            free(env_variable);
+            is_current_folder_prepended_to_path = 1;
+        }
+        // entry is library => add current folder to LD_LIBRARY_PATH
+        else if(!is_current_folder_prepended_to_ld_library_path
+                && is_shared_library(entry->d_name))
+        {
+            char *env_variable = alloc_strgenf("LD_LIBRARY_PATH=%s", current_folder);
+            if(shifter_prependenv(env, env_variable) != 0)
+            {
+                fprintf(stderr, "Failed to prepend environment variable %s\n", env_variable);
+                free(env_variable);
+                return_value = 1;
+                break;
+            }
+            free(env_variable);
+            is_current_folder_prepended_to_ld_library_path = 1;
+        }
+    }
+    closedir(dir);
+    return return_value;
+}
 
-    return 0;
+int is_shared_library(char* file_name)
+{
+    char* pos = strstr(file_name, ".so");
+
+    if(pos == NULL)
+    {
+        return 0;
+    }
+
+    pos += 3;
+    while(*pos != '\0')
+    {
+        if(*pos!='.' && !isdigit(*pos))
+        {
+            return 0;
+        }
+        ++pos;
+    }
+
+    return 1;
 }
 
 int _shifter_get_max_capability(unsigned long *_maxCap) {
