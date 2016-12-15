@@ -1028,7 +1028,7 @@ int mountImageVFS(ImageData *imageData,
     }
     free(site_resources_path);
 
-    if(execute_hook_to_activate_gpu_support(gpu_config, udiConfig) != 0)
+    if(execute_hook_to_activate_gpu_support(gpu_config, verbose, udiConfig) != 0)
     {
         fprintf(stderr, "activate_gpu_support hook failed\n");
         goto _mountImgVfs_unclean;

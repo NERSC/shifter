@@ -23,7 +23,7 @@ int parse_gpu_env(struct gpu_support_config* config) {
     return 0;
 }
 
-int execute_hook_to_activate_gpu_support(const struct gpu_support_config* gpu_config, UdiRootConfig* udiConfig) {
+int execute_hook_to_activate_gpu_support(const struct gpu_support_config* gpu_config, int verbose, UdiRootConfig* udiConfig) {
     int ret = 0;
 
     if(gpu_config->is_gpu_support_enabled) {
@@ -35,7 +35,8 @@ int execute_hook_to_activate_gpu_support(const struct gpu_support_config* gpu_co
         args[2] = strdup(gpu_config->gpu_ids);
         args[3] = strdup(udiConfig->udiMountPoint);
         args[4] = strdup(udiConfig->siteResources);
-        args[5] = NULL;
+        args[5] = verbose ? strdup("verbose-on") : strdup("verbose-off");
+        args[6] = NULL;
 
         ret = forkAndExecv(args);
 

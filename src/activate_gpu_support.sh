@@ -9,6 +9,7 @@ container_mount_point=
 container_bin_path=
 container_lib_path=
 container_lib64_path=
+is_verbose_active=
 
 #the NVIDIA compute libraries that will be bind mounted into the container
 nvidia_compute_libs="cuda \
@@ -30,7 +31,12 @@ log()
 {
     local level="$1"
     local msg="$2"
-    printf "[ GPU SUPPORT ACTIVATION ] =$level= $msg\n" >&2
+    if [ $is_verbose_active = false ]; then
+        if [ $level = DEBUG -o $level = INFO ]; then
+            return
+        fi
+    fi
+    printf "[ GPU SUPPORT ] =$level= $msg\n" >&2
 }
 
 exit_if_previous_command_failed()
@@ -43,16 +49,25 @@ exit_if_previous_command_failed()
 
 parse_command_line_arguments()
 {
-    if [ $# -eq 3 ]; then
-      nvidia_devices=$(echo $1 | tr , '\n' | sed 's/^/\/dev\/nvidia/')
-      container_mount_point=$2
-      container_site_resources=$container_mount_point$3
-      container_bin_path=$container_site_resources/gpu/bin
-      container_lib_path=$container_site_resources/gpu/lib
-      container_lib64_path=$container_site_resources/gpu/lib64
-    else
-        log ERROR "internal error: received bad number of command line arguments"
+    if [ ! $# -eq 4 ]; then
+        log ERROR "Internal error: received bad number of command line arguments"
         exit 1
+    fi
+
+    nvidia_devices=$(echo $1 | tr , '\n' | sed 's/^/\/dev\/nvidia/')
+    container_mount_point=$2
+    container_site_resources=$container_mount_point$3
+    container_bin_path=$container_site_resources/gpu/bin
+    container_lib_path=$container_site_resources/gpu/lib
+    container_lib64_path=$container_site_resources/gpu/lib64
+
+    local verbose=$4
+    if [ $verbose = "verbose-on" ]; then
+        is_verbose_active=true
+    elif [ $verbose = "verbose-off" ]; then
+        is_verbose_active=false
+    else
+        log ERROR "Internal error: received bad \"verbose\" parameter"
     fi
 }
 
@@ -140,32 +155,10 @@ load_nvidia_uvm_if_necessary()
     fi
 }
 
-get_container_device_file()
-{
-    local container_device_prefix=$(echo $container_mount_point/dev | sed 's/\//\\\//g')
-    echo $1 | sed "s/^/$container_device_prefix\//"
-}
-
-get_host_device_file()
-{
-    echo $1 | sed 's/^/\/dev\//'
-}
-
-is_value_not_in_list()
-{
-    local element=$1
-    local list=$2
-    for list_element in $list; do
-        if [ "$element" = "$list_element" ]; then
-            return 1
-        fi
-    done
-    return 0
-}
-
 parse_command_line_arguments $*
 validate_command_line_arguments
 check_prerequisites
 add_nvidia_compute_libs_to_container
 add_nvidia_binaries_to_container
 load_nvidia_uvm_if_necessary
+log INFO "activated support for GPU devices $(echo $nvidia_devices | tr '\n' ' ')"
