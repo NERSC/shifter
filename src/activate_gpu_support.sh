@@ -4,12 +4,11 @@
 #this script with an empty environment
 export PATH=/usr/local/bin:/usr/bin:/bin:/sbin
 
-is_gpu_support_enabled=
-gpu_ids=
+nvidia_devices=
 container_mount_point=
-gpu_bin_path=
-gpu_lib_path=
-gpu_lib64_path=
+container_bin_path=
+container_lib_path=
+container_lib64_path=
 
 #the NVIDIA compute libraries that will be bind mounted into the container
 nvidia_compute_libs="cuda \
@@ -45,15 +44,12 @@ exit_if_previous_command_failed()
 parse_command_line_arguments()
 {
     if [ $# -eq 3 ]; then
-      is_gpu_support_enabled=true
       nvidia_devices=$(echo $1 | tr , '\n' | sed 's/^/\/dev\/nvidia/')
       container_mount_point=$2
-      gpu_bin_path=$3/gpu/bin
-      gpu_lib_path=$3/gpu/lib
-      gpu_lib64_path=$3/gpu/lib64
-    elif [ $# -eq 1 ]; then
-      is_gpu_support_enabled=false
-      container_mount_point=$1
+      container_site_resources=$container_mount_point$3
+      container_bin_path=$container_site_resources/gpu/bin
+      container_lib_path=$container_site_resources/gpu/lib
+      container_lib64_path=$container_site_resources/gpu/lib64
     else
         log ERROR "internal error: received bad number of command line arguments"
         exit 1
@@ -62,10 +58,6 @@ parse_command_line_arguments()
 
 validate_command_line_arguments()
 {
-    if [ $is_gpu_support_enabled = false ]; then
-        return
-    fi
-
     for device in $nvidia_devices; do
         if [ ! -e $device ]; then
             log ERROR "received bad GPU ID. Cannot find device $device"
@@ -73,17 +65,18 @@ validate_command_line_arguments()
     done
 
     if [ ! -d $container_mount_point ]; then
-        log ERROR "internal error: received invalid value for 'mount point' command line argument"
+        log ERROR "internal error: received invalid \"mount point\". Directory $container_mount_point doesn't exist."
+        exit 1
+    fi
+
+    if [ ! -d $container_site_resources ]; then
+        log ERROR "internal error: received invalid \"site resources\". Directory $container_site_resources doesn't exist."
         exit 1
     fi
 }
 
 check_prerequisites()
 {
-    if [ $is_gpu_support_enabled = false ]; then
-        return
-    fi
-
     local cmds="nvidia-smi nvidia-modprobe"
     for cmd in $cmds; do
         command -v $cmd >/dev/null && continue
@@ -94,16 +87,9 @@ check_prerequisites()
 
 add_nvidia_compute_libs_to_container()
 {
-    if [ $is_gpu_support_enabled = false ]; then
-        return
-    fi
-
-    local lib_path_container=$container_mount_point/$gpu_lib_path
-    local lib64_path_container=$container_mount_point/$gpu_lib64_path
-
-    mkdir -p $lib_path_container
+    mkdir -p $container_lib_path
     exit_if_previous_command_failed
-    mkdir -p $lib64_path_container
+    mkdir -p $container_lib64_path
     exit_if_previous_command_failed
 
     for lib in $nvidia_compute_libs; do
@@ -116,9 +102,9 @@ add_nvidia_compute_libs_to_container()
         for lib_host in $libs_host; do
             local arch=$( file -L $lib_host | awk '{print $3}' | cut -d- -f1 )
             if [ "$arch" = "32" ]; then
-                local lib_container=$lib_path_container/$(basename $lib_host)
+                local lib_container=$container_lib_path/$(basename $lib_host)
             elif [ "$arch" = "64" ]; then
-                local lib_container=$lib64_path_container/$(basename $lib_host)
+                local lib_container=$container_lib64_path/$(basename $lib_host)
             else
                 log ERROR "found/parsed invalid CPU architecture of NVIDIA library"
                 exit 1
@@ -132,13 +118,7 @@ add_nvidia_compute_libs_to_container()
 
 add_nvidia_binaries_to_container()
 {
-    if [ $is_gpu_support_enabled = false ]; then
-        return
-    fi
-
-    local bins_path_container=$container_mount_point/$gpu_bin_path
-
-    mkdir -p $bins_path_container
+    mkdir -p $container_bin_path
     exit_if_previous_command_failed
 
     for bin in $nvidia_binaries; do
@@ -147,7 +127,7 @@ add_nvidia_binaries_to_container()
             log WARN "could not find binary: $bin"
             continue
         fi
-        local bin_container=$bins_path_container/$bin
+        local bin_container=$container_bin_path/$bin
         touch $bin_container
         mount --bind $bin_host $bin_container
     done
@@ -155,10 +135,6 @@ add_nvidia_binaries_to_container()
 
 load_nvidia_uvm_if_necessary()
 {
-    if [ $is_gpu_support_enabled = false ]; then
-        return
-    fi
-
     if [ ! -e /dev/nvidia-uvm ]; then
         nvidia-modprobe -u -c=0
     fi
@@ -187,31 +163,9 @@ is_value_not_in_list()
     return 0
 }
 
-remove_unused_nvidia_devices()
-{
-
-    if [ $is_gpu_support_enabled = false ]; then
-        for device in $(ls /dev | grep -E 'nvidia'); do
-            local container_device_file=$(get_container_device_file $device)
-            umount $container_device_file
-            rm $container_device_file #remove all NVIDIA devices
-        done
-    else
-        for device in $(ls /dev | grep -E 'nvidia[0-9]+'); do
-            local host_device_file=$(get_host_device_file $device)
-            local container_device_file=$(get_container_device_file $device)
-            if is_value_not_in_list $host_device_file "$nvidia_devices" ; then
-                umount $container_device_file
-                rm $container_device_file #remove NVIDIA devices not in the list
-            fi
-        done
-    fi
-}
-
 parse_command_line_arguments $*
 validate_command_line_arguments
 check_prerequisites
 add_nvidia_compute_libs_to_container
 add_nvidia_binaries_to_container
 load_nvidia_uvm_if_necessary
-remove_unused_nvidia_devices

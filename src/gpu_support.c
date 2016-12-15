@@ -24,28 +24,25 @@ int parse_gpu_env(struct gpu_support_config* config) {
 }
 
 int execute_hook_to_activate_gpu_support(const struct gpu_support_config* gpu_config, UdiRootConfig* udiConfig) {
-    char* script_path = alloc_strgenf("%s/bin/activate_gpu_support.sh", udiConfig->udiRootPath);
+    int ret = 0;
 
-    char* args[8];
     if(gpu_config->is_gpu_support_enabled) {
+        char* script_path = alloc_strgenf("%s/bin/activate_gpu_support.sh", udiConfig->udiRootPath);
+
+        char* args[8];
         args[0] = strdup("/bin/bash");
         args[1] = script_path;
         args[2] = strdup(gpu_config->gpu_ids);
         args[3] = strdup(udiConfig->udiMountPoint);
         args[4] = strdup(udiConfig->siteResources);
         args[5] = NULL;
-    }
-    else {
-        args[0] = strdup("/bin/bash");
-        args[1] = script_path;
-        args[2] = strdup(udiConfig->udiMountPoint);
-        args[3] = NULL;
-    }
 
-    int ret = forkAndExecv(args);
-    char** p;
-    for (p=args; *p != NULL; p++) {
-        free(*p);
+        ret = forkAndExecv(args);
+
+        char** p;
+        for (p=args; *p != NULL; p++) {
+            free(*p);
+        }
     }
 
     return ret;

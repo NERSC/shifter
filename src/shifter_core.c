@@ -787,12 +787,9 @@ _fail_copy_etcPath:
     _BINDMOUNT(&mountCache, "/sys", mntBuffer, 0, 1);
 
     /* mount /dev */
-    if(bindmount_dev_contents(udiConfig, &mountCache) != 0)
-    {
-        fprintf(stderr, "FAILED to bind mount /dev contents. Exiting.\n");
-        ret = 1;
-        goto _prepSiteMod_unclean;
-    }
+    snprintf(mntBuffer, PATH_MAX, "%s/dev", udiRoot);
+    mntBuffer[PATH_MAX-1] = 0;
+    _BINDMOUNT(&mountCache, "/dev", mntBuffer, 0, 1);
 
     /* mount /tmp */
     snprintf(mntBuffer, PATH_MAX, "%s/tmp", udiRoot);
@@ -901,127 +898,6 @@ _writeHostFile_error:
         fclose(fp);
     }
     return 1;
-}
-
-/*! Bind mount the contents of /dev into the container.
- * Note that here we bind mount one by one each file and folder in /dev,
- * instead of bind mounting the entire /dev at once. This allows
- * unmounting device files without propagating changes into the host.
- * E.g. the GPU support part of Shifter umounts the unused GPU devices,
- * in order to prevent the container from accessing them.
- */
-int bindmount_dev_contents(UdiRootConfig *udi_config, MountList* mount_cache)
-{
-    DIR* dir = opendir("/dev");
-    if(dir == NULL)
-    {
-        fprintf(stderr, "FAILED to opendir /dev");
-        perror(" --- REASON:");
-        return 1;
-    }
-
-    //for each file/folder in /dev
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != NULL)
-    {
-        // skip some special files
-        // note: stdin, stdout, stderr shall be skipped, otherwise
-        // the "realpath" function could fail when piping is performed
-        // (e.g. shifter --image=image-name:latest ls /home | grep username)
-        if( strcmp(".", entry->d_name)==0
-            || strcmp("..", entry->d_name)==0
-            || strcmp("stdin", entry->d_name)==0
-            || strcmp("stdout", entry->d_name)==0
-            || strcmp("stderr", entry->d_name)==0)
-            continue;
-
-        char src_entry[PATH_MAX];
-        char src_entry_target[PATH_MAX];
-        snprintf(src_entry, PATH_MAX, "/dev/%s", entry->d_name);
-        //convert symlink to target if necessary
-        if(realpath(src_entry, src_entry_target) == NULL)
-        {
-            closedir(dir);
-            fprintf(stderr, "FAILED to call realpath (argument: %s)", src_entry);
-            perror(" --- REASON: ");
-            return 1;
-        }
-
-        char dest_entry[PATH_MAX];
-        snprintf(dest_entry, PATH_MAX, "%s/dev/%s", udi_config->udiMountPoint, entry->d_name);
-
-        int is_symlink = strcmp(src_entry, src_entry_target) != 0;
-        if(is_symlink)
-        {
-            //create symlink
-            if(symlink(src_entry_target, dest_entry) != 0)
-            {
-                closedir(dir);
-                fprintf(stderr, "FAILED to create symlink (target: %s, path: %s)", src_entry_target, dest_entry);
-                perror(" --- REASON: ");
-                return 1;
-            }
-        }
-        else
-        {
-            //do bind mount
-            if(create_mount_point(src_entry, dest_entry) != 0)
-            {
-                closedir(dir);
-                fprintf(stderr, "FAILED to create mount point\n");
-                return 1;
-            }
-
-            int mount_flags=0;
-            int overwrite_mounts=0;
-            if(_shifterCore_bindMount(udi_config, mount_cache, src_entry, dest_entry, mount_flags, overwrite_mounts) != 0)
-            {
-                closedir(dir);
-                fprintf(stderr, "FAILED to bind mount %s to %s\n", src_entry, dest_entry);
-                perror("   --- REASON: ");
-                return 1;
-            }
-        }
-    }
-    closedir(dir);
-    return 0;
-}
-
-/*! Create an empty file/directory at location specified by "to"
- * where the file/direcory specified by "from" will be mounted.*/
-int create_mount_point(const char* from, const char* to)
-{
-    struct stat sb;
-    if (stat(from, &sb) == -1)
-    {
-        fprintf(stderr, "cannot stat file %s\n", from);
-        perror("    --- REASON: ");
-        return 1;
-    }
-
-    if(S_ISDIR(sb.st_mode)) //directory
-    {
-        if(mkdir(to, 0755) != 0)
-        {
-            fprintf(stderr, "FAILED to mkdir %s\n", to);
-            perror("   --- REASON: ");
-            return 1;
-        }
-    }
-    else //file
-    {
-        int flags = O_RDWR | O_CREAT;
-        mode_t mode=0;
-        int fd = open(to, flags, mode);
-        if(fd==-1)
-        {
-            fprintf(stderr, "FAILED to create file %s\n", to);
-            perror("   --- REASON: ");
-            return 1;
-        }
-        close(fd);
-    }
-    return 0;
 }
 
 int mountImageVFS(ImageData *imageData,

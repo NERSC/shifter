@@ -7,7 +7,7 @@ import re
 _container_image=None
 
 
-class TestGPUDevices(unittest.TestCase):
+class TestGPUSupport(unittest.TestCase):
     """
     These tests verify that the GPU resources and configurations (device files,
     libraries and value of LD_LIBRARY_PATH) are correctly set inside the container.
@@ -93,16 +93,14 @@ class TestGPUDevices(unittest.TestCase):
     def setUp(self):
         self.cuda_visible_devices=None
 
-    # CUDA_VISIBLE_DEVICES doesn't exist in environment
-    def test_no_environment_variable_and_no_command_line_option(self):
+    def test_cuda_visible_devices_doesnt_exist(self):
         libs, bins, env_ld_lib_path, env_path = self._get_gpu_properties_in_container()
         self.assertEqual(libs, set())
         self.assertEqual(bins, set())
         self.assertEqual(env_ld_lib_path, set())
         self.assertEqual(env_path, set())
 
-    # CUDA_VISIBLE_DEVICES= (empty)
-    def test_deactivate_gpus_with_environment_variablei_0(self):
+    def test_cuda_visible_devices_is_empty(self):
         self.cuda_visible_devices=""
         libs, bins, env_ld_lib_path, env_path = self._get_gpu_properties_in_container()
         self.assertEqual(libs, set())
@@ -110,8 +108,7 @@ class TestGPUDevices(unittest.TestCase):
         self.assertEqual(env_ld_lib_path, set())
         self.assertEqual(env_path, set())
 
-    # CUDA_VISIBLE_DEVICES=NoDevFiles
-    def test_deactivate_gpus_with_environment_variable_1(self):
+    def test_cuda_visible_devices_is_nodevfiles(self):
         self.cuda_visible_devices="NoDevFiles"
         libs, bins, env_ld_lib_path, env_path = self._get_gpu_properties_in_container()
         self.assertEqual(libs, set())
@@ -119,8 +116,7 @@ class TestGPUDevices(unittest.TestCase):
         self.assertEqual(env_ld_lib_path, set())
         self.assertEqual(env_path, set())
 
-    # CUDA_VISIBLE_DEVICES=0
-    def test_activate_gpu0_with_environment_variable(self):
+    def test_cuda_visible_devices_is_0(self):
         self.cuda_visible_devices="0"
         libs, bins, env_ld_lib_path, env_path = self._get_gpu_properties_in_container()
         self._assert_is_subset(subset=self._GPU_LIBS, superset=libs)
@@ -128,8 +124,7 @@ class TestGPUDevices(unittest.TestCase):
         self.assertEqual(self._GPU_ENV_LD_LIB_PATH, env_ld_lib_path)
         self.assertEqual(self._GPU_ENV_PATH, env_path)
 
-    # CUDA_VISIBLE_DEVICES=1
-    def test_activate_gpu0_with_environment_variable(self):
+    def test_cuda_visible_devices_is_1(self):
         self.cuda_visible_devices="1"
         libs, bins, env_ld_lib_path, env_path = self._get_gpu_properties_in_container()
         self._assert_is_subset(subset=self._GPU_LIBS, superset=libs)
@@ -137,8 +132,7 @@ class TestGPUDevices(unittest.TestCase):
         self.assertEqual(self._GPU_ENV_LD_LIB_PATH, env_ld_lib_path)
         self.assertEqual(self._GPU_ENV_PATH, env_path)
 
-    # CUDA_VISIBLE_DEVICES=0,1
-    def test_activate_gpu0_and_gpu1_with_environment_variable(self):
+    def test_cuda_visible_devices_is_0_1(self):
         self.cuda_visible_devices="0,1"
         libs, bins, env_ld_lib_path, env_path = self._get_gpu_properties_in_container()
         self._assert_is_subset(subset=self._GPU_LIBS, superset=libs)

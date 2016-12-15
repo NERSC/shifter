@@ -75,10 +75,6 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
 int destructUDI(UdiRootConfig *udiConfig, int killSshd);
 int bindImageIntoUDI(const char *relpath, ImageData *imageData, UdiRootConfig *udiConfig, int copyFlag);
 int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig);
-int bindmount_dev_contents(UdiRootConfig*, MountList*);
-int is_symlink(char*, int*);
-int convert_symlink_to_target(const char*, char*);
-int create_mount_point(const char*, const char*);
 int setupImageSsh(char *sshPubKey, char *username, uid_t uid, gid_t gid, UdiRootConfig *udiConfig);
 int startSshd(const char *user, UdiRootConfig *udiConfig);
 int filterEtcGroup(const char *dest, const char *from, const char *username, size_t maxGroups);
