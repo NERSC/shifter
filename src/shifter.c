@@ -382,7 +382,6 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         {"image", 1, 0, 'i'},
         {"entrypoint", 2, 0, 0},
         {"env", 0, 0, 'e'},
-        {"gpu", 1, 0, 'g'},
         {0, 0, 0, 0}
     };
     if (config == NULL) {
@@ -399,7 +398,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     optind = 1;
     for ( ; ; ) {
         int longopt_index = 0;
-        opt = getopt_long(argc, argv, "hnvV:i:e:g:", long_options, &longopt_index);
+        opt = getopt_long(argc, argv, "hnvV:i:e:", long_options, &longopt_index);
         if (opt == -1) break;
 
         switch (opt) {
@@ -463,18 +462,6 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                  * variables
                  */
                 break;
-            case 'g':
-                {
-                    if (optarg == NULL)
-                    {
-                        fprintf(stderr, "GPU device requested but not specified, or specified incorrectly!\n");
-                        _usage(1);
-                        break;
-                    }
-
-                    config->gpu_ids = strdup(optarg);
-                    break;
-                }
             case 'h':
                 _usage(0);
                 break;
@@ -627,7 +614,7 @@ static void _usage(int status) {
         "Usage:\n"
         "shifter [-h|--help] [-v|--verbose] [--image=<imageType>:<imageTag>]\n"
         "    [--entry] [-V|--volume=/path/to/bind:/mnt/in/image[:<flags>][,...]]\n"
-        "    [-g|--gpu=<deviceID>] [-- /command/to/exec/in/shifter [args...]]\n"
+        "    [-- /command/to/exec/in/shifter [args...]]\n"
         );
     printf("\n");
     printf(
@@ -664,16 +651,15 @@ static void _usage(int status) {
 "under /dev, /etc, /opt/udiImage, /proc, or /var; or overwrite any bind-\n"
 "requested by the system configuration.\n"
 "\n"
-"GPU Selection: To select one or more GPU devices to be made available inside\n"
-"the container, use the \"--gpu\" or \"-g\" options, supplying as arguments \n"
-"the IDs of the devices as reported by nvidia-smi or the CUDA Runtime, e.g.:\n"
-"    shifter --gpu=0,1,2\n"
-"Alternatively, the GPUs can be specified in the environment using:\n"
-"    export CUDA_VISIBLE_DEVICES=0,1,2\n"
-"If the environment variable is present, it will override the \"--gpu\" option.\n"
-"When using the SLURM Workload Manager, CUDA_VISIBLE_DEVICES will always be\n"
-"set, and it will contain the device IDs if an allocation with GPUs is\n"
-"requested using Generic Resource Scheduling, e.g.:\n"
+"GPU Support: To select one or more GPU devices to be made available inside\n"
+"the container, set the environment variable CUDA_VISIBLE_DEVICES.\n"
+"The value of CUDA_VISIBLE_DEVICES should be a comma separated list of GPU\n"
+"device IDs.\n"
+"e.g.,\n"
+"    export CUDA_VISIBLE_DEVICES=0,2\n"
+"When using the SLURM Workload Manager, CUDA_VISIBLE_DEVICES is always\n"
+"exported, and the user can control the selected GPU devices through\n"
+"the Generic Resource Scheduling, e.g.:\n"
 "    srun --gres=gpu:<NumGPUsPerNode>\n"
 "Thus, Shifter transparently supports GPUs selected by the SLURM GRES plugin.\n"
 "\n"
