@@ -177,18 +177,6 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         free(config->siteResources);
         config->siteResources = NULL;
     }
-    if (config->gpuBinPath != NULL) {
-        free(config->gpuBinPath);
-        config->gpuBinPath = NULL;
-    }
-    if (config->gpuLibPath != NULL) {
-        free(config->gpuLibPath);
-        config->gpuLibPath = NULL;
-    }
-    if (config->gpuLib64Path != NULL) {
-        free(config->gpuLib64Path);
-        config->gpuLib64Path = NULL;
-    }
     if (config->siteFs != NULL) {
         free_VolumeMap(config->siteFs, 1);
         config->siteFs = NULL;
@@ -310,12 +298,6 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->mkfsXfsPath != NULL ? config->mkfsXfsPath : ""));
     written += fprintf(fp, "siteResources = %s\n",
         (config->siteResources != NULL ? config->siteResources : ""));
-    written += fprintf(fp, "gpuBinPath = %s\n",
-        (config->gpuBinPath != NULL ? config->gpuBinPath : ""));
-    written += fprintf(fp, "gpuLibPath = %s\n",
-        (config->gpuLibPath != NULL ? config->gpuLibPath : ""));
-    written += fprintf(fp, "gpuLib64Path = %s\n",
-        (config->gpuLib64Path != NULL ? config->gpuLib64Path : ""));
     written += fprintf(fp, "Image Gateway Servers = %lu servers\n", config->gwUrl_size);
     for (idx = 0; idx < config->gwUrl_size; idx++) {
         char *gwUrl = config->gwUrl[idx];
@@ -618,25 +600,6 @@ static int _assign(const char *key, const char *value, void *t_config) {
         config->defaultImageType = strdup(value);
     } else if (strcmp(key, "siteResources") == 0) {
         config->siteResources = strdup(value);
-
-        /* Generate subpaths for GPU support */
-        size_t subPath_size;
-        char* subPath;
-        subPath_size = strlen(config->siteResources) + 9;
-        subPath = (char *) malloc(sizeof(char *) * subPath_size);
-        sprintf(subPath, "%s/gpu/bin", config->siteResources);
-        config->gpuBinPath = strdup(subPath);
-        free(subPath);
-        subPath_size = strlen(config->siteResources) + 9;
-        subPath = (char *) malloc(sizeof(char *) * subPath_size);
-        sprintf(subPath, "%s/gpu/lib", config->siteResources);
-        config->gpuLibPath = strdup(subPath);
-        free(subPath);
-        subPath_size = strlen(config->siteResources) + 11;
-        subPath = (char *) malloc(sizeof(char *) * subPath_size);
-        sprintf(subPath, "%s/gpu/lib64", config->siteResources);
-        config->gpuLib64Path = strdup(subPath);
-        free(subPath);
     } else if (strcmp(key, "nodeContextPrefix") == 0) {
         /* do nothing, this key is defunct */
     } else {

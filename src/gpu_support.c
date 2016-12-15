@@ -32,10 +32,8 @@ int execute_hook_to_activate_gpu_support(const struct gpu_support_config* gpu_co
         args[1] = script_path;
         args[2] = strdup(gpu_config->gpu_ids);
         args[3] = strdup(udiConfig->udiMountPoint);
-        args[4] = strdup(udiConfig->gpuBinPath);
-        args[5] = strdup(udiConfig->gpuLibPath);
-        args[6] = strdup(udiConfig->gpuLib64Path);
-        args[7] = NULL;
+        args[4] = strdup(udiConfig->siteResources);
+        args[5] = NULL;
     }
     else {
         args[0] = strdup("/bin/bash");

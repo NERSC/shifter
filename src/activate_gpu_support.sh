@@ -44,13 +44,13 @@ exit_if_previous_command_failed()
 
 parse_command_line_arguments()
 {
-    if [ $# -eq 5 ]; then
+    if [ $# -eq 3 ]; then
       is_gpu_support_enabled=true
       nvidia_devices=$(echo $1 | tr , '\n' | sed 's/^/\/dev\/nvidia/')
       container_mount_point=$2
-      gpu_bin_path=$3
-      gpu_lib_path=$4
-      gpu_lib64_path=$5
+      gpu_bin_path=$3/gpu/bin
+      gpu_lib_path=$3/gpu/lib
+      gpu_lib64_path=$3/gpu/lib64
     elif [ $# -eq 1 ]; then
       is_gpu_support_enabled=false
       container_mount_point=$1
