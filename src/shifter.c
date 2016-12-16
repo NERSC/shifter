@@ -53,6 +53,7 @@
 #include "VolumeMap.h"
 #include "config.h"
 #include "gpu_support.h"
+#include "mpi_support.h"
 
 #define VOLUME_ALLOC_BLOCK 10
 
@@ -72,8 +73,6 @@ struct options {
     gid_t tgtGid;
     char *username;
     char *workdir;
-    char *gpu_ids;
-    int is_mpi_support_enabled;
     char **args;
     char **env;
     VolumeMap volumeMap;
@@ -83,12 +82,16 @@ struct options {
 
 
 static void _usage(int);
-int parse_options(int argc, char **argv, struct options *opts, UdiRootConfig *);
+int parse_options(int argc, char **argv, struct options *opts, UdiRootConfig *, struct mpi_support_config*);
 int parse_environment(struct options *opts, UdiRootConfig *);
 int fprint_options(FILE *, struct options *);
 void free_options(struct options *, int freeStruct);
 int isImageLoaded(ImageData *, struct options *, UdiRootConfig *);
-int loadImage(ImageData *, struct options *, const struct gpu_support_config*, UdiRootConfig *);
+int loadImage(  ImageData *,
+                struct options *,
+                UdiRootConfig *,
+                const struct gpu_support_config*,
+                const struct mpi_support_config*);
 int adoptPATH(char **environ);
 
 #ifndef _TESTHARNESS_SHIFTER
@@ -117,6 +120,7 @@ int main(int argc, char **argv) {
     UdiRootConfig udiConfig;
     ImageData imageData;
     struct gpu_support_config gpu_config;
+    struct mpi_support_config mpi_config;
     memset(&opts, 0, sizeof(struct options));
     memset(&udiConfig, 0, sizeof(UdiRootConfig));
     memset(&imageData, 0, sizeof(ImageData));
@@ -130,7 +134,7 @@ int main(int argc, char **argv) {
         exit(1);
     }
     /* parse config file and command line options */
-    if (parse_options(argc, argv, &opts, &udiConfig) != 0) {
+    if (parse_options(argc, argv, &opts, &udiConfig, &mpi_config) != 0) {
         fprintf(stderr, "FAILED to parse command line arguments.\n");
         exit(1);
     }
@@ -226,7 +230,7 @@ int main(int argc, char **argv) {
     }
 
     if (isImageLoaded(&imageData, &opts, &udiConfig) == 0) {
-        if (loadImage(&imageData, &opts, &gpu_config, &udiConfig) != 0) {
+        if (loadImage(&imageData, &opts, &udiConfig, &gpu_config, &mpi_config) != 0) {
             fprintf(stderr, "FAILED to setup image.\n");
             free_gpu_support_config(&gpu_config);
             exit(1);
@@ -373,7 +377,11 @@ int local_prependenv(char ***environ, const char *prepvar) {
 }
 #endif
 
-int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *udiConfig) {
+int parse_options(  int argc,
+                    char **argv,
+                    struct options *config,
+                    UdiRootConfig *udiConfig,
+                    struct mpi_support_config* mpi_config) {
     int opt = 0;
     int volOptCount = 0;
     static struct option long_options[] = {
@@ -465,7 +473,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                  */
                 break;
             case 'm':
-                config->is_mpi_support_enabled = 1;
+                mpi_config->is_mpi_support_enabled = 1;
                 break;
             case 'h':
                 _usage(0);
@@ -744,7 +752,11 @@ int isImageLoaded(ImageData *image, struct options *options, UdiRootConfig *udiC
 /**
  * Loads the needed image
  */
-int loadImage(ImageData *image, struct options *opts, const struct gpu_support_config* gpu_config, UdiRootConfig *udiConfig) {
+int loadImage(  ImageData *image,
+                struct options *opts,
+                UdiRootConfig *udiConfig,
+                const struct gpu_support_config* gpu_config,
+                const struct mpi_support_config* mpi_config) {
     int retryCnt = 0;
     char chrootPath[PATH_MAX];
     snprintf(chrootPath, PATH_MAX, "%s", udiConfig->udiMountPoint);
@@ -799,7 +811,7 @@ int loadImage(ImageData *image, struct options *opts, const struct gpu_support_c
             goto _loadImage_error;
         }
     }
-    if (mountImageVFS(image, opts->username, opts->verbose, NULL, udiConfig, gpu_config) != 0) {
+    if (mountImageVFS(image, opts->username, opts->verbose, NULL, udiConfig, gpu_config, mpi_config) != 0) {
         fprintf(stderr, "FAILED to mount image into UDI\n");
         goto _loadImage_error;
     }

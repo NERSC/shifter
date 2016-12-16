@@ -62,7 +62,8 @@ test_shifter_SOURCES = \
     $(top_srcdir)/src/VolumeMap.c \
     $(top_srcdir)/src/PathList.c \
     $(top_srcdir)/src/MountList.c \
-    $(top_srcdir)/src/gpu_support.c
+    $(top_srcdir)/src/gpu_support.c \
+    $(top_srcdir)/src/mpi_support.c
 test_shifter_CXXFLAGS = $(TEST_CFLAGS) -D_TESTHARNESS_SHIFTER
 test_shifter_CFLAGS = $(TEST_CFLAGS) -D_TESTHARNESS_SHIFTER
 test_shifter_LDFLAGS = $(TEST_LDFLAGS)
@@ -82,7 +83,8 @@ test_gpu_support_SOURCES = \
     $(top_srcdir)/src/shifter_core.c \
     $(top_srcdir)/src/VolumeMap.c \
     $(top_srcdir)/src/MountList.c \
-    $(top_srcdir)/src/PathList.c
+    $(top_srcdir)/src/PathList.c \
+    $(top_srcdir)/src/mpi_support.c
 test_gpu_support_CXXFLAGS = $(TEST_CFLAGS)
 test_gpu_support_CFLAGS = $(TEST_CFLAGS)
 test_gpu_support_LDFLAGS = $(TEST_LDFLAGS)
@@ -96,7 +98,8 @@ test_shifter_core_SOURCES = \
     $(top_srcdir)/src/MountList.c \
     $(top_srcdir)/src/PathList.c \
     $(top_srcdir)/src/ImageData.c \
-    $(top_srcdir)/src/gpu_support.c
+    $(top_srcdir)/src/gpu_support.c \
+    $(top_srcdir)/src/mpi_support.c
 test_shifter_core_CXXFLAGS = $(TEST_CFLAGS) -DNOTROOT
 test_shifter_core_CFLAGS = $(TEST_CFLAGS)
 test_shifter_core_LDFLAGS = $(TEST_LDFLAGS)

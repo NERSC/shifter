@@ -694,6 +694,7 @@ TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
 #endif
     UdiRootConfig *config = NULL;
     struct gpu_support_config gpu_config = {};
+    struct mpi_support_config mpi_config = {};
     ImageData *image = NULL;
     MountList mounts;
     int rc = 0;
@@ -703,7 +704,7 @@ TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
 
     fprint_ImageData(stderr, image);
 
-    rc = mountImageVFS(image, "dmj", 0, NULL, config, &gpu_config);
+    rc = mountImageVFS(image, "dmj", 0, NULL, config, &gpu_config, &mpi_config);
     CHECK(rc == 1);
     CHECK(parse_MountList(&mounts) == 0);
     CHECK(find_MountList(&mounts, tmpDir) == NULL);
@@ -714,7 +715,7 @@ TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
     memset(&mounts, 0, sizeof(MountList));
 
     config->allowLocalChroot = 1;
-    rc = mountImageVFS(image, "dmj", 0, NULL, config, &gpu_config);
+    rc = mountImageVFS(image, "dmj", 0, NULL, config, &gpu_config, &mpi_config);
     CHECK(rc == 0);
     CHECK(parse_MountList(&mounts) == 0);
     CHECK(find_MountList(&mounts, tmpDir) != NULL);
@@ -1276,6 +1277,30 @@ TEST(ShifterCoreTestGroup, setupenv_site_resources_test) {
     free(config.siteResources);
 }
 
+TEST(ShifterCoreTestGroup, create_site_resources_folder_test) {
+    UdiRootConfig *config = (UdiRootConfig *) malloc(sizeof(UdiRootConfig));
+    memset(config, 0, sizeof(UdiRootConfig));
+    config->udiMountPoint = strdup(tmpDir);
+    std::string container_path = "/site-resources";
+    std::string site_path = tmpDir + container_path;
+    config->siteResources = strdup(container_path.c_str());
+
+    // folder doesn't exist yet in container
+    {
+        CHECK(create_site_resources_folder(config) == 0);
+        CHECK(is_existing_directory(site_path.c_str()) == 1);
+        rmdir(site_path.c_str());
+    }
+    // folder already exists in container
+    {
+        mkdir(site_path.c_str(), 0755);
+        CHECK(create_site_resources_folder(config) != 0);
+        rmdir(site_path.c_str());
+    }
+
+    free_UdiRootConfig(config, 1);
+}
+
 TEST(ShifterCoreTestGroup, shifterRealpath_test) {
     UdiRootConfig *config = (UdiRootConfig *) malloc(sizeof(UdiRootConfig));
     memset(config, 0, sizeof(UdiRootConfig));
@@ -1320,6 +1345,7 @@ IGNORE_TEST(ShifterCoreTestGroup, destructUDI_test) {
 #endif
     UdiRootConfig *config = NULL;
     struct gpu_support_config gpu_config = {};
+    struct mpi_support_config mpi_config = {};
     ImageData *image = NULL;
     MountList mounts;
     struct stat statData;
@@ -1328,7 +1354,7 @@ IGNORE_TEST(ShifterCoreTestGroup, destructUDI_test) {
 
     CHECK(setupLocalRootVFSConfig(&config, &image, tmpDir, cwd) == 0);
     config->allowLocalChroot = 1;
-    CHECK(mountImageVFS(image, "dmj", 0, NULL, config, &gpu_config) == 0);
+    CHECK(mountImageVFS(image, "dmj", 0, NULL, config, &gpu_config, &mpi_config) == 0);
 
     CHECK(parse_MountList(&mounts) == 0);
     CHECK(find_MountList(&mounts, tmpDir) != NULL);

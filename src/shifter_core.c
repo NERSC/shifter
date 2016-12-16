@@ -903,11 +903,10 @@ _writeHostFile_error:
 int mountImageVFS(ImageData *imageData,
                   const char *username,
                   int verbose,
-                  int is_mpi_support_enabled,
-                  int verbose,
                   const char *minNodeSpec,
                   UdiRootConfig *udiConfig,
-                  const struct gpu_support_config* gpu_config) {
+                  const struct gpu_support_config* gpu_config,
+                  const struct mpi_support_config *mpi_config) {
     struct stat statData;
     char udiRoot[PATH_MAX];
     char *sshPath = NULL;
@@ -1036,7 +1035,7 @@ int mountImageVFS(ImageData *imageData,
         goto _mountImgVfs_unclean;
     }
 
-    if(execute_hook_to_activate_mpi_support(is_mpi_support_enabled, verbose, udiConfig) != 0)
+    if(execute_hook_to_activate_mpi_support(verbose, udiConfig, mpi_config) != 0)
     {
         fprintf(stderr, "activate_mpi_support hook failed\n");
         goto _mountImgVfs_unclean;
@@ -1051,39 +1050,6 @@ _mountImgVfs_unclean:
         free(sshPath);
     }
     return 1;
-}
-
-int execute_hook_to_activate_mpi_support(int is_mpi_support_enabled, int verbose, UdiRootConfig* udiConfig)
-{
-    int ret = 0;
-
-    if(is_mpi_support_enabled)
-    {
-        if (udiConfig->siteResources == NULL)
-        {
-            fprintf(stderr, "MPI support requested but the configuration file "
-                            "doesn't specify the path where the site-specific "
-                            "dependencies shall be mounted\n");
-            return 1;
-        }
-
-        char* args[6];
-        args[0] = strdup("/bin/bash");
-        args[1] = alloc_strgenf("%s/bin/activate_mpi_support.sh", udiConfig->udiRootPath);
-        args[2] = strdup(udiConfig->udiMountPoint);
-        args[3] = strdup(udiConfig->siteResources);
-        args[4] = verbose ? strdup("verbose-on") : strdup("verbose-off");
-        args[5] = NULL;
-
-        ret = forkAndExecv(args);
-        char** p;
-        for (p=args; *p != NULL; p++)
-        {
-            free(*p);
-        }
-    }
-
-    return ret;
 }
 
 /** makeUdiMountPrivate

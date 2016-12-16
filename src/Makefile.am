@@ -30,7 +30,9 @@ SHIFTER_SOURCES = \
     MountList.h \
     MountList.c \
     gpu_support.h \
-    gpu_support.c
+    gpu_support.c \
+    mpi_support.h \
+    mpi_support.c
 
 SETUPROOT_SOURCES = \
     setupRoot.c \
@@ -49,7 +51,9 @@ SETUPROOT_SOURCES = \
     MountList.h \
     MountList.c \
     gpu_support.h \
-    gpu_support.c
+    gpu_support.c \
+    mpi_support.h \
+    mpi_support.c
 
 UNSETUPROOT_SOURCES = \
     unsetupRoot.c \
@@ -68,7 +72,9 @@ UNSETUPROOT_SOURCES = \
     MountList.h \
     MountList.c \
     gpu_support.h \
-    gpu_support.c
+    gpu_support.c \
+    mpi_support.h \
+    mpi_support.c
 
 SHIFTERIMG_SOURCES = \
     shifterimg.c \

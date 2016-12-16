@@ -48,6 +48,7 @@
 #include "VolumeMap.h"
 #include "MountList.h"
 #include "gpu_support.h"
+#include "mpi_support.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -69,7 +70,8 @@ int mountImageVFS(ImageData *imageData,
                   int verbose,
                   const char *minNodeSpec,
                   UdiRootConfig *udiConfig,
-                  const struct gpu_support_config *gpu_config);
+                  const struct gpu_support_config *gpu_config,
+                  const struct mpi_support_config *mpi_config);
 int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig);
 int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat format, UdiRootConfig *udiConfig, int readonly);
 int destructUDI(UdiRootConfig *udiConfig, int killSshd);
