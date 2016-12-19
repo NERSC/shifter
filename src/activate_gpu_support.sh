@@ -89,6 +89,7 @@ parse_command_line_arguments()
         is_verbose_active=false
     else
         log ERROR "Internal error: received bad \"verbose\" parameter"
+        exit 1
     fi
 }
 
@@ -107,12 +108,10 @@ validate_command_line_arguments()
 
 check_prerequisites()
 {
-    local cmds="nvidia-smi nvidia-modprobe"
-    for cmd in $cmds; do
-        command -v $cmd >/dev/null && continue
-        log ERROR "Command not found: $cmd"
-        exit 1
-    done
+    # we require nvidia-smi to be available on the host, otherwise the container's nvidia-smi (if any) cannot
+    # be overridden and that might result in unexpected behavior if the user run's nvidia-smi inside the container
+    which nvidia-smi &>/dev/null
+    exit_if_previous_command_failed "Cannot find nvidia-smi on the host. Make sure that your PATH environment variable is correctly set."
 }
 
 add_nvidia_compute_libs_to_container()
@@ -154,8 +153,12 @@ add_nvidia_binaries_to_container()
 
 load_nvidia_uvm_if_necessary()
 {
+    # /dev/nvidia-uvm is available when the NVIDIA UVM kernel module is correctly loaded.
+    # Load the kernel module through nvidia-modprobe if /dev/nvidia-uvm doesn't exist.
     if [ ! -e /dev/nvidia-uvm ]; then
+        log INFO "/dev/nvidia-uvm doesn't exist. Creating it with nvidia-modprobe."
         nvidia-modprobe -u -c=0
+        exit_if_previous_command_failed "Cannot nvidia-modprobe -u -c=0"
     fi
 }
 
