@@ -4,12 +4,13 @@
 #this script with an empty environment
 export PATH=/usr/local/bin:/usr/bin:/bin:/sbin
 
-nvidia_devices=
-container_mount_point=
+cuda_devices=
+container_root_dir=
+container_site_resources=
+is_verbose_active=
 container_bin_path=
 container_lib_path=
 container_lib64_path=
-is_verbose_active=
 
 #the NVIDIA compute libraries that will be bind mounted into the container
 nvidia_compute_libs="cuda \
@@ -47,6 +48,26 @@ exit_if_previous_command_failed()
     fi
 }
 
+bind_mount_file_into_container()
+{
+    local target=$1
+    local container_mount_point=$2
+    local mount_point=$container_root_dir$container_mount_point
+    local mount_dir=$(dirname $mount_point)
+
+    # create a mount point if necessary
+    if [ ! -e $mount_point ]; then
+        mkdir -p $mount_dir
+        exit_if_previous_command_failed "Cannot mkdir -p $mount_dir"
+        touch $mount_point
+        exit_if_previous_command_failed "Cannot touch $mount_point"
+    fi
+
+    log INFO "Bind mounting site's $target to container's $container_mount_point"
+    mount --bind $target $mount_point
+    exit_if_previous_command_failed "Cannot mount --bind $target $mount_point"
+}
+
 parse_command_line_arguments()
 {
     if [ ! $# -eq 4 ]; then
@@ -54,9 +75,9 @@ parse_command_line_arguments()
         exit 1
     fi
 
-    nvidia_devices=$(echo $1 | tr , '\n' | sed 's/^/\/dev\/nvidia/')
-    container_mount_point=$2
-    container_site_resources=$container_mount_point$3
+    cuda_devices=$1
+    container_root_dir=$2
+    container_site_resources=$3
     container_bin_path=$container_site_resources/gpu/bin
     container_lib_path=$container_site_resources/gpu/lib
     container_lib64_path=$container_site_resources/gpu/lib64
@@ -73,19 +94,13 @@ parse_command_line_arguments()
 
 validate_command_line_arguments()
 {
-    for device in $nvidia_devices; do
-        if [ ! -e $device ]; then
-            log ERROR "received bad GPU ID. Cannot find device $device"
-        fi
-    done
-
-    if [ ! -d $container_mount_point ]; then
-        log ERROR "internal error: received invalid \"mount point\". Directory $container_mount_point doesn't exist."
+    if [ ! -d $container_root_dir ]; then
+        log ERROR "internal error: received invalid \"container's root directory\". Directory $container_root_dir doesn't exist."
         exit 1
     fi
 
-    if [ ! -d $container_site_resources ]; then
-        log ERROR "internal error: received invalid \"site resources\". Directory $container_site_resources doesn't exist."
+    if [ ! -d $container_root_dir$container_site_resources ]; then
+        log ERROR "internal error: received invalid \"site resources\". Directory $container_root_dir$container_site_resources doesn't exist."
         exit 1
     fi
 }
@@ -102,15 +117,10 @@ check_prerequisites()
 
 add_nvidia_compute_libs_to_container()
 {
-    mkdir -p $container_lib_path
-    exit_if_previous_command_failed
-    mkdir -p $container_lib64_path
-    exit_if_previous_command_failed
-
     for lib in $nvidia_compute_libs; do
         local libs_host=$( ldconfig -p | grep "lib${lib}.so" | awk '{print $4}' )
         if [ -z "$libs_host" ]; then
-            log WARN "could not find library: $lib"
+            log WARNING "could not find library: $lib"
             continue
         fi
 
@@ -124,27 +134,21 @@ add_nvidia_compute_libs_to_container()
                 log ERROR "found/parsed invalid CPU architecture of NVIDIA library"
                 exit 1
             fi
-
-            touch $lib_container
-            mount --bind $lib_host $lib_container
+            bind_mount_file_into_container $lib_host $lib_container
         done
     done
 }
 
 add_nvidia_binaries_to_container()
 {
-    mkdir -p $container_bin_path
-    exit_if_previous_command_failed
-
     for bin in $nvidia_binaries; do
         local bin_host="$( which $bin )"
         if [ -z $bin_host ]; then
-            log WARN "could not find binary: $bin"
+            log WARNING "could not find binary: $bin"
             continue
         fi
         local bin_container=$container_bin_path/$bin
-        touch $bin_container
-        mount --bind $bin_host $bin_container
+        bind_mount_file_into_container $bin_host $bin_container
     done
 }
 
@@ -157,8 +161,8 @@ load_nvidia_uvm_if_necessary()
 
 parse_command_line_arguments $*
 validate_command_line_arguments
+log INFO "activating support for CUDA devices $cuda_devices."
 check_prerequisites
 add_nvidia_compute_libs_to_container
 add_nvidia_binaries_to_container
 load_nvidia_uvm_if_necessary
-log INFO "activated support for GPU devices $(echo $nvidia_devices | tr '\n' ' ')"
