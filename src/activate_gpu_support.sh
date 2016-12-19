@@ -42,9 +42,11 @@ log()
 
 exit_if_previous_command_failed()
 {
-    if [ $? -ne 0 ]; then
-        log ERROR "internal error"
-        exit 1
+    local error_code=$?
+    local error_msg="$1"
+    if [ $error_code -ne 0 ]; then
+        log ERROR "$error_msg"
+        exit $error_code
     fi
 }
 
@@ -96,12 +98,12 @@ parse_command_line_arguments()
 validate_command_line_arguments()
 {
     if [ ! -d $container_root_dir ]; then
-        log ERROR "internal error: received invalid \"container's root directory\". Directory $container_root_dir doesn't exist."
+        log ERROR "Internal error: received invalid \"container's root directory\". Directory $container_root_dir doesn't exist."
         exit 1
     fi
 
     if [ ! -d $container_root_dir$container_site_resources ]; then
-        log ERROR "internal error: received invalid \"site resources\". Directory $container_root_dir$container_site_resources doesn't exist."
+        log ERROR "Internal error: received invalid \"site resources\". Directory $container_root_dir$container_site_resources doesn't exist."
         exit 1
     fi
 }
@@ -119,7 +121,7 @@ add_nvidia_compute_libs_to_container()
     for lib in $nvidia_compute_libs; do
         local libs_host=$( ldconfig -p | grep "lib${lib}.so" | awk '{print $4}' )
         if [ -z "$libs_host" ]; then
-            log WARNING "could not find library: $lib"
+            log WARNING "Could not find library: $lib"
             continue
         fi
 
@@ -130,7 +132,7 @@ add_nvidia_compute_libs_to_container()
             elif [ "$arch" = "64" ]; then
                 local lib_container=$container_lib64_path/$(basename $lib_host)
             else
-                log ERROR "found/parsed invalid CPU architecture of NVIDIA library"
+                log ERROR "Found/parsed invalid CPU architecture of NVIDIA library"
                 exit 1
             fi
             bind_mount_file_into_container $lib_host $lib_container
@@ -143,7 +145,7 @@ add_nvidia_binaries_to_container()
     for bin in $nvidia_binaries; do
         local bin_host="$( which $bin )"
         if [ -z $bin_host ]; then
-            log WARNING "could not find binary: $bin"
+            log WARNING "Could not find binary: $bin"
             continue
         fi
         local bin_container=$container_bin_path/$bin
@@ -164,7 +166,7 @@ load_nvidia_uvm_if_necessary()
 
 parse_command_line_arguments $*
 validate_command_line_arguments
-log INFO "activating support for CUDA devices $cuda_devices."
+log INFO "Activating support for CUDA devices $cuda_devices."
 check_prerequisites
 add_nvidia_compute_libs_to_container
 add_nvidia_binaries_to_container
