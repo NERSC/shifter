@@ -289,6 +289,6 @@ defaultImageType=docker
 # Absolute path to where site-specific resources will be bind-mounted inside the
 # container to enable features like native MPI or GPU support.
 # This configuration only affects the container. The specified path will be automatically
-# created inside the container, if necessary. The specified path doesn't need to exist on the host.
+# created inside the container. The specified path doesn't need to exist on the host.
 #
 siteResources=/opt/shifter/site-resources
