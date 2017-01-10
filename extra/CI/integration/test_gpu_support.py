@@ -14,17 +14,17 @@ class TestGPUSupport(unittest.TestCase):
     """
 
     _GPU_DEVICES = {"nvidia0", "nvidia1"}
-    _GPU_LIBS = {   "libcuda.so", \
-                    "libnvidia-compiler.so", \
-                    "libnvidia-ptxjitcompiler.so", \
-                    "libnvidia-encode.so", \
-                    "libnvidia-ml.so", \
-                    "libnvidia-fatbinaryloader.so", \
+    _GPU_LIBS = {   "libcuda.so",
+                    "libnvidia-compiler.so",
+                    "libnvidia-ptxjitcompiler.so",
+                    "libnvidia-encode.so",
+                    "libnvidia-ml.so",
+                    "libnvidia-fatbinaryloader.so",
                     "libnvidia-opencl.so" }
-    _GPU_BINS = {   "nvidia-cuda-mps-control", \
-                    "nvidia-cuda-mps-server", \
-                    "nvidia-debugdump", \
-                    "nvidia-persistenced", \
+    _GPU_BINS = {   "nvidia-cuda-mps-control",
+                    "nvidia-cuda-mps-server",
+                    "nvidia-debugdump",
+                    "nvidia-persistenced",
                     "nvidia-smi"}
     _GPU_ENV_LD_LIB_PATH = {"/opt/shifter/site-resources/gpu/lib", "/opt/shifter/site-resources/gpu/lib64"}
     _GPU_ENV_PATH = {"/opt/shifter/site-resources/gpu/bin"}
