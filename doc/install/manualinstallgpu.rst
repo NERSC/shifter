@@ -101,7 +101,7 @@ To illustrate the configuration process, consider the following parameters that 
 * **autoLoadKernelModule=0** Flag to determine if kernel modules will be loaded by Shifter if required. This is limited to loop, squashfs, ext4 (and dependencies). *Recommend value 0* if kernel modules (loop, squashfs, and ext4) are already loaded as part of the node boot process, otherwise use *value 1* to let Shifter load the kernel modules.
 * **system=greina** The name of the computer cluster where shifter is deployed. It is **important for this to match the platform name in the json configuration file** for the Image Manager.
 * **imageGateway=http://greina9:5000** Space separated URLs for where the Image Gateway can be reached.
-* **siteResources=/site-resources** Absolute path to where host software dependencies (e.g. nvidia) will be bind-mounted into the container. This feature is used to provide the docker image with access to drivers and hardware that are unique to the target machine, this is done by bind mounting them into the path provided in siteResources when the container is started on the target machine.
+* **siteResources=/opt/shifter/site-resources** Absolute path to where site-specific resources will be bind-mounted inside the container to enable features like native MPI or GPU support. This configuration only affects the container. The specified path will be automatically created inside the container. The specified path doesn't need to exist on the host.
 
 
 Shifter Startup

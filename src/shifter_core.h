@@ -47,6 +47,7 @@
 #include "UdiRootConfig.h"
 #include "VolumeMap.h"
 #include "MountList.h"
+#include "gpu_support.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -63,18 +64,17 @@ int setupVolumeMapMounts(MountList *mountCache, VolumeMap *map,
 int userMountFilter(char *udiRoot, char *filtered_from, char *filtered_to, char *flags);
 int isKernelModuleLoaded(const char *name);
 int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig);
-int mountImageVFS(ImageData *imageData, const char *username, const char *gpu_id, const char *minNodeSpec, UdiRootConfig *udiConfig);
-int execute_hook_to_activate_gpu_support(const char* gpu_ids, UdiRootConfig* udiConfig);
-int is_gpu_support_enabled(const char* gpu_ids);
+int mountImageVFS(ImageData *imageData,
+                  const char *username,
+                  int verbose,
+                  const char *minNodeSpec,
+                  UdiRootConfig *udiConfig,
+                  const struct gpu_support_config *gpu_config);
 int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig);
 int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat format, UdiRootConfig *udiConfig, int readonly);
 int destructUDI(UdiRootConfig *udiConfig, int killSshd);
 int bindImageIntoUDI(const char *relpath, ImageData *imageData, UdiRootConfig *udiConfig, int copyFlag);
 int prepareSiteModifications(const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig);
-int bindmount_dev_contents(UdiRootConfig*, MountList*);
-int is_symlink(char*, int*);
-int convert_symlink_to_target(const char*, char*);
-int create_mount_point(const char*, const char*);
 int setupImageSsh(char *sshPubKey, char *username, uid_t uid, gid_t gid, UdiRootConfig *udiConfig);
 int startSshd(const char *user, UdiRootConfig *udiConfig);
 int filterEtcGroup(const char *dest, const char *from, const char *username, size_t maxGroups);
@@ -91,6 +91,8 @@ int unmountTree(MountList *mounts, const char *base);
 int validateUnmounted(const char *path, int subtree);
 int isSharedMount(const char *);
 int writeHostFile(const char *minNodeSpec, UdiRootConfig *udiConfig);
+int forkAndExecv(char *const *args);
+int forkAndExecvSilent(char *const *args);
 
 /** shifter_set_capability_boundingset_null
   * attempts to prevent any capabilities from ever being assumed again by this

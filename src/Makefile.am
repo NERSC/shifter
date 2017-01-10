@@ -28,7 +28,9 @@ SHIFTER_SOURCES = \
     PathList.h \
     PathList.c \
     MountList.h \
-    MountList.c
+    MountList.c \
+    gpu_support.h \
+    gpu_support.c
 
 SETUPROOT_SOURCES = \
     setupRoot.c \
@@ -45,7 +47,9 @@ SETUPROOT_SOURCES = \
     PathList.h \
     PathList.c \
     MountList.h \
-    MountList.c
+    MountList.c \
+    gpu_support.h \
+    gpu_support.c
 
 UNSETUPROOT_SOURCES = \
     unsetupRoot.c \
@@ -62,7 +66,9 @@ UNSETUPROOT_SOURCES = \
     PathList.h \
     PathList.c \
     MountList.h \
-    MountList.c
+    MountList.c \
+    gpu_support.h \
+    gpu_support.c
 
 SHIFTERIMG_SOURCES = \
     shifterimg.c \

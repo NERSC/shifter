@@ -57,6 +57,7 @@
 #include "MountList.h"
 #include "config.h"
 #include "PathList.h"
+#include "gpu_support.h"
 
 #ifndef BINDMOUNT_OVERWRITE_UNMOUNT_RETRY
 #define BINDMOUNT_OVERWRITE_UNMOUNT_RETRY 3
@@ -786,12 +787,9 @@ _fail_copy_etcPath:
     _BINDMOUNT(&mountCache, "/sys", mntBuffer, 0, 1);
 
     /* mount /dev */
-    if(bindmount_dev_contents(udiConfig, &mountCache) != 0)
-    {
-        fprintf(stderr, "FAILED to bind mount /dev contents. Exiting.\n");
-        ret = 1;
-        goto _prepSiteMod_unclean;
-    }
+    snprintf(mntBuffer, PATH_MAX, "%s/dev", udiRoot);
+    mntBuffer[PATH_MAX-1] = 0;
+    _BINDMOUNT(&mountCache, "/dev", mntBuffer, 0, 1);
 
     /* mount /tmp */
     snprintf(mntBuffer, PATH_MAX, "%s/tmp", udiRoot);
@@ -902,132 +900,12 @@ _writeHostFile_error:
     return 1;
 }
 
-/*! Bind mount the contents of /dev into the container.
- * Note that here we bind mount one by one each file and folder in /dev,
- * instead of bind mounting the entire /dev at once. This allows
- * unmounting device files without propagating changes into the host.
- * E.g. the GPU support part of Shifter umounts the unused GPU devices,
- * in order to prevent the container from accessing them.
- */
-int bindmount_dev_contents(UdiRootConfig *udi_config, MountList* mount_cache)
-{
-    DIR* dir = opendir("/dev");
-    if(dir == NULL)
-    {
-        fprintf(stderr, "FAILED to opendir /dev");
-        perror(" --- REASON:");
-        return 1;
-    }
-
-    //for each file/folder in /dev
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != NULL)
-    {
-        // skip some special files
-        // note: stdin, stdout, stderr shall be skipped, otherwise
-        // the "realpath" function could fail when piping is performed
-        // (e.g. shifter --image=image-name:latest ls /home | grep username)
-        if( strcmp(".", entry->d_name)==0
-            || strcmp("..", entry->d_name)==0
-            || strcmp("stdin", entry->d_name)==0
-            || strcmp("stdout", entry->d_name)==0
-            || strcmp("stderr", entry->d_name)==0)
-            continue;
-
-        char src_entry[PATH_MAX];
-        char src_entry_target[PATH_MAX];
-        snprintf(src_entry, PATH_MAX, "/dev/%s", entry->d_name);
-        //convert symlink to target if necessary
-        if(realpath(src_entry, src_entry_target) == NULL)
-        {
-            closedir(dir);
-            fprintf(stderr, "FAILED to call realpath (argument: %s)", src_entry);
-            perror(" --- REASON: ");
-            return 1;
-        }
-
-        char dest_entry[PATH_MAX];
-        snprintf(dest_entry, PATH_MAX, "%s/dev/%s", udi_config->udiMountPoint, entry->d_name);
-
-        int is_symlink = strcmp(src_entry, src_entry_target) != 0;
-        if(is_symlink)
-        {
-            //create symlink
-            if(symlink(src_entry_target, dest_entry) != 0)
-            {
-                closedir(dir);
-                fprintf(stderr, "FAILED to create symlink (target: %s, path: %s)", src_entry_target, dest_entry);
-                perror(" --- REASON: ");
-                return 1;
-            }
-        }
-        else
-        {
-            //do bind mount
-            if(create_mount_point(src_entry, dest_entry) != 0)
-            {
-                closedir(dir);
-                fprintf(stderr, "FAILED to create mount point\n");
-                return 1;
-            }
-
-            int mount_flags=0;
-            int overwrite_mounts=0;
-            if(_shifterCore_bindMount(udi_config, mount_cache, src_entry, dest_entry, mount_flags, overwrite_mounts) != 0)
-            {
-                closedir(dir);
-                fprintf(stderr, "FAILED to bind mount %s to %s\n", src_entry, dest_entry);
-                perror("   --- REASON: ");
-                return 1;
-            }
-        }
-    }
-    closedir(dir);
-    return 0;
-}
-
-/*! Create an empty file/directory at location specified by "to"
- * where the file/direcory specified by "from" will be mounted.*/
-int create_mount_point(const char* from, const char* to)
-{
-    struct stat sb;
-    if (stat(from, &sb) == -1)
-    {
-        fprintf(stderr, "cannot stat file %s\n", from);
-        perror("    --- REASON: ");
-        return 1;
-    }
-
-    if(S_ISDIR(sb.st_mode)) //directory
-    {
-        if(mkdir(to, 0755) != 0)
-        {
-            fprintf(stderr, "FAILED to mkdir %s\n", to);
-            perror("   --- REASON: ");
-            return 1;
-        }
-    }
-    else //file
-    {
-        int flags = O_RDWR | O_CREAT;
-        mode_t mode=0;
-        int fd = open(to, flags, mode);
-        if(fd==-1)
-        {
-            fprintf(stderr, "FAILED to create file %s\n", to);
-            perror("   --- REASON: ");
-            return 1;
-        }
-        close(fd);
-    }
-    return 0;
-}
-
 int mountImageVFS(ImageData *imageData,
                   const char *username,
-                  const char *gpu_ids,
+                  int verbose,
                   const char *minNodeSpec,
-                  UdiRootConfig *udiConfig) {
+                  UdiRootConfig *udiConfig,
+                  const struct gpu_support_config* gpu_config) {
     struct stat statData;
     char udiRoot[PATH_MAX];
     char *sshPath = NULL;
@@ -1037,7 +915,7 @@ int mountImageVFS(ImageData *imageData,
 
     umask(022);
 
-    if (imageData == NULL || username == NULL || udiConfig == NULL) {
+    if (imageData == NULL || username == NULL || gpu_config == NULL || udiConfig == NULL) {
         fprintf(stderr, "Invalid arguments to mountImageVFS(), error.\n");
         goto _mountImgVfs_unclean;
     }
@@ -1142,14 +1020,15 @@ int mountImageVFS(ImageData *imageData,
     BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
 
     /* create site resources directory */
-    if(udiConfig->siteResources != NULL)
-    {
-        char* site_resources_path = alloc_strgenf("%s%s", udiConfig->udiMountPoint, udiConfig->siteResources);
-        _MKDIR(site_resources_path, 0755);
+    char* site_resources_path = alloc_strgenf("%s%s", udiConfig->udiMountPoint, udiConfig->siteResources);
+    if(mkdir_p(site_resources_path, 0755) != 0) {
+        fprintf(stderr, "cannot mkdir %s\n", site_resources_path);
         free(site_resources_path);
+        goto _mountImgVfs_unclean;
     }
+    free(site_resources_path);
 
-    if(execute_hook_to_activate_gpu_support(gpu_ids, udiConfig) != 0)
+    if(execute_hook_to_activate_gpu_support(gpu_config, verbose, udiConfig) != 0)
     {
         fprintf(stderr, "activate_gpu_support hook failed\n");
         goto _mountImgVfs_unclean;
@@ -1164,58 +1043,6 @@ _mountImgVfs_unclean:
         free(sshPath);
     }
     return 1;
-}
-
-int execute_hook_to_activate_gpu_support(const char* gpu_ids, UdiRootConfig* udiConfig)
-{
-    char *gpu_script = "bin/activate_gpu_support.sh";
-    size_t gpu_path_size = strlen(udiConfig->udiRootPath) + strlen(gpu_script) + 2;
-    char *full_gpu_path = (char *) malloc(sizeof(char) * gpu_path_size);
-    sprintf(full_gpu_path, "%s/%s", udiConfig->udiRootPath, gpu_script);
-
-    char* args[8];
-    if(is_gpu_support_enabled(gpu_ids))
-    {
-        if (udiConfig->siteResources == NULL)
-        {
-            fprintf(stderr, "GPU support requested but the configuration file "
-                            "doesn't specify the path where the site-specific "
-                            "dependencies shall be mounted\n");
-            return 1;
-        }
-
-        args[0] = strdup("/bin/bash");
-        args[1] = full_gpu_path;
-        args[2] = strdup(gpu_ids);
-        args[3] = strdup(udiConfig->udiMountPoint);
-        args[4] = strdup(udiConfig->gpuBinPath);
-        args[5] = strdup(udiConfig->gpuLibPath);
-        args[6] = strdup(udiConfig->gpuLib64Path);
-        args[7] = NULL;
-    }
-    else
-    {
-        args[0] = strdup("/bin/bash");
-        args[1] = full_gpu_path;
-        args[2] = strdup(udiConfig->udiMountPoint);
-        args[3] = NULL;
-    }
-
-    int ret = forkAndExecv(args);
-    char** p;
-    for (p=args; *p != NULL; p++)
-    {
-        free(*p);
-    }
-
-    return ret;
-}
-
-int is_gpu_support_enabled(const char* gpu_ids)
-{
-    return  gpu_ids != NULL
-            && strcmp(gpu_ids, "") != 0
-            && strcmp(gpu_ids, "NoDevFiles") != 0;
 }
 
 /** makeUdiMountPrivate
@@ -3525,6 +3352,12 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
     return 0;
 }
 
+/*! Recursively searches the container's siteResources folder.
+ * All subfolders that contain a shared library are prepended to the container's
+ * LD_LIBRARY_PATH environment variable.
+ * All subfolders that contain an executable file are prepended to the container's
+ * PATH environment variable.
+ */
 int shifter_setupenv_site_resources(char ***env, UdiRootConfig *udiConfig)
 {
     if (udiConfig->siteResources != NULL)
@@ -3540,6 +3373,7 @@ int shifter_setupenv_site_resources(char ***env, UdiRootConfig *udiConfig)
 
 int shifter_setupenv_site_resources_rec(char ***env, const char* current_folder)
 {
+    int return_value = 0;
     int is_current_folder_prepended_to_path = 0;
     int is_current_folder_prepended_to_ld_library_path = 0;
 
@@ -3568,7 +3402,8 @@ int shifter_setupenv_site_resources_rec(char ***env, const char* current_folder)
         {
             fprintf(stderr, "failed to stat %s\n", entry_full_path);
             perror(" --- REASON");
-            return 1;
+            return_value = 1;
+            break;
         }
 
         // entry is folder => resursively search it
@@ -3576,7 +3411,8 @@ int shifter_setupenv_site_resources_rec(char ***env, const char* current_folder)
         {
             if(shifter_setupenv_site_resources_rec(env, entry_full_path) != 0)
             {
-                return 1;
+                return_value = 1;
+                break;
             }
         }
         // entry is executable program => add current folder to PATH
@@ -3589,7 +3425,8 @@ int shifter_setupenv_site_resources_rec(char ***env, const char* current_folder)
             {
                 fprintf(stderr, "Failed to prepend environment variable %s\n", env_variable);
                 free(env_variable);
-                return 1;
+                return_value = 1;
+                break;
             }
             free(env_variable);
             is_current_folder_prepended_to_path = 1;
@@ -3603,14 +3440,15 @@ int shifter_setupenv_site_resources_rec(char ***env, const char* current_folder)
             {
                 fprintf(stderr, "Failed to prepend environment variable %s\n", env_variable);
                 free(env_variable);
-                return 1;
+                return_value = 1;
+                break;
             }
             free(env_variable);
             is_current_folder_prepended_to_ld_library_path = 1;
         }
     }
     closedir(dir);
-    return 0;
+    return return_value;
 }
 
 int is_shared_library(char* file_name)
