@@ -141,9 +141,9 @@ class TestGPUSupport(unittest.TestCase):
         self.assertEqual(self._GPU_ENV_PATH, env_path)
 
     def _get_gpu_properties_in_container(self):
-        return (self._get_gpu_libraries_in_container(), \
-                self._get_gpu_binaries_in_container(), \
-                self._get_gpu_paths_in_container_environment_variable("LD_LIBRARY_PATH"), \
+        return (self._get_gpu_libraries_in_container(),
+                self._get_gpu_binaries_in_container(),
+                self._get_gpu_paths_in_container_environment_variable("LD_LIBRARY_PATH"),
                 self._get_gpu_paths_in_container_environment_variable("PATH"))
 
     def _get_gpu_libraries_in_container(self):
