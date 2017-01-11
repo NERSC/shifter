@@ -70,6 +70,7 @@ int mountImageVFS(ImageData *imageData,
                   const char *minNodeSpec,
                   UdiRootConfig *udiConfig,
                   const struct gpu_support_config *gpu_config);
+int create_site_resources_folder(const UdiRootConfig*);
 int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig);
 int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat format, UdiRootConfig *udiConfig, int readonly);
 int destructUDI(UdiRootConfig *udiConfig, int killSshd);

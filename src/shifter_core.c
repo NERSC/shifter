@@ -1019,14 +1019,9 @@ int mountImageVFS(ImageData *imageData,
     /* copy image /etc into place */
     BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
 
-    /* create site resources directory */
-    char* site_resources_path = alloc_strgenf("%s%s", udiConfig->udiMountPoint, udiConfig->siteResources);
-    if(mkdir_p(site_resources_path, 0755) != 0) {
-        fprintf(stderr, "cannot mkdir %s\n", site_resources_path);
-        free(site_resources_path);
+    if(create_site_resources_folder(udiConfig) != 0) {
         goto _mountImgVfs_unclean;
     }
-    free(site_resources_path);
 
     if(execute_hook_to_activate_gpu_support(gpu_config, verbose, udiConfig) != 0)
     {
@@ -1043,6 +1038,25 @@ _mountImgVfs_unclean:
         free(sshPath);
     }
     return 1;
+}
+
+int create_site_resources_folder(const UdiRootConfig* udiConfig) {
+    char* site_resources_path = alloc_strgenf("%s%s", udiConfig->udiMountPoint, udiConfig->siteResources);
+    if(is_existing_file(site_resources_path)) {
+        fprintf(stderr, "Cannot create the site-resources directory %s in the container."
+                        " A file with the same path already exists in the container image."
+                        " Hint: remove the clashing file in the container or contact the"
+                        " system administrator to change the Shifter's site-resources path.", udiConfig->siteResources);
+        free(site_resources_path);
+        return 1;
+    }
+    if(mkdir_p(site_resources_path, 0755) != 0) {
+        fprintf(stderr, "cannot mkdir %s\n", site_resources_path);
+        free(site_resources_path);
+        return 1;
+    }
+    free(site_resources_path);
+    return 0;
 }
 
 /** makeUdiMountPrivate
