@@ -49,6 +49,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdarg.h>
+#include <sys/stat.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -61,8 +62,8 @@ char *alloc_strgenf(const char *format, ...);
 char *alloc_strcatf(char *string, size_t *currLen, size_t *capacity, const char *format, ...);
 int pathcmp(const char *a, const char *b);
 char *cleanPath(const char *path);
-
 char *userInputPathFilter(const char *input, int allowSlash);
+int mkdir_p(const char* path, mode_t mode);
 
 #ifdef __cplusplus
 }
