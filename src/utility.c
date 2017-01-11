@@ -472,7 +472,8 @@ int pathcmp(const char *a, const char *b) {
     return ret;
 }
 
-/** Creates the specified directory as the bash command "mkdir -p", i.e. there is no error
+/**
+ * Creates the specified directory as the bash command "mkdir -p", i.e. there is no error
  * if the directory exists and makes parent directories as needed.
  */
 int mkdir_p(const char* path, mode_t mode) {
@@ -491,16 +492,14 @@ int mkdir_p(const char* path, mode_t mode) {
         fprintf(stderr, "mkdir_p: specified a non valid absulute path\n");
     }
 
-    // iterate though each subfolder
+    // iterate through each subfolder and create them as needed
     while(1) {
         ++pos;
         if (*pos == '/' || *pos == '\0') {
             int is_last_subfolder = (*pos == '\0');
             *pos = '\0';
 
-            // create subfolder if doesn't exist yet
-            struct stat sb;
-            if (stat(begin, &sb) != 0) {
+            if (!is_existing_file(begin)) {
                 if (mkdir(begin, mode) != 0) {
                     fprintf(stderr, "cannot mkdir %s\n", begin);
                     return 1;
@@ -516,4 +515,20 @@ int mkdir_p(const char* path, mode_t mode) {
         }
     }
     return 0;
+}
+
+/**
+ * Returns 1 if the specified file exists (could be either a file or a directory), otherwise 0.
+ */
+int is_existing_file(const char* path) {
+    struct stat sb;
+    return stat(path, &sb) == 0;
+}
+
+/**
+ * Returns 1 if the specified directory exists, otherwise 0.
+ */
+int is_existing_directory(const char* path) {
+    struct stat sb;
+    return stat(path, &sb) == 0 && S_ISDIR(sb.st_mode);
 }
