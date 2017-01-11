@@ -64,6 +64,8 @@ int pathcmp(const char *a, const char *b);
 char *cleanPath(const char *path);
 char *userInputPathFilter(const char *input, int allowSlash);
 int mkdir_p(const char* path, mode_t mode);
+int is_existing_file(const char* path);
+int is_existing_directory(const char* path);
 
 #ifdef __cplusplus
 }
