@@ -72,7 +72,6 @@ struct options {
     gid_t tgtGid;
     char *username;
     char *workdir;
-    char *gpu_ids;
     char **args;
     char **env;
     VolumeMap volumeMap;
