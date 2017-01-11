@@ -52,6 +52,8 @@
 #include "utility.h"
 #include "VolumeMap.h"
 #include "config.h"
+#include "gpu_support.h"
+#include "mpi_support.h"
 
 #define VOLUME_ALLOC_BLOCK 10
 
@@ -71,8 +73,6 @@ struct options {
     gid_t tgtGid;
     char *username;
     char *workdir;
-    char *gpu_ids;
-    int is_mpi_support_enabled;
     char **args;
     char **env;
     VolumeMap volumeMap;
@@ -82,13 +82,16 @@ struct options {
 
 
 static void _usage(int);
-int parse_options(int argc, char **argv, struct options *opts, UdiRootConfig *);
+int parse_options(int argc, char **argv, struct options *opts, UdiRootConfig *, struct mpi_support_config*);
 int parse_environment(struct options *opts, UdiRootConfig *);
-int parse_gpu_env(struct options *opts);
 int fprint_options(FILE *, struct options *);
 void free_options(struct options *, int freeStruct);
 int isImageLoaded(ImageData *, struct options *, UdiRootConfig *);
-int loadImage(ImageData *, struct options *, UdiRootConfig *);
+int loadImage(  ImageData *,
+                struct options *,
+                UdiRootConfig *,
+                const struct gpu_support_config*,
+                const struct mpi_support_config*);
 int adoptPATH(char **environ);
 
 #ifndef _TESTHARNESS_SHIFTER
@@ -116,6 +119,8 @@ int main(int argc, char **argv) {
     struct options opts;
     UdiRootConfig udiConfig;
     ImageData imageData;
+    struct gpu_support_config gpu_config;
+    struct mpi_support_config mpi_config;
     memset(&opts, 0, sizeof(struct options));
     memset(&udiConfig, 0, sizeof(UdiRootConfig));
     memset(&imageData, 0, sizeof(ImageData));
@@ -129,12 +134,12 @@ int main(int argc, char **argv) {
         exit(1);
     }
     /* parse config file and command line options */
-    if (parse_options(argc, argv, &opts, &udiConfig) != 0) {
+    if (parse_options(argc, argv, &opts, &udiConfig, &mpi_config) != 0) {
         fprintf(stderr, "FAILED to parse command line arguments.\n");
         exit(1);
     }
     /* parse environment variables for GPU support */
-    if (parse_gpu_env(&opts) != 0) {
+    if (parse_gpu_env(&gpu_config) != 0) {
         fprintf(stderr, "FAILED to parse CUDA GPU environment variables.\n");
         exit(1);
     }
@@ -225,10 +230,12 @@ int main(int argc, char **argv) {
     }
 
     if (isImageLoaded(&imageData, &opts, &udiConfig) == 0) {
-        if (loadImage(&imageData, &opts, &udiConfig) != 0) {
+        if (loadImage(&imageData, &opts, &udiConfig, &gpu_config, &mpi_config) != 0) {
             fprintf(stderr, "FAILED to setup image.\n");
+            free_gpu_support_config(&gpu_config);
             exit(1);
         }
+        free_gpu_support_config(&gpu_config);
     }
 
     /* switch to new / to prevent the chroot jail from being leaky */
@@ -370,7 +377,11 @@ int local_prependenv(char ***environ, const char *prepvar) {
 }
 #endif
 
-int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *udiConfig) {
+int parse_options(  int argc,
+                    char **argv,
+                    struct options *config,
+                    UdiRootConfig *udiConfig,
+                    struct mpi_support_config* mpi_config) {
     int opt = 0;
     int volOptCount = 0;
     static struct option long_options[] = {
@@ -380,7 +391,6 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         {"image", 1, 0, 'i'},
         {"entrypoint", 2, 0, 0},
         {"env", 0, 0, 'e'},
-        {"gpu", 1, 0, 'g'},
         {"mpi", 0, 0, 'm'},
         {0, 0, 0, 0}
     };
@@ -398,7 +408,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     optind = 1;
     for ( ; ; ) {
         int longopt_index = 0;
-        opt = getopt_long(argc, argv, "hnvV:i:e:g:m", long_options, &longopt_index);
+        opt = getopt_long(argc, argv, "hnvV:i:e:m", long_options, &longopt_index);
         if (opt == -1) break;
 
         switch (opt) {
@@ -462,20 +472,8 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                  * variables
                  */
                 break;
-            case 'g':
-                {
-                    if (optarg == NULL)
-                    {
-                        fprintf(stderr, "GPU device requested but not specified, or specified incorrectly!\n");
-                        _usage(1);
-                        break;
-                    }
-
-                    config->gpu_ids = strdup(optarg);
-                    break;
-                }
             case 'm':
-                config->is_mpi_support_enabled = 1;
+                mpi_config->is_mpi_support_enabled = 1;
                 break;
             case 'h':
                 _usage(0);
@@ -624,34 +622,12 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
     return 0;
 }
 
-
-/**
- * Determine if GPU support is requested through the CUDA_VISIBLE_DEVICES
- * environment variable.
- * CUDA_VISIBLE_DEVICES is also set by the SLURM workload manager generic
- * resources (GRES) plugin.
- * As a design decision, the environment variable overrides
- * the --gpu command line option.
- */
-int parse_gpu_env(struct options *opts) {
-    char *envPtr = NULL;
-
-    if ((envPtr = getenv("CUDA_VISIBLE_DEVICES")) != NULL) {
-        if (opts->gpu_ids != NULL) {
-            free(opts->gpu_ids);
-        }
-        opts->gpu_ids = strdup(envPtr);
-    }
-
-    return 0;
-}
-
 static void _usage(int status) {
     printf("\n"
         "Usage:\n"
         "shifter [-h|--help] [-v|--verbose] [--image=<imageType>:<imageTag>]\n"
         "    [--entry] [-V|--volume=/path/to/bind:/mnt/in/image[:<flags>][,...]]\n"
-        "    [-g|--gpu=<deviceID>] [-m|--mpi] [-- /command/to/exec/in/shifter [args...]]\n"
+        "    [-m|--mpi] [-- /command/to/exec/in/shifter [args...]]\n"
         );
     printf("\n");
     printf(
@@ -688,16 +664,15 @@ static void _usage(int status) {
 "under /dev, /etc, /opt/udiImage, /proc, or /var; or overwrite any bind-\n"
 "requested by the system configuration.\n"
 "\n"
-"GPU Selection: To select one or more GPU devices to be made available inside\n"
-"the container, use the \"--gpu\" or \"-g\" options, supplying as arguments \n"
-"the IDs of the devices as reported by nvidia-smi or the CUDA Runtime, e.g.:\n"
-"    shifter --gpu=0,1,2\n"
-"Alternatively, the GPUs can be specified in the environment using:\n"
-"    export CUDA_VISIBLE_DEVICES=0,1,2\n"
-"If the environment variable is present, it will override the \"--gpu\" option.\n"
-"When using the SLURM Workload Manager, CUDA_VISIBLE_DEVICES will always be\n"
-"set, and it will contain the device IDs if an allocation with GPUs is\n"
-"requested using Generic Resource Scheduling, e.g.:\n"
+"GPU Support: To select one or more GPU devices to be made available inside\n"
+"the container, set the environment variable CUDA_VISIBLE_DEVICES.\n"
+"The value of CUDA_VISIBLE_DEVICES should be a comma separated list of GPU\n"
+"device IDs.\n"
+"e.g.,\n"
+"    export CUDA_VISIBLE_DEVICES=0,2\n"
+"When using the SLURM Workload Manager, CUDA_VISIBLE_DEVICES is always\n"
+"exported, and the user can control the selected GPU devices through\n"
+"the Generic Resource Scheduling, e.g.:\n"
 "    srun --gres=gpu:<NumGPUsPerNode>\n"
 "Thus, Shifter transparently supports GPUs selected by the SLURM GRES plugin.\n"
 "\n"
@@ -777,7 +752,11 @@ int isImageLoaded(ImageData *image, struct options *options, UdiRootConfig *udiC
 /**
  * Loads the needed image
  */
-int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) {
+int loadImage(  ImageData *image,
+                struct options *opts,
+                UdiRootConfig *udiConfig,
+                const struct gpu_support_config* gpu_config,
+                const struct mpi_support_config* mpi_config) {
     int retryCnt = 0;
     char chrootPath[PATH_MAX];
     snprintf(chrootPath, PATH_MAX, "%s", udiConfig->udiMountPoint);
@@ -832,7 +811,7 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
             goto _loadImage_error;
         }
     }
-    if (mountImageVFS(image, opts->username, opts->gpu_ids, opts->is_mpi_support_enabled, opts->verbose, NULL, udiConfig) != 0) {
+    if (mountImageVFS(image, opts->username, opts->verbose, NULL, udiConfig, gpu_config, mpi_config) != 0) {
         fprintf(stderr, "FAILED to mount image into UDI\n");
         goto _loadImage_error;
     }

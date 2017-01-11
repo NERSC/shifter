@@ -67,6 +67,8 @@
 #include "UdiRootConfig.h"
 #include "shifter_core.h"
 #include "VolumeMap.h"
+#include "gpu_support.h"
+#include "mpi_support.h"
 
 #include "config.h"
 
@@ -94,8 +96,9 @@ int getImage(ImageData *, SetupRootConfig *, UdiRootConfig *);
 int main(int argc, char **argv) {
     UdiRootConfig udiConfig;
     SetupRootConfig config;
-
     ImageData image;
+    struct gpu_support_config gpu_config = {};
+    struct mpi_support_config mpi_config = {};
 
     memset(&udiConfig, 0, sizeof(UdiRootConfig));
     memset(&config, 0, sizeof(SetupRootConfig));
@@ -139,7 +142,7 @@ int main(int argc, char **argv) {
             exit(1);
         }
     }
-    if (mountImageVFS(&image, config.user, NULL, 0, 0, config.minNodeSpec, &udiConfig) != 0) {
+    if (mountImageVFS(&image, config.user, 0, config.minNodeSpec, &udiConfig, &gpu_config, &mpi_config) != 0) {
         fprintf(stderr, "FAILED to mount image into UDI\n");
         exit(1);
     }

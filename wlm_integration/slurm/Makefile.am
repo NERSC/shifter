@@ -18,7 +18,9 @@ SHIFTER_SO_SOURCES = \
     $(top_srcdir)/src/shifter_core.c \
     $(top_srcdir)/src/PathList.c \
     $(top_srcdir)/src/ImageData.c \
-    $(top_srcdir)/src/VolumeMap.c
+    $(top_srcdir)/src/VolumeMap.c \
+    $(top_srcdir)/src/gpu_support.c \
+    $(top_srcdir)/src/mpi_support.c
 
 shifter_slurm_la_SOURCES = $(SHIFTER_SO_SOURCES)
 shifter_slurm_la_LDFLAGS = $(SO_LDFLAGS) $(PLUGIN_FLAGS)

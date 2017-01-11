@@ -22,8 +22,8 @@ class TestMPISupport(unittest.TestCase):
     _SITE_MPI_BINS = { "mpirun" }
     _SITE_MPI_CONFIGURATION_FILES = { "/etc/dummy-mpi-config-file" }
 
-    _EXPECTED_CONTAINER_MPI_ENV_LD_LIB_PATH = { "/site-resources/mpi/lib" }
-    _EXPECTED_CONTAINER_MPI_ENV_PATH = { "/site-resources/mpi/bin" }
+    _EXPECTED_CONTAINER_MPI_ENV_LD_LIB_PATH = { "/opt/shifter/site-resources/mpi/lib" }
+    _EXPECTED_CONTAINER_MPI_ENV_PATH = { "/opt/shifter/site-resources/mpi/bin" }
 
     _CONTAINER_IMAGES = { \
         "mpich-compatible1" : "rukkal/shifter-mpi-support-test:mpich-compatible1", \
@@ -227,13 +227,13 @@ class TestMPISupport(unittest.TestCase):
 
     def _get_mpi_dependency_libs_in_container(self):
         if self._is_mpi_support_in_container_enabled():
-            return set(self._get_command_output_in_container(["ls", "/site-resources/mpi/lib"]))
+            return set(self._get_command_output_in_container(["ls", "/opt/shifter/site-resources/mpi/lib"]))
         else:
             return set()
 
     def _get_mpi_bins_in_container(self):
         if self._is_mpi_support_in_container_enabled():
-            return set(self._get_command_output_in_container(["ls", "/site-resources/mpi/bin"]))
+            return set(self._get_command_output_in_container(["ls", "/opt/shifter/site-resources/mpi/bin"]))
         else:
             return set()
 
@@ -251,12 +251,12 @@ class TestMPISupport(unittest.TestCase):
         for out in output:
             if expr.match(out) is not None:
                 paths = out.split("=")[1].split(":")
-        expr = re.compile("/site-resources/mpi")
+        expr = re.compile("/opt/shifter/site-resources/mpi")
         mpi_paths = [path for path in paths if expr.match(path) is not None]
         return set(mpi_paths)
 
     def _is_mpi_support_in_container_enabled(self):
-        return self._file_exists_in_container("/site-resources/mpi")
+        return self._file_exists_in_container("/opt/shifter/site-resources/mpi")
 
     def _file_exists_in_container(self, file_path):
         command = ["bash", "-c", "if [ -e " + file_path + " ]; then echo \"file exists\"; fi"]

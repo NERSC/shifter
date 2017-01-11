@@ -81,20 +81,6 @@ TEST(ShifterTestGroup, adoptPATH_test) {
     free(tmpenv);
 }
 
-TEST(ShifterTestGroup, parseGPUenv_test)
-{
-    struct options opts;
-    memset(&opts, 0, sizeof(struct options));
-
-    opts.gpu_ids = strdup("0");
-    setenv("CUDA_VISIBLE_DEVICES", "0,1", 1);
-
-    parse_gpu_env(&opts);
-
-    CHECK (strcmp(opts.gpu_ids, "0,1") == 0);
-}
-
-
 #if 0
 TEST(ShifterTestGroup, LocalPutEnv_basic) {
     setenv("TESTENV0", "qwerty123", 1);

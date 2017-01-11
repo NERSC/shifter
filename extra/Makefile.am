@@ -11,7 +11,9 @@ SHIFTER_SLURM_DWS_SUPPORT_SOURCES = \
 	$(top_srcdir)/src/VolumeMap.c \
 	$(top_srcdir)/src/MountList.c \
 	$(top_srcdir)/src/PathList.c \
-	$(top_srcdir)/src/shifter_core.c
+	$(top_srcdir)/src/shifter_core.c \
+	$(top_srcdir)/src/gpu_support.c \
+	$(top_srcdir)/src/mpi_support.c
 
 
 shifter_slurm_dws_support_SOURCES = $(SHIFTER_SLURM_DWS_SUPPORT_SOURCES)
