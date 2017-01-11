@@ -388,6 +388,7 @@ int parse_options(  int argc,
         {"help", 0, 0, 'h'},
         {"volume", 1, 0, 'V'},
         {"verbose", 0, 0, 'v'},
+        {"version", 0, 0, 0},
         {"image", 1, 0, 'i'},
         {"entrypoint", 2, 0, 0},
         {"env", 0, 0, 'e'},
@@ -419,6 +420,10 @@ int parse_options(  int argc,
                         if (optarg != NULL) {
                             config->entrypoint = strdup(optarg);
                         }
+                    }
+                    else if (strcmp(long_options[longopt_index].name, "version") == 0) {
+                        printf("Shifter %s\n", VERSION);
+                        exit(0);
                     }
                 }
                 break;
@@ -625,7 +630,7 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
 static void _usage(int status) {
     printf("\n"
         "Usage:\n"
-        "shifter [-h|--help] [-v|--verbose] [--image=<imageType>:<imageTag>]\n"
+        "shifter [-h|--help] [--version] [-v|--verbose] [--image=<imageType>:<imageTag>]\n"
         "    [--entry] [-V|--volume=/path/to/bind:/mnt/in/image[:<flags>][,...]]\n"
         "    [-m|--mpi] [-- /command/to/exec/in/shifter [args...]]\n"
         );
