@@ -51,6 +51,7 @@
 #include <unistd.h>
 
 #include "VolumeMap.h"
+#include "gpu_support.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -143,6 +144,8 @@ typedef struct _UdiRootConfig {
     char *jobIdentifier;
     dev_t *bindMountAllowedDevices;
     size_t bindMountAllowedDevices_sz;
+
+    struct gpu_support_config gpu_config;
 } UdiRootConfig;
 
 int parse_UdiRootConfig(const char *, UdiRootConfig *, int validateFlags);

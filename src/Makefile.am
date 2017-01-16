@@ -79,7 +79,12 @@ SHIFTERIMG_SOURCES = \
     UdiRootConfig.h \
     UdiRootConfig.c \
     VolumeMap.h \
-	VolumeMap.c
+	VolumeMap.c \
+	gpu_support.h \
+	gpu_support.c \
+    shifter_core.c \
+    MountList.c \
+    PathList.c
 
 
 shifter_SOURCES = $(SHIFTER_SOURCES)
