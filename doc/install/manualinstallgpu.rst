@@ -15,9 +15,6 @@ In order to mantain the portability that images provide while supporting site-op
 We use this approach and solve the practical details for allowing container portability and native performance on a variety of target systems through command line options that indicate if, for instance, gpu support should be enabled and what gpu devices should be made available to the container image at startup.
 
 
-Installation
-============
-
 Shifter Runtime
 ---------------
 
@@ -84,7 +81,7 @@ Create links to system directories and additional required directories:
    sudo ln -s $UDIROOT_PREFIX/bin/shifter /usr/bin/shifter
    sudo ln -s $UDIROOT_PREFIX/bin/shifterimg /usr/bin/shifterimg
    sudo mkdir -p /usr/libexec/shifter
-   sudo ln -s /opt/shifter/udiRoot/libexec/shifter/mount /usr/libexec/shifter/mount
+   sudo ln -s $UDIROOT_PREFIX/libexec/shifter/mount /usr/libexec/shifter/mount
    sudo mkdir -p $SHIFTER_SYSCONFDIR
 
 

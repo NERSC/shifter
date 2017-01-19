@@ -35,6 +35,7 @@ Contents:
    install/centos6
    install/cle6
    install/manualinstallgpu
+   install/required-permissions
    wlm/slurm
 
 
