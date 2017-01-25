@@ -117,6 +117,7 @@ def _setup_http_conn(url, cacert=None):
         else:
             conn = httplib.HTTPConnection(target.netloc)
     elif target.scheme == 'https':
+        useproxy = False
         if 'https_proxy' in os.environ and needProxy(target.hostname):
             proxy = urlparse.urlparse(os.environ['https_proxy'])
             useproxy = True
