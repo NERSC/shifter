@@ -106,7 +106,7 @@ def _setup_http_conn(url, cacert=None):
     conn = None
 
     if target.scheme == 'http':
-        if 'http_proxy' in os.environ and needProxy(target.hostname):
+        if 'http_proxy' in os.environ and need_proxy(target.hostname):
             proxy = urlparse.urlparse(os.environ['http_proxy'])
             conn = httplib.HTTPConnection(proxy.netloc)
             conn.set_tunnel(
@@ -118,7 +118,7 @@ def _setup_http_conn(url, cacert=None):
             conn = httplib.HTTPConnection(target.netloc)
     elif target.scheme == 'https':
         useproxy = False
-        if 'https_proxy' in os.environ and needProxy(target.hostname):
+        if 'https_proxy' in os.environ and need_proxy(target.hostname):
             proxy = urlparse.urlparse(os.environ['https_proxy'])
             useproxy = True
         try:
