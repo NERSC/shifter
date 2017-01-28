@@ -41,75 +41,10 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include "shifterimg.h"
 #include "utility.h"
 #include "UdiRootConfig.h"
 #include "ImageData.h"
-
-enum ImageGwAction {
-    MODE_LOOKUP = 0,
-    MODE_PULL,
-    MODE_IMAGES,
-    MODE_LOGIN,
-    MODE_PULL_NONBLOCK,
-    MODE_EXPIRE,
-    MODE_AUTOEXPIRE,
-    MODE_INVALID
-};
-
-enum AclCredential {
-    USER_ACL = 0,
-    GROUP_ACL,
-    INVALID_ACL
-};
-
-typedef struct _LoginCredential {
-    char *system;
-    char *location;
-    char *cred;
-} LoginCredential;
-
-struct options {
-    int verbose;
-    enum ImageGwAction mode;
-    char *type;
-    char *tag;
-    char *rawtype;
-    char *rawtag;
-    char *location;
-    char *rawlocation;
-    LoginCredential **loginCredentials;
-
-    int *allowed_uids;
-    size_t allowed_uids_len;
-    size_t allowed_uids_sz;
-
-    int *allowed_gids;
-    size_t allowed_gids_len;
-    size_t allowed_gids_sz;
-};
-
-typedef struct _ImageGwState {
-    char *message;
-    int isJsonMessage;
-    size_t expContentLen;
-    size_t messageLen;
-    size_t messageCurr;
-    int messageComplete;
-} ImageGwState;
-
-typedef struct _ImageGwImageRec {
-    char *entryPoint;
-    char **env;
-    char *workdir;
-    char **groupAcl;
-    char *identifier;
-    char *type;
-    char *status;
-    double last_pull;
-    char *system;
-    char **tag;
-    char **userAcl;
-} ImageGwImageRec;
 
 void _usage(int ret) {
     FILE *output = stdout;
@@ -1297,6 +1232,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     return 0;
 }
 
+#ifndef _TESTHARNESS_SHIFTER
 int main(int argc, char **argv) {
     UdiRootConfig udiConfig;
     struct options config;
@@ -1355,3 +1291,4 @@ int main(int argc, char **argv) {
     if (imgGw == NULL) return 1;
     return 0;
 }
+#endif
