@@ -32,6 +32,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <pwd.h>
+#include <grp.h>
 #include <signal.h>
 #include <munge.h>
 #include <curl/curl.h>
@@ -55,6 +56,12 @@ enum ImageGwAction {
     MODE_INVALID
 };
 
+enum AclCredential {
+    USER_ACL = 0,
+    GROUP_ACL,
+    INVALID_ACL
+};
+
 typedef struct _LoginCredential {
     char *system;
     char *location;
@@ -71,6 +78,14 @@ struct options {
     char *location;
     char *rawlocation;
     LoginCredential **loginCredentials;
+
+    int *allowed_uids;
+    size_t allowed_uids_len;
+    size_t allowed_uids_sz;
+
+    int *allowed_gids;
+    size_t allowed_gids_len;
+    size_t allowed_gids_sz;
 };
 
 typedef struct _ImageGwState {
@@ -96,11 +111,19 @@ typedef struct _ImageGwImageRec {
     char **userAcl;
 } ImageGwImageRec;
 
-
 void _usage(int ret) {
     FILE *output = stdout;
-    fprintf(output, "Usage: shifterimg [-h|-v] <mode> <type:tag>\n\n");
+    fprintf(output, "Usage:\n shifterimg [options] <mode> <type:tag>\n\n");
     fprintf(output, "    Mode: images, lookup, or pull\n");
+    fprintf(output, "\nOptions:\n");
+    fprintf(output, " --user/-u <list>    List of users allowed to access a "
+            "private image\n");
+    fprintf(output, " --group/-g <list>   List of groups allowed to access a "
+            "private image\n");
+    fprintf(output, " --verbose/-v        Verbose output\n");
+    fprintf(output, " --help/-h           Display this help\n");
+    fprintf(output, "\nNote: the --user and --group options are only relevant "
+            " for image pulls\n");
     exit(ret);
 }
 
@@ -242,6 +265,8 @@ int doLogin(struct options *options, UdiRootConfig *udiConfig) {
     char *password = NULL;
     char *cred = NULL;
     char *munge_cred = NULL;
+    char *creddir = NULL;
+    char *path = NULL;
 
     if (options->location == NULL) {
         options->location = strdup("default");
@@ -302,8 +327,6 @@ int doLogin(struct options *options, UdiRootConfig *udiConfig) {
 
     /* write out credentials */
     struct passwd *pwd = getpwuid(getuid());
-    char *creddir = NULL;
-    char *path = NULL;
     if (pwd != NULL) {
         FILE *out = NULL;
         creddir = alloc_strgenf("%s/.udiRoot", pwd->pw_dir);
@@ -767,6 +790,68 @@ char *constructAuthMessage(struct options *config, UdiRootConfig *udiConfig) {
     return NULL;
 }
 
+char *_prepare_pull_payload(struct options *config) {
+    if (config == NULL) return NULL;
+    size_t len = 0;
+    size_t size = 0;
+
+    char *allowed_uids = NULL;
+    char *allowed_gids = NULL;
+    char *ret = NULL;
+
+    if (config->allowed_uids != NULL && config->allowed_uids_len > 0) {
+        size_t idx = 0;
+        len = 0;
+        size = 0;
+        for (idx = 0; idx < config->allowed_uids_len; idx++) {
+            allowed_uids = alloc_strcatf(allowed_uids, &len, &size, "%d,", config->allowed_uids[idx]);
+        }
+        if (allowed_uids != NULL) {
+            allowed_uids[strlen(allowed_uids)] = '\0'; /* remove trailing comma */
+        }
+    }
+    if (config->allowed_gids != NULL && config->allowed_gids_len > 0) {
+        size_t idx = 0;
+        len = 0;
+        size = 0;
+        for (idx = 0; idx < config->allowed_gids_len; idx++) {
+            allowed_gids = alloc_strcatf(allowed_gids, &len, &size, "%d,", config->allowed_gids[idx]);
+        }
+        if (allowed_gids != NULL) {
+            allowed_gids[strlen(allowed_gids)] = '\0'; /* remove trailing comma */
+        }
+    }
+
+    len = 0;
+    size = 0;
+    if (allowed_uids == NULL && allowed_gids == NULL) {
+        return NULL;
+    }
+    ret = strdup("{");
+    if (allowed_uids != NULL) {
+        ret = alloc_strcatf(ret, &len, &size, "\"allowed_uids:\"%s\",", allowed_uids);
+    }
+    if (allowed_gids != NULL) {
+        ret = alloc_strcatf(ret, &len, &size, "\"allowed_gids:\"%s\",", allowed_gids);
+    }
+
+    ret[strlen(ret)] = '\0'; /* remove trailing comma */
+    if (strlen(ret) > 0) {
+        ret = alloc_strcatf(ret, &len, &size, "}");
+    }
+
+    if (allowed_uids != NULL) {
+        free(allowed_uids);
+        allowed_uids = NULL;
+    }
+    if (allowed_gids != NULL) {
+        free(allowed_gids);
+        allowed_gids = NULL;
+    }
+
+    return ret;
+}
+
 ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options *config, UdiRootConfig *udiConfig) {
     const char *modeStr = NULL;
     if (config->mode == MODE_LOOKUP) {
@@ -821,18 +906,25 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
     munge_ctx_destroy(ctx);
 
     headers = curl_slist_append(headers, authstr);
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
+    if (config->mode == MODE_PULL || config->mode == MODE_PULL_NONBLOCK) {
+        char *payload = _prepare_pull_payload(config);
+        if (payload == NULL) {
+            payload = strdup("");
+        }
+        curl_easy_setopt(curl, CURLOPT_POST, 1);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload);
+        free(payload);
+
+        curl_slist_append(headers, "Content-type: application/json");
+    }
+
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, handleResponseHeader);
     curl_easy_setopt(curl, CURLOPT_HEADERDATA, imageGw);
 
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, handleResponseData);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, imageGw);
-
-    if (config->mode == MODE_PULL || config->mode == MODE_PULL_NONBLOCK) {
-        curl_easy_setopt(curl, CURLOPT_POST, 1);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "");
-    }
 
     if (udiConfig->gatewayTimeout > 0) {
         curl_easy_setopt(curl, CURLOPT_TIMEOUT, udiConfig->gatewayTimeout);
@@ -1026,11 +1118,82 @@ _error:
     return 1;
 }
 
+int _lookup_user_id(const char *str) {
+    struct passwd *pwd = getpwnam(str);
+    if (pwd != NULL) {
+        return (int) pwd->pw_uid;
+    }
+    return -1;
+}
+
+int _lookup_group_id(const char *str) {
+    struct group *grp = getgrnam(str);
+    if (grp != NULL) {
+        return (int) grp->gr_gid;
+    }
+    return -1;
+}
+
+void _add_allowed(enum AclCredential aclType, struct options *config, const char *arg) {
+    char *start = NULL;
+    char *end = NULL;
+    char *ptr = NULL;
+    char *tmp = strdup(arg);
+
+    int **ids = NULL;
+    size_t *ids_sz = NULL;
+    size_t *ids_len = NULL;
+    int (*fn_lookup)(const char *) = NULL;
+
+    if (aclType == USER_ACL) {
+        fn_lookup = &_lookup_user_id;
+        ids = &(config->allowed_uids);
+        ids_sz = &(config->allowed_uids_sz);
+        ids_len = &(config->allowed_uids_len);
+    } else if (aclType == GROUP_ACL) {
+        fn_lookup = &_lookup_group_id;
+        ids = &(config->allowed_gids);
+        ids_sz = &(config->allowed_gids_sz);
+        ids_len = &(config->allowed_gids_len);
+    } else {
+        return;
+    }
+
+    start = tmp;
+    end = start + strlen(start);
+    while ((ptr = strchr(start, ',')) != NULL && ptr < end && start < end) {
+        int idval = -1;
+        *ptr = '\0';
+        start = shifter_trim(start);
+
+        idval = (*fn_lookup)(start);
+        if (idval < 0) {
+            idval = (int) strtol(start, NULL, 10);
+        }
+        if (idval > 0) {
+            if (*ids_len + 1 >= *ids_sz) {
+                int *tmp = (int *) realloc(*ids, sizeof(int) * (*ids_len + 10));
+                if (tmp == NULL) {
+                    fprintf(stderr, "FAILED to allocate memory for acl list, aborting.\n");
+                    abort();
+                }
+                *ids = tmp;
+                *ids_sz = *ids_len + 10;
+            }
+            (*ids)[*ids_len] = idval;
+            (*ids_len)++;
+        }
+        start = ptr + 1;
+    }
+}
+
 int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *udiConfig) {
     int opt = 0;
     static struct option long_options[] = {
         {"help", 0, 0, 'h'},
         {"verbose", 0, 0, 'v'},
+        {"user", 1, 0, 'u'},
+        {"group", 1, 0, 'g'},
         {0, 0, 0, 0}
     };
 
@@ -1048,6 +1211,12 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                 break;
             case 'v':
                 config->verbose = 1;
+                break;
+            case 'u':
+                _add_allowed(USER_ACL, config, optarg);
+                break;
+            case 'g':
+                _add_allowed(GROUP_ACL, config, optarg);
                 break;
             case '?':
                 fprintf(stderr, "Missing an argument!\n");
