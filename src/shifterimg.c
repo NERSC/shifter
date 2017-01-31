@@ -1096,9 +1096,14 @@ void _add_allowed(enum AclCredential aclType, struct options *config, const char
 
     start = tmp;
     end = start + strlen(start);
-    while ((ptr = strchr(start, ',')) != NULL && ptr < end && start < end) {
+    while (start < end) {
         int idval = -1;
-        *ptr = '\0';
+        ptr = strchr(start, ',');
+        if (ptr != NULL) {
+            *ptr = '\0';
+        } else {
+            ptr = end;
+        }
         start = shifter_trim(start);
 
         idval = (*fn_lookup)(start);
