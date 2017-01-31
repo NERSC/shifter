@@ -38,7 +38,7 @@ class GWTestCase(unittest.TestCase):
 
         from shifter_imagegw import api
         mongouri=self.config['MongoDBURI']
-        print "Debug: Connecting to %s"%mongouri
+        print "Debug: Connecting to %s" % mongouri
         client = MongoClient(mongouri)
         db=self.config['MongoDB']
         if not os.path.exists(self.config['CacheDirectory']):
@@ -110,37 +110,46 @@ class GWTestCase(unittest.TestCase):
                 break
             print '  %s...'%(r['status'])
             time.sleep(1)
-            count=count-1
+            count = count - 1
         return cstate
 
     def good_record(self):
-        return {'system':self.system,
-            'itype':self.type,
-            'id':'bogus',
-            'tag':[self.itag],
-            'format':'squashfs',
-            'status':'READY',
-            'userACL':[],
-            'groupACL':[],
-            'last_pull':time.time(),
-            'ENV':[],
-            'ENTRY':'',
-            }
-
-
+        return {'system': self.system,
+                'itype': self.type,
+                'id': 'bogus',
+                'tag': [self.itag],
+                'format': 'squashfs',
+                'status': 'READY',
+                'userACL': [],
+                'groupACL': [],
+                'last_pull': time.time(),
+                'ENV': [],
+                'ENTRY': '',
+                }
 
     def test_pull(self):
-        uri='%s/pull/%s/'%(self.url,self.urlreq)
-        rv = self.app.post(uri,headers={AUTH_HEADER:self.auth})
-        assert rv.status_code==200
+        uri = '%s/pull/%s/' % (self.url, self.urlreq)
+        data = {'useracl': ['bob', 'alice']}
+        rv = self.app.post(uri, headers={AUTH_HEADER: self.auth}, data=data)
+        assert rv.status_code == 200
 
     def test_list(self):
+        # Do a pull so we can create an image record
+        uri = '%s/pull/%s/' % (self.url,self.urlreq)
+        rv = self.app.post(uri, headers={AUTH_HEADER:self.auth})
+        assert rv.status_code == 200
+        uri='%s/list/%s/'%(self.url,self.system)
+        rv = self.app.get(uri, headers={AUTH_HEADER:self.auth})
+        assert rv.status_code==200
+
+    def test_queue(self):
         # Do a pull so we can create an image record
         uri='%s/pull/%s/'%(self.url,self.urlreq)
         rv = self.app.post(uri,headers={AUTH_HEADER:self.auth})
         assert rv.status_code==200
-        uri='%s/list/%s/'%(self.url,self.system)
+        uri='%s/queue/%s/'%(self.url,self.system)
         rv = self.app.get(uri, headers={AUTH_HEADER:self.auth})
+        print rv.data
         assert rv.status_code==200
 
     def test_pulllookup(self):
