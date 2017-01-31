@@ -61,6 +61,7 @@ QUEUE.conf.update(CELERY_ACCEPT_CONTENT=['json'])
 QUEUE.conf.update(CELERY_TASK_SERIALIZER='json')
 QUEUE.conf.update(CELERY_RESULT_SERIALIZER='json')
 
+
 class Updater(object):
     """
     This is a helper class to update the status for the request.
@@ -77,6 +78,7 @@ class Updater(object):
 
 DEFAULT_UPDATER = Updater(None)
 
+
 def initqueue(newconfig):
     """
     This is mainly used by the manager to configure the broker
@@ -88,7 +90,6 @@ def initqueue(newconfig):
     QUEUE.conf.update(CELERY_ACCEPT_CONTENT=['json'])
     QUEUE.conf.update(CELERY_TASK_SERIALIZER='json')
     QUEUE.conf.update(CELERY_RESULT_SERIALIZER='json')
-
 
 
 def normalized_name(request):
@@ -103,6 +104,7 @@ def already_processed(request):
     """ Stub method to see if something is already processed. """
     return False
 
+
 def _get_cacert(location):
     """ Private method to get the cert location """
     params = CONFIG['Locations'][location]
@@ -116,6 +118,7 @@ def _get_cacert(location):
         if not os.path.exists(cacert):
             raise OSError('%s does not exist' % cacert)
     return cacert
+
 
 def _pull_dockerv2(request, location, repo, tag, updater):
     """ Private method to pull a docker images. """
@@ -145,13 +148,13 @@ def _pull_dockerv2(request, location, repo, tag, updater):
 
         dock.pull_layers(manifest, cdir)
 
-        expandedpath = tempfile.mkdtemp(suffix='extract', \
-                prefix=request['id'], dir=edir)
+        expandedpath = tempfile.mkdtemp(suffix='extract',
+                                        prefix=request['id'], dir=edir)
         request['expandedpath'] = expandedpath
 
         updater.update_status("PULLING", 'Extracting Layers')
-        dock.extract_docker_layers(expandedpath, dock.get_eldest_layer(), \
-            cachedir=cdir)
+        dock.extract_docker_layers(expandedpath, dock.get_eldest_layer(),
+                                   cachedir=cdir)
         return True
     except:
         logging.warn(sys.exc_value)
@@ -183,9 +186,9 @@ def pull_image(request, updater=DEFAULT_UPDATER):
     if len(parts) == 2:
         (repo, tag) = parts
     else:
-        raise OSError('Unable to parse tag %s'%request['tag'])
-    logging.debug("doing image pull for loc=%s repo=%s tag=%s", location, \
-            repo, tag)
+        raise OSError('Unable to parse tag %s' % request['tag'])
+    logging.debug("doing image pull for loc=%s repo=%s tag=%s", location,
+                  repo, tag)
 
     if location in CONFIG['Locations']:
         params = CONFIG['Locations'][location]
@@ -212,6 +215,7 @@ def examine_image(request):
     # TODO: Add checks to examine the image.  Should be extensible.
     return True
 
+
 def get_image_format(request):
     """
     Retreive the image format for the reuqest using a default if not provided.
@@ -221,6 +225,7 @@ def get_image_format(request):
         fmt = request['format']
 
     return fmt
+
 
 def convert_image(request):
     """
@@ -239,6 +244,7 @@ def convert_image(request):
     status = converters.convert(fmt, request['expandedpath'], imagefile)
     return status
 
+
 def write_metadata(request):
     """
     Write out the metadata file
@@ -247,18 +253,22 @@ def write_metadata(request):
     """
     fmt = request['format']
     meta = request['meta']
+    if 'userACL' in request:
+        meta['userACL'] = request['userACL']
+    if 'groupACL' in request:
+        meta['groupACL'] = request['groupACL']
 
     edir = CONFIG['ExpandDirectory']
 
-    ## initially write metadata to tempfile
-    (fdesc, metafile) = tempfile.mkstemp(prefix=request['id'], suffix='meta', \
-            dir=edir)
+    # initially write metadata to tempfile
+    (fdesc, metafile) = tempfile.mkstemp(prefix=request['id'], suffix='meta',
+                                         dir=edir)
     os.close(fdesc)
     request['metafile'] = metafile
 
     status = converters.writemeta(fmt, meta, metafile)
 
-    ## after success move to final name
+    # after success move to final name
     final_metafile = os.path.join(edir, '%s.meta' % (request['id']))
     shutil.move(metafile, final_metafile)
     request['metafile'] = final_metafile
@@ -281,7 +291,9 @@ def check_image(request):
     image_filename = "%s.%s" % (request['id'], fmt)
     image_metadata = "%s.meta" % (request['id'])
 
-    return transfer.imagevalid(sysconf, image_filename, image_metadata, logging)
+    return transfer.imagevalid(sysconf, image_filename, image_metadata,
+                               logging)
+
 
 def transfer_image(request):
     """
@@ -297,6 +309,7 @@ def transfer_image(request):
     if 'metafile' in request:
         meta = request['metafile']
     return transfer.transfer(sysconf, request['imagefile'], meta, logging)
+
 
 def remove_image(request):
     """
@@ -328,7 +341,8 @@ def cleanup_temporary(request):
             cleanitem = str(cleanitem)
 
         if not isinstance(cleanitem, str):
-            raise ValueError('Invalid type for %s,%s' % (item, type(cleanitem)))
+            raise ValueError('Invalid type for %s,%s' %
+                             (item, type(cleanitem)))
         if cleanitem == '' or cleanitem == '/':
             raise ValueError('Invalid value for %s: %s' % (item, cleanitem))
         if not cleanitem.startswith(CONFIG['ExpandDirectory']):
@@ -342,9 +356,8 @@ def cleanup_temporary(request):
                 else:
                     os.unlink(cleanitem)
             except:
-                logging.error("Worker: caught exception while trying to " \
-                        "clean up (%s) %s.", item, cleanitem)
-
+                logging.error("Worker: caught exception while trying to "
+                              "clean up (%s) %s.", item, cleanitem)
 
 
 @QUEUE.task(bind=True)
@@ -365,7 +378,7 @@ def dopull(self, request, testmode=0):
             'id': ident,
             'entrypoint': ['./blah'],
             'workdir': '/root',
-            'env':['FOO=bar', 'BAZ=boz']
+            'env': ['FOO=bar', 'BAZ=boz']
         }
         return ret
     elif testmode == 2:
@@ -375,6 +388,7 @@ def dopull(self, request, testmode=0):
         # Step 1 - Do the pull
         updater.update_status('PULLING', 'PULLING')
         print "pulling image %s" % request['tag']
+        logging.info(request)
         if not pull_image(request, updater=updater):
             print "pull_image failed"
             logging.info("Worker: Pull failed")
@@ -394,6 +408,7 @@ def dopull(self, request, testmode=0):
             print "Worker: converting image %s" % request['tag']
             if not convert_image(request):
                 raise OSError('Conversion failed')
+            print request
             if not write_metadata(request):
                 raise OSError('Metadata creation failed')
             # Step 4 - TRANSFER
@@ -408,12 +423,12 @@ def dopull(self, request, testmode=0):
         return request['meta']
 
     except:
-        logging.error("ERROR: dopull failed system=%s tag=%s", \
-                request['system'], request['tag'])
+        logging.error("ERROR: dopull failed system=%s tag=%s",
+                      request['system'], request['tag'])
         print sys.exc_value
         self.update_state(state='FAILURE')
 
-        ## TODO: add a debugging flag and only disable cleanup if debugging
+        # TODO: add a debugging flag and only disable cleanup if debugging
         cleanup_temporary(request)
         raise
 
@@ -423,8 +438,8 @@ def doexpire(self, request, testmode=0):
     """
     Celery task to do the full workflow of pulling an image and transferring it
     """
-    logging.debug("do expire system=%s tag=%s TM=%d", request['system'], \
-            request['tag'], testmode)
+    logging.debug("do expire system=%s tag=%s TM=%d", request['system'],
+                  request['tag'], testmode)
     try:
         self.update_state(state='EXPIRING')
         if not remove_image(request):
@@ -435,15 +450,16 @@ def doexpire(self, request, testmode=0):
         return True
 
     except:
-        logging.error("ERROR: doexpire failed system=%s tag=%s", \
-                request['system'], request['tag'])
+        logging.error("ERROR: doexpire failed system=%s tag=%s",
+                      request['system'], request['tag'])
         raise
+
 
 @QUEUE.task(bind=True)
 def doimagevalid(self, request, testmode=0):
     """
     Celery task to check if a pulled image exists and if it is valid
     """
-    logging.debug("do imagevalid system=%s tag=%s TM=%d", request['system'], \
-            request['tag'], testmode)
+    logging.debug("do imagevalid system=%s tag=%s TM=%d", request['system'],
+                  request['tag'], testmode)
     raise NotImplementedError('no image validity checks implemented yet')

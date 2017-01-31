@@ -63,6 +63,7 @@ with open(CONFIG_FILE) as config_file:
             app.logger.critical('Unrecongnized Log Level specified')
 mgr = ImageMngr(config, logger=app.logger)
 
+
 # For RESTful Service
 @app.errorhandler(404)
 def not_found(error=None):
@@ -77,16 +78,18 @@ def not_found(error=None):
     resp.status_code = 404
     return resp
 
+
 @app.route('/')
 def apihelp():
     """ API helper return """
     return "{lookup,pull,expire,list}"
 
+
 def create_response(rec):
     """ Helper function to create a formated JSON response. """
     resp = {}
     fields = (
-        'id', 'system', 'itype', 'tag', 'status', 'userAcl', 'groupAcl',
+        'id', 'system', 'itype', 'tag', 'status', 'userACL', 'groupACL',
         'ENV', 'ENTRY', 'WORKDIR', 'last_pull', 'status_message',
     )
     for field in fields:
@@ -141,6 +144,7 @@ def lookup(system, imgtype, tag):
         return not_found('%s %s' % (sys.exc_type, sys.exc_value))
     return jsonify(create_response(rec))
 
+
 # Pull image
 # This will pull the requested image.
 @app.route('/api/pull/<system>/<imgtype>/<path:tag>/', methods=["POST"])
@@ -152,8 +156,16 @@ def pull(system, imgtype, tag):
     auth = request.headers.get(AUTH_HEADER)
     memo = "pull system=%s imgtype=%s tag=%s" % (system, imgtype, tag)
     app.logger.debug(memo)
-    i = {'system':system, 'itype':imgtype, 'tag':tag}
+    i = {'system': system, 'itype': imgtype, 'tag': tag}
     try:
+        if 'useracl' in request.form:
+            app.logger.debug(request.form['useracl'])
+            uacl = request.form['useracl'].replace('[', '').replace(']', '')
+            i['userACL'] = uacl.replace(' ', '').split(',')
+    except:
+        pass
+    try:
+        app.logger.debug(i)
         session = mgr.new_session(auth, system)
         rec = mgr.pull(session, i)
         app.logger.debug(rec)
@@ -197,3 +209,19 @@ def expire(system, imgtype, tag):
         app.logger.exception('Exception in expire')
         return not_found()
     return jsonify({'status': resp})
+
+# Show queue
+# This will list pull requests and their state
+@app.route('/api/queue/<system>/', methods=["GET"])
+def queue(system):
+    """ List images for a specific system. """
+    #auth = request.headers.get(AUTH_HEADER)
+    app.logger.debug("show queue system=%s" % (system))
+    try:
+        session = mgr.new_session(None, system)
+        records = mgr.show_queue(session, system)
+    except:
+        app.logger.exception('Exception in queue')
+        return not_found('%s' % (sys.exc_value))
+    resp = {'list': records}
+    return jsonify(resp)

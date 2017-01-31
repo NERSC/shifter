@@ -19,8 +19,8 @@
 # See LICENSE for full text.
 
 """
-Convert module that handles converting an unpacked image into a compatibable format
-for shifter.
+Convert module that handles converting an unpacked image into a compatibable
+format for shifter.
 """
 
 import os
@@ -29,13 +29,16 @@ import shutil
 import tempfile
 from shifter_imagegw.util import program_exists
 
+
 def generate_ext4_image(expand_path, image_path):
     """
     Creates an ext4 based image
     """
-    message = 'ext4 support is note implemented yet %s %s'%(expand_path, image_path)
+    message = 'ext4 support is note implemented yet %s %s' % \
+              (expand_path, image_path)
     raise NotImplementedError(message)
     return False
+
 
 def generate_cramfs_image(expand_path, image_path):
     """
@@ -54,6 +57,7 @@ def generate_cramfs_image(expand_path, image_path):
         pass
 
     return True
+
 
 def generate_squashfs_image(expand_path, image_path):
     """
@@ -75,6 +79,7 @@ def generate_squashfs_image(expand_path, image_path):
 
     return True
 
+
 def convert(fmt, expand_path, image_path):
     """ do the conversion """
     if os.path.exists(image_path):
@@ -94,6 +99,10 @@ def convert(fmt, expand_path, image_path):
             success = generate_cramfs_image(expand_path, temp_path)
         elif fmt == 'ext4':
             success = generate_ext4_image(expand_path, temp_path)
+        elif fmt == 'mock':
+            with open(temp_path, 'w') as f:
+                f.write('bogus')
+            success = True
         else:
             raise NotImplementedError("%s not a supported format" % fmt)
     except:
@@ -110,6 +119,7 @@ def convert(fmt, expand_path, image_path):
     # Some error must have occurred
     return True
 
+
 def writemeta(fmt, meta, metafile):
     """ write the metadata file """
     with open(metafile, 'w') as meta_fd:
@@ -119,6 +129,10 @@ def writemeta(fmt, meta, metafile):
             meta_fd.write("ENTRY: %s\n" % (meta['entrypoint']))
         if 'workdir' in meta and meta['workdir'] is not None:
             meta_fd.write("WORKDIR: %s\n" % (meta['workdir']))
+        if 'userACL' in meta and meta['userACL'] is not None:
+            meta_fd.write("USERACL: %s\n" % (str(meta['userACL'])))
+        if 'groupACL' in meta and meta['groupACL'] is not None:
+            meta_fd.write("GROUPACL: %s\n" % (str(meta['groupACL'])))
         if 'env' in meta and meta['env'] is not None:
             for keyval in meta['env']:
                 meta_fd.write("ENV: %s\n" % (keyval))
