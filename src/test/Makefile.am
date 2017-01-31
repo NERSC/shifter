@@ -8,8 +8,8 @@ TEST_LDFLAGS = $(CPPUTEST_LDFLAGS)
 
 dist_noinst_DATA = test_udiRoot.conf.in etc chroot1 chroot2 chroot3 etc_small data_config1.conf data_config2.conf data_config3.conf data_config4.conf setup_test_chroot.sh shifter_sleep_test
 noinst_DATA = test_udiRoot.conf chroot1/nss chroot2/nss chroot3/nss
-check_PROGRAMS = test_utility test_VolumeMap test_UdiRootConfig test_MountList test_shifter_core test_shifter_core_AsRoot test_shifter_core_AsRootDangerous test_ImageData test_shifter test_PathList
-TESTS = test_utility test_VolumeMap test_UdiRootConfig test_MountList test_shifter_core test_ImageData test_shifter test_PathList
+check_PROGRAMS = test_utility test_VolumeMap test_UdiRootConfig test_MountList test_shifter_core test_shifter_core_AsRoot test_shifter_core_AsRootDangerous test_ImageData test_shifter test_PathList test_shifterimg
+TESTS = test_utility test_VolumeMap test_UdiRootConfig test_MountList test_shifter_core test_ImageData test_shifter test_PathList test_shifterimg
 
 test_udiRoot.conf: test_udiRoot.conf.in
 	cat $(srcdir)/test_udiRoot.conf.in | sed "s|@@@PREFIX@@@|./|g" | sed "s|@@@CONFIG_DIR@@@|./|g" | sed "s|@@@ROOTFSTYPE@@@|$(ROOTFS_TYPE)|g"  > test_udiRoot.conf
@@ -65,6 +65,18 @@ test_shifter_SOURCES = \
 test_shifter_CXXFLAGS = $(TEST_CFLAGS) -D_TESTHARNESS_SHIFTER
 test_shifter_CFLAGS = $(TEST_CFLAGS) -D_TESTHARNESS_SHIFTER
 test_shifter_LDFLAGS = $(TEST_LDFLAGS)
+
+test_shifterimg_SOURCES = \
+    test_shifterimg.cpp \
+    $(top_srcdir)/src/shifterimg.c \
+    $(top_srcdir)/src/UdiRootConfig.c \
+    $(top_srcdir)/src/VolumeMap.c \
+    $(top_srcdir)/src/ImageData.c \
+    $(top_srcdir)/src/utility.c
+test_shifterimg_LDFLAGS = $(TEST_LDFLAGS)
+test_shifterimg_LDFLAGS = $(MUNGE_LDFLAGS) $(JSON_LDFLAGS) $(LIBCURL) $(MUNGE_LDFLAGS) $(TEST_LDFLAGS)
+test_shifterimg_CFLAGS = $(AM_CPPFLAGS) $(MUNGE_CPPFLAGS) $(JSON_CPPFLAGS) $(LIBCURL_CPPFLAGS) $(MUNGE_CPPFLAGS) $(TEST_CFLAGS) -D_TESTHARNESS_SHIFTER
+test_shifterimg_CXXFLAGS = $(AM_CPPFLAGS) $(MUNGE_CPPFLAGS) $(JSON_CPPFLAGS) $(LIBCURL_CPPFLAGS) $(MUNGE_CPPFLAGS) $(TEST_CFLAGS) -D_TESTHARNESS_SHIFTER
 
 test_ImageData_SOURCES = \
     test_ImageData.cpp \
