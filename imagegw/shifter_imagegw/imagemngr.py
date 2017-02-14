@@ -347,6 +347,7 @@ class ImageMngr(object):
             self.logger.debug("Setting state")
             self.update_mongo_state(ident, 'ENQUEUED')
             request['tag'] = request['pulltag']
+            request['session'] = session
             self.logger.debug("Calling do pull with queue=%s", request['system'])
             pullreq = dopull.apply_async([request], queue=request['system'], \
                     kwargs={'testmode':testmode})
