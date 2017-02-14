@@ -31,3 +31,4 @@ siteEnv=SHIFTER_RUNTIME=1 \
 siteEnvAppend=PATH=/opt/udiImage/bin\
               MANPATH=/opt/udiImage/share/man
 siteEnvPrepend=PKG_CONFIG_PATH=/this/is/fake
+siteResources=/opt/shifter/site-resources

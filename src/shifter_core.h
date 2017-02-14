@@ -47,6 +47,7 @@
 #include "UdiRootConfig.h"
 #include "VolumeMap.h"
 #include "MountList.h"
+#include "gpu_support.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -63,7 +64,12 @@ int setupVolumeMapMounts(MountList *mountCache, VolumeMap *map,
 int userMountFilter(char *udiRoot, char *filtered_from, char *filtered_to, char *flags);
 int isKernelModuleLoaded(const char *name);
 int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig);
-int mountImageVFS(ImageData *imageData, const char *username, const char *minNodeSpec, UdiRootConfig *udiConfig);
+int mountImageVFS(ImageData *imageData,
+                  const char *username,
+                  int verbose,
+                  const char *minNodeSpec,
+                  UdiRootConfig *udiConfig);
+int create_site_resources_folder(const UdiRootConfig*);
 int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig);
 int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat format, UdiRootConfig *udiConfig, int readonly);
 int destructUDI(UdiRootConfig *udiConfig, int killSshd);
@@ -85,6 +91,8 @@ int unmountTree(MountList *mounts, const char *base);
 int validateUnmounted(const char *path, int subtree);
 int isSharedMount(const char *);
 int writeHostFile(const char *minNodeSpec, UdiRootConfig *udiConfig);
+int forkAndExecv(char *const *args);
+int forkAndExecvSilent(char *const *args);
 
 /** shifter_set_capability_boundingset_null
   * attempts to prevent any capabilities from ever being assumed again by this
@@ -120,17 +128,22 @@ int shifter_set_capability_boundingset_null();
 gid_t *shifter_getgrouplist(const char *user, gid_t group, int *ngroups);
 
 /** shifter_copyenv
-  * copy current process environ into a newly allocated array with newly
-  * allocated strings
+  * copy the passed environ (array of strings) into a newly allocated array with newly
+  * allocated strings. Reserve some spots at the end of the array for additional
+  * environment variables. The number of spots to be reserved is specified through
+  * the "reserve" parameter
   *
   * @return copy of the environment, caller is responsible to deal with memory
   */
-char **shifter_copyenv(void);
+char **shifter_copyenv(char** env, int reserve);
 int shifter_putenv(char ***env, char *var);
 int shifter_appendenv(char ***env, char *var);
 int shifter_prependenv(char ***env, char *var);
 int shifter_unsetenv(char ***env, char *var);
 int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig);
+int shifter_setupenv_site_resources(char ***env, UdiRootConfig *udiConfig);
+int shifter_setupenv_site_resources_rec(char ***env, const char* current_folder);
+int is_shared_library(char* file_name);
 struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config);
 struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config);
 

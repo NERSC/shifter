@@ -52,6 +52,7 @@
 #include "utility.h"
 #include "VolumeMap.h"
 #include "config.h"
+#include "gpu_support.h"
 
 #define VOLUME_ALLOC_BLOCK 10
 
@@ -89,6 +90,8 @@ int loadImage(ImageData *, struct options *, UdiRootConfig *);
 int adoptPATH(char **environ);
 
 #ifndef _TESTHARNESS_SHIFTER
+extern char** environ;
+
 int main(int argc, char **argv) {
     sighandler_t sighupHndlr = signal(SIGHUP, SIG_IGN);
     sighandler_t sigintHndlr = signal(SIGINT, SIG_IGN);
@@ -96,7 +99,7 @@ int main(int argc, char **argv) {
     sighandler_t sigtermHndlr = signal(SIGTERM, SIG_IGN);
 
     /* save a copy of the environment for the exec */
-    char **environ_copy = shifter_copyenv();
+    char **environ_copy = shifter_copyenv(environ, 0);
 
     /* declare needed variables */
     char wd[PATH_MAX];
@@ -123,15 +126,19 @@ int main(int argc, char **argv) {
         fprintf(stderr, "FAILED to parse environment\n");
         exit(1);
     }
-
-    /* destroy this environment */
-    clearenv();
-
     /* parse config file and command line options */
     if (parse_options(argc, argv, &opts, &udiConfig) != 0) {
         fprintf(stderr, "FAILED to parse command line arguments.\n");
         exit(1);
     }
+    /* parse environment variables for GPU support */
+    if (parse_gpu_env(&udiConfig.gpu_config) != 0) {
+        fprintf(stderr, "FAILED to parse CUDA GPU environment variables.\n");
+        exit(1);
+    }
+
+    /* destroy this environment */
+    clearenv();
 
     /* discover information about this image */
     if (parse_ImageData(opts.imageType, opts.imageIdentifier, &udiConfig, &imageData) != 0) {
@@ -273,8 +280,16 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to switch to working dir: %s, staying in /\n", opts.workdir);
     }
 
-    /* source the environment variables from the image */
-    shifter_setupenv(&environ_copy, &imageData, &udiConfig);
+    /* set the environment variables */
+    if (shifter_setupenv(&environ_copy, &imageData, &udiConfig) != 0) {
+        fprintf(stderr, "Failed to setup container environment variables\n");
+    }
+
+    /* set the environment variables related to the site resources */
+    if (shifter_setupenv_site_resources(&environ_copy, &udiConfig) != 0) {
+        fprintf(stderr, "Failed to setup container's site-resources environment variables\n");
+        exit(1);
+    }
 
     /* immediately set PATH to container PATH to get search right */
     adoptPATH(environ_copy);
@@ -590,7 +605,6 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
     return 0;
 }
 
-
 static void _usage(int status) {
     printf("\n"
         "Usage:\n"
@@ -632,6 +646,18 @@ static void _usage(int status) {
 "in the provided image.  You can not bind a path into any path including or\n"
 "under /dev, /etc, /opt/udiImage, /proc, or /var; or overwrite any bind-\n"
 "requested by the system configuration.\n"
+"\n"
+"GPU Support: To select one or more GPU devices to be made available inside\n"
+"the container, set the environment variable CUDA_VISIBLE_DEVICES.\n"
+"The value of CUDA_VISIBLE_DEVICES should be a comma separated list of GPU\n"
+"device IDs.\n"
+"e.g.,\n"
+"    export CUDA_VISIBLE_DEVICES=0,2\n"
+"When using the SLURM Workload Manager, CUDA_VISIBLE_DEVICES is always\n"
+"exported, and the user can control the selected GPU devices through\n"
+"the Generic Resource Scheduling, e.g.:\n"
+"    srun --gres=gpu:<NumGPUsPerNode>\n"
+"Thus, Shifter transparently supports GPUs selected by the SLURM GRES plugin.\n"
 "\n"
         );
     exit(status);
@@ -761,7 +787,7 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
             goto _loadImage_error;
         }
     }
-    if (mountImageVFS(image, opts->username, NULL, udiConfig) != 0) {
+    if (mountImageVFS(image, opts->username, opts->verbose, NULL, udiConfig) != 0) {
         fprintf(stderr, "FAILED to mount image into UDI\n");
         goto _loadImage_error;
     }
@@ -799,4 +825,3 @@ int adoptPATH(char **environ) {
     }
     return 1;
 }
-

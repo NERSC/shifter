@@ -24,6 +24,8 @@
  */
 
 #include <CppUTest/CommandLineTestRunner.h>
+#include <exception>
+#include <algorithm>
 #include <vector>
 #include <string>
 #include <iostream>
@@ -43,6 +45,8 @@ extern "C" {
 int _shifterCore_bindMount(UdiRootConfig *config, MountList *mounts, const char *from, const char *to, int ro, int overwrite);
 int _shifterCore_copyFile(const char *cpPath, const char *source, const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode);
 }
+
+extern char** environ;
 
 #ifdef NOTROOT
 #define ISROOT 0
@@ -70,6 +74,7 @@ int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const cha
     (*image)->type = strdup("local");
     parse_ImageData((*image)->type, strdup("/"), *config, *image);
     (*config)->udiMountPoint = strdup(tmpDir);
+    (*config)->udiRootPath = alloc_strgenf("/usr", basePath);
     (*config)->rootfsType = strdup(ROOTFS_TYPE);
     (*config)->etcPath = alloc_strgenf("%s/%s", basePath, "etc");
     (*config)->cpPath = strdup("/bin/cp");
@@ -149,7 +154,7 @@ TEST(ShifterCoreTestGroup, check_find_process_by_cmdline) {
         exit(127);
     }
     CHECK(pid > 0);
-    usleep(10000);
+    usleep(1000000);
 
     pid_t discovered = shifter_find_process_by_cmdline(cmd);
     printf("pid: %d, discovered: %d, %s\n", pid, discovered, cmd);
@@ -688,6 +693,7 @@ IGNORE_TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
 TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
 #endif
     UdiRootConfig *config = NULL;
+    struct gpu_support_config gpu_config = {};
     ImageData *image = NULL;
     MountList mounts;
     int rc = 0;
@@ -697,7 +703,7 @@ TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
 
     fprint_ImageData(stderr, image);
 
-    rc = mountImageVFS(image, "dmj", NULL, config);
+    rc = mountImageVFS(image, "dmj", 0, NULL, config);
     CHECK(rc == 1);
     CHECK(parse_MountList(&mounts) == 0);
     CHECK(find_MountList(&mounts, tmpDir) == NULL);
@@ -708,7 +714,7 @@ TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
     memset(&mounts, 0, sizeof(MountList));
 
     config->allowLocalChroot = 1;
-    rc = mountImageVFS(image, "dmj", NULL, config);
+    rc = mountImageVFS(image, "dmj", 0, NULL, config);
     CHECK(rc == 0);
     CHECK(parse_MountList(&mounts) == 0);
     CHECK(find_MountList(&mounts, tmpDir) != NULL);
@@ -795,7 +801,7 @@ TEST(ShifterCoreTestGroup, copyenv_test) {
     char **cptr = NULL;
     setenv("ABCD", "DCBA", 1);
 
-    copied_env = shifter_copyenv();
+    copied_env = shifter_copyenv(environ, 0);
     CHECK(copied_env != NULL);
 
     /* environment variables should be identical and in
@@ -827,7 +833,7 @@ TEST(ShifterCoreTestGroup, setenv_test) {
     size_t newcnt = 0;
 
     unsetenv("FAKE_ENV_VAR_FOR_TEST");
-    copied_env = shifter_copyenv();
+    copied_env = shifter_copyenv(environ, 0);
     CHECK(copied_env != NULL);
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         cnt++;
@@ -875,7 +881,7 @@ TEST(ShifterCoreTestGroup, appendenv_test) {
     size_t newcnt = 0;
 
     setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
-    copied_env = shifter_copyenv();
+    copied_env = shifter_copyenv(environ, 0);
     CHECK(copied_env != NULL);
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         cnt++;
@@ -924,7 +930,7 @@ TEST(ShifterCoreTestGroup, prependenv_test) {
     size_t newcnt = 0;
 
     setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
-    copied_env = shifter_copyenv();
+    copied_env = shifter_copyenv(environ, 0);
     CHECK(copied_env != NULL);
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         cnt++;
@@ -973,7 +979,7 @@ TEST(ShifterCoreTestGroup, unsetenv_test) {
     size_t newcnt = 0;
 
     setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
-    copied_env = shifter_copyenv();
+    copied_env = shifter_copyenv(environ, 0);
     CHECK(copied_env != NULL);
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         cnt++;
@@ -1068,6 +1074,208 @@ TEST(ShifterCoreTestGroup, setupenv_test) {
     free_UdiRootConfig(config, 1);
 }
 
+bool are_environments_equal(const std::vector<std::string>& expected_env, char** actual_env)
+{
+    for(size_t i=0; i<expected_env.size(); ++i)
+    {
+        if(actual_env[i] == NULL)
+        {
+            return false;
+        }
+
+        if(expected_env[i] != actual_env[i])
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+TEST(ShifterCoreTestGroup, setupenv_site_resources_test) {
+    char* site_resources_path = alloc_strgenf("%s%s", tmpDir, "/site-resources");
+    UdiRootConfig config = {};
+    config.udiMountPoint = strdup(tmpDir);
+    config.siteResources = site_resources_path;
+
+    // site resources folder is not configured
+    {
+        char* oldSiteResources = config.siteResources;
+        config.siteResources = NULL;
+        char** actual_environment;
+        actual_environment = (char **) malloc(sizeof(char *) * 3);
+        actual_environment[0] = strdup("PATH=/initial-path");
+        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
+        actual_environment[2] = NULL;
+
+        std::vector<std::string> expected_environment;
+        expected_environment.push_back("PATH=/initial-path");
+        expected_environment.push_back("LD_LIBRARY_PATH=/initial-ld-library-path");
+        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
+
+        CHECK(are_environments_equal(expected_environment, actual_environment));
+        config.siteResources = oldSiteResources;
+        free(actual_environment[0]);
+        free(actual_environment[1]);
+    }
+
+    // site resources folder is empty
+    {
+        char** actual_environment;
+        actual_environment = (char **) malloc(sizeof(char *) * 3);
+        actual_environment[0] = strdup("PATH=/initial-path");
+        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
+        actual_environment[2] = NULL;
+
+        CHECK(system((std::string("mkdir ") + site_resources_path).c_str()) == 0);
+        std::vector<std::string> expected_environment;
+        expected_environment.push_back("PATH=/initial-path");
+        expected_environment.push_back("LD_LIBRARY_PATH=/initial-ld-library-path");
+        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
+
+        CHECK(are_environments_equal(expected_environment, actual_environment));
+        CHECK(system((std::string("rm -r ") + site_resources_path).c_str()) == 0);
+        free(actual_environment[0]);
+        free(actual_environment[1]);
+        free(actual_environment);
+    }
+
+    // site resources folder contains executable file
+    {
+        char** actual_environment;
+        actual_environment = (char **) malloc(sizeof(char *) * 3);
+        actual_environment[0] = strdup("PATH=/initial-path");
+        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
+        actual_environment[2] = NULL;
+
+        std::string bins_path = std::string(site_resources_path) +  "/bins_path";
+        std::string bin = bins_path + "/executable_file";
+        CHECK(system((std::string("mkdir -p ") + bins_path).c_str()) == 0);
+        CHECK(system((std::string("touch ") + bin).c_str()) == 0);
+        CHECK(system((std::string("chmod 755 ") + bin).c_str()) == 0);
+        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
+
+        std::vector<std::string> expected_environment;
+        expected_environment.push_back("PATH=" + bins_path + ":/initial-path");
+        expected_environment.push_back("LD_LIBRARY_PATH=/initial-ld-library-path");
+
+        CHECK(are_environments_equal(expected_environment, actual_environment));
+        CHECK(system((std::string("rm -r ") + site_resources_path).c_str()) == 0);
+        free(actual_environment[0]);
+        free(actual_environment[1]);
+        free(actual_environment);
+    }
+
+    // site resources folder contains shared library (*.so)
+    {
+        char** actual_environment;
+        actual_environment = (char **) malloc(sizeof(char *) * 3);
+        actual_environment[0] = strdup("PATH=/initial-path");
+        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
+        actual_environment[2] = NULL;
+
+        std::string libs_path = std::string(site_resources_path) + "/libs_path";
+        std::string lib = libs_path + "/libtest.so";
+        CHECK(system((std::string("mkdir -p ") + libs_path).c_str()) == 0);
+        CHECK(system((std::string("touch ") + lib).c_str()) == 0);
+        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
+
+        std::vector<std::string> expected_environment;
+        expected_environment.push_back("PATH=/initial-path");
+        expected_environment.push_back("LD_LIBRARY_PATH=" + libs_path + ":/initial-ld-library-path");
+        CHECK(are_environments_equal(expected_environment, actual_environment));
+
+        CHECK(system((std::string("rm -r ") + site_resources_path).c_str()) == 0);
+        free(actual_environment[0]);
+        free(actual_environment[1]);
+        free(actual_environment);
+    }
+
+    // site resources folder contains shared library (*.so.1)
+    {
+        char** actual_environment;
+        actual_environment = (char **) malloc(sizeof(char *) * 3);
+        actual_environment[0] = strdup("PATH=/initial-path");
+        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
+        actual_environment[2] = NULL;
+
+        std::string libs_path = std::string(site_resources_path) + "/libs_path";
+        std::string lib = libs_path + "/libtest.so.1";
+        CHECK(system((std::string("mkdir -p ") + libs_path).c_str()) == 0);
+        CHECK(system((std::string("touch ") + lib).c_str()) == 0);
+        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
+
+        std::vector<std::string> expected_environment;
+        expected_environment.push_back("PATH=/initial-path");
+        expected_environment.push_back("LD_LIBRARY_PATH=" + libs_path + ":/initial-ld-library-path");
+        CHECK(are_environments_equal(expected_environment, actual_environment));
+
+        CHECK(system((std::string("rm -r ") + site_resources_path).c_str()) == 0);
+        free(actual_environment[0]);
+        free(actual_environment[1]);
+        free(actual_environment);
+    }
+
+    // site resources folder contains executable shared libraries (*.so)
+    {
+        char** actual_environment;
+        actual_environment = (char **) malloc(sizeof(char *) * 3);
+        actual_environment[0] = strdup("PATH=/initial-path");
+        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
+        actual_environment[2] = NULL;
+
+        std::string libs_path = std::string(site_resources_path) + "/libs_path";
+        std::string lib1 = libs_path + "/libtest1.so";
+        std::string lib2 = libs_path + "/libtest2.so";
+        CHECK(system((std::string("mkdir -p ") + libs_path).c_str()) == 0);
+        CHECK(system((std::string("touch ") + lib1).c_str()) == 0);
+        CHECK(system((std::string("touch ") + lib2).c_str()) == 0);
+        CHECK(system((std::string("chmod 755 ") + lib1).c_str()) == 0);
+        CHECK(system((std::string("chmod 755 ") + lib2).c_str()) == 0);
+        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
+
+        std::vector<std::string> expected_environment;
+        expected_environment.push_back("PATH=/initial-path");
+        expected_environment.push_back("LD_LIBRARY_PATH=" + libs_path + ":/initial-ld-library-path");
+        CHECK(are_environments_equal(expected_environment, actual_environment));
+
+        CHECK(system((std::string("rm -r ") + site_resources_path).c_str()) == 0);
+        free(actual_environment[0]);
+        free(actual_environment[1]);
+        free(actual_environment);
+    }
+
+    // site resources folder contains shared library and executable in deeper folder
+    {
+        char** actual_environment;
+        actual_environment = (char **) malloc(sizeof(char *) * 3);
+        actual_environment[0] = strdup("PATH=/initial-path");
+        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
+        actual_environment[2] = NULL;
+
+        std::string deep_path = std::string(site_resources_path) + "/the/deep/path";
+        std::string lib = deep_path + "/libtest.so";
+        std::string bin = deep_path + "/bintest";
+        CHECK(system((std::string("mkdir -p ") + deep_path).c_str()) == 0);
+        CHECK(system((std::string("touch ") + lib).c_str()) == 0);
+        CHECK(system((std::string("touch ") + bin).c_str()) == 0);
+        CHECK(system((std::string("chmod 755 ") + bin).c_str()) == 0);
+        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
+
+        std::vector<std::string> expected_environment;
+        expected_environment.push_back("PATH=" + deep_path + ":/initial-path");
+        expected_environment.push_back("LD_LIBRARY_PATH=" + deep_path + ":/initial-ld-library-path");
+        CHECK(are_environments_equal(expected_environment, actual_environment));
+
+        CHECK(system((std::string("rm -r ") + site_resources_path).c_str()) == 0);
+        free(actual_environment[0]);
+        free(actual_environment[1]);
+        free(actual_environment);
+    }
+
+    free(config.udiMountPoint);
+    free(config.siteResources);
+}
+
 TEST(ShifterCoreTestGroup, shifterRealpath_test) {
     UdiRootConfig *config = (UdiRootConfig *) malloc(sizeof(UdiRootConfig));
     memset(config, 0, sizeof(UdiRootConfig));
@@ -1111,6 +1319,7 @@ TEST(ShifterCoreTestGroup, destructUDI_test) {
 IGNORE_TEST(ShifterCoreTestGroup, destructUDI_test) {
 #endif
     UdiRootConfig *config = NULL;
+    struct gpu_support_config gpu_config = {};
     ImageData *image = NULL;
     MountList mounts;
     struct stat statData;
@@ -1119,7 +1328,7 @@ IGNORE_TEST(ShifterCoreTestGroup, destructUDI_test) {
 
     CHECK(setupLocalRootVFSConfig(&config, &image, tmpDir, cwd) == 0);
     config->allowLocalChroot = 1;
-    CHECK(mountImageVFS(image, "dmj", NULL, config) == 0);
+    CHECK(mountImageVFS(image, "dmj", 0, NULL, config) == 0);
 
     CHECK(parse_MountList(&mounts) == 0);
     CHECK(find_MountList(&mounts, tmpDir) != NULL);
