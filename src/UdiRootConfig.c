@@ -198,6 +198,8 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         free(config->jobIdentifier);
         config->jobIdentifier = NULL;
     }
+    free_gpu_support_config(&config->gpu_config);
+    free_mpi_support_config(&config->mpi_config);
 
     char **arrays[] = {
         config->perNodeCacheAllowedFsType,
@@ -318,7 +320,8 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->nodeIdentifier != NULL ? config->nodeIdentifier : ""));
     written += fprintf(fp, "jobIdentifier: %s\n",
         (config->jobIdentifier != NULL ? config->jobIdentifier : ""));
-
+    written += fprint_gpu_support_config(fp, &config->gpu_config);
+    written += fprint_mpi_support_config(fp, &config->mpi_config);
     written += fprintf(fp, "***** END UdiRootConfig *****\n");
     return written;
 }

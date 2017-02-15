@@ -4,11 +4,13 @@
 #ifndef _SHIFTER_GPU_SUPPORT_H
 #define _SHIFTER_GPU_SUPPORT_H
 
-#include "UdiRootConfig.h"
+#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef struct _UdiRootConfig UdiRootConfig;
 
 struct gpu_support_config {
     char* gpu_ids;
@@ -26,7 +28,12 @@ int parse_gpu_env(struct gpu_support_config* config);
  * Executes the external bash script responsible for exposing
  * to the container the GPU-support related site resources.
  */
-int execute_hook_to_activate_gpu_support(const struct gpu_support_config* gpu_config, int verbose, UdiRootConfig* udiConfig);
+int execute_hook_to_activate_gpu_support(int verbose, const UdiRootConfig* udiConfig);
+
+/**
+ * Prints the GPU configuration to the passed file and returns the number of bytes written.
+ */
+int fprint_gpu_support_config(FILE* fp, const struct gpu_support_config* config);
 
 /**
  * Free all resources owned by the specified GPU support configuration structure.

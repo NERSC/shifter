@@ -47,7 +47,13 @@ test_UdiRootConfig_SOURCES = \
     test_UdiRootConfig.cpp \
     $(top_srcdir)/src/UdiRootConfig.c \
     $(top_srcdir)/src/utility.c \
-	$(top_srcdir)/src/VolumeMap.c
+    $(top_srcdir)/src/VolumeMap.c \
+    $(top_srcdir)/src/PathList.c \
+    $(top_srcdir)/src/MountList.c \
+    $(top_srcdir)/src/shifter_core.c \
+    $(top_srcdir)/src/gpu_support.c \
+    $(top_srcdir)/src/mpi_support.c
+
 test_UdiRootConfig_CXXFLAGS = $(TEST_CFLAGS)
 test_UdiRootConfig_CFLAGS = $(TEST_CFLAGS)
 test_UdiRootConfig_LDFLAGS = $(TEST_LDFLAGS)

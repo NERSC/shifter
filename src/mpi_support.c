@@ -5,11 +5,11 @@
 #include "utility.h"
 #include "shifter_core.h"
 
-int execute_hook_to_activate_mpi_support(int verbose, const UdiRootConfig* udiConfig, const struct mpi_support_config* mpi_config)
+int execute_hook_to_activate_mpi_support(int verbose, const UdiRootConfig* udiConfig)
 {
     int ret = 0;
 
-    if(mpi_config->is_mpi_support_enabled)
+    if(udiConfig->mpi_config.is_mpi_support_enabled)
     {
         char* args[6];
         args[0] = strdup("/bin/bash");
@@ -29,3 +29,15 @@ int execute_hook_to_activate_mpi_support(int verbose, const UdiRootConfig* udiCo
 
     return ret;
 }
+
+int fprint_mpi_support_config(FILE* fp, const struct mpi_support_config* config)
+{
+    size_t written = 0;
+    written += fprintf(fp, "***** MPI support config *****\n");
+    written += fprintf(fp, "is_mpi_support_enabled = %d\n", config->is_mpi_support_enabled);
+    return written;
+}
+
+void free_mpi_support_config(struct mpi_support_config* config) {
+}
+

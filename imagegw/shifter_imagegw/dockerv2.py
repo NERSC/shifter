@@ -26,6 +26,7 @@ import httplib
 import ssl
 import json
 import os
+import stat
 import re
 from subprocess import Popen, PIPE
 import base64
@@ -42,7 +43,7 @@ if 'all_proxy' in os.environ:
     (SOCKS_TYPE, SOCKS_HOST, SOCKS_PORT) = os.environ['all_proxy'].split(':')
     SOCKS_HOST = SOCKS_HOST.replace('//', '')
     socks.set_default_proxy(socks.SOCKS5, SOCKS_HOST, int(SOCKS_PORT))
-    socket.socket = socks.socksocket  #dont add ()!!!
+    socket.socket = socks.socksocket  # dont add ()!!!
 
 
 def jose_decode_base64(input_string):
@@ -55,6 +56,7 @@ def jose_decode_base64(input_string):
     if nbytes == 3:
         return base64.b64decode(input_string + '===')
     return base64.b64decode(input_string)
+
 
 def _verify_manifest_signature(manifest, text, digest):
     """
@@ -71,19 +73,20 @@ def _verify_manifest_signature(manifest, text, digest):
             if format_tail is None:
                 format_tail = curr_tail
             elif format_tail != curr_tail:
-                raise ValueError( \
-                        'formatTail did not match between signature blocks')
+                msg = 'formatTail did not match between signature blocks'
+                raise ValueError(msg)
             if format_length is None:
                 format_length = protected['formatLength']
             elif format_length != protected['formatLength']:
-                raise ValueError( \
-                        'formatLen did not match between signature blocks')
+                msg = 'formatLen did not match between signature blocks'
+                raise ValueError(msg)
     message = text[0:format_length] + format_tail
     if hashlib.sha256(message).hexdigest() != digest:
-        raise ValueError( \
-                'Failed to match manifest digest to downloaded content')
+        msg = 'Failed to match manifest digest to downloaded content'
+        raise ValueError(msg)
 
     return True
+
 
 def _setup_http_conn(url, cacert=None):
     """Prepare http connection object and return it."""
@@ -107,13 +110,15 @@ def _setup_http_conn(url, cacert=None):
             ssl_context = ssl.create_default_context()
             if cacert is not None:
                 ssl_context = ssl.create_default_context(cafile=cacert)
-            conn = httplib.HTTPSConnection(server, port=port, context=ssl_context)
+            conn = httplib.HTTPSConnection(server, port=port,
+                                           context=ssl_context)
         except AttributeError:
             conn = httplib.HTTPSConnection(server, port, None, cacert)
     else:
         print "Error, unknown protocol %s" % protocol
         return None
     return conn
+
 
 def _construct_image_metadata(manifest):
     """Perform introspection and analysis of docker manifest."""
@@ -139,8 +144,8 @@ def _construct_image_metadata(manifest):
         layer_data['fsLayer'] = manifest['fsLayers'][idx]
         if 'parent' not in layer_data:
             if no_parent is not None:
-                raise ValueError('Found more than one layer with no ' \
-                        'parent, cannot proceed')
+                msg = 'Found more than one layer with no parent, exiting'
+                raise ValueError(msg)
             no_parent = layer_data
         else:
             if layer_data['parent'] in layers:
@@ -154,8 +159,9 @@ def _construct_image_metadata(manifest):
             raise ValueError('Malformed layer, missing id')
 
     if no_parent is None:
-        raise ValueError('Unable to find single layer wihtout parent, ' \
-                'cannot identify terminal layer')
+        msg = 'Unable to find single layer wihtout parent, '
+        msg += 'cannot identify terminal layer'
+        raise ValueError(msg)
 
     # traverse graph and construct linked-list of layers
     curr = no_parent
@@ -202,13 +208,13 @@ class DockerV2Handle(object):
             cacert to specify an approved signing authority
             username/password to specify a login
         """
-        ## attempt to parse image identifier
+        # attempt to parse image identifier
         try:
             self.repo, self.tag = imageIdent.strip().split(':', 1)
         except ValueError:
             if isinstance(imageIdent, str):
-                raise ValueError('Invalid docker image identifier: %s' \
-                        % imageIdent)
+                msg = 'Invalid docker image identifier: %s' % imageIdent
+                raise ValueError(msg)
             else:
                 raise ValueError('Invalid type for docker image identifier')
 
@@ -295,8 +301,8 @@ class DockerV2Handle(object):
 
     def exclude_layer(self, blobsum):
         """Prevent a layer from being downloaded/extracted/examined"""
-        ## TODO: add better verfication of the blobsum, potentially give other
-        ## routes to mask out a layer with this function
+        # TODO: add better verfication of the blobsum, potentially give other
+        # routes to mask out a layer with this function
         if blobsum not in self.excludeBlobSums:
             self.excludeBlobSums.append(blobsum)
 
@@ -313,7 +319,7 @@ class DockerV2Handle(object):
         """
         auth_data_str = None
 
-        ## TODO, figure out what mode was for
+        # TODO, figure out what mode was for
         (_, auth_data_str) = auth_loc_str.split(' ', 2)
 
         auth_data = {}
@@ -363,6 +369,7 @@ class DockerV2Handle(object):
         elif self.auth_method == 'basic' and self.username is not None:
             auth = '%s:%s' % (self.username, self.password)
             headers['Authorization'] = 'Basic %s' % base64.b64encode(auth)
+        # Todo: first try unauthenticated then authenticated
 
         req_path = "/v2/%s/manifests/%s" % (self.repo, self.tag)
         conn.request("GET", req_path, None, headers)
@@ -373,8 +380,8 @@ class DockerV2Handle(object):
                 self.do_token_auth(resp1.getheader('WWW-Authenticate'))
             return self.get_image_manifest(retrying=True)
         if resp1.status != 200:
-            raise ValueError("Bad response from registry status=%d" \
-                    % (resp1.status))
+            msg = "Bad response from registry status=%d" % (resp1.status)
+            raise ValueError(msg)
         expected_hash = resp1.getheader('docker-content-digest')
         content_len = int(resp1.getheader('content-length'))
         if expected_hash is None or len(expected_hash) == 0:
@@ -387,7 +394,7 @@ class DockerV2Handle(object):
             raise ValueError(memo)
         jdata = json.loads(data)
 
-        ## throws exceptions upon failure only
+        # throws exceptions upon failure only
         _verify_manifest_signature(jdata, data, expected_hash)
         return jdata
 
@@ -409,11 +416,10 @@ class DockerV2Handle(object):
                 resp['entrypoint'] = config['Entrypoint']
         return resp
 
-
     def pull_layers(self, manifest, cachedir):
         """Download layers to cachedir if they do not exist."""
-        ## TODO: don't rely on self.eldest to demonstrate that
-        ## examine_manifest has run
+        # TODO: don't rely on self.eldest to demonstrate that
+        # examine_manifest has run
         if self.eldest is None:
             self.examine_manifest(manifest)
         layer = self.eldest
@@ -428,6 +434,7 @@ class DockerV2Handle(object):
             self.save_layer(layer['fsLayer']['blobSum'], cachedir)
             layer = layer['child']
         return True
+
     def _get_auth_header(self):
         """
         Helper function to generate the header.
@@ -439,7 +446,6 @@ class DockerV2Handle(object):
             auth = '%s:%s' % (self.username, self.password)
             headers['Authorization'] = 'Basic %s' % base64.b64encode(auth)
         return headers
-
 
     def save_layer(self, layer, cachedir='./'):
         """
@@ -485,9 +491,9 @@ class DockerV2Handle(object):
         out_fp = os.fdopen(out_fd, 'w')
 
         try:
-            readsz = 4 * 1024 * 1024 # read 4MB chunks
+            readsz = 4 * 1024 * 1024  # read 4MB chunks
             while nread < maxlen:
-                ### TODO find a way to timeout a failed read
+                # TODO find a way to timeout a failed read
                 buff = resp1.read(readsz)
                 if buff is None:
                     break
@@ -527,9 +533,9 @@ class DockerV2Handle(object):
             trailing = '/' if not to_remove.endswith('/') else ''
             prefix_to_remove = to_remove + trailing
 
-            return [x for x in layer_members \
-                    if (not x.name == to_remove
-                        and not x.name.startswith(prefix_to_remove))]
+            return [x for x in layer_members
+                    if (not x.name == to_remove and
+                        not x.name.startswith(prefix_to_remove))]
 
         layer_paths = []
         tar_file_refs = []
@@ -544,23 +550,24 @@ class DockerV2Handle(object):
             tfp = tarfile.open(tfname, 'r:gz')
             tar_file_refs.append(tfp)
 
-            ## get directory of tar contents
+            # get directory of tar contents
             members = tfp.getmembers()
 
-            ## remove all illegal files
+            # remove all illegal files
             members = filter_layer(members, 'dev/')
             members = filter_layer(members, '/')
             members = [x for x in members if not x.name.find('..') >= 0]
 
-            ## find all whiteouts
-            whiteouts = [x for x in members \
-                    if x.name.find('/.wh.') >= 0 or x.name.startswith('.wh.')]
+            # find all whiteouts
+            whiteouts = [x for x in members
+                         if x.name.find('/.wh.') >= 0 or
+                         x.name.startswith('.wh.')]
 
-            ## remove the whiteout tags from this layer
+            # remove the whiteout tags from this layer
             for wh_ in whiteouts:
                 members.remove(wh_)
 
-            ## remove the whiteout targets from all ancestral layers
+            # remove the whiteout targets from all ancestral layers
             for idx, ancs_layer in enumerate(layer_paths):
                 for wh_ in whiteouts:
                     path = wh_.name.replace('/.wh.', '/')
@@ -572,18 +579,18 @@ class DockerV2Handle(object):
                         ancs_layer = filter_layer(ancs_layer, path)
                 layer_paths[idx] = ancs_layer
 
-            ## remove identical paths (not dirs) from all ancestral layers
+            # remove identical paths (not dirs) from all ancestral layers
             notdirs = [x.name for x in members if not x.isdir()]
             for idx, ancs_layer in enumerate(layer_paths):
-                ancs_layer = [x for x in ancs_layer if not x.name in notdirs]
+                ancs_layer = [x for x in ancs_layer if x.name not in notdirs]
                 layer_paths[idx] = ancs_layer
 
-            ## push this layer into the collection
+            # push this layer into the collection
             layer_paths.append(members)
 
             layer = layer['child']
 
-        ## extract the selected files
+        # extract the selected files
         layer_idx = 0
         layer = base_layer
         while layer is not None:
@@ -594,6 +601,13 @@ class DockerV2Handle(object):
             tfp = tar_file_refs[layer_idx]
             members = layer_paths[layer_idx]
             tfp.extractall(path=base_path, members=members)
+            # We need to make sure everything is writeable by the user so
+            # subsequent layers can do overwrites
+            for f in members:
+                path = base_path + '/' + f.name
+                mode = f.mode
+                if not stat.S_ISLNK(mode) and (f.mode & stat.S_IWUSR) == 0:
+                    os.chmod(path, mode | stat.S_IWUSR)
 
             layer_idx += 1
             layer = layer['child']
@@ -601,10 +615,11 @@ class DockerV2Handle(object):
         for tfp in tar_file_refs:
             tfp.close()
 
-        ## fix permissions on the extracted files
+        # fix permissions on the extracted files
         cmd = ['chmod', '-R', 'a+rX,u+w', base_path]
         pfp = Popen(cmd)
         pfp.communicate()
+
 
 # Deprecated: Just use the object above
 def pull_image(options, repo, tag, cachedir='./', expanddir='./'):
@@ -634,7 +649,7 @@ def pull_image(options, repo, tag, cachedir='./', expanddir='./'):
 
     layer = eldest
     meta = youngest
-    resp = {'id':meta['id']}
+    resp = {'id': meta['id']}
     expandedpath = os.path.join(expanddir, str(meta['id']))
     resp['expandedpath'] = expandedpath
     if 'config' in meta:
@@ -650,11 +665,16 @@ def pull_image(options, repo, tag, cachedir='./', expanddir='./'):
     handle.extract_docker_layers(expandedpath, layer, cachedir=cachedir)
     return resp
 
+
 def main():
     """Harness for manual testing."""
     cache_dir = os.environ['TMPDIR']
-    pull_image({'baseUrl':'https://registry-1.docker.io'}, 'dlwoodruff/pyomodock', \
-            '4.3.1137', cachedir=cache_dir, expanddir=cache_dir)
+    pull_image({'baseUrl': 'https://registry-1.docker.io'}, 'scanon/shanetest',
+               'latest', cachedir=cache_dir, expanddir=cache_dir)
+
+    pull_image({'baseUrl': 'https://registry-1.docker.io'},
+               'dlwoodruff/pyomodock', '4.3.1137', cachedir=cache_dir,
+               expanddir=cache_dir)
 
 if __name__ == '__main__':
     main()

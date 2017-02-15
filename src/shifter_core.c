@@ -904,9 +904,7 @@ int mountImageVFS(ImageData *imageData,
                   const char *username,
                   int verbose,
                   const char *minNodeSpec,
-                  UdiRootConfig *udiConfig,
-                  const struct gpu_support_config* gpu_config,
-                  const struct mpi_support_config *mpi_config) {
+                  UdiRootConfig *udiConfig) {
     struct stat statData;
     char udiRoot[PATH_MAX];
     char *sshPath = NULL;
@@ -916,7 +914,7 @@ int mountImageVFS(ImageData *imageData,
 
     umask(022);
 
-    if (imageData == NULL || username == NULL || gpu_config == NULL || udiConfig == NULL) {
+    if (imageData == NULL || username == NULL || udiConfig == NULL) {
         fprintf(stderr, "Invalid arguments to mountImageVFS(), error.\n");
         goto _mountImgVfs_unclean;
     }
@@ -1024,13 +1022,13 @@ int mountImageVFS(ImageData *imageData,
         goto _mountImgVfs_unclean;
     }
 
-    if(execute_hook_to_activate_gpu_support(gpu_config, verbose, udiConfig) != 0)
+    if(execute_hook_to_activate_gpu_support(verbose, udiConfig) != 0)
     {
         fprintf(stderr, "activate_gpu_support hook failed\n");
         goto _mountImgVfs_unclean;
     }
 
-    if(execute_hook_to_activate_mpi_support(verbose, udiConfig, mpi_config) != 0)
+    if(execute_hook_to_activate_mpi_support(verbose, udiConfig) != 0)
     {
         fprintf(stderr, "activate_mpi_support hook failed\n");
         goto _mountImgVfs_unclean;
