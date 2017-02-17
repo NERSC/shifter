@@ -183,32 +183,39 @@ strip_library_name()
     echo $lib_name_stripped
 }
 
+# Returns a list containing the major and minor version strings of the given library name.
+# If the library doesn't contain a version string, the version number is assumed to be zero
+# and a string containing zero is placed in the list to be returned.
+get_mpi_library_major_and_minor_version_numbers()
+{
+    local library=$1
+    local version_strings=($(echo $(basename $library) | sed 's/lib.\+\.so\(.*\)/\1/' | sed -e 's/^\.\(.*\)/\1/' | sed -e 's/\./ /g'))
+    local number_of_version_strings=${#version_strings[*]}
+    if [ $number_of_version_strings -eq 0 ]; then
+        echo "0 0"
+    elif [ $number_of_version_strings -eq 1 ]; then
+        echo "${version_strings[0]} 0"
+    else
+        echo "${version_strings[0]} ${version_strings[1]}"
+    fi
+}
+
 are_mpi_libraries_abi_compatible()
 {
     local site_lib=$1
-    local site_lib_version_numbers=($(echo $(basename $site_lib) | sed 's/lib.*\.so\(.*\)/\1/' | sed -e 's/^\.\(.*\)/\1/' | sed -e 's/\./ /g'))
+    local site_lib_version_numbers=($(get_mpi_library_major_and_minor_version_numbers $site_lib))
     local count_site_version_numbers=${#site_lib_version_numbers[*]}
 
     local container_lib=$2
-    local container_lib_version_numbers=($(echo $(basename $container_lib) | sed 's/lib.*\.so\(.*\)/\1/' | sed -e 's/^\.\(.*\)/\1/' | sed -e 's/\./ /g'))
+    local container_lib_version_numbers=($(get_mpi_library_major_and_minor_version_numbers $container_lib))
     local count_container_version_numbers=${#container_lib_version_numbers[*]}
 
-    if [ $count_site_version_numbers -gt $count_container_version_numbers ]; then
-        log ERROR "Internal error: missing version information about the container MPI shared library $site_lib
-The library name should contain at least $count_site_version_numbers version numbers"
-        exit 1
+    if [ ${site_lib_version_numbers[0]} -ne ${container_lib_version_numbers[0]} ]; then
+        return 1
     fi
 
-    if [ $count_site_version_numbers -ge 1 ]; then
-        if [ ${site_lib_version_numbers[0]} -ne ${container_lib_version_numbers[0]} ]; then
-            return 1
-        fi
-    fi
-
-    if [ $count_site_version_numbers -ge 2 ]; then
-        if [ ${site_lib_version_numbers[1]} -lt ${container_lib_version_numbers[1]} ]; then
-            return 1
-        fi
+    if [ ${site_lib_version_numbers[1]} -lt ${container_lib_version_numbers[1]} ]; then
+        return 1
     fi
 
     return 0
