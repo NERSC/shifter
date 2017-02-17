@@ -126,7 +126,7 @@ parse_command_line_arguments()
 check_that_image_contains_required_dependencies()
 {
     # we need the container image to provide these command line tools
-    command_line_tools="sed realpath"
+    command_line_tools="sed readlink"
     for command_line_tool in $command_line_tools; do
         if [ -z $(chroot $container_root_dir bash -c "which $command_line_tool") ]; then
             log ERROR "Missing dependency: make sure that the container image contains the program \"$command_line_tool\""
@@ -257,7 +257,7 @@ corresponding_site_mpi_library_exists()
 override_mpi_shared_libraries_of_container()
 {
     log INFO "Scanning container's ld.so.cache for MPI libraries"
-    local container_lib_realpaths=$(chroot $container_root_dir bash -c "ldconfig -p | sed -n -e 's/.* => \(.*\)/echo \$(realpath \1)/p' | bash")
+    local container_lib_realpaths=$(chroot $container_root_dir bash -c "ldconfig -p | sed -n -e 's/.* => \(.*\)/echo \$(readlink -e \1)/p' | bash")
     local container_lib_realpaths_mounted_so_far=
     local container_has_mpi_libraries=false
 
