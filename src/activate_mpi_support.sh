@@ -179,7 +179,7 @@ bind_mount_files_at_same_location_in_container()
 strip_library_name()
 {
     local lib_name=$1
-    local lib_name_stripped=$(basename $lib_name | sed -n -e 's/\(.\+\.so\)\(\.[0-9]\+\)*$/\1/p')
+    local lib_name_stripped=$(basename $lib_name | sed -n -e 's/\(.\+\.so\)\(\..\+\)*$/\1/p')
     echo $lib_name_stripped
 }
 
