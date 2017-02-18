@@ -20,11 +20,13 @@ import os
 import unittest
 from shifter_imagegw import converters
 
+
 class ConvertersTestCase(unittest.TestCase):
 
     def setUp(self):
         #os.environ['PATH']=os.environ['PATH']+":./test"
-        self.test_dir = os.path.dirname(os.path.abspath(__file__)) + "/../test/"
+        test_dir = os.path.dirname(os.path.abspath(__file__)) + "/../test/"
+        self.test_dir = test_dir
 
     def tearDown(self):
         pass
@@ -36,8 +38,8 @@ class ConvertersTestCase(unittest.TestCase):
         """
         Test convert function using a mock format
         """
-        output='%s/test.squashfs'%(os.environ['TMPDIR'])
-        resp=converters.convert('mock','',output)
+        output = '%s/test.squashfs' % (os.environ['TMPDIR'])
+        resp = converters.convert('mock', '', output)
         assert resp is True
         assert os.path.exists(output)
 
@@ -49,8 +51,9 @@ class ConvertersTestCase(unittest.TestCase):
         meta = {'workdir': "/tmp/",
                 'entrypoint': '/bin/sh',
                 'env': ['a=b', 'c=d'],
-                'userACL': ['usera', 'userb'],
-                'groupACL': ['groupa', 'groupb'],
+                'private': True,
+                'userACL': [1000, 1001],
+                'groupACL': [1002, 1003],
                 }
         output = '%s/test.meta' % (os.environ['TMPDIR'])
         resp = converters.writemeta('squashfs', meta, output)
@@ -59,20 +62,13 @@ class ConvertersTestCase(unittest.TestCase):
         with open(output) as f:
             for line in f:
                 (k, v) = line.strip().split(": ", 2)
-                print "%s = %s" % (k, v)
                 if k == 'ENV':
                     meta['ENV'].append(v)
                 else:
                     meta[k] = v
-        print meta
-        assert 'WORKDIR' in meta
-        assert 'FORMAT' in meta
-        assert 'ENTRY' in meta
-        assert 'USERACL' in meta
-        assert 'GROUPACL' in meta
-        assert len(meta['ENV']) > 0
-        return
-
-
-if __name__ == '__main__':
-    unittest.main()
+        keys = ('WORKDIR', 'FORMAT', 'ENTRY', 'USERACL', 'GROUPACL')
+        for key in keys:
+            self.assertIn(key, meta)
+        self.assertEquals(meta['USERACL'].find("["), -1)
+        self.assertEquals(meta['USERACL'].find("]"), -1)
+        self.assertGreater(len(meta['ENV']), 0)

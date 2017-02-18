@@ -113,7 +113,7 @@ static struct termios origTermState;
 static int termfd = -1;
 
 void modtermSignalHandler(int signum) {
-    if (termfd != -1){ 
+    if (termfd != -1){
         tcsetattr(termfd, TCSANOW, &origTermState);
     }
     exit(128+signum);
@@ -151,8 +151,8 @@ int getttycred(const char *system, char **username, char **password) {
     }
 
     /* get current terminal state */
-    tcgetattr(termfd, &origTermState); 
-    tcgetattr(termfd, &currState); 
+    tcgetattr(termfd, &origTermState);
+    tcgetattr(termfd, &currState);
 
 
     /* catch common termination/suspend signals to reset term */
@@ -163,7 +163,7 @@ int getttycred(const char *system, char **username, char **password) {
     /* disable echoing */
     currState.c_lflag &= ~ECHO;
     tcsetattr(termfd, TCSANOW, &currState);
-    
+
 
     fprintf(write_fp, "%s password: ", system);
     fflush(write_fp);
@@ -214,7 +214,7 @@ int doLogin(struct options *options, UdiRootConfig *udiConfig) {
     cred = alloc_strgenf("%s:%s", username, password);
 
     munge_ctx_t ctx = munge_ctx_create();
-    munge_encode(&munge_cred, ctx, cred, strlen(cred)); 
+    munge_encode(&munge_cred, ctx, cred, strlen(cred));
     munge_ctx_destroy(ctx);
 
     free(cred);
@@ -225,7 +225,7 @@ int doLogin(struct options *options, UdiRootConfig *udiConfig) {
     /* figure out where to insert credentials */
     LoginCredential **lcptr = options->loginCredentials;
     for ( ; lcptr && *lcptr; lcptr++) {
-        if ((*lcptr)->system && (*lcptr)->location && 
+        if ((*lcptr)->system && (*lcptr)->location &&
                 strcmp((*lcptr)->system, udiConfig->system) == 0 &&
                 strcmp((*lcptr)->location, options->location) == 0) {
 
@@ -742,7 +742,7 @@ char *_prepare_pull_payload(struct options *config) {
             allowed_uids = alloc_strcatf(allowed_uids, &len, &size, "%d,", config->allowed_uids[idx]);
         }
         if (allowed_uids != NULL) {
-            allowed_uids[strlen(allowed_uids)] = '\0'; /* remove trailing comma */
+            allowed_uids[strlen(allowed_uids)-1] = '\0'; /* remove trailing comma */
         }
     }
     if (config->allowed_gids != NULL && config->allowed_gids_len > 0) {
@@ -753,7 +753,7 @@ char *_prepare_pull_payload(struct options *config) {
             allowed_gids = alloc_strcatf(allowed_gids, &len, &size, "%d,", config->allowed_gids[idx]);
         }
         if (allowed_gids != NULL) {
-            allowed_gids[strlen(allowed_gids)] = '\0'; /* remove trailing comma */
+            allowed_gids[strlen(allowed_gids)-1] = '\0'; /* remove trailing comma */
         }
     }
 
@@ -763,14 +763,17 @@ char *_prepare_pull_payload(struct options *config) {
         return NULL;
     }
     ret = strdup("{");
+    len = 1;
+    size = 1;
     if (allowed_uids != NULL) {
-        ret = alloc_strcatf(ret, &len, &size, "\"allowed_uids:\"%s\",", allowed_uids);
+        ret = alloc_strcatf(ret, &len, &size, "\"allowed_uids\":\"%s\",", allowed_uids);
     }
     if (allowed_gids != NULL) {
-        ret = alloc_strcatf(ret, &len, &size, "\"allowed_gids:\"%s\",", allowed_gids);
+        ret = alloc_strcatf(ret, &len, &size, "\"allowed_gids\":\"%s\",", allowed_gids);
     }
 
-    ret[strlen(ret)] = '\0'; /* remove trailing comma */
+    ret[strlen(ret)-1] = '\0'; /* remove trailing comma */
+    len--;
     if (strlen(ret) > 0) {
         ret = alloc_strcatf(ret, &len, &size, "}");
     }
@@ -783,7 +786,6 @@ char *_prepare_pull_payload(struct options *config) {
         free(allowed_gids);
         allowed_gids = NULL;
     }
-
     return ret;
 }
 
@@ -823,7 +825,7 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
 
     char *cred_message = constructAuthMessage(config, udiConfig);
     if (cred_message == NULL) {
-        munge_encode(&cred, ctx, "", 0); 
+        munge_encode(&cred, ctx, "", 0);
     } else {
         size_t len = strlen(cred_message);
         munge_encode(&cred, ctx, cred_message, len);
@@ -838,18 +840,19 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
     }
     free(cred);
     cred = NULL;
+    char *payload=NULL;
     munge_ctx_destroy(ctx);
 
     headers = curl_slist_append(headers, authstr);
 
     if (config->mode == MODE_PULL || config->mode == MODE_PULL_NONBLOCK) {
-        char *payload = _prepare_pull_payload(config);
+        payload = _prepare_pull_payload(config);
         if (payload == NULL) {
             payload = strdup("");
         }
         curl_easy_setopt(curl, CURLOPT_POST, 1);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload);
-        free(payload);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, strlen(payload));
 
         curl_slist_append(headers, "Content-type: application/json");
     }
@@ -866,6 +869,9 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
     }
 
     err = curl_easy_perform(curl);
+    if (payload!=NULL) {
+      free(payload);
+    }
     if (err) {
         if (err == 7) { // 7 means Failed to connect to host.
           printf("ERROR: failed to contact the image gateway.\n");
@@ -1091,6 +1097,7 @@ void _add_allowed(enum AclCredential aclType, struct options *config, const char
         ids_sz = &(config->allowed_gids_sz);
         ids_len = &(config->allowed_gids_len);
     } else {
+        printf("whatttt!?!");
         return;
     }
 
@@ -1105,7 +1112,6 @@ void _add_allowed(enum AclCredential aclType, struct options *config, const char
             ptr = end;
         }
         start = shifter_trim(start);
-
         idval = (*fn_lookup)(start);
         if (idval < 0) {
             idval = (int) strtol(start, NULL, 10);
@@ -1228,7 +1234,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         char *path = alloc_strgenf("%s/.udiRoot/.cred", pwd->pw_dir);
         if (path != NULL && access(path, F_OK) == 0) {
             shifter_parseConfig(path, '=', config, _assignLoginCredential);
-        } 
+        }
         if (path != NULL) {
             free(path);
             path = NULL;

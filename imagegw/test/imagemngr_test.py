@@ -2,6 +2,7 @@ import os
 import unittest
 import time
 import json
+import base64
 from pymongo import MongoClient
 
 """
@@ -44,10 +45,12 @@ class ImageMngrTestCase(unittest.TestCase):
         self.id = 'fakeid'
         self.tag2 = 'test2'
         self.tag3 = 'scanon/shanetest:latest'
+        self.public = 'index.docker.io/busybox:latest'
+        self.private = 'index.docker.io/scanon/shaneprivate:latest'
         self.format = 'squashfs'
-        self.auth = 'good:user:user'
-        self.authadmin = 'good:root:root'
-        self.badauth = 'bad:user:user'
+        self.auth = 'good:user:user::100:100'
+        self.authadmin = 'good:root:root::0:0'
+        self.badauth = 'bad:user:user::100:100'
         self.logfile = '/tmp/worker.log'
         self.pid = 0
         self.query = {'system': self.system, 'itype': self.itype,
@@ -55,8 +58,9 @@ class ImageMngrTestCase(unittest.TestCase):
         if os.path.exists(self.logfile):
             pass  # os.unlink(self.logfile)
         # Cleanup Mongo
-        if self.images.find_one(self.query):
-            self.images.remove(self.query)
+        self.images.remove({})
+        #if self.images.find_one(self.query):
+        #    self.images.remove(self.query)
 
     def tearDown(self):
         """
@@ -74,7 +78,7 @@ class ImageMngrTestCase(unittest.TestCase):
                        'worker', '--quiet',
                        '-Q', '%s' % (system),
                        '--loglevel=INFO',
-                       '-c', '2',
+                       '-c', '1',
                        '-f', self.logfile])
         else:
             time.sleep(1)
@@ -94,6 +98,8 @@ class ImageMngrTestCase(unittest.TestCase):
         state = 'UNKNOWN'
         while (state != wstate and count > 0):
             state = self.m.get_state(id)
+            if state is None:
+                return None
             count -= 1
             time.sleep(poll_interval)
         return state
@@ -151,10 +157,37 @@ class ImageMngrTestCase(unittest.TestCase):
             'ENTRY': ''
         }
 
+    def read_metafile(self, metafile):
+        kv = {}
+        with open(metafile) as mf:
+            for line in mf:
+                (k, v) = line.rstrip().split(': ')
+                kv[k] = v
+        # Convert ACLs to list of ints
+        if 'USERACL' in kv:
+            list = map(lambda x: int(x), kv['USERACL'].split(','))
+            kv['USERACL'] = list
+        if 'GROUPACL' in kv:
+            list = map(lambda x: int(x), kv['GROUPACL'].split(','))
+            kv['GROUPACL'] = list
+
+        return kv
+
+    def set_last_pull(self, id, t):
+        self.m.images.update({'_id': id}, {'$set': {'last_pull': t}})
+
+    def read_tokens(self):
+        if not os.path.exists("./tokens.cfg"):
+            return None
+        with open("./tokens.cfg") as f:
+            d = json.load(f)
+        for k in d.keys():
+            d[k] = base64.b64decode(d[k])
+        return d
+
 #
 #  Tests
 #
-
     def test_session(self):
         s = self.m.new_session(self.auth, self.system)
         assert s is not None
@@ -337,6 +370,8 @@ class ImageMngrTestCase(unittest.TestCase):
                   'ENTRY': '',
                   'last_pull': 0
                   }
+        record = self.good_pullrecord()
+        record['last_pull'] = 0
         # Create a fake record in mongo
         # First test when there is no existing image
         id = self.images.insert(record.copy())
@@ -417,7 +452,6 @@ class ImageMngrTestCase(unittest.TestCase):
             'userACL': [],
             'groupAcl': []
         }
-
         session = self.m.new_session(self.auth, self.system)
         pull = self.m.pull(session, pr)
         assert pull is not None
@@ -557,24 +591,23 @@ class ImageMngrTestCase(unittest.TestCase):
 
     def test_pull2(self):
         """
-        Test pulling two images
+        Test pulling two different images
         """
 
         # Use defaults for format, arch, os, ostcount, replication
-        pr1 = {'system': self.system,
-               'itype': self.itype,
-               'tag': self.tag,
-               'remotetype': 'dockerv2',
-               'userACL': [],
-               'groupAcl': []
-               }
-        pr2 = pr1
-        pr2['tag'] = self.tag2
+        pr = {'system': self.system,
+              'itype': self.itype,
+              'tag': self.tag,
+              'remotetype': 'dockerv2',
+              'userACL': [],
+              'groupAcl': []
+              }
         # Do the pull
         self.start_worker()
         session = self.m.new_session(self.auth, self.system)
-        rec1 = self.m.pull(session, pr1, testmode=1)  # ,delay=False)
-        rec2 = self.m.pull(session, pr2, testmode=1)  # ,delay=False)
+        rec1 = self.m.pull(session, pr, testmode=1)  # ,delay=False)
+        pr['tag'] = self.tag2
+        rec2 = self.m.pull(session, pr, testmode=1)  # ,delay=False)
         assert rec1 is not None
         id1 = rec1['_id']
         assert rec2 is not None
@@ -591,6 +624,197 @@ class ImageMngrTestCase(unittest.TestCase):
         self.images.drop()
         self.stop_worker()
 
+    def test_checkread(self):
+        """
+        Let's simulate various permissions and test them.
+        """
+        user1 = {'uid': 1, 'gid': 1}
+        mock_image_rec = {
+            'userACL': None,
+            'groupACL': None
+        }
+        # Test a public image with ACLs set to None
+        assert self.m._checkread(user1, mock_image_rec)
+        # Now empty list instead of None.  Treat it the same way.
+        mock_image_rec['userACL'] = []
+        mock_image_rec['groupACL'] = []
+        assert self.m._checkread(user1, mock_image_rec)
+        assert self.m._checkread(user1, {'private': False})
+        # Private false should trump other things
+        assert self.m._checkread(user1, {'private': False, 'userACL': [2]})
+        assert self.m._checkread(user1, {'private': False, 'groupACL': [2]})
+        # Now check a protected image that the user should
+        # have access to
+        mock_image_rec['userACL'] = [1]
+        assert self.m._checkread(user1, mock_image_rec)
+        # And Not
+        assert self.m._checkread({'uid': 2, 'gid': 1}, mock_image_rec) is False
+        # Now check by groupACL
+        mock_image_rec['groupACL'] = [1]
+        assert self.m._checkread({'uid': 3, 'gid': 1}, mock_image_rec)
+        # And Not
+        assert self.m._checkread({'uid': 3, 'gid': 2}, mock_image_rec) is False
+        # What about an image with a list
+        mock_image_rec = {
+            'userACL': [1, 2, 3],
+            'groupACL': [4, 5, 6]
+        }
+        assert self.m._checkread(user1, mock_image_rec)
+        # And Not
+        assert self.m._checkread({'uid': 7, 'gid': 7}, mock_image_rec) is False
+
+    def test_pulls_acl_change(self):
+        """
+        This simulates a pull inflight + an ACL pull
+        request at the same time.
+        """
+        record = self.good_pullrecord()
+        record['status'] = 'PULLING'
+        id = self.images.insert(record)
+        assert id is not None
+        # Now try to submit an ACL change
+        session = self.m.new_session(self.auth, self.system)
+        pr = {
+            'system': record['system'],
+            'itype': record['itype'],
+            'tag': record['pulltag'],
+            'remotetype': 'dockerv2',
+            'userACL': [1001, 1002],
+            'groupACL': [1003, 1004]
+        }
+        rec = self.m.pull(session, pr)  # ,delay=False)
+        print rec
+        assert rec['status'] == 'PULLING'
+
+    def test_pull_logic(self):
+        """
+        Consolidate some of the various tests around
+        handling various pull sceanrios
+        """
+        # Assume the image is already recently pulled
+        record = self.good_record()
+        tag = record['tag'][0]
+        basepr = {
+            'system': record['system'],
+            'itype': record['itype'],
+            'tag': tag,
+            'remotetype': 'dockerv2',
+        }
+        id = self.images.insert(record)
+        assert id is not None
+        session = self.m.new_session(self.auth, self.system)
+        pr = basepr.copy()
+        rec = self.m.pull(session, pr)  # ,delay=False)
+        assert rec['status'] == 'READY'
+
+        # reset and test a re-pull of an old image
+        self.images.remove({})
+        record['last_pull'] = record['last_pull'] - 36000
+        id = self.images.insert(record)
+        assert id is not None
+        session = self.m.new_session(self.auth, self.system)
+        rec = self.m.pull(session, pr)  # ,delay=False)
+        assert rec['status'] == 'INIT'
+
+        # Re-pull of new image with ACL change
+        self.images.remove({})
+        pr = basepr.copy()
+        id = self.images.insert(record)
+        assert id is not None
+        pr['userACL'] = [1001]
+        session = self.m.new_session(self.auth, self.system)
+        rec = self.m.pull(session, pr)  # ,delay=False)
+        assert rec['status'] == 'INIT'
+
+        # reset and test a re-pull of an old image
+        self.images.remove({})
+        pr = basepr.copy()
+        record['last_pull'] = record['last_pull'] - 36000
+        id = self.images.insert(record)
+        assert id is not None
+        session = self.m.new_session(self.auth, self.system)
+        rec = self.m.pull(session, pr)  # ,delay=False)
+        assert rec['status'] == 'INIT'
+        # Now let's do a re-pull with ACL change.  We should
+        # get back the prev rec.  The status will now be
+        # pending because we do an update status
+        pr['userACL'] = [1001]
+        session = self.m.new_session(self.auth, self.system)
+        rec2 = self.m.pull(session, pr)  # ,delay=False)
+        assert rec2['_id'] == rec['_id']
+        assert rec2['status'] == 'PENDING'
+
+    def test_pull_public_acl(self):
+        """
+        Pulling a public image with ACLs should ignore the acls.
+        """
+        # Use defaults for format, arch, os, ostcount, replication
+        pr = {
+            'system': self.system,
+            'itype': self.itype,
+            'tag': self.tag3,
+            'remotetype': 'dockerv2',
+            'userACL': [1001, 1002],
+            'groupACL': [1003, 1004]
+        }
+        # Do the pull
+        self.start_worker()
+        session = self.m.new_session(self.auth, self.system)
+        rec = self.m.pull(session, pr)  # ,delay=False)
+        id = rec['_id']
+        assert rec is not None
+        # Confirm record
+        q = {'system': self.system, 'itype': self.itype,
+             'pulltag': self.tag3}
+        mrec = self.images.find_one(q)
+        assert '_id' in mrec
+        assert 'userACL' in mrec
+        assert 1001 in mrec['userACL']
+        # Track through transistions
+        state = self.time_wait(id)
+        assert state == 'READY'
+        mrec = self.images.find_one(q)
+        assert 'private' in mrec
+        assert mrec['private'] is False
+
+    def test_pull_public_acl_token(self):
+        """
+        Pulling a public image with ACLs should ignore the acls.
+        """
+        tokens = self.read_tokens()
+        if tokens is None:
+            print "Skipping private pull tests"
+            return
+        # Use defaults for format, arch, os, ostcount, replication
+        pr = {
+            'system': self.system,
+            'itype': self.itype,
+            'tag': self.public,
+            'remotetype': 'dockerv2',
+            'userACL': [1001, 1002],
+            'groupACL': [1003, 1004],
+            'groupAcl': []
+        }
+        # Do the pull
+        self.start_worker()
+        session = self.m.new_session(self.auth, self.system)
+        rec = self.m.pull(session, pr)  # ,delay=False)
+        id = rec['_id']
+        assert rec is not None
+        # Confirm record
+        q = {'system': self.system, 'itype': self.itype,
+             'pulltag': self.public}
+        mrec = self.images.find_one(q)
+        assert '_id' in mrec
+        assert 'userACL' in mrec
+        assert 1001 in mrec['userACL']
+        # Track through transistions
+        state = self.time_wait(id)
+        assert state == 'READY'
+        mrec = self.images.find_one(q)
+        assert 'private' in mrec
+        assert mrec['private'] is False
+
     def test_pull_acl(self):
         """
         Basic pull test with ACLs testmode image.
@@ -599,40 +823,78 @@ class ImageMngrTestCase(unittest.TestCase):
         pr = {
             'system': self.system,
             'itype': self.itype,
-            'tag': self.tag3,
+            'tag': self.private,
             'remotetype': 'dockerv2',
-            'userACL': ['usera', 'userb'],
+            'userACL': [1001, 1002],
+            'groupACL': [1003, 1004],
             'groupAcl': []
         }
         # Do the pull
+        tokens = self.read_tokens()
+        if tokens is None:
+            print "Skipping private pull tests"
+            return
+
         self.start_worker()
         session = self.m.new_session(self.auth, self.system)
+        session['tokens'] = tokens
         rec = self.m.pull(session, pr)  # ,delay=False)
-        assert rec is not None
+        self.assertIsNotNone(rec)
         id = rec['_id']
         # Confirm record
-        q = {'system': self.system, 'itype': self.itype, 'pulltag': self.tag3}
+        q = {'system': self.system, 'itype': self.itype,
+             'pulltag': self.private}
         mrec = self.images.find_one(q)
-        print mrec
-        assert '_id' in mrec
-        assert 'userACL' in mrec
-        assert 'usera' in mrec['userACL']
+        self.assertIn('_id', mrec)
+        self.assertIn('userACL', mrec)
+        self.assertIn(1001, mrec['userACL'])
         # Track through transistions
         state = self.time_wait(id)
         #Debug
-        assert state == 'READY'
+        self.assertEquals(state, 'READY')
         imagerec = self.m.lookup(session, pr)
-        print imagerec
         assert 'ENTRY' in imagerec
         assert 'ENV' in imagerec
-        kv = {}
-        with open(self.get_metafile(self.system, imagerec['id'])) as f:
-            for l in f:
-                (k, v) = l.split(': ')
-                kv[k] = v
+        mf = self.get_metafile(self.system, imagerec['id'])
+        kv = self.read_metafile(mf)
         assert 'USERACL' in kv
+        assert 1001 in kv['USERACL']
+        assert 1003 not in kv['USERACL']
+        assert 100 in kv['USERACL']
+        self.set_last_pull(id, time.time() - 36000)
+
+        # Now let's pull it again with a new userACL
+        pr['userACL'] = [1003, 1002]
+        session = self.m.new_session(self.auth, self.system)
+        session['tokens'] = self.read_tokens()
+        rec = self.m.pull(session, pr)  # ,delay=False)
+        self.assertIsNotNone(rec)
+        id = rec['_id']
+        state = self.time_wait(id)
+        self.assertIsNone(state)
+        imagerec = self.m.lookup(session, pr)
+        assert 'ENTRY' in imagerec
+        assert 'ENV' in imagerec
+        assert 1003 in imagerec['userACL']
+        kv = self.read_metafile(mf)
+        assert 1003 in kv['USERACL']
+        # Try pulling the same ACLs in a different order
+        self.set_last_pull(id, time.time() - 36000)
+        pr['userACL'] = [1002, 1003]
+        session = self.m.new_session(self.auth, self.system)
+        session['tokens'] = self.read_tokens()
+        rec = self.m.pull(session, pr)  # ,delay=False)
+        self.assertIsNotNone(rec)
+        # Don't wait because it should immediately finish
+        self.assertEqual(rec['status'], 'READY')
+        kv = self.read_metafile(mf)
         self.images.drop()
         self.stop_worker()
+
+    # TODO: Write a test that tries to update an image the
+    # user doesn't have permissions to
+    def test_acl_update_denied(self):
+        pass
 
     def test_expire_remote(self):
         system = self.system

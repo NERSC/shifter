@@ -135,7 +135,19 @@ def _pull_dockerv2(request, location, repo, tag, updater):
         if cacert is not None:
             options['cacert'] = cacert
         options['baseUrl'] = url
+        if 'authMethod' in params:
+            options['authMethod'] = params['authMethod']
 
+        if ('session' in request and 'tokens' in request['session'] and
+                request['session']['tokens']):
+            if location in request['session']['tokens']:
+                userpass = request['session']['tokens'][location]
+                options['username'] = userpass.split(':')[0]
+                options['password'] = ''.join(userpass.split(':')[1:])
+            elif ('default' in request['session']['tokens']):
+                userpass = request['session']['tokens']['default']
+                options['username'] = userpass.split(':')[0]
+                options['password'] = ''.join(userpass.split(':')[1:])
         imageident = '%s:%s' % (repo, tag)
         dock = dockerv2.DockerV2Handle(imageident, options, updater=updater)
         updater.update_status("PULLING", 'Getting manifest')
@@ -200,7 +212,7 @@ def pull_image(request, updater=DEFAULT_UPDATER):
         return _pull_dockerv2(request, location, repo, tag, updater)
     elif rtype == 'dockerhub':
         logging.warning("Use of depcreated dockerhub type")
-        raise NotImplementedError('dockerhub type is depcreated. Use dockverv2')
+        raise NotImplementedError('dockerhub type is depcreated. Use dockerv2')
     else:
         raise NotImplementedError('Unsupported remote type %s' % rtype)
     return False
@@ -295,7 +307,7 @@ def check_image(request):
                                logging)
 
 
-def transfer_image(request):
+def transfer_image(request, meta_only=False):
     """
     Transfers the image to the target system based on the configuration.
 
@@ -308,7 +320,11 @@ def transfer_image(request):
     meta = None
     if 'metafile' in request:
         meta = request['metafile']
-    return transfer.transfer(sysconf, request['imagefile'], meta, logging)
+    if meta_only:
+        request['meta']['meta_only'] = True
+        return transfer.transfer(sysconf, None, meta, logging)
+    else:
+        return transfer.transfer(sysconf, request['imagefile'], meta, logging)
 
 
 def remove_image(request):
@@ -365,7 +381,8 @@ def dopull(self, request, testmode=0):
     """
     Celery task to do the full workflow of pulling an image and transferring it
     """
-    logging.debug("dopull system=%s tag=%s", request['system'], request['tag'])
+    tag = request['tag']
+    logging.debug("dopull system=%s tag=%s", request['system'], tag)
     updater = Updater(self.update_state)
     if testmode == 1:
         states = ('PULLING', 'EXAMINATION', 'CONVERSION', 'TRANSFER', 'READY')
@@ -387,10 +404,8 @@ def dopull(self, request, testmode=0):
     try:
         # Step 1 - Do the pull
         updater.update_status('PULLING', 'PULLING')
-        print "pulling image %s" % request['tag']
         logging.info(request)
         if not pull_image(request, updater=updater):
-            print "pull_image failed"
             logging.info("Worker: Pull failed")
             raise OSError('Pull failed')
 
@@ -400,23 +415,32 @@ def dopull(self, request, testmode=0):
         if not check_image(request):
             # Step 2 - Check the image
             updater.update_status('EXAMINATION', 'Examining image')
-            print "Worker: examining image %s" % request['tag']
+            logging.debug("Worker: examining image %s" % tag)
             if not examine_image(request):
                 raise OSError('Examine failed')
             # Step 3 - Convert
             updater.update_status('CONVERSION', 'Converting image')
-            print "Worker: converting image %s" % request['tag']
+            logging.debug("Worker: converting image %s" % tag)
             if not convert_image(request):
                 raise OSError('Conversion failed')
-            print request
             if not write_metadata(request):
                 raise OSError('Metadata creation failed')
             # Step 4 - TRANSFER
             updater.update_status('TRANSFER', 'Transferring image')
-            logging.info("Worker: transferring image %s", request['tag'])
-            print "Worker: transferring image %s" % request['tag']
+            logging.debug("Worker: transferring image %s", tag)
             if not transfer_image(request):
                 raise OSError('Transfer failed')
+        else:
+            logging.debug("Need to update metadata")
+            request['format'] = get_image_format(request)
+
+            if not write_metadata(request):
+                raise OSError('Metadata creation failed')
+            updater.update_status('TRANSFER', 'Transferring metadata')
+            logging.debug("Worker: transferring metadata %s", request['tag'])
+            if not transfer_image(request, meta_only=True):
+                raise OSError('Transfer failed')
+
         # Done
         updater.update_status('READY', 'Image ready')
         cleanup_temporary(request)

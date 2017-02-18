@@ -99,6 +99,7 @@ def create_response(rec):
             resp[field] = 'MISSING'
     return resp
 
+
 # List images
 # This will list the images for a system
 @app.route('/api/list/<system>/', methods=["GET"])
@@ -131,13 +132,14 @@ def lookup(system, imgtype, tag):
 
     auth = request.headers.get(AUTH_HEADER)
     memo = 'lookup system=%s imgtype=%s tag=%s auth=%s' \
-            % (system, imgtype, tag, auth)
+           % (system, imgtype, tag, auth)
     app.logger.debug(memo)
-    i = {'system':system, 'itype':imgtype, 'tag':tag}
+    i = {'system': system, 'itype': imgtype, 'tag': tag}
     try:
         session = mgr.new_session(auth, system)
         rec = mgr.lookup(session, i)
         if rec is None:
+            app.logger.debug("Image lookup failed.")
             return not_found('image not found')
     except:
         app.logger.exception('Exception in lookup')
@@ -154,25 +156,38 @@ def pull(system, imgtype, tag):
         tag = '%s:latest' % (tag)
 
     auth = request.headers.get(AUTH_HEADER)
+    data = {}
+    try:
+        rqd = request.get_data()
+        if rqd is not "" and rqd is not None:
+            data = json.loads(rqd)
+    except:
+        app.logger.warn("Unable to parse pull data '%s'" %
+                        (request.get_data()))
+        pass
+
     memo = "pull system=%s imgtype=%s tag=%s" % (system, imgtype, tag)
     app.logger.debug(memo)
     i = {'system': system, 'itype': imgtype, 'tag': tag}
-    try:
-        if 'useracl' in request.form:
-            app.logger.debug(request.form['useracl'])
-            uacl = request.form['useracl'].replace('[', '').replace(']', '')
-            i['userACL'] = uacl.replace(' ', '').split(',')
-    except:
-        pass
+    if 'allowed_uids' in data:
+        # Convert to integers
+        i['userACL'] = map(lambda x: int(x),
+                           data['allowed_uids'].split(','))
+    if 'allowed_gids' in data:
+        # Convert to integers
+        i['groupACL'] = map(lambda x: int(x),
+                            data['allowed_gids'].split(','))
     try:
         app.logger.debug(i)
         session = mgr.new_session(auth, system)
+        app.logger.debug(session)
         rec = mgr.pull(session, i)
         app.logger.debug(rec)
     except:
         app.logger.exception('Exception in pull')
         return not_found('%s %s' % (sys.exc_type, sys.exc_value))
     return jsonify(create_response(rec))
+
 
 # auto expire
 # This will autoexpire images and cleanup stuck pulls
@@ -189,16 +204,17 @@ def autoexpire(system):
         return not_found()
     return jsonify({'status': resp})
 
+
 # expire image
 # This will expire an image which removes it from the cache.
-@app.route('/api/expire/<system>/<imgtype>/<tag>/', methods=["GET"])
+@app.route('/api/expire/<system>/<imgtype>/<path:tag>/', methods=["GET"])
 def expire(system, imgtype, tag):
     """ Expire a sepcific image for a system """
     if imgtype == "docker" and tag.find(':') == -1:
         tag = '%s:latest' % (tag)
 
     auth = request.headers.get(AUTH_HEADER)
-    i = {'system':system, 'itype':imgtype, 'tag':tag}
+    i = {'system': system, 'itype': imgtype, 'tag': tag}
     memo = "expire system=%s imgtype=%s tag=%s" % (system, imgtype, tag)
     app.logger.debug(memo)
     resp = None
@@ -209,6 +225,7 @@ def expire(system, imgtype, tag):
         app.logger.exception('Exception in expire')
         return not_found()
     return jsonify({'status': resp})
+
 
 # Show queue
 # This will list pull requests and their state

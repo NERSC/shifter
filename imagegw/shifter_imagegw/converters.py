@@ -74,7 +74,6 @@ def generate_squashfs_image(expand_path, image_path):
     try:
         shutil.rmtree(expand_path)
     except:
-        # error handling
         pass
 
     return True
@@ -124,15 +123,20 @@ def writemeta(fmt, meta, metafile):
     """ write the metadata file """
     with open(metafile, 'w') as meta_fd:
         # write out ENV, ENTRYPOINT, WORKDIR and format
+        private = False
+        if 'private' in meta:
+            private = meta['private']
         meta_fd.write("FORMAT: %s\n" % (fmt))
         if 'entrypoint' in meta and meta['entrypoint'] is not None:
             meta_fd.write("ENTRY: %s\n" % (meta['entrypoint']))
         if 'workdir' in meta and meta['workdir'] is not None:
             meta_fd.write("WORKDIR: %s\n" % (meta['workdir']))
-        if 'userACL' in meta and meta['userACL'] is not None:
-            meta_fd.write("USERACL: %s\n" % (str(meta['userACL'])))
-        if 'groupACL' in meta and meta['groupACL'] is not None:
-            meta_fd.write("GROUPACL: %s\n" % (str(meta['groupACL'])))
+        if private and 'userACL' in meta and meta['userACL'] is not None:
+            acls = ','.join(map(lambda x: str(x), meta['userACL']))
+            meta_fd.write("USERACL: %s\n" % (acls))
+        if private and 'groupACL' in meta and meta['groupACL'] is not None:
+            acls = ','.join(map(lambda x: str(x), meta['groupACL']))
+            meta_fd.write("GROUPACL: %s\n" % (acls))
         if 'env' in meta and meta['env'] is not None:
             for keyval in meta['env']:
                 meta_fd.write("ENV: %s\n" % (keyval))

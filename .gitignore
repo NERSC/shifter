@@ -75,3 +75,4 @@ wlm_integration/slurm/test/test_shifterSpank_config
 wlm_integration/slurm/test/test_shifterSpank_prolog
 wlm_integration/slurm/test/test_shifterSpank_cgroup
 wlm_integration/slurm/test/test_shifterSpank_util
+tokens.cfg

@@ -71,7 +71,7 @@ class ImageMngr(object):
             log_handler = logging.StreamHandler()
             logfmt = '%(asctime)s [%(name)s] %(levelname)s : %(message)s'
             log_handler.setFormatter(logging.Formatter(logfmt))
-            log_handler.setLevel(logging.DEBUG)
+            log_handler.setLevel(logging.INFO)
             self.logger.addHandler(log_handler)
         else:
             self.logger = logger
@@ -89,7 +89,7 @@ class ImageMngr(object):
         if 'PullUpdateTime' in self.config:
             self.pullupdatetimeout = self.config['PullUpdateTimeout']
         # Max amount of time to allow for a pull
-        self.pulltimeout = self.pullupdatetimeout * 10
+        self.pulltimeout = self.pullupdatetimeout
         # This is not intended to provide security, but just
         # provide a basic check that a session object is correct
         self.magic = 'imagemngrmagic'
@@ -145,22 +145,73 @@ class ImageMngr(object):
         """Check if system is a valid platform."""
         return bool(system in self.systems)
 
-    def _checkread(self, user, imageid):
+    def _checkread(self, session, rec):
         """
         Checks if the user has read permissions to the image. (Not Implemented)
         """
-        self.logger.warn("unimplemented checkread called for %s for user %s"
-                         % (imageid, user))
-        return True
+
+        # Start by checking if the image is public (no ACLs)
+        if 'private' in rec and rec['private'] is False:
+            return True
+        iUACL = rec['userACL']
+        iGACL = rec['groupACL']
+        if iUACL is None and iGACL is None:
+            return True
+        if iUACL == [] and iGACL == []:
+            return True
+        uid = session['uid']
+        gid = session['gid']
+        self.logger.debug('uid=%s iUACL=%s' %(uid, str(iUACL)))
+        self.logger.debug('sessions = ' + str(session))
+        if iUACL is not None and uid in iUACL:
+            return True
+        if iGACL is not None and gid in iGACL:
+            return True
+        return False
 
     def _resetexpire(self, ident):
         """Reset the expire time.  (Not fully implemented)."""
         # Change expire time for image
         # TODO shore up expire-time parsing
-        (days, hours, minutes, secs) = self.config['ImageExpirationTimeout'].split(':')
-        expire = time() + int(secs) + 60 * (int(minutes) + 60 * (int(hours) + 24 * int(days)))
+        expire_timeout = self.config['ImageExpirationTimeout']
+        (days, hours, minutes, secs) = expire_timeout.split(':')
+        expire = time() + int(secs) + 60 * (int(minutes) +
+                                            60 * (int(hours) + 24 * int(days)))
         self._images_update({'_id': ident}, {'$set': {'expiration': expire}})
         return expire
+
+    def _make_acl(self, acllist, id):
+        if id not in acllist:
+            acllist.append(id)
+        return acllist
+
+    def _compare_list(self, a, b, key):
+        """"
+        look at the key element of two objects
+        and compare the list of ids.
+
+        return True if everything matches
+        return False if anything is different
+        """
+
+        # If the key isn't in the objects or
+        # something else fails, then it must
+        # have changed.
+        try:
+            if key not in a:
+                return False
+            if key not in b:
+                return False
+        except:
+            return True
+        aitems = a[key]
+        bitems = b[key]
+        if len(aitems) != len(bitems):
+            return False
+        for item in aitems:
+            if item not in bitems:
+                return False
+        return True
 
     def new_session(self, auth_string, system):
         """
@@ -197,6 +248,8 @@ class ImageMngr(object):
         self.update_states()
         rec = self._images_find_one(query)
         if rec is not None:
+            if self._checkread(session, rec) is False:
+                return None
             self._resetexpire(rec['_id'])
         # TODO: verify access
         return rec
@@ -213,7 +266,8 @@ class ImageMngr(object):
         records = self._images_find(query)
         resp = []
         for record in records:
-            resp.append(record)
+            if self._checkread(session, record):
+                resp.append(record)
         # verify access
         return resp
 
@@ -311,9 +365,10 @@ class ImageMngr(object):
             'ostcount': '0',  # integer, number of OSTs (future)
             'replication': '1',  # integer, number of copies to deploy
             'userACL': [],
+            'groupACL': [],
+            'private': None,
             'tag': [],
-            'status': 'INIT',
-            'groupAcl': []
+            'status': 'INIT'
         }
         if 'DefaultImageFormat' in self.config:
             newimage['format'] = self.config['DefaultImageFormat']
@@ -336,7 +391,7 @@ class ImageMngr(object):
             'pulltag': image['tag']
         }
         self.logger.debug('Pull called Test Mode=%d', testmode)
-        self.logger.debug(image)
+        #self.logger.debug(image)
         if not self.check_session(session, request['system']):
             self.logger.warn('Invalid session on system %s', request['system'])
             raise OSError("Invalid Session")
@@ -361,17 +416,49 @@ class ImageMngr(object):
                 continue
             rec = record
             break
+        inflight = False
+        recent = False
+        if rec is not None and rec['status'] != 'READY':
+            inflight = True
+        elif rec is not None:
+            # if an image has been pulled in the last 60 seconds
+            # let's consider that "recent"
+            if (time() - rec['last_pull']) < 10:
+                recent = True
+        request['userACL'] = []
+        request['groupACL'] = []
+        if 'userACL' in image and image['userACL'] != []:
+            request['userACL'] = self._make_acl(image['userACL'],
+                                                session['uid'])
+        if 'groupACL' in image and image['groupACL'] != []:
+            request['groupACL'] = self._make_acl(image['groupACL'],
+                                                 session['gid'])
+        if self._compare_list(request, rec, 'userACL') and \
+                self._compare_list(request, rec, 'groupACL'):
+            acl_changed = False
+        else:
+            self.logger.debug("No ACL change detected.")
+            acl_changed = True
+
+        # We could hit a key error or some other edge case
+        # so just do our best and update if there are problems
+        update = False
+        if not recent and not inflight and acl_changed:
+            self.logger.debug("ACL change detected.")
+            update = True
 
         if self._pullable(rec):
-            if 'userACL' in image:
-                request['userACL'] = image['userACL']
+            self.logger.debug("Pullable image")
+            update = True
+
+        if update:
             self.logger.debug("Creating New Pull Record")
-            self.logger.debug(request)
             rec = self.new_pull_record(request)
             ident = rec['_id']
-            self.logger.debug("Setting state")
+            self.logger.debug("ENQUEUEING Request")
             self.update_mongo_state(ident, 'ENQUEUED')
             request['tag'] = request['pulltag']
+            request['session'] = session
             self.logger.debug("Calling do pull with queue=%s",
                               request['system'])
             pullreq = dopull.apply_async([request], queue=request['system'],
@@ -428,6 +515,36 @@ class ImageMngr(object):
                             {'$pull': {'tag': tag}}, multi=True)
         return True
 
+    def update_acls(self, ident, response):
+        self.logger.debug("Update ACLs called for %s %s", ident, str(response))
+        pullrec = self._images_find_one({'_id': ident})
+        if pullrec is None:
+            self.logger.error('ERROR: Missing pull request (r=%s)',
+                              str(response))
+            return
+        #Check that this image ident doesn't already exist for this system
+        rec = self._images_find_one({'id': response['id'], 'status': 'READY',
+                                    'system': pullrec['system']})
+        if rec is None:
+            # This means the image already existed, but we didn't have a
+            # record of it.  That seems odd (it happens in tests).  Let's
+            # note it and power on through.
+            msg = "WARNING: No image record found for an ACL update"
+            self.logger.warn(msg)
+            response['last_pull'] = time()
+            self.update_mongo(ident, response)
+            self.add_tag(ident, pullrec['system'], pullrec['pulltag'])
+        else:
+            updates = {
+                'userACL': response['userACL'],
+                'groupACL': response['groupACL'],
+                'private': response['private'],
+                'last_pull': time()
+            }
+            self.logger.debug("Doing ACLs update")
+            self.update_mongo(rec['_id'], updates)
+            self._images_remove({'_id': ident})
+
     def complete_pull(self, ident, response):
         """
         Transition a completed pull request to an available image.
@@ -446,7 +563,11 @@ class ImageMngr(object):
             # So we already had this image.
             # Let's delete the pull record.
             # TODO: update the pull time of the matching id
-            self.update_mongo(rec['_id'], {'last_pull': time()})
+            self.logger.warn('Duplicate image')
+            update_rec = {
+                'last_pull': time()
+            }
+            self.update_mongo(rec['_id'], update_rec)
 
             self._images_remove({'_id': ident})
             # However it could be a new tag.  So let's update the tag
@@ -465,16 +586,35 @@ class ImageMngr(object):
         Helper function to set the mongo values for an image with _id==ident.
         """
         setline = dict()
-        if 'id' in resp:
-            setline['id'] = resp['id']
-        if 'entrypoint' in resp:
-            setline['ENTRY'] = resp['entrypoint']
-        if 'env' in resp:
-            setline['ENV'] = resp['env']
-        if 'workdir' in resp:
-            setline['WORKDIR'] = resp['workdir']
-        if 'last_pull' in resp:
-            setline['last_pull'] = resp['last_pull']
+        # This maps from the key name in the response to the
+        # key name used in mongo
+        mappings = {
+            'id': 'id',
+            'entrypoint': 'ENTRY',
+            'env': 'ENV',
+            'workdir': 'WORKDIR',
+            'last_pull': 'last_pull',
+            'userACL': 'userACL',
+            'groupACL': 'groupACL',
+            'private': 'private'
+        }
+        if 'private' in resp and resp['private'] is False:
+            resp['userACL'] = []
+            resp['groupACL'] = []
+
+        for key in mappings.keys():
+            if key in resp:
+                setline[mappings[key]] = resp[key]
+        #if 'id' in resp:
+        #    setline['id'] = resp['id']
+        # if 'entrypoint' in resp:
+        #     setline['ENTRY'] = resp['entrypoint']
+        # if 'env' in resp:
+        #     setline['ENV'] = resp['env']
+        # if 'workdir' in resp:
+        #     setline['WORKDIR'] = resp['workdir']
+        # if 'last_pull' in resp:
+        #     setline['last_pull'] = resp['last_pull']
 
         self._images_update({'_id': ident}, {'$set': setline})
 
@@ -525,7 +665,12 @@ class ImageMngr(object):
             if state == "READY" or state == "SUCCESS":
                 self.logger.debug("Completing pull request %d", i)
                 response = req.get()
-                self.complete_pull(self.task_image_id[req], response)
+                self.logger.debug(response)
+                if 'meta_only' in response:
+                    self.logger.debug('Updating ACLs')
+                    self.update_acls(self.task_image_id[req], response)
+                else:
+                    self.complete_pull(self.task_image_id[req], response)
                 self.logger.debug('meta=%s', str(response))
                 # Now save the response
                 self.tasks.remove(req)
@@ -544,7 +689,6 @@ class ImageMngr(object):
             return False
         # Cleanup - Lookup for things stuck in non-READY state
         self.update_states()
-        pulltimeout = time() - self.pullupdatetimeout * 10
         removed = []
         for rec in self._images_find({'status': {'$ne': 'READY'},
                                      'system': system}):
@@ -553,7 +697,7 @@ class ImageMngr(object):
                 self.logger.warning('Image missing last_pull for pulltag:' +
                                     rec['pulltag'])
                 continue
-            if rec['last_pull'] < pulltimeout:
+            if time() > rec['last_pull'] + self.pulltimeout:
                 removed.append(rec['_id'])
                 self._images_remove({'_id': rec['_id']})
 
