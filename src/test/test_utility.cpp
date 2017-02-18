@@ -45,6 +45,19 @@
 #include <stdlib.h>
 
 TEST_GROUP(UtilityTestGroup) {
+    char *tmpDir;
+
+    void setup() {
+        tmpDir = strdup("/tmp/shifter.XXXXXX");
+        if (mkdtemp(tmpDir) == NULL) {
+            fprintf(stderr, "WARNING mkdtemp failed, some tests will crash.\n");
+        }
+    }
+
+    void teardown() {
+        rmdir(tmpDir);
+        free(tmpDir);
+    }
 };
 
 TEST(UtilityTestGroup, ShifterTrim_NoTrim) {
@@ -408,6 +421,33 @@ TEST(UtilityTestGroup, pathcmp_basic) {
     CHECK(pathcmp("/a/b/c", "/a/b/c") == 0);
     CHECK(pathcmp("a/b/c", "") != 0);
     CHECK(pathcmp("", "a/b/c") != 0);
+}
+
+TEST(UtilityTestGroup, mkdir_p) {
+    {
+        std::string dir = std::string(tmpDir) + "/";
+        printf("creating %s\n", dir.c_str());
+        CHECK(mkdir_p(dir.c_str(), 0775) == 0);
+        CHECK(is_existing_directory(dir.c_str()) == 1);
+    }
+    {
+        std::string dir = std::string(tmpDir) + "//";
+        printf("creating %s\n", dir.c_str());
+        CHECK(mkdir_p(dir.c_str(), 0775) == 0);
+        CHECK(is_existing_directory(dir.c_str()) == 1);
+    }
+    {
+        std::string dir = std::string(tmpDir) + "/subdir";
+        printf("creating %s\n", dir.c_str());
+        CHECK(mkdir_p(dir.c_str(), 0775) == 0);
+        CHECK(is_existing_directory(dir.c_str()) == 1);
+    }
+    {
+        std::string dir = std::string(tmpDir) + "/subdir1/subdir2";
+        printf("creating %s\n", dir.c_str());
+        CHECK(mkdir_p(dir.c_str(), 0775) == 0);
+        CHECK(is_existing_directory(dir.c_str()) == 1);
+    }
 }
 
 int main(int argc, char** argv) {

@@ -28,7 +28,9 @@ SHIFTER_SOURCES = \
     PathList.h \
     PathList.c \
     MountList.h \
-    MountList.c
+    MountList.c \
+    gpu_support.h \
+    gpu_support.c
 
 SETUPROOT_SOURCES = \
     setupRoot.c \
@@ -45,7 +47,9 @@ SETUPROOT_SOURCES = \
     PathList.h \
     PathList.c \
     MountList.h \
-    MountList.c
+    MountList.c \
+    gpu_support.h \
+    gpu_support.c
 
 UNSETUPROOT_SOURCES = \
     unsetupRoot.c \
@@ -62,7 +66,9 @@ UNSETUPROOT_SOURCES = \
     PathList.h \
     PathList.c \
     MountList.h \
-    MountList.c
+    MountList.c \
+    gpu_support.h \
+    gpu_support.c
 
 SHIFTERIMG_SOURCES = \
     shifterimg.c \
@@ -74,7 +80,12 @@ SHIFTERIMG_SOURCES = \
     UdiRootConfig.h \
     UdiRootConfig.c \
     VolumeMap.h \
-	VolumeMap.c
+	VolumeMap.c \
+	gpu_support.h \
+	gpu_support.c \
+    shifter_core.c \
+    MountList.c \
+    PathList.c
 
 
 shifter_SOURCES = $(SHIFTER_SOURCES)
@@ -86,4 +97,5 @@ shifterimg_LDFLAGS = $(MUNGE_LDFLAGS) $(JSON_LDFLAGS) $(LIBCURL) $(MUNGE_LDFLAGS
 shifterimg_CPPFLAGS = $(AM_CPPFLAGS) $(MUNGE_CPPFLAGS) $(JSON_CPPFLAGS) $(LIBCURL_CPPFLAGS) $(MUNGE_CPPFLAGS)
 
 install-exec-hook:
+	cp activate_gpu_support.sh $(DESTDIR)$(bindir)/activate_gpu_support.sh
 	/bin/chmod 4755 $(DESTDIR)$(bindir)/shifter

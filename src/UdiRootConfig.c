@@ -173,6 +173,10 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         free(config->rootfsType);
         config->rootfsType = NULL;
     }
+    if (config->siteResources != NULL) {
+        free(config->siteResources);
+        config->siteResources = NULL;
+    }
     if (config->siteFs != NULL) {
         free_VolumeMap(config->siteFs, 1);
         config->siteFs = NULL;
@@ -194,6 +198,7 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         free(config->jobIdentifier);
         config->jobIdentifier = NULL;
     }
+    free_gpu_support_config(&config->gpu_config);
 
     char **arrays[] = {
         config->perNodeCacheAllowedFsType,
@@ -292,6 +297,8 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->ddPath != NULL ? config->ddPath : ""));
     written += fprintf(fp, "mkfsXfsPath = %s\n",
         (config->mkfsXfsPath != NULL ? config->mkfsXfsPath : ""));
+    written += fprintf(fp, "siteResources = %s\n",
+        (config->siteResources != NULL ? config->siteResources : ""));
     written += fprintf(fp, "Image Gateway Servers = %lu servers\n", config->gwUrl_size);
     for (idx = 0; idx < config->gwUrl_size; idx++) {
         char *gwUrl = config->gwUrl[idx];
@@ -312,7 +319,7 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->nodeIdentifier != NULL ? config->nodeIdentifier : ""));
     written += fprintf(fp, "jobIdentifier: %s\n",
         (config->jobIdentifier != NULL ? config->jobIdentifier : ""));
-
+    written += fprint_gpu_support_config(fp, &config->gpu_config);
     written += fprintf(fp, "***** END UdiRootConfig *****\n");
     return written;
 }
@@ -362,6 +369,9 @@ int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
         if (config->rootfsType == NULL || strlen(config->rootfsType) == 0) {
             VAL_ERROR("\"rootfsType\" is not defined", UDIROOT_VAL_PARSE);
         }
+        if (config->siteResources == NULL || strlen(config->siteResources) == 0) {
+            VAL_ERROR("\"siteResources\" is not defined", UDIROOT_VAL_PARSE);
+        }
     }
     if (validateFlags & UDIROOT_VAL_FILEVAL) {
         struct stat statData;
@@ -401,6 +411,10 @@ int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
             } else if (!(statData.st_mode & S_IXUSR)) {
                 VAL_ERROR("Specified \"mkfsXfsPath\" is not executable.", UDIROOT_VAL_FILEVAL);
             }
+        }
+        if (config->siteResources[0] != '/') {
+            // note: we will find out later, through "mkdir", whether it is a valid path name or not
+            VAL_ERROR("Specified \"siteResources\" is not an absolute path.", UDIROOT_VAL_FILEVAL);
         }
     }
     return 0;
@@ -585,6 +599,8 @@ static int _assign(const char *key, const char *value, void *t_config) {
         if (config->system == NULL) return 1;
     } else if (strcmp(key, "defaultImageType") == 0) {
         config->defaultImageType = strdup(value);
+    } else if (strcmp(key, "siteResources") == 0) {
+        config->siteResources = strdup(value);
     } else if (strcmp(key, "nodeContextPrefix") == 0) {
         /* do nothing, this key is defunct */
     } else {
