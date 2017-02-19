@@ -27,6 +27,10 @@ class ConvertersTestCase(unittest.TestCase):
         #os.environ['PATH']=os.environ['PATH']+":./test"
         test_dir = os.path.dirname(os.path.abspath(__file__)) + "/../test/"
         self.test_dir = test_dir
+        if 'TMPDIR' in os.environ:
+            self.outdir = os.environ['TMPDIR']
+        else:
+            self.outdir = '/tmp/'
 
     def tearDown(self):
         pass
@@ -38,7 +42,7 @@ class ConvertersTestCase(unittest.TestCase):
         """
         Test convert function using a mock format
         """
-        output = '%s/test.squashfs' % (os.environ['TMPDIR'])
+        output = '%s/test.squashfs' % (self.outdir)
         resp = converters.convert('mock', '', output)
         assert resp is True
         assert os.path.exists(output)
@@ -55,7 +59,7 @@ class ConvertersTestCase(unittest.TestCase):
                 'userACL': [1000, 1001],
                 'groupACL': [1002, 1003],
                 }
-        output = '%s/test.meta' % (os.environ['TMPDIR'])
+        output = '%s/test.meta' % (self.outdir)
         resp = converters.writemeta('squashfs', meta, output)
         assert resp is not None
         meta = {'ENV': []}
