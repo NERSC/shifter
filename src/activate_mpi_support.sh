@@ -187,24 +187,36 @@ get_mpi_library_major_and_minor_version_numbers()
     local library=$1
     local version_strings=($(echo $(basename $library) | sed 's/lib.\+\.so\(.*\)/\1/' | sed -e 's/^\.\(.*\)/\1/' | sed -e 's/\./ /g'))
     local number_of_version_strings=${#version_strings[*]}
+
     if [ $number_of_version_strings -eq 0 ]; then
-        echo "0 0"
+        local major_number=0
+        local minor_number=0
     elif [ $number_of_version_strings -eq 1 ]; then
-        echo "${version_strings[0]} 0"
+        local major_number=${version_strings[0]}
+        local minor_number=0
     else
-        echo "${version_strings[0]} ${version_strings[1]}"
+        local major_number=${version_strings[0]}
+        local minor_number=${version_strings[1]}
     fi
+
+    is_number_regexp='^[0-9]+$'
+    if ! [[ $major_number =~ $is_number_regexp ]]; then
+        log ERROR "Internal error: major version string of MPI library $library is not a number"
+    fi
+    if ! [[ $minor_number =~ $is_number_regexp ]]; then
+        log ERROR "Internal error: minor version string of MPI library $library is not a number"
+    fi
+
+    echo "$major_number $minor_number"
 }
 
 are_mpi_libraries_abi_compatible()
 {
     local site_lib=$1
     local site_lib_version_numbers=($(get_mpi_library_major_and_minor_version_numbers $site_lib))
-    local count_site_version_numbers=${#site_lib_version_numbers[*]}
 
     local container_lib=$2
     local container_lib_version_numbers=($(get_mpi_library_major_and_minor_version_numbers $container_lib))
-    local count_container_version_numbers=${#container_lib_version_numbers[*]}
 
     if [ ${site_lib_version_numbers[0]} -ne ${container_lib_version_numbers[0]} ]; then
         return 1
