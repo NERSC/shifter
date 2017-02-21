@@ -19,6 +19,8 @@ libmpifort.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/lib
 # This is a list of libraries that are dependencies of the site MPI libraries.
 # These libraries are always bind mounted in the container when the MPI support is active.
 site_mpi_dependency_libraries="
+/cm/shared/apps/easybuild/software/GCC/5.3.0/lib64/libgfortran.so.3
+/cm/shared/apps/easybuild/software/GCC/5.3.0/lib64/libquadmath.so.0
 /lib64/libmlx5-rdmav2.so
 /lib64/libmlx4-rdmav2.so
 /lib64/libxml2.so.2
