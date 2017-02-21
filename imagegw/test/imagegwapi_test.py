@@ -142,6 +142,9 @@ class GWTestCase(unittest.TestCase):
 
     def test_list(self):
         # Do a pull so we can create an image record
+        uri = '%s/list/%s/' % (self.url, 'systemc')
+        rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
+        self.assertEquals(rv.status_code, 404)
         uri = '%s/pull/%s/' % (self.url, self.urlreq)
         rv = self.app.post(uri, headers={AUTH_HEADER: self.auth})
         assert rv.status_code == 200

@@ -37,7 +37,6 @@ def generate_ext4_image(expand_path, image_path):
     message = 'ext4 support is note implemented yet %s %s' % \
               (expand_path, image_path)
     raise NotImplementedError(message)
-    return False
 
 
 def generate_cramfs_image(expand_path, image_path):
@@ -105,7 +104,8 @@ def convert(fmt, expand_path, image_path):
         else:
             raise NotImplementedError("%s not a supported format" % fmt)
     except:
-        os.unlink(temp_path)
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
         raise
 
     if not success:

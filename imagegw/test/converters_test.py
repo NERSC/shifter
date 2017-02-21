@@ -32,6 +32,14 @@ class ConvertersTestCase(unittest.TestCase):
         else:
             self.outdir = '/tmp/'
 
+    def make_fake(self):
+        path = self.outdir + "/fakeimage"
+        if os.path.exists(path) is False:
+            os.makedirs(path)
+        with open(path + '/a', "w") as f:
+            f.write('blah')
+        return path
+
     def tearDown(self):
         pass
 
@@ -46,6 +54,17 @@ class ConvertersTestCase(unittest.TestCase):
         resp = converters.convert('mock', '', output)
         assert resp is True
         assert os.path.exists(output)
+
+        path = self.make_fake()
+
+        resp = converters.convert('cramfs', path, '/tmp/blah.cramfs')
+        self.assertTrue(resp)
+
+        with self.assertRaises(NotImplementedError):
+            resp = converters.convert('ext4', path, '/tmp/blah.ext4')
+
+        resp = converters.convert('squashfs', path, output)
+        self.assertTrue(resp)
 
     def test_writemeta(self):
         """
@@ -76,3 +95,17 @@ class ConvertersTestCase(unittest.TestCase):
         self.assertEquals(meta['USERACL'].find("["), -1)
         self.assertEquals(meta['USERACL'].find("]"), -1)
         self.assertGreater(len(meta['ENV']), 0)
+
+    def test_ext4(self):
+        with self.assertRaises(NotImplementedError):
+            converters.generate_ext4_image('/tmp', '/tmp')
+
+    def test_cramfs(self):
+        converters.generate_cramfs_image('/tmp/b', '/tmp/blah')
+        self.assertTrue(os.path.exists('/tmp/blah'))
+        os.remove('/tmp/blah')
+
+    def test_squashfs(self):
+        converters.generate_squashfs_image('/tmp/b', '/tmp/blah')
+        self.assertTrue(os.path.exists('/tmp/blah'))
+        os.remove('/tmp/blah')

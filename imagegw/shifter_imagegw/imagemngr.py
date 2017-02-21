@@ -261,6 +261,8 @@ class ImageMngr(object):
         """
         if not self.check_session(session, system):
             raise OSError("Invalid Session")
+        if self._isasystem(system) is False:
+            raise OSError("Invalid System")
         query = {'status': 'READY', 'system': system}
         self.update_states()
         records = self._images_find(query)

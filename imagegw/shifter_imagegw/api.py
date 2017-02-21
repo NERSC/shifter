@@ -112,8 +112,11 @@ def imglist(system):
         records = mgr.imglist(session, system)
         if records is None:
             return not_found('image not found')
+    except OSError:
+        app.logger.warning('Bad session or system')
+        return not_found('Bad session or system')
     except:
-        app.logger.exception('Exception in list')
+        app.logger.exception('Unknown Exception in List')
         return not_found('%s' % (sys.exc_value))
     images = []
     for rec in records:

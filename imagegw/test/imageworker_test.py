@@ -21,6 +21,10 @@ import unittest
 import json
 
 
+def update_status(state, meta=None):
+    print 'state=%s' % (state)
+
+
 class ImageWorkerTestCase(unittest.TestCase):
 
     def setUp(self):
@@ -28,6 +32,7 @@ class ImageWorkerTestCase(unittest.TestCase):
         os.environ['PATH'] = cwd + ':' + os.environ['PATH']
         from shifter_imagegw import imageworker
         self.imageworker = imageworker
+        self.updater = imageworker.Updater(update_status)
         self.configfile = 'test.json'
         with open(self.configfile) as config_file:
             self.config = json.load(config_file)
@@ -123,7 +128,7 @@ class ImageWorkerTestCase(unittest.TestCase):
         self.assertTrue(os.path.exists(request['expandedpath']))
         return
 
-    def test1_convert_image(self):
+    def test_convert_image(self):
         request = {
             'system': self.system,
             'itype': self.itype,
@@ -135,7 +140,7 @@ class ImageWorkerTestCase(unittest.TestCase):
         status = self.imageworker.convert_image(request)
         self.assertTrue(status)
 
-    def test2_transfer_image(self):
+    def test_transfer_image(self):
         request = {
             'system': self.system,
             'itype': self.itype,
@@ -147,6 +152,50 @@ class ImageWorkerTestCase(unittest.TestCase):
         assert os.path.exists(self.imagefile)
         status = self.imageworker.transfer_image(request)
         self.assertTrue(status)
+
+    def test_pull_docker(self):
+        request = {
+            'system': self.system,
+            'itype': self.itype,
+            'tag': self.tag
+        }
+        resp = self.imageworker._pull_dockerv2(request, 'index.docker.io',
+                                               'scanon/shanetest', 'latest',
+                                               self.updater)
+        self.assertTrue(resp)
+
+    def test_pull_image(self):
+        request = {
+            'system': self.system,
+            'itype': self.itype,
+            'tag': self.tag
+        }
+        resp = self.imageworker.pull_image(request, self.updater)
+        self.assertTrue(resp)
+
+    def test_puller(self):
+        request = {
+            'system': self.system,
+            'itype': self.itype,
+            'tag': self.tag
+        }
+
+        result = self.imageworker.pull(request, self.updater, testmode=1)
+        self.assertIn('workdir', result)
+        self.assertIn('env', result)
+        self.assertTrue(result)
+        with self.assertRaises(OSError):
+            self.imageworker.pull(request, self.updater, testmode=2)
+        result = self.imageworker.pull(request, self.updater)
+        request['userACL'] = [1001]
+        result = self.imageworker.pull(request, self.updater)
+        #sleep(6)
+        #print result
+        #self.imageworker.dopull.apply(request)
+        self.imageworker.remove_image(request)
+
+    def test_unimplemented_fuctions(self):
+        pass
 
 if __name__ == '__main__':
     unittest.main()

@@ -92,19 +92,6 @@ def initqueue(newconfig):
     QUEUE.conf.update(CELERY_RESULT_SERIALIZER='json')
 
 
-def normalized_name(request):
-    """
-    Helper function that returns a filename based on the request
-    """
-    return '%s_%s' % (request['itype'], request['tag'].replace('/', '_'))
-    #return request['meta']['id']
-
-
-def already_processed(request):
-    """ Stub method to see if something is already processed. """
-    return False
-
-
 def _get_cacert(location):
     """ Private method to get the cert location """
     params = CONFIG['Locations'][location]
@@ -376,14 +363,12 @@ def cleanup_temporary(request):
                               "clean up (%s) %s.", item, cleanitem)
 
 
-@QUEUE.task(bind=True)
-def dopull(self, request, testmode=0):
+def pull(request, updater, testmode=0):
     """
     Celery task to do the full workflow of pulling an image and transferring it
     """
     tag = request['tag']
     logging.debug("dopull system=%s tag=%s", request['system'], tag)
-    updater = Updater(self.update_state)
     if testmode == 1:
         states = ('PULLING', 'EXAMINATION', 'CONVERSION', 'TRANSFER', 'READY')
         for state in states:
@@ -450,11 +435,20 @@ def dopull(self, request, testmode=0):
         logging.error("ERROR: dopull failed system=%s tag=%s",
                       request['system'], request['tag'])
         print sys.exc_value
-        self.update_state(state='FAILURE')
+        updater.update_state('FAILURE', 'FAILED')
 
         # TODO: add a debugging flag and only disable cleanup if debugging
         cleanup_temporary(request)
         raise
+
+
+@QUEUE.task(bind=True)
+def dopull(self, request, testmode=0):
+    """
+    Celery task to do the full workflow of pulling an image and transferring it
+    """
+    updater = Updater(self.update_state)
+    return pull(request, updater, testmode=testmode)
 
 
 @QUEUE.task(bind=True)
