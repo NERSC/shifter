@@ -72,6 +72,7 @@ UNSETUPROOT_SOURCES = \
 
 SHIFTERIMG_SOURCES = \
     shifterimg.c \
+    shifterimg.h \
     ImageData.h \
     ImageData.c \
     utility.h \

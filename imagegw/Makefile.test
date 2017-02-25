@@ -20,8 +20,8 @@ testprep: test/config/redis.conf test/config/ssh.key test/config/munge.key
 	docker volume inspect imagegw || docker volume create --name imagegw
 
 startdeps:
-	docker run -d -p 27017:27017 mongo --smallfiles
-	docker run -d -p 6379:6379 redis
+	docker run -d --name mongot -p 27017:27017 mongo --smallfiles
+	docker run -d --name redist -p 6379:6379 redis
 
 starttest: testprep
 	docker build -t imagegwapi .

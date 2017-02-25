@@ -1,0 +1,4 @@
+#!/bin/sh
+# Mock for mkfs.cramfs for testing purposes
+#
+(echo "mock mkfs.cramfs called with $@";date) > $2

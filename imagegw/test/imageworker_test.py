@@ -20,6 +20,11 @@ import os
 import unittest
 import json
 
+
+def update_status(state, meta=None):
+    print 'state=%s' % (state)
+
+
 class ImageWorkerTestCase(unittest.TestCase):
 
     def setUp(self):
@@ -27,6 +32,7 @@ class ImageWorkerTestCase(unittest.TestCase):
         os.environ['PATH'] = cwd + ':' + os.environ['PATH']
         from shifter_imagegw import imageworker
         self.imageworker = imageworker
+        self.updater = imageworker.Updater(update_status)
         self.configfile = 'test.json'
         with open(self.configfile) as config_file:
             self.config = json.load(config_file)
@@ -35,109 +41,161 @@ class ImageWorkerTestCase(unittest.TestCase):
         self.tag = 'registry.services.nersc.gov/nersc-py:latest'
         self.tag = 'ubuntu:latest'
         self.tag = 'scanon/shanetest:latest'
-        self.hash = 'b3491cdefcdb79a31ab7ddf1bbcf7c8eeff9b4f00cb83a0be513fb800623f9cf'
+        self.hash = \
+            'b3491cdefcdb79a31ab7ddf1bbcf7c8eeff9b4f00cb83a0be513fb800623f9cf'
+        self.hash2 = \
+            'a90493edb7d6589542c475ebfd052fe3912a153015d6e0923cfd5f40d0bc2925'
+        self.hash3 = \
+            'ac6b4960ac85aeb6effc8538955078fcb1f3bb9e15451efe63b753a3a566884c'
         if not os.path.exists(self.config['CacheDirectory']):
             os.mkdir(self.config['CacheDirectory'])
-        self.expandedpath = os.path.join(self.config['CacheDirectory'], \
-                '%s_%s' % (self.itype, self.tag.replace('/', '_')))
-        self.imagefile = os.path.join(self.config['ExpandDirectory'], \
-                '%s.%s' % (self.hash, 'squashfs'))
-        print "imagefile", self.imagefile
+        self.expandedpath = \
+            os.path.join(self.config['CacheDirectory'],
+                         '%s_%s' % (self.itype, self.tag.replace('/', '_')))
+        self.imagefile = os.path.join(self.config['ExpandDirectory'],
+                                      '%s.%s' % (self.hash, 'squashfs'))
         idir = self.config['Platforms']['systema']['ssh']['imageDir']
         if not os.path.exists(idir):
             os.makedirs(idir)
+        self.imageDir = idir
 
-
-    #def tearDown(self):
-    #  print "No teardown"
-
+    def cleanup_cache(self):
+        for h in [self.hash, self.hash2, self.hash3]:
+            fp = '%s/%s.meta' % (self.imageDir, h)
+            if os.path.exists(fp):
+                os.remove(fp)
 
     def test0_pull_image(self):
-        request = {'system':self.system, 'itype':self.itype, 'tag':self.tag}
+        self.cleanup_cache()
+        request = {'system': self.system, 'itype': self.itype, 'tag': self.tag}
         status = self.imageworker.pull_image(request)
-        print status
-        assert status is True
-        assert 'meta' in request
+        self.assertTrue(status)
+        self.assertIn('meta', request)
         meta = request['meta']
-        assert 'id' in meta
-        assert meta['entrypoint'][0] == "/bin/sh"
-        assert os.path.exists(request['expandedpath'])
+        self.assertIn('id', meta)
+        self.assertEquals(meta['entrypoint'][0], "/bin/sh")
+        self.assertTrue(os.path.exists(request['expandedpath']))
 
+        #fp = '%s/%s.meta' % (self.imageDir, request['id'])
+        #print fp
+        #self.assertTrue(os.path.exists(fp))
         return
 
     # Pull the image but explicitly specify dockerhub
     def test_pull_image_dockerhub(self):
         request = {
-            'system':self.system,
-            'itype':self.itype,
-            'tag':'index.docker.io/ubuntu:latest'
+            'system': self.system,
+            'itype': self.itype,
+            'tag': 'index.docker.io/ubuntu:latest'
         }
         status = self.imageworker.pull_image(request)
-        assert status is True
-        assert 'meta' in request
+        self.assertTrue(status)
+        self.assertIn('meta', request)
         meta = request['meta']
-        assert 'id' in meta
-        assert os.path.exists(request['expandedpath'])
+        self.assertIn('id', meta)
+        self.assertTrue(os.path.exists(request['expandedpath']))
         return
 
     # Use the URL format of the location, like an alias
     def test_pull_image_url(self):
         request = {
-            'system':self.system,
-            'itype':self.itype,
-            'tag':'urltest/ubuntu:latest'
+            'system': self.system,
+            'itype': self.itype,
+            'tag': 'urltest/ubuntu:latest'
         }
         status = self.imageworker.pull_image(request)
-        assert status is True
-        assert 'meta' in request
+        self.assertTrue(status)
+        self.assertIn('meta', request)
         meta = request['meta']
-        assert 'id' in meta
-        assert os.path.exists(request['expandedpath'])
+        self.assertIn('id', meta)
+        self.assertTrue(os.path.exists(request['expandedpath']))
         return
 
-    # Use the URL format of the location and pull a nested image (e.g. with an org)
+    # Use the URL format of the location and pull a nested image
+    # (e.g. with an org)
     def test_pull_image_url_org(self):
+        self.cleanup_cache()
         request = {
-            'system':self.system,
-            'itype':self.itype,
-            'tag':'urltest/%s'%(self.tag)
+            'system': self.system,
+            'itype': self.itype,
+            'tag': 'urltest/%s' % (self.tag)
         }
         status = self.imageworker.pull_image(request)
-        assert status is True
-        assert 'meta' in request
+        self.assertTrue(status)
+        self.assertIn('meta', request)
         meta = request['meta']
-        assert 'id' in meta
-        assert os.path.exists(request['expandedpath'])
+        self.assertIn('id', meta)
+        self.assertTrue(os.path.exists(request['expandedpath']))
         return
 
-    def test1_convert_image(self):
+    def test_convert_image(self):
         request = {
-            'system':self.system,
-            'itype':self.itype,
-            'tag':self.tag
+            'system': self.system,
+            'itype': self.itype,
+            'tag': self.tag
         }
         status = self.imageworker.pull_image(request)
         # TODO: a little odd that is True and == True used here
-        assert status is True
+        self.assertTrue(status)
         status = self.imageworker.convert_image(request)
-        assert status == True
-        return
+        self.assertTrue(status)
 
-    def test2_transfer_image(self):
-        print self.imagefile
+    def test_transfer_image(self):
         request = {
-            'system':self.system,
-            'itype':self.itype,
-            'tag':self.tag,
-            'imagefile':self.imagefile
+            'system': self.system,
+            'itype': self.itype,
+            'tag': self.tag,
+            'imagefile': self.imagefile
         }
         with open(self.imagefile, 'w') as f:
             f.write('bogus')
         assert os.path.exists(self.imagefile)
         status = self.imageworker.transfer_image(request)
-        assert status == True
-        return
+        self.assertTrue(status)
 
+    def test_pull_docker(self):
+        request = {
+            'system': self.system,
+            'itype': self.itype,
+            'tag': self.tag
+        }
+        resp = self.imageworker._pull_dockerv2(request, 'index.docker.io',
+                                               'scanon/shanetest', 'latest',
+                                               self.updater)
+        self.assertTrue(resp)
+
+    def test_pull_image(self):
+        request = {
+            'system': self.system,
+            'itype': self.itype,
+            'tag': self.tag
+        }
+        resp = self.imageworker.pull_image(request, self.updater)
+        self.assertTrue(resp)
+
+    def test_puller(self):
+        request = {
+            'system': self.system,
+            'itype': self.itype,
+            'tag': self.tag
+        }
+
+        result = self.imageworker.pull(request, self.updater, testmode=1)
+        self.assertIn('workdir', result)
+        self.assertIn('env', result)
+        self.assertTrue(result)
+        with self.assertRaises(OSError):
+            self.imageworker.pull(request, self.updater, testmode=2)
+        result = self.imageworker.pull(request, self.updater)
+        request['userACL'] = [1001]
+        result = self.imageworker.pull(request, self.updater)
+        #sleep(6)
+        #print result
+        #self.imageworker.dopull.apply(request)
+        self.imageworker.remove_image(request)
+
+    def test_unimplemented_fuctions(self):
+        pass
 
 if __name__ == '__main__':
     unittest.main()

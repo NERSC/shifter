@@ -1,7 +1,7 @@
 /* Shifter, Copyright (c) 2015, The Regents of the University of California,
 ## through Lawrence Berkeley National Laboratory (subject to receipt of any
 ## required approvals from the U.S. Dept. of Energy).  All rights reserved.
-## 
+##
 ## Redistribution and use in source and binary forms, with or without
 ## modification, are permitted provided that the following conditions are met:
 ##  1. Redistributions of source code must retain the above copyright notice,
@@ -13,7 +13,7 @@
 ##     National Laboratory, U.S. Dept. of Energy nor the names of its
 ##     contributors may be used to endorse or promote products derived from this
 ##     software without specific prior written permission.
-## 
+##
 ## THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 ## AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 ## IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -25,7 +25,7 @@
 ## CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ## ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 ## POSSIBILITY OF SUCH DAMAGE.
-##  
+##
 ## You are under no obligation whatsoever to provide any bug fixes, patches, or
 ## upgrades to the features, functionality or performance of the source code
 ## ("Enhancements") to anyone; however, if you choose to make your Enhancements
@@ -66,6 +66,7 @@ static const char *allowedImageTypes[] = {
     NULL
 };
 
+uid_t * _Convert_to_list(const char *text);
 int _ImageData_assign(const char *key, const char *value, void *t_imageData);
 char *_ImageData_filterString(const char *input, int allowSlash);
 
@@ -75,7 +76,7 @@ char *_ImageData_filterString(const char *input, int allowSlash);
  * requested image tag.  It is legal to lookup an identifier mislabeled as a
  * tag.  This provides a deterministic and trusted path for always getting a
  * valid identifier.  If imageType is "id", then imageTag is assumed to already
- * be an identifier and no lookup will occur, a copy of imageTag will be 
+ * be an identifier and no lookup will occur, a copy of imageTag will be
  * returned.
  *
  * \param imageType the image type, any string the gateway might understand,
@@ -183,6 +184,8 @@ int parse_ImageData(char *type, char *identifier, UdiRootConfig *config, ImageDa
         image->identifier = strdup(identifier);
         image->filename = strdup(identifier);
         image->format = FORMAT_VFS;
+        image->uids = NULL;
+        image->gids = NULL;
         return 0;
     }
 
@@ -373,6 +376,10 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
         if (image->workdir == NULL) {
             return 1;
         }
+    } else if (strcmp(key, "USERACL") == 0) {
+        image->uids = _Convert_to_list(value);
+    } else if (strcmp(key, "GROUPACL") == 0) {
+        image->gids = _Convert_to_list(value);
     } else if (strcmp(key, "VOLUME") == 0) {
         char **tmp = image->volume + image->volume_size;
         char *tvalue = _ImageData_filterString(value, 1);
@@ -380,10 +387,40 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
         image->volume_size++;
         free(tvalue);
     } else {
-        printf("Couldn't understand key: %s\n", key);
-        return 2;
+        printf("WARNING: Couldn't understand key: %s\n", key);
     }
-    return 0; 
+    return 0;
+}
+
+uid_t * _Convert_to_list(const char *text){
+  uid_t *ids=NULL;
+  const char *ptr;
+  int count;
+  int i;
+
+  if (text[0]==0){
+    return NULL;
+  }
+  /* Figure out the number of elements */
+  for (ptr=text,count=0;ptr!=NULL;count++){
+    ptr=strstr(ptr,",");
+    if (ptr!=NULL) ptr++;
+  }
+  /* Alloc an array */
+  ids=malloc(sizeof(uid_t)*(count+1));
+  if (ids==NULL){
+      fprintf(stderr, "ERROR: Alloc failed for ids\n");
+      return NULL;
+  }
+  /* Populate with the uid/gid */
+  for (ptr=text,i=0;i<count;i++){
+    ids[i]=atol(ptr);
+    ptr=strstr(ptr,",");
+    if (ptr!=NULL) ptr++;
+  }
+  /* Terminate with a -1 */
+  ids[count]=-1;
+  return ids;
 }
 
 char *_ImageData_filterString(const char *input, int allowSlash) {
@@ -527,7 +564,7 @@ _error:
         free(type);
         type = NULL;
     }
-    if (tag != NULL) { 
+    if (tag != NULL) {
         free(tag);
         tag = NULL;
     }

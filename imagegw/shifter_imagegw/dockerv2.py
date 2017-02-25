@@ -46,7 +46,7 @@ if 'all_proxy' in os.environ:
     socket.socket = socks.socksocket  # dont add ()!!!
 
 
-def jose_decode_base64(input_string):
+def _jose_decode_base64(input_string):
     """
     Helper function to Decode base64
     """
@@ -67,9 +67,9 @@ def _verify_manifest_signature(manifest, text, digest):
 
     if 'signatures' in manifest:
         for sig in manifest['signatures']:
-            protected_json = jose_decode_base64(sig['protected'])
+            protected_json = _jose_decode_base64(sig['protected'])
             protected = json.loads(protected_json)
-            curr_tail = jose_decode_base64(protected['formatTail'])
+            curr_tail = _jose_decode_base64(protected['formatTail'])
             if format_tail is None:
                 format_tail = curr_tail
             elif format_tail != curr_tail:
@@ -152,8 +152,8 @@ def _construct_image_metadata(manifest):
                 if layers[layer_data['parent']]['id'] == layer_data['id']:
                     # skip already-existing image
                     continue
-                raise ValueError('Multiple inheritance from a layer, ' \
-                        'unsure how to proceed')
+                raise ValueError('Multiple inheritance from a layer, ' +
+                                 'unsure how to proceed')
             layers[layer_data['parent']] = layer_data
         if 'id' not in layer_data:
             raise ValueError('Malformed layer, missing id')
@@ -232,7 +232,7 @@ class DockerV2Handle(object):
             if base_url.find('http') >= 0:
                 protocol = base_url.split(':')[0]
                 index = base_url.find(':')
-                base_url = base_url[index+3:]
+                base_url = base_url[index + 3:]
             if base_url.find('/') >= 0:
                 index = base_url.find('/')
                 base_path = base_url[index:]
@@ -244,9 +244,10 @@ class DockerV2Handle(object):
                 protocol = 'https'
 
             if server is None or len(server) == 0:
-                raise ValueError('unable to parse baseUrl, no server ' \
-                        'specified, should be like '
-                        'https://server.location/optionalBasePath')
+                msg = 'unable to parse baseUrl, no server '
+                msg += 'specified, should be like \n'
+                msg += 'https://server.location/optionalBasePath'
+                raise ValueError(msg)
 
             if base_path is None:
                 base_path = '/v2'
@@ -254,6 +255,8 @@ class DockerV2Handle(object):
             self.protocol = protocol
             self.server = server
             self.base_path = base_path
+            self.private = False
+            self.headers = {}
 
         if self.protocol == 'http':
             self.allow_authenticated = False
@@ -265,8 +268,8 @@ class DockerV2Handle(object):
 
         if 'cacert' in options:
             if not os.path.exists(options['cacert']):
-                raise ValueError('specified cacert file does not exist: %s' \
-                        % options['cacert'])
+                raise ValueError('specified cacert file does not exist: %s'
+                                 % options['cacert'])
 
             self.cacert = options['cacert']
 
@@ -277,12 +280,12 @@ class DockerV2Handle(object):
 
         if (self.password is not None and self.username is None) or \
                 (self.username is not None and self.password is None):
-            raise ValueError('if either username or password is specified, ' \
-                    'both must be')
+            raise ValueError('if either username or password is specified, ' +
+                             'both must be')
 
-        if self.allow_authenticated is False and self.username is not None:
-            raise ValueError('authentication not allowed with the current ' \
-                    'settings (make sure you are using https)')
+        #if self.allow_authenticated is False and self.username is not None:
+        #    raise ValueError('authentication not allowed with the current ' +
+        #                     'settings (make sure you are using https)')
 
         self.auth_method = 'token'
         if 'authMethod' in options:
@@ -306,7 +309,7 @@ class DockerV2Handle(object):
         if blobsum not in self.excludeBlobSums:
             self.excludeBlobSums.append(blobsum)
 
-    def do_token_auth(self, auth_loc_str):
+    def do_token_auth(self, auth_loc_str, creds=False):
         """
         Perform token authorization as in Docker registry v2 specification.
         :param auth_loc_str: from "WWW-Authenticate" response header
@@ -318,6 +321,9 @@ class DockerV2Handle(object):
 
         """
         auth_data_str = None
+        if self.allow_authenticated is False and self.username is not None:
+            raise ValueError('authentication not allowed with the current ' +
+                             'settings (make sure you are using https)')
 
         # TODO, figure out what mode was for
         (_, auth_data_str) = auth_loc_str.split(' ', 2)
@@ -329,18 +335,20 @@ class DockerV2Handle(object):
 
         auth_conn = _setup_http_conn(auth_data['realm'], self.cacert)
         if auth_conn is None:
-            raise ValueError('Bad response from registry, failed to get auth ' \
-                    'connection')
+            raise ValueError('Bad response from registry, ' +
+                             'failed to get auth connection')
 
         headers = {}
-        if self.username is not None and self.password is not None:
+        if creds and self.username is not None and self.password is not None:
+            print "\nUsing Usernmae/Password: private set to True\n"
+            self.private = True
             auth = '%s:%s' % (self.username, self.password)
             headers['Authorization'] = 'Basic %s' % base64.b64encode(auth)
 
         match_obj = re.match(r'(https?)://(.*?)(/.*)', auth_data['realm'])
         if match_obj is None:
-            raise ValueError('Failed to parse authorization URL: %s' \
-                    % auth_data['realm'])
+            raise ValueError('Failed to parse authorization URL: %s'
+                             % auth_data['realm'])
         path = match_obj.groups()[2]
         path = '%s?service=%s&scope=%s' \
                % (path, auth_data['service'], auth_data['scope'])
@@ -363,21 +371,35 @@ class DockerV2Handle(object):
         if conn is None:
             return None
 
-        headers = {}
-        if self.auth_method == 'token' and self.token is not None:
-            headers = {'Authorization': 'Bearer %s' % self.token}
-        elif self.auth_method == 'basic' and self.username is not None:
-            auth = '%s:%s' % (self.username, self.password)
-            headers['Authorization'] = 'Basic %s' % base64.b64encode(auth)
+        #headers = {}
+        #if self.auth_method == 'token' and self.token is not None:
+        #    headers = {'Authorization': 'Bearer %s' % self.token}
+        #elif self.auth_method == 'basic' and self.username is not None:
+        #    auth = '%s:%s' % (self.username, self.password)
+        #    headers['Authorization'] = 'Basic %s' % base64.b64encode(auth)
         # Todo: first try unauthenticated then authenticated
+        self._get_auth_header()
 
         req_path = "/v2/%s/manifests/%s" % (self.repo, self.tag)
-        conn.request("GET", req_path, None, headers)
+        conn.request("GET", req_path, None, self.headers)
         resp1 = conn.getresponse()
 
-        if resp1.status == 401 and not retrying:
-            if self.auth_method == 'token':
-                self.do_token_auth(resp1.getheader('WWW-Authenticate'))
+        if resp1.status == 401 and not retrying and \
+                self.auth_method == 'token':
+            # First try authenticating as public (no creds)
+            self.do_token_auth(resp1.getheader('WWW-Authenticate'))
+            try:
+                return self.get_image_manifest(retrying=True)
+            except:
+                # Likely failed because it needs a cred, continue
+                pass
+
+            # So that must have failed, let's try with creds
+            # TODO: If there aren't any creds it should just fail out
+            # now because we are basically repeating the previous
+            # attempt
+            self.do_token_auth(resp1.getheader('WWW-Authenticate'),
+                               creds=True)
             return self.get_image_manifest(retrying=True)
         if resp1.status != 200:
             msg = "Bad response from registry status=%d" % (resp1.status)
@@ -390,7 +412,7 @@ class DockerV2Handle(object):
         data = resp1.read()
         if len(data) != content_len:
             memo = "Failed to read manifest: %d/%d bytes read" \
-                    % (len(data), content_len)
+                   % (len(data), content_len)
             raise ValueError(memo)
         jdata = json.loads(data)
 
@@ -414,6 +436,7 @@ class DockerV2Handle(object):
                 resp['env'] = config['Env']
             if 'Entrypoint' in config:
                 resp['entrypoint'] = config['Entrypoint']
+        resp['private'] = self.private
         return resp
 
     def pull_layers(self, manifest, cachedir):
@@ -439,13 +462,13 @@ class DockerV2Handle(object):
         """
         Helper function to generate the header.
         """
-        headers = {}
+        #headers = {}
         if self.auth_method == 'token' and self.token is not None:
-            headers = {'Authorization': 'Bearer %s' % self.token}
+            self.headers = {'Authorization': 'Bearer %s' % self.token}
         elif self.auth_method == 'basic' and self.username is not None:
             auth = '%s:%s' % (self.username, self.password)
-            headers['Authorization'] = 'Basic %s' % base64.b64encode(auth)
-        return headers
+            self.headers['Authorization'] = 'Basic %s' % base64.b64encode(auth)
+        return self.headers
 
     def save_layer(self, layer, cachedir='./'):
         """
@@ -458,7 +481,7 @@ class DockerV2Handle(object):
             if conn is None:
                 return None
 
-            headers = self._get_auth_header()
+            #headers = self._get_auth_header()
             filename = '%s/%s.tar' % (cachedir, layer)
 
             if os.path.exists(filename):
@@ -468,7 +491,7 @@ class DockerV2Handle(object):
                     # there was a checksum mismatch, nuke the file
                     os.unlink(filename)
 
-            conn.request("GET", path, None, headers)
+            conn.request("GET", path, None, self.headers)
             resp1 = conn.getresponse()
             location = resp1.getheader('location')
             if resp1.status == 200:
@@ -477,13 +500,14 @@ class DockerV2Handle(object):
             elif resp1.status == 401 and self.auth_method == 'token':
                 self.do_token_auth(resp1.getheader('WWW-Authenticate'))
                 continue
-            elif location != None:
+            elif location is not None:
                 url = location
                 match_obj = re.match(r'(https?)://(.*?)(/.*)', location)
-                url = '%s://%s' % (match_obj.groups()[0], match_obj.groups()[1])
+                url = '%s://%s' % (match_obj.groups()[0],
+                                   match_obj.groups()[1])
                 path = match_obj.groups()[2]
             else:
-                print 'got status: %d' % resp1.status
+                print 'ERROR: Getting layer recieved status: %d' % resp1.status
                 return False
         maxlen = int(resp1.getheader('content-length'))
         nread = 0
@@ -637,13 +661,10 @@ def pull_image(options, repo, tag, cachedir='./', expanddir='./'):
     imageident = '%s:%s' % (repo, tag)
     handle = DockerV2Handle(imageident, options)
 
-    print "about to get manifest"
     manifest = handle.get_image_manifest()
     (eldest, youngest) = _construct_image_metadata(manifest)
     layer = eldest
-    print "about to get layers"
     while layer is not None:
-        print "about to pull layer: ", layer['fsLayer']['blobSum']
         handle.save_layer(layer['fsLayer']['blobSum'], cachedir)
         layer = layer['child']
 

@@ -28,6 +28,9 @@ class Dockerv2TestCase(unittest.TestCase):
     def setUp(self):
         cwd = os.path.dirname(os.path.realpath(__file__))
         os.environ['PATH'] = cwd + ':' + os.environ['PATH']
+        self.options = None
+        if 'LOCALREGISTRY' in os.environ:
+            self.options = {'baseUrl': os.environ['LOCALREGISTRY']}
         self.cleanpaths = []
 
     def tearDown(self):
@@ -40,8 +43,8 @@ class Dockerv2TestCase(unittest.TestCase):
         self.cleanpaths.append(cache)
         self.cleanpaths.append(expand)
 
-        resp = dockerv2.pull_image(None, 'dmjacobsen/whiteouttest', 'latest',
-                                   cachedir=cache, expanddir=expand)
+        resp = dockerv2.pull_image(self.options, 'dmjacobsen/whiteouttest',
+                                   'latest', cachedir=cache, expanddir=expand)
 
         assert os.path.exists(resp['expandedpath'])
         assert os.path.exists(os.path.join(resp['expandedpath'], 'usr'))
@@ -61,7 +64,7 @@ class Dockerv2TestCase(unittest.TestCase):
         self.cleanpaths.append(cache)
         self.cleanpaths.append(expand)
 
-        resp = dockerv2.pull_image(None, 'scanon/shanetest', 'latest',
+        resp = dockerv2.pull_image(self.options, 'scanon/shanetest', 'latest',
                                    cachedir=cache, expanddir=expand)
 
         assert os.path.exists(resp['expandedpath'])
