@@ -240,6 +240,8 @@ class ImageMngr(object):
         Return the last <limit> lookup records.
         """
         recs = []
+        if not self._isadmin(session, system):
+            return recs
         if self.metrics is None:
             return recs
         count = self.metrics.count()
