@@ -37,6 +37,7 @@ class ImageMngrTestCase(unittest.TestCase):
         client = MongoClient(mongodb)
         db = self.config['MongoDB']
         self.images = client[db].images
+        self.metrics = client[db].metrics
         self.images.drop()
         self.m = ImageMngr(self.config)
         self.system = 'systema'
@@ -990,11 +991,11 @@ class ImageMngrTestCase(unittest.TestCase):
                                                self.format)
         session = self.m.new_session(self.authadmin, self.system)
         self.m.autoexpire(session, self.system, testmode=1)  # ,delay=False)
-        time.sleep(2)
+        time.sleep(5)
         state = self.m.get_state(id)
-        assert state == 'EXPIRED'
-        assert os.path.exists(file) is False
-        assert os.path.exists(metafile) is False
+        self.assertEquals(state, 'EXPIRED')
+        self.assertFalse(os.path.exists(file))
+        self.assertFalse(os.path.exists(metafile))
 
     def test_autoexpire_dontexpire(self):
         # A new image shouldn't expire
@@ -1033,6 +1034,28 @@ class ImageMngrTestCase(unittest.TestCase):
         assert os.path.exists(file) is True
         assert os.path.exists(metafile) is True
 
+    def test_metrics(self):
+        rec = {
+            "uid": 100,
+            "user": "usera",
+            "tag": self.tag,
+            "system": self.system,
+            "id": self.id,
+            "type": self.itype
+        }
+        # Remove everything
+        self.metrics.remove({})
+        for _ in xrange(100):
+            rec['time'] = time.time()
+            self.metrics.insert(rec.copy())
+        session = self.m.new_session(self.authadmin, self.system)
+        recs = self.m.get_metrics(session, self.system, 10)  # ,delay=False)
+        self.assertIsNotNone(recs)
+        self.assertEquals(len(recs), 10)
+        # Try pulling more records than we have
+        recs = self.m.get_metrics(session, self.system, 101)  # ,delay=False)
+        self.assertIsNotNone(recs)
+        self.assertEquals(len(recs), 100)
 
 if __name__ == '__main__':
     unittest.main()

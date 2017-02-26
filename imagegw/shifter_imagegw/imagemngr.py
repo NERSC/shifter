@@ -107,6 +107,10 @@ class ImageMngr(object):
             self.images = client[db_].images
         else:
             raise NameError('MongoDBURI not defined')
+        self.metrics = None
+        if 'Metrics' in self.config and self.config['Metrics'] is True:
+            self.metrics = client[db_].metrics
+
         initqueue(config)
         # Initialize data structures
 
@@ -161,7 +165,7 @@ class ImageMngr(object):
             return True
         uid = session['uid']
         gid = session['gid']
-        self.logger.debug('uid=%s iUACL=%s' %(uid, str(iUACL)))
+        self.logger.debug('uid=%s iUACL=%s' % (uid, str(iUACL)))
         self.logger.debug('sessions = ' + str(session))
         if iUACL is not None and uid in iUACL:
             return True
@@ -213,6 +217,40 @@ class ImageMngr(object):
                 return False
         return True
 
+    def _add_metrics(self, session, request, record):
+        """
+        Add a row to mongo for this lookup request.
+        """
+        try:
+            r = {
+                'user': session['user'],
+                'uid': session['uid'],
+                'system': request['system'],
+                'type': request['itype'],
+                'tag': request['tag'],
+                'id': record['id'],
+                'time': time()
+            }
+            self._metrics_insert(r)
+        except:
+            self.logger.warn('Failed to log lookup.')
+
+    def get_metrics(self, session, system, limit):
+        """
+        Return the last <limit> lookup records.
+        """
+        recs = []
+        if self.metrics is None:
+            return recs
+        count = self.metrics.count()
+        skip = count - limit
+        if skip < 0:
+            skip = 0
+        for r in self.metrics.find().skip(skip):
+            r.pop('_id', None)
+            recs.append(r)
+        return recs
+
     def new_session(self, auth_string, system):
         """
         Creates a session context that can be used for multiple transactions.
@@ -251,7 +289,9 @@ class ImageMngr(object):
             if self._checkread(session, rec) is False:
                 return None
             self._resetexpire(rec['_id'])
-        # TODO: verify access
+
+        if self.metrics is not None:
+            self._add_metrics(session, image, rec)
         return rec
 
     def imglist(self, session, system):
@@ -787,6 +827,12 @@ class ImageMngr(object):
     def _images_insert(self, *args, **kwargs):
         """ Decorated function to insert an image in mongo """
         return self.images.insert(*args, **kwargs)
+
+    @mongo_reconnect_reattempt
+    def _metrics_insert(self, *args, **kwargs):
+        """ Decorated function to insert an image in mongo """
+        if self.metrics is not None:
+            return self.metrics.insert(*args, **kwargs)
 
 
 def usage():
