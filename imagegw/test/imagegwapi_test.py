@@ -48,6 +48,8 @@ class GWTestCase(unittest.TestCase):
             os.makedirs(p)
         self.images = client[db].images
         self.images.drop()
+        self.metrics = client[db].metrics
+        self.metrics.remove({})
         api.config['TESTING'] = True
         self.app = api.app.test_client()
         self.url = "/api"
@@ -225,6 +227,28 @@ class GWTestCase(unittest.TestCase):
         r = self.images.find_one({'_id': id})
 
         assert r['status'] == 'EXPIRED'
+
+    def test_metrics(self):
+        rec = {
+            "uid": 100,
+            "user": "usera",
+            "tag": self.tag,
+            "system": self.system,
+            "id": "fakeid",
+            "type": "docker"
+        }
+        # Remove everything
+        self.metrics.remove({})
+        for _ in xrange(100):
+            rec['time'] = time.time()
+            last_time = rec['time']
+            self.metrics.insert(rec.copy())
+        uri = '%s/metrics/%s/?limit=20' % (self.url, self.system)
+        rv = self.app.get(uri, headers={AUTH_HEADER: self.authadmin})
+        self.assertEquals(rv.status_code, 200)
+        data = json.loads(rv.data)
+        self.assertEquals(len(data), 20)
+        self.assertEquals(data[19]['time'], last_time)
 
 if __name__ == '__main__':
     unittest.main()

@@ -150,6 +150,25 @@ def lookup(system, imgtype, tag):
     return jsonify(create_response(rec))
 
 
+# Get Metrics
+# This will return the most recent XX lookup records.
+@app.route('/api/metrics/<system>/', methods=["GET"])
+def metrics(system):
+    """ Lookup an image for a system and return its record """
+    auth = request.headers.get(AUTH_HEADER)
+    memo = 'metrics system=%s auth=%s' \
+           % (system, auth)
+    app.logger.debug(memo)
+    limit = int(request.args.get('limit', '10'))
+    try:
+        session = mgr.new_session(auth, system)
+        recs = mgr.get_metrics(session, system, limit)
+    except:
+        app.logger.exception('Exception in metrics')
+        return not_found('%s %s' % (sys.exc_type, sys.exc_value))
+    return jsonify(recs)
+
+
 # Pull image
 # This will pull the requested image.
 @app.route('/api/pull/<system>/<imgtype>/<path:tag>/', methods=["POST"])
