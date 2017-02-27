@@ -59,9 +59,6 @@ TEST(ImageDataTestGroup, ConfigAssign_basic) {
     ret = _ImageData_assign(NULL, NULL, NULL);
     CHECK(ret == 1);
 
-    ret = _ImageData_assign("FakeKey", "FakeValue", &image);
-    CHECK(ret == 2);
-
     ret = _ImageData_assign("ENV", "PATH=/bin:/usr/bin", &image);
     CHECK(ret == 0);
 

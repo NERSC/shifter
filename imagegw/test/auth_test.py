@@ -20,10 +20,10 @@ import os
 import unittest
 from shifter_imagegw.auth import Authentication
 
+
 class AuthTestCase(unittest.TestCase):
 
     def setUp(self):
-        #os.environ['PATH']=os.environ['PATH']+":./test"
         self.test_dir = os.path.dirname(os.path.abspath(__file__)) + "/../test/"
         self.encoded = "xxxx\n"
         self.message = "test"
@@ -32,8 +32,8 @@ class AuthTestCase(unittest.TestCase):
             f.write(self.encoded)
         self.system = 'systema'
         self.config = {
-            "Authentication":"munge",
-            "Platforms":{self.system: {"mungeSocketPath": "/tmp/munge.s"}}
+            "Authentication": "munge",
+            "Platforms": {self.system: {"mungeSocketPath": "/tmp/munge.s"}}
         }
         self.auth = Authentication(self.config)
 
@@ -50,11 +50,11 @@ class AuthTestCase(unittest.TestCase):
     def test_auth_replay(self):
         resp = self.auth.authenticate(self.encoded, self.system)
         assert resp is not None
-        with self.assertRaises(OSError) as cm:
+        with self.assertRaises(OSError):
             resp = self.auth.authenticate(self.encoded, self.system)
 
     def test_auth_bad(self):
-        with self.assertRaises(OSError) as cm:
+        with self.assertRaises(OSError):
             self.auth.authenticate("bad", self.system)
 
 

@@ -52,6 +52,7 @@
 #include "utility.h"
 #include "VolumeMap.h"
 #include "config.h"
+#include "gpu_support.h"
 
 #define VOLUME_ALLOC_BLOCK 10
 
@@ -88,7 +89,26 @@ int isImageLoaded(ImageData *, struct options *, UdiRootConfig *);
 int loadImage(ImageData *, struct options *, UdiRootConfig *);
 int adoptPATH(char **environ);
 
+int check_permissions(uid_t actualUid, gid_t actualGid, ImageData imageData) {
+    uid_t *tuid;
+    gid_t *tgid;
+
+    if (imageData.uids==NULL && imageData.gids==NULL) {
+        return 1;
+    }
+
+    for (tuid=imageData.uids;tuid!=NULL && *tuid!=-1;tuid++){
+        if (*tuid==actualUid) return 1;
+    }
+    for (tgid=imageData.gids;tgid!=NULL && *tgid!=-1;tgid++){
+        if (*tgid==actualGid) return 1;
+    }
+    return 0;
+}
+
 #ifndef _TESTHARNESS_SHIFTER
+extern char** environ;
+
 int main(int argc, char **argv) {
     sighandler_t sighupHndlr = signal(SIGHUP, SIG_IGN);
     sighandler_t sigintHndlr = signal(SIGINT, SIG_IGN);
@@ -96,7 +116,7 @@ int main(int argc, char **argv) {
     sighandler_t sigtermHndlr = signal(SIGTERM, SIG_IGN);
 
     /* save a copy of the environment for the exec */
-    char **environ_copy = shifter_copyenv();
+    char **environ_copy = shifter_copyenv(environ, 0);
 
     /* declare needed variables */
     char wd[PATH_MAX];
@@ -123,19 +143,33 @@ int main(int argc, char **argv) {
         fprintf(stderr, "FAILED to parse environment\n");
         exit(1);
     }
-
-    /* destroy this environment */
-    clearenv();
-
     /* parse config file and command line options */
     if (parse_options(argc, argv, &opts, &udiConfig) != 0) {
         fprintf(stderr, "FAILED to parse command line arguments.\n");
         exit(1);
     }
+    /* parse environment variables for GPU support */
+    if (parse_gpu_env(&udiConfig.gpu_config) != 0) {
+        fprintf(stderr, "FAILED to parse CUDA GPU environment variables.\n");
+        exit(1);
+    }
+
+    /* destroy this environment */
+    clearenv();
 
     /* discover information about this image */
     if (parse_ImageData(opts.imageType, opts.imageIdentifier, &udiConfig, &imageData) != 0) {
         fprintf(stderr, "FAILED to find requested image.\n");
+        exit(1);
+    }
+    /* figure out who we are and who we want to be */
+    eUid = geteuid();
+    eGid = getegid();
+    actualUid = getuid();
+    actualGid = getgid();
+
+    if (check_permissions(actualUid, actualGid, imageData) == 0){
+        fprintf(stderr,"FAILED permission denied to image\n");
         exit(1);
     }
 
@@ -273,8 +307,16 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to switch to working dir: %s, staying in /\n", opts.workdir);
     }
 
-    /* source the environment variables from the image */
-    shifter_setupenv(&environ_copy, &imageData, &udiConfig);
+    /* set the environment variables */
+    if (shifter_setupenv(&environ_copy, &imageData, &udiConfig) != 0) {
+        fprintf(stderr, "Failed to setup container environment variables\n");
+    }
+
+    /* set the environment variables related to the site resources */
+    if (shifter_setupenv_site_resources(&environ_copy, &udiConfig) != 0) {
+        fprintf(stderr, "Failed to setup container's site-resources environment variables\n");
+        exit(1);
+    }
 
     /* immediately set PATH to container PATH to get search right */
     adoptPATH(environ_copy);
@@ -372,6 +414,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     /* set some defaults */
     config->tgtUid = getuid();
     config->tgtGid = getgid();
+    seteuid(config->tgtUid);
 
     /* ensure that getopt processing stops at first non-option */
     setenv("POSIXLY_CORRECT", "1", 1);
@@ -522,7 +565,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
 
     udiConfig->target_uid = config->tgtUid;
     udiConfig->target_gid = config->tgtGid;
-
+    seteuid(0);
     return 0;
 }
 
@@ -590,7 +633,6 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
     return 0;
 }
 
-
 static void _usage(int status) {
     printf("\n"
         "Usage:\n"
@@ -632,6 +674,18 @@ static void _usage(int status) {
 "in the provided image.  You can not bind a path into any path including or\n"
 "under /dev, /etc, /opt/udiImage, /proc, or /var; or overwrite any bind-\n"
 "requested by the system configuration.\n"
+"\n"
+"GPU Support: To select one or more GPU devices to be made available inside\n"
+"the container, set the environment variable CUDA_VISIBLE_DEVICES.\n"
+"The value of CUDA_VISIBLE_DEVICES should be a comma separated list of GPU\n"
+"device IDs.\n"
+"e.g.,\n"
+"    export CUDA_VISIBLE_DEVICES=0,2\n"
+"When using the SLURM Workload Manager, CUDA_VISIBLE_DEVICES is always\n"
+"exported, and the user can control the selected GPU devices through\n"
+"the Generic Resource Scheduling, e.g.:\n"
+"    srun --gres=gpu:<NumGPUsPerNode>\n"
+"Thus, Shifter transparently supports GPUs selected by the SLURM GRES plugin.\n"
 "\n"
         );
     exit(status);
@@ -734,7 +788,7 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
     /* all of the mounts visible to us are now in our private namespace; since
      * we'll be changing things, need to ensure that nothing is mounted with
      * MS_SHARED, which would cause our changes to propagate out to the outside
-     * system.  If we used MS_PRIVATE it would prevent us from receiving 
+     * system.  If we used MS_PRIVATE it would prevent us from receiving
      * external events even if downstream bindmounts made by the container
      * specify MS_SLAVE.  Thus setting MS_SLAVE forces the one-way propagation
      * of mount/umounts that are desirable here
@@ -761,7 +815,7 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
             goto _loadImage_error;
         }
     }
-    if (mountImageVFS(image, opts->username, NULL, udiConfig) != 0) {
+    if (mountImageVFS(image, opts->username, opts->verbose, NULL, udiConfig) != 0) {
         fprintf(stderr, "FAILED to mount image into UDI\n");
         goto _loadImage_error;
     }
@@ -799,4 +853,3 @@ int adoptPATH(char **environ) {
     }
     return 1;
 }
-

@@ -19,8 +19,8 @@
 # See LICENSE for full text.
 
 """
-Convert module that handles converting an unpacked image into a compatibable format
-for shifter.
+Convert module that handles converting an unpacked image into a compatibable
+format for shifter.
 """
 
 import os
@@ -29,13 +29,15 @@ import shutil
 import tempfile
 from shifter_imagegw.util import program_exists
 
+
 def generate_ext4_image(expand_path, image_path):
     """
     Creates an ext4 based image
     """
-    message = 'ext4 support is note implemented yet %s %s'%(expand_path, image_path)
+    message = 'ext4 support is note implemented yet %s %s' % \
+              (expand_path, image_path)
     raise NotImplementedError(message)
-    return False
+
 
 def generate_cramfs_image(expand_path, image_path):
     """
@@ -55,6 +57,7 @@ def generate_cramfs_image(expand_path, image_path):
 
     return True
 
+
 def generate_squashfs_image(expand_path, image_path):
     """
     Creates a SquashFS based image
@@ -70,10 +73,10 @@ def generate_squashfs_image(expand_path, image_path):
     try:
         shutil.rmtree(expand_path)
     except:
-        # error handling
         pass
 
     return True
+
 
 def convert(fmt, expand_path, image_path):
     """ do the conversion """
@@ -94,10 +97,15 @@ def convert(fmt, expand_path, image_path):
             success = generate_cramfs_image(expand_path, temp_path)
         elif fmt == 'ext4':
             success = generate_ext4_image(expand_path, temp_path)
+        elif fmt == 'mock':
+            with open(temp_path, 'w') as f:
+                f.write('bogus')
+            success = True
         else:
             raise NotImplementedError("%s not a supported format" % fmt)
     except:
-        os.unlink(temp_path)
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
         raise
 
     if not success:
@@ -110,15 +118,25 @@ def convert(fmt, expand_path, image_path):
     # Some error must have occurred
     return True
 
+
 def writemeta(fmt, meta, metafile):
     """ write the metadata file """
     with open(metafile, 'w') as meta_fd:
         # write out ENV, ENTRYPOINT, WORKDIR and format
+        private = False
+        if 'private' in meta:
+            private = meta['private']
         meta_fd.write("FORMAT: %s\n" % (fmt))
         if 'entrypoint' in meta and meta['entrypoint'] is not None:
             meta_fd.write("ENTRY: %s\n" % (meta['entrypoint']))
         if 'workdir' in meta and meta['workdir'] is not None:
             meta_fd.write("WORKDIR: %s\n" % (meta['workdir']))
+        if private and 'userACL' in meta and meta['userACL'] is not None:
+            acls = ','.join(map(lambda x: str(x), meta['userACL']))
+            meta_fd.write("USERACL: %s\n" % (acls))
+        if private and 'groupACL' in meta and meta['groupACL'] is not None:
+            acls = ','.join(map(lambda x: str(x), meta['groupACL']))
+            meta_fd.write("GROUPACL: %s\n" % (acls))
         if 'env' in meta and meta['env'] is not None:
             for keyval in meta['env']:
                 meta_fd.write("ENV: %s\n" % (keyval))

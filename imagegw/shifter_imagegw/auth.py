@@ -62,13 +62,13 @@ class Authentication(object):
         if response is None:
             raise OSError('Authentication Failed')
         ret = dict()
-        uid = response['UID']
-        gid = response['GID']
-        (user, uid) = uid.replace(' ', '').rstrip(')').split('(')
-        (group, gid) = gid.replace(' ', '').rstrip(')').split('(')
+        uids = response['UID']
+        gids = response['GID']
+        (user, uid) = uids.replace(' ', '').rstrip(')').split('(')
+        (group, gid) = gids.replace(' ', '').rstrip(')').split('(')
         ret = {
-            'user': user, 'uid': uid,
-            'group': group, 'gid': gid,
+            'user': user, 'uid': int(uid),
+            'group': group, 'gid': int(gid),
             'tokens': ''
         }
         message_json = response['MESSAGE']
@@ -88,10 +88,14 @@ class Authentication(object):
         auth = authstr.split(':')
         if len(auth) == 3:
             (status, user, group) = auth
-            ret = {'user':user, 'group':group, 'tokens':''}
+            ret = {'user': user, 'group': group, 'tokens': ''}
         elif len(auth) == 4:
             (status, user, group, token) = auth
-            ret = {'user':user, 'group':group, 'tokens':token}
+            ret = {'user': user, 'group': group, 'tokens': token}
+        elif len(auth) == 6:
+            (status, user, group, token, uid, gid) = auth
+            ret = {'user': user, 'group': group, 'tokens': token,
+                   'uid': int(uid), 'gid': int(gid)}
         else:
             raise OSError('Bad AuthString')
 
