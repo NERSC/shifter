@@ -14,16 +14,13 @@
 site_mpi_shared_libraries="
 libmpi.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpi.so.12.0.5
 libmpicxx.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpicxx.so.12.0.5
-libmpifort.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpifort.so.12.0.5
-libmpl.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpi.so
-libopa.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpi.so
-libmpich.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpi.so.12.0.5
-libmpichcxx.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpicxx.so.12.0.5
-libmpichf90.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpifort.so.12.0.5"
+libmpifort.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpifort.so.12.0.5"
 
 # This is a list of libraries that are dependencies of the site MPI libraries.
 # These libraries are always bind mounted in the container when the MPI support is active.
 site_mpi_dependency_libraries="
+/cm/shared/apps/easybuild/software/GCC/5.3.0/lib64/libgfortran.so.3
+/cm/shared/apps/easybuild/software/GCC/5.3.0/lib64/libquadmath.so.0
 /lib64/libmlx5-rdmav2.so
 /lib64/libmlx4-rdmav2.so
 /lib64/libxml2.so.2
@@ -32,7 +29,8 @@ site_mpi_dependency_libraries="
 /lib64/librdmacm.so.1
 /lib64/libibumad.so.3
 /lib64/libibverbs.so.1
-/lib64/libnl.so.1"
+/lib64/libnl.so.1
+/lib64/libnuma.so.1"
 
 # This is a list of site MPI command line tools that will be bind mounted in the container.
 site_mpi_binaries="
@@ -126,7 +124,7 @@ parse_command_line_arguments()
 check_that_image_contains_required_dependencies()
 {
     # we need the container image to provide these command line tools
-    command_line_tools="sed realpath"
+    command_line_tools="sed readlink"
     for command_line_tool in $command_line_tools; do
         if [ -z $(chroot $container_root_dir bash -c "which $command_line_tool") ]; then
             log ERROR "Missing dependency: make sure that the container image contains the program \"$command_line_tool\""
@@ -179,36 +177,55 @@ bind_mount_files_at_same_location_in_container()
 strip_library_name()
 {
     local lib_name=$1
-    local lib_name_stripped=$(basename $lib_name | sed -n -e 's/\(.\+\.so\)\(\.[0-9]\+\)*$/\1/p')
+    local lib_name_stripped=$(basename $lib_name | sed -n -e 's/\(.\+\.so\)\(\..\+\)*$/\1/p')
     echo $lib_name_stripped
+}
+
+# Returns a list containing the major and minor version strings of the given library name.
+# If the library doesn't contain a version string, the version number is assumed to be zero
+# and a string containing zero is placed in the list to be returned.
+get_mpi_library_major_and_minor_version_numbers()
+{
+    local library=$1
+    local version_strings=($(echo $(basename $library) | sed 's/lib.\+\.so\(.*\)/\1/' | sed -e 's/^\.\(.*\)/\1/' | sed -e 's/\./ /g'))
+    local number_of_version_strings=${#version_strings[*]}
+
+    if [ $number_of_version_strings -eq 0 ]; then
+        local major_number=0
+        local minor_number=0
+    elif [ $number_of_version_strings -eq 1 ]; then
+        local major_number=${version_strings[0]}
+        local minor_number=0
+    else
+        local major_number=${version_strings[0]}
+        local minor_number=${version_strings[1]}
+    fi
+
+    is_number_regexp='^[0-9]+$'
+    if ! [[ $major_number =~ $is_number_regexp ]]; then
+        log ERROR "Internal error: major version string of MPI library $library is not a number"
+    fi
+    if ! [[ $minor_number =~ $is_number_regexp ]]; then
+        log ERROR "Internal error: minor version string of MPI library $library is not a number"
+    fi
+
+    echo "$major_number $minor_number"
 }
 
 are_mpi_libraries_abi_compatible()
 {
     local site_lib=$1
-    local site_lib_version_numbers=($(echo $(basename $site_lib) | sed 's/lib.*\.so\(.*\)/\1/' | sed -e 's/^\.\(.*\)/\1/' | sed -e 's/\./ /g'))
-    local count_site_version_numbers=${#site_lib_version_numbers[*]}
+    local site_lib_version_numbers=($(get_mpi_library_major_and_minor_version_numbers $site_lib))
 
     local container_lib=$2
-    local container_lib_version_numbers=($(echo $(basename $container_lib) | sed 's/lib.*\.so\(.*\)/\1/' | sed -e 's/^\.\(.*\)/\1/' | sed -e 's/\./ /g'))
-    local count_container_version_numbers=${#container_lib_version_numbers[*]}
+    local container_lib_version_numbers=($(get_mpi_library_major_and_minor_version_numbers $container_lib))
 
-    if [ $count_site_version_numbers -gt $count_container_version_numbers ]; then
-        log ERROR "Internal error: missing version information about the container MPI shared library $site_lib
-The library name should contain at least $count_site_version_numbers version numbers"
-        exit 1
+    if [ ${site_lib_version_numbers[0]} -ne ${container_lib_version_numbers[0]} ]; then
+        return 1
     fi
 
-    if [ $count_site_version_numbers -ge 1 ]; then
-        if [ ${site_lib_version_numbers[0]} -ne ${container_lib_version_numbers[0]} ]; then
-            return 1
-        fi
-    fi
-
-    if [ $count_site_version_numbers -ge 2 ]; then
-        if [ ${site_lib_version_numbers[1]} -lt ${container_lib_version_numbers[1]} ]; then
-            return 1
-        fi
+    if [ ${site_lib_version_numbers[1]} -lt ${container_lib_version_numbers[1]} ]; then
+        return 1
     fi
 
     return 0
@@ -257,7 +274,7 @@ corresponding_site_mpi_library_exists()
 override_mpi_shared_libraries_of_container()
 {
     log INFO "Scanning container's ld.so.cache for MPI libraries"
-    local container_lib_realpaths=$(chroot $container_root_dir bash -c "ldconfig -p | sed -n -e 's/.* => \(.*\)/echo \$(realpath \1)/p' | bash")
+    local container_lib_realpaths=$(chroot $container_root_dir bash -c "ldconfig -p | sed -n -e 's/.* => \(.*\)/echo \$(readlink -e \1)/p' | bash")
     local container_lib_realpaths_mounted_so_far=
     local container_has_mpi_libraries=false
 
