@@ -34,7 +34,7 @@ Contents:
    mpi/mpich_abi
    install/centos6
    install/cle6
-   install/manualinstallgpu
+   install/manualinstall
    install/required-permissions
    wlm/slurm
 

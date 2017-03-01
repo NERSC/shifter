@@ -88,7 +88,7 @@ Create links to system directories and additional required directories:
 Shifter's runtime configuration parameters
 ++++++++++++++++++++++++++++++++++++++++++
 
-At run time, Shifter takes its configuration options from a file named *udiRoot.conf*. This file must be placed in the directory specified with *--sysconfdir* when running shifter's configure script. For reference, a template with a base configuration named *udiroot.conf.example* can be found inside the sources directory.
+At run time, Shifter takes its configuration options from a file named *udiRoot.conf*. This file must be placed in the directory specified with *--sysconfdir* when running shifter's configure script. For reference, a template with a base configuration named *udiRoot.conf.example* can be found inside the sources directory.
 
 To illustrate the configuration process, consider the following parameters that were modified from the template configuration (*udiroot.conf.example*) to support the install on our local cluster named *Greina*:
 
@@ -99,6 +99,9 @@ To illustrate the configuration process, consider the following parameters that 
 * **system=greina** The name of the computer cluster where shifter is deployed. It is **important for this to match the platform name in the json configuration file** for the Image Manager.
 * **imageGateway=http://greina9:5000** Space separated URLs for where the Image Gateway can be reached.
 * **siteResources=/opt/shifter/site-resources** Absolute path to where site-specific resources will be bind-mounted inside the container to enable features like native MPI or GPU support. This configuration only affects the container. The specified path will be automatically created inside the container. The specified path doesn't need to exist on the host.
+
+**Known issue on CLE**
+On Cray's CLE the value of the configuration option **rootfsType** in **udiRoot.conf** should be set to **ramfs**. Using the recommended value, i.e. tmpfs, could not work on Cray's compute nodes.
 
 
 Shifter Startup
