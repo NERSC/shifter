@@ -292,3 +292,53 @@ defaultImageType=docker
 # created inside the container. The specified path doesn't need to exist on the host.
 #
 siteResources=/opt/shifter/site-resources
+
+
+#siteMPISharedLibs
+#
+# This is a semicolon separated list of key-value pairs defined in the form
+# "<key1>:<value1>..."
+# The key is the name of the container's library to be substituted.
+# The value is the full path of the site's library that will substitute the container's library.
+#
+# The MPI support machinery will check that the site's library is ABI compatible with the
+# container's library to be substituted. The compatibility check is performed by comparing the
+# version numbers specified in the libraries' file names as follows:
+# - The major numbers (first from the left) must be equal.
+# - The site's minor number (second from the left) must be greater or equal to the container's minor number.
+# - If the site's library name doesn't contain any version number, no compatibility check is performed.
+# This compatibility check is compatible with the MPICH ABI version number schema.
+#
+#siteMPISharedLibs=libmpi.so:/path/to/my/libmpi.so;libmpicxx.so:/path/to/my/libmpicxx.so;libmpifort.so:/path/to/my/libmpifort.so
+
+
+#siteMPIDependencyLibs
+#
+# This is a semicolon separated list of libraries that are dependencies of the
+# site MPI libraries.
+# These libraries are always bind mounted in the container when the MPI support
+# is active.
+#
+#siteMPIDependencyLibs=""
+
+
+#siteMPIBins
+#
+# This is a semicolon separated list of site MPI command line tools that will
+# be bind mounted in the container.
+#
+#siteMPIBins=/path/to/my/mpiexec;/path/to/my/mpicc;...
+
+
+#siteMPIConfigurationFiles
+#
+# This is a semicolon separated list of site configuration files needed by MPI
+# resources or dependencies that will be copied in the container.
+#
+# Note for Cray systems: Cray's MPI implementation needs to read data from the
+# following paths, so be sure to include them in the list if you intend to use
+# native MPI support on a Cray machine:
+#   /var/opt/cray/alps/spool
+#   /etc/opt/cray
+#
+#siteMPIConfigurationFiles=
