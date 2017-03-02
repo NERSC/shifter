@@ -54,16 +54,6 @@ exit_if_previous_command_failed()
     fi
 }
 
-parse_semicolon_separated_list_into_array()
-{
-    IFS=';' read -ra $2 <<< "$1"
-    for i in "${2[@]}"; do
-        if [ ! -e $i ]
-            log ERROR "Internal error: received request to mount non-existent file ($i)"
-        fi
-    done
-}
-
 parse_command_line_arguments()
 {
     if [ ! $# -eq 7 ]; then
@@ -85,10 +75,10 @@ parse_command_line_arguments()
     container_mpi_lib_dir=$site_resources/mpi/lib
     container_mpi_bin_dir=$site_resources/mpi/bin
 
-    parse_semicolon_separated_list_into_array $3 site_mpi_shared_libraries
-    parse_semicolon_separated_list_into_array $4 site_mpi_dependency_libraries
-    parse_semicolon_separated_list_into_array $5 site_mpi_binaries
-    parse_semicolon_separated_list_into_array $6 site_configuration_files
+    site_mpi_shared_libraries=$(echo $3 | tr ';' ' ')
+    site_mpi_dependency_libraries=$(echo $4 | tr ';' ' ')
+    site_mpi_binaries=$(echo $5 | tr ';' ' ')
+    site_configuration_files=$(echo $6 | tr ';' ' ')
 
     local verbose=$7
     if [ $verbose = "verbose-on" ]; then
@@ -291,6 +281,6 @@ cached_site_mpi_library_ids_stripped >/dev/null
 parse_command_line_arguments $*
 check_that_image_contains_required_dependencies
 override_mpi_shared_libraries_of_container
-bind_mount_files_into_given_folder_of_container $site_mpi_dependency_libraries "$container_mpi_lib_dir"
-bind_mount_files_into_given_folder_of_container $site_mpi_binaries "$container_mpi_bin_dir"
-bind_mount_files_at_same_location_in_container $site_configuration_files
+bind_mount_files_into_given_folder_of_container "$site_mpi_dependency_libraries" "$container_mpi_lib_dir"
+bind_mount_files_into_given_folder_of_container "$site_mpi_binaries" "$container_mpi_bin_dir"
+bind_mount_files_at_same_location_in_container "$site_configuration_files"
