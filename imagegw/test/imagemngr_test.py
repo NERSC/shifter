@@ -630,6 +630,7 @@ class ImageMngrTestCase(unittest.TestCase):
         Let's simulate various permissions and test them.
         """
         user1 = {'uid': 1, 'gid': 1}
+        self.assertTrue(self.m._checkread(user1, {}))
         mock_image_rec = {
             'userACL': None,
             'groupACL': None

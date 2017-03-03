@@ -157,8 +157,12 @@ class ImageMngr(object):
         # Start by checking if the image is public (no ACLs)
         if 'private' in rec and rec['private'] is False:
             return True
-        iUACL = rec['userACL']
-        iGACL = rec['groupACL']
+        iUACL = None
+        iGACL = None
+        if 'userACL' in rec:
+            iUACL = rec['userACL']
+        if 'groupACL' in rec:
+            iGACL = rec['groupACL']
         if iUACL is None and iGACL is None:
             return True
         if iUACL == [] and iGACL == []:
