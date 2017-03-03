@@ -1,9 +1,9 @@
-Manual installation of Shifter with GPU support
-===============================================
+Manual installation of Shifter
+******************************
 
 
-Introduction: GPU support / Native performance for container images
--------------------------------------------------------------------
+Introduction: Native performance for container images
+=====================================================
 
 
 Containers allow applications to be portable accross platforms by packing the application in a complete filesystem that has everything needed for execution: code, libraries, system tools, environment variables, etc. Therefore, a container can ensure that an application always run under the same software environment.
@@ -12,8 +12,11 @@ To achieve a degree of portability, shifter (as the container runtime) has to pr
 
 In order to mantain the portability that images provide while supporting site-optimized system features we implement a solution that relies on drivers that provide ABI compatibility and mount system specific features at the container's startup. In other words, the driver that is used by a container to allow the application to run on a laptop can be swapped at startup by the shifter runtime and instead an ABI compatible version is loaded that is optimized for the infrastructure of the supercomputer, therefore allowing the same container to achieve native performance.
 
-We use this approach and solve the practical details for allowing container portability and native performance on a variety of target systems through command line options that indicate if, for instance, gpu support should be enabled and what gpu devices should be made available to the container image at startup.
+We use this approach and solve the practical details for allowing container portability and native performance on a variety of target systems through command line options that indicate if, for instance, GPU support should be enabled and what GPU devices should be made available to the container image at startup.
 
+
+Installation
+============
 
 Shifter Runtime
 ---------------
@@ -70,6 +73,7 @@ Configure and build the runtime:
                --with-json-c                    \
                --with-libcurl                   \
                --with-munge                     \
+               --disable-staticsshd             \
                --with-slurm=/path/to/your/slurm/installation
    make -j8
    sudo make install
@@ -100,8 +104,35 @@ To illustrate the configuration process, consider the following parameters that 
 * **imageGateway=http://greina9:5000** Space separated URLs for where the Image Gateway can be reached.
 * **siteResources=/opt/shifter/site-resources** Absolute path to where site-specific resources will be bind-mounted inside the container to enable features like native MPI or GPU support. This configuration only affects the container. The specified path will be automatically created inside the container. The specified path doesn't need to exist on the host.
 
-**Known issue on CLE**
-On Cray's CLE the value of the configuration option **rootfsType** in **udiRoot.conf** should be set to **ramfs**. Using the recommended value, i.e. tmpfs, could not work on Cray's compute nodes.
+.. warning::
+    **Known issue on CLE**
+    
+    On Cray's CLE the value of the configuration option **rootfsType** in **udiRoot.conf** should be set to **ramfs**. Using the recommended value, i.e. tmpfs, could not work on Cray's compute nodes.
+
+
+Configuring Shifter for native MPI support
+++++++++++++++++++++++++++++++++++++++++++
+
+Shifter has the capability of overriding the MPI implementation inside the
+container image with an implementation sourced from the host system. This allows
+the container to work with native interconnect performance, by fully leveraging
+the hardware and software stack present in the system. It also frees the
+image from the requirement of packaging a specific implementation, as long
+as it retains ABI compatibility with the implementation installed in the system
+where the container is to be run.
+
+In order to enable native MPI support, the ``--mpi`` command-line option has to
+be used, and the following parameters in *udiRoot.conf* need to be configured
+(please refer to comments in the configuration file for more details):
+
+* **siteMPISharedLibs** A semicolon separated list of full paths to the site's
+  library that will substitute the container's library.
+* **siteMPIDependencyLibs** A semicolon separated list of libraries that are
+  dependencies of the site MPI libraries.
+* **siteMPIBins** A semicolon separated list of site MPI command line tools that will
+  be bind mounted in the container.
+* **siteMPIConfigurationFiles** A semicolon separated list of site configuration
+  files needed by MPI resources or dependencies that will be copied in the container.
 
 
 Shifter Startup
@@ -221,8 +252,8 @@ Copy the following files from the virtual-cluster installation resources:
    sudo cp init.d.shifter-imagegw /etc/init.d/shifter-imagegw
 
 
-Configure
-+++++++++
+Configuration of the Image Gateway
+++++++++++++++++++++++++++++++++++
 
 For configuration parameters, the Image Gateway uses a file named *imagemanager.json*. The configuration file must be located in the directory that was specified in Shifter's *$SHIFTER_SYSCONFDIR* (*--sysconfdir* when running shifter's *configure* script). A base template file named *imagemanager.json.example* can be found inside the sources directory.
 
