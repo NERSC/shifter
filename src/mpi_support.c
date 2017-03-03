@@ -11,17 +11,21 @@ int execute_hook_to_activate_mpi_support(int verbose, const UdiRootConfig* udiCo
 
     if(udiConfig->mpi_config.is_mpi_support_enabled)
     {
-        char* args[10];
+        if (udiConfig->siteMPISharedLibs == NULL || strlen(udiConfig->siteMPISharedLibs) == 0){
+            fprintf(stderr, "Native MPI support requested but no site-specific MPI libraries defined\n");
+            return 1
+        }
+
+        char* args[9];
         args[0] = strdup("/bin/bash");
         args[1] = alloc_strgenf("%s/bin/activate_mpi_support.sh", udiConfig->udiRootPath);
         args[2] = strdup(udiConfig->udiMountPoint);
         args[3] = strdup(udiConfig->siteResources);
         args[4] = strdup(udiConfig->siteMPISharedLibs);
         args[5] = strdup(udiConfig->siteMPIDependencyLibs);
-        args[6] = strdup(udiConfig->siteMPIBins);
-        args[7] = strdup(udiConfig->siteMPIConfigurationFiles);
-        args[8] = verbose ? strdup("verbose-on") : strdup("verbose-off");
-        args[9] = NULL;
+        args[6] = strdup(udiConfig->siteMPIConfigurationFiles);
+        args[7] = verbose ? strdup("verbose-on") : strdup("verbose-off");
+        args[8] = NULL;
 
         ret = forkAndExecv(args);
         char** p;

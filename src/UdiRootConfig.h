@@ -99,7 +99,6 @@ typedef struct _UdiRootConfig {
     char *siteResources;
     char *siteMPISharedLibs;
     char *siteMPIDependencyLibs;
-    char *siteMPIBins;
     char *siteMPIConfigurationFiles;
     char **siteEnv;
     char **siteEnvAppend;

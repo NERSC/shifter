@@ -129,8 +129,6 @@ be used, and the following parameters in *udiRoot.conf* need to be configured
   library that will substitute the container's library.
 * **siteMPIDependencyLibs** A semicolon separated list of libraries that are
   dependencies of the site MPI libraries.
-* **siteMPIBins** A semicolon separated list of site MPI command line tools that will
-  be bind mounted in the container.
 * **siteMPIConfigurationFiles** A semicolon separated list of site configuration
   files needed by MPI resources or dependencies that will be copied in the container.
 

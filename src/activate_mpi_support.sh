@@ -11,17 +11,14 @@
 # - The site's minor number (second from the left) must be greated or equal to the container's minor number.
 # - If the site's library name doesn't contain any version number, no compatibility check is performed.
 # This compatibility check is compatible with the MPICH ABI version number schema.
-site_mpi_shared_libraries=
+site_mpi_shared_libraries=""
 
 # This is a list of libraries that are dependencies of the site MPI libraries.
 # These libraries are always bind mounted in the container when the MPI support is active.
-site_mpi_dependency_libraries=
-
-# This is a list of site MPI command line tools that will be bind mounted in the container.
-site_mpi_binaries=
+site_mpi_dependency_libraries=""
 
 # This is a list of site configuration files that will be copied in the container.
-site_configuration_files=
+site_configuration_files=""
 
 #here is necessary to set PATH manually because shifter executes
 #this script with an empty environment
@@ -56,7 +53,7 @@ exit_if_previous_command_failed()
 
 parse_command_line_arguments()
 {
-    if [ ! $# -eq 7 ]; then
+    if [ ! $# -eq 6 ]; then
         log ERROR "Internal error: received bad number of command line arguments"
         exit 1
     fi
@@ -77,10 +74,9 @@ parse_command_line_arguments()
 
     site_mpi_shared_libraries=$(echo $3 | tr ';' ' ')
     site_mpi_dependency_libraries=$(echo $4 | tr ';' ' ')
-    site_mpi_binaries=$(echo $5 | tr ';' ' ')
-    site_configuration_files=$(echo $6 | tr ';' ' ')
+    site_configuration_files=$(echo $5 | tr ';' ' ')
 
-    local verbose=$7
+    local verbose=$6
     if [ $verbose = "verbose-on" ]; then
         is_verbose_active=true
     elif [ $verbose = "verbose-off" ]; then
@@ -280,5 +276,4 @@ parse_command_line_arguments $*
 check_that_image_contains_required_dependencies
 override_mpi_shared_libraries_of_container
 bind_mount_files_into_given_folder_of_container "$site_mpi_dependency_libraries" "$container_mpi_lib_dir"
-bind_mount_files_into_given_folder_of_container "$site_mpi_binaries" "$container_mpi_bin_dir"
 bind_mount_files_at_same_location_in_container "$site_configuration_files"

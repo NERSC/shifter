@@ -317,15 +317,7 @@ siteResources=/opt/shifter/site-resources
 # These libraries are always bind mounted in the container when the MPI support
 # is active.
 #
-#siteMPIDependencyLibs=""
-
-
-#siteMPIBins
-#
-# This is a semicolon separated list of site MPI command line tools that will
-# be bind mounted in the container.
-#
-#siteMPIBins=/path/to/my/mpiexec;/path/to/my/mpicc;...
+#siteMPIDependencyLibs=
 
 
 #siteMPIConfigurationFiles
