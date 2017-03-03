@@ -13,7 +13,7 @@ int execute_hook_to_activate_mpi_support(int verbose, const UdiRootConfig* udiCo
     {
         if (udiConfig->siteMPISharedLibs == NULL || strlen(udiConfig->siteMPISharedLibs) == 0){
             fprintf(stderr, "Native MPI support requested but no site-specific MPI libraries defined\n");
-            return 1
+            return 1;
         }
 
         char* args[9];
