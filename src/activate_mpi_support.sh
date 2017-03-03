@@ -203,9 +203,8 @@ are_mpi_libraries_abi_compatible()
 get_abi_compatible_site_mpi_library()
 {
     local container_lib=$1
-    for site_lib in $site_mpi_shared_libraries; do
-        local site_lib_id=$(echo $site_lib | cut -d: -f1)
-        local site_lib_realpath=$(echo $site_lib | cut -d: -f2)
+    for site_lib_realpath in $site_mpi_shared_libraries; do
+        local site_lib_id=$(strip_library_name $site_lib_realpath)
         if [ $(strip_library_name $site_lib_id) = $(strip_library_name $container_lib) ]; then
             if are_mpi_libraries_abi_compatible $site_lib_realpath $container_lib; then
                 echo $site_lib_realpath
@@ -220,8 +219,7 @@ cached_site_mpi_library_ids_stripped()
     # if cache is empty let's populate it
     if [ -z "$cached_lib_ids" ]; then
         for lib in $site_mpi_shared_libraries; do
-            local lib_id=$(echo $lib | cut -d: -f1)
-            local lib_id_stripped=$(strip_library_name $lib_id)
+            local lib_id_stripped=$(strip_library_name $lib)
             export cached_lib_ids="$cached_lib_ids $lib_id_stripped"
         done
     fi

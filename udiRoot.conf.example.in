@@ -296,10 +296,8 @@ siteResources=/opt/shifter/site-resources
 
 #siteMPISharedLibs
 #
-# This is a semicolon separated list of key-value pairs defined in the form
-# "<key1>:<value1>..."
-# The key is the name of the container's library to be substituted.
-# The value is the full path of the site's library that will substitute the container's library.
+# This is a semicolon separated list of full paths to the site's library that
+# will substitute the container's library.
 #
 # The MPI support machinery will check that the site's library is ABI compatible with the
 # container's library to be substituted. The compatibility check is performed by comparing the
@@ -309,7 +307,7 @@ siteResources=/opt/shifter/site-resources
 # - If the site's library name doesn't contain any version number, no compatibility check is performed.
 # This compatibility check is compatible with the MPICH ABI version number schema.
 #
-#siteMPISharedLibs=libmpi.so:/path/to/my/libmpi.so;libmpicxx.so:/path/to/my/libmpicxx.so;libmpifort.so:/path/to/my/libmpifort.so
+#siteMPISharedLibs=/path/to/my/libmpi.so;/path/to/my/libmpicxx.so;/path/to/my/libmpifort.so
 
 
 #siteMPIDependencyLibs
