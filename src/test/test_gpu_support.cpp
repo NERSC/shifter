@@ -3,6 +3,7 @@
  */
 #include <string>
 #include <CppUTest/CommandLineTestRunner.h>
+#include "UdiRootConfig.h"
 #include "gpu_support.h"
 
 TEST_GROUP(GPUSupportTestGroup) {

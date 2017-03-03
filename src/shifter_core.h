@@ -99,7 +99,7 @@ int forkAndExecvSilent(char *const *args);
   * process and its heirs
   *
   * Returns 0 upon success, non-zero upon any failure
-  */  
+  */
 int shifter_set_capability_boundingset_null();
 
 /** shifter_getgrouplist
@@ -110,7 +110,7 @@ int shifter_set_capability_boundingset_null();
   * \param pointer to ngroups, can be pointer to an zero-value integer (ngroups
   *     itself must not be NULL)
   *
-  * \returns 0-terminated array of gids (malloc'd, user responsible for 
+  * \returns 0-terminated array of gids (malloc'd, user responsible for
   *     freeing it)
   *
   * Upon successful run, will be return array populated with the valid gids for

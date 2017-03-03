@@ -1,6 +1,7 @@
 /**
  * @author Kean Mariotti <kean.mariotti@cscs.ch>
  */
+#include "UdiRootConfig.h"
 #include "gpu_support.h"
 #include "utility.h"
 #include "shifter_core.h"

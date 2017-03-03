@@ -52,6 +52,7 @@
 #include <sys/utsname.h>
 
 #include "UdiRootConfig.h"
+#include "gpu_support.h"
 #include "utility.h"
 
 #define SITEFS_ALLOC_BLOCK 16
