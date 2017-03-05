@@ -39,7 +39,7 @@ if [[ ! -e "zlib-${ZLIB_VERSION}.tar.gz" && -n "$DEPTAR_DIR" && -e "$DEPTAR_DIR/
     cp "$DEPTAR_DIR/zlib-${ZLIB_VERSION}.tar.gz" .
 fi
 if [[ ! -e "zlib-${ZLIB_VERSION}.tar.gz" ]]; then
-    curl -o "zlib-${ZLIB_VERSION}.tar.gz" "http://zlib.net/zlib-${ZLIB_VERSION}.tar.gz"
+    curl -o "zlib-${ZLIB_VERSION}.tar.gz" "http://zlib.net/fossils/zlib-${ZLIB_VERSION}.tar.gz"
 fi
 if [[ ! -e "openssh-${OPENSSH_VERSION}.tar.gz" && -n "$DEPTAR_DIR" && -e "$DEPTAR_DIR/openssh-${OPENSSH_VERSION}.tar.gz" ]]; then
     cp "$DEPTAR_DIR/openssh-${OPENSSH_VERSION}.tar.gz" .
