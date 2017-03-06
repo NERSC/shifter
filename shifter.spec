@@ -182,7 +182,11 @@ getent group > %{_sysconfdir}/shifter_etc_files/group
 
 %post imagegw
 %if 0%{?rhel}
+%if 0%{?el6}
+pip install celery==3.1.23
+%else
 pip install celery
+%endif
 %endif
 
 %files
@@ -197,6 +201,7 @@ pip install celery
 %config(noreplace missingok) %verify(not filedigest mtime size) %{_sysconfdir}/shifter_etc_files/group
 %config(noreplace) %{_sysconfdir}/shifter_etc_files/nsswitch.conf
 %{_bindir}/shifterimg
+%{_bindir}/activate_gpu_support.sh
 %{_sbindir}/setupRoot
 %{_sbindir}/unsetupRoot
 %{_libexecdir}/shifter/mount
