@@ -11,14 +11,14 @@
 # - The site's minor number (second from the left) must be greated or equal to the container's minor number.
 # - If the site's library name doesn't contain any version number, no compatibility check is performed.
 # This compatibility check is compatible with the MPICH ABI version number schema.
-site_mpi_shared_libraries=""
+site_mpi_shared_libraries=
 
 # This is a list of libraries that are dependencies of the site MPI libraries.
 # These libraries are always bind mounted in the container when the MPI support is active.
-site_mpi_dependency_libraries=""
+site_mpi_dependency_libraries=
 
 # This is a list of site configuration files that will be copied in the container.
-site_configuration_files=""
+site_configuration_files=
 
 #here is necessary to set PATH manually because shifter executes
 #this script with an empty environment

@@ -288,8 +288,9 @@ defaultImageType=docker
 #
 # Absolute path to where site-specific resources will be bind-mounted inside the
 # container to enable features like native MPI or GPU support.
-# This configuration only affects the container. The specified path will be automatically
-# created inside the container. The specified path doesn't need to exist on the host.
+# This configuration only affects the container. The specified path will be
+# automatically created inside the container.
+# The specified path doesn't need to exist on the host.
 #
 siteResources=/opt/shifter/site-resources
 
@@ -299,12 +300,15 @@ siteResources=/opt/shifter/site-resources
 # This is a semicolon separated list of full paths to the site's library that
 # will substitute the container's library.
 #
-# The MPI support machinery will check that the site's library is ABI compatible with the
-# container's library to be substituted. The compatibility check is performed by comparing the
-# version numbers specified in the libraries' file names as follows:
+# The MPI support machinery will check that the site's library is ABI compatible
+# with the container's library to be substituted. The compatibility check is
+# performed by comparing the version numbers specified in the libraries' file
+# names as follows:
 # - The major numbers (first from the left) must be equal.
-# - The site's minor number (second from the left) must be greater or equal to the container's minor number.
-# - If the site's library name doesn't contain any version number, no compatibility check is performed.
+# - The site's minor number (second from the left) must be greater or equal to
+#   the container's minor number.
+# - If the site's library name doesn't contain the version numbers or contains
+#   only the major version number, the missing numbers assumed to be zero.
 # This compatibility check is compatible with the MPICH ABI version number schema.
 #
 #siteMPISharedLibs=/path/to/my/libmpi.so;/path/to/my/libmpicxx.so;/path/to/my/libmpifort.so
