@@ -10,14 +10,6 @@
 extern "C" {
 #endif
 
-typedef struct _UdiRootConfig UdiRootConfig;
-
-struct gpu_support_config {
-    char* gpu_ids;
-    int is_gpu_support_enabled;
-};
-
-
 /**
  * Pupulate the GPU configuration structure according to the value
  * of the environment variable CUDA_VISIBLE_DEVICES.
