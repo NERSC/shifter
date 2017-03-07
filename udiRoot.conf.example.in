@@ -327,12 +327,6 @@ siteResources=/opt/shifter/site-resources
 #siteMPIConfigurationFiles
 #
 # This is a semicolon separated list of site configuration files needed by MPI
-# resources or dependencies that will be copied in the container.
-#
-# Note for Cray systems: Cray's MPI implementation needs to read data from the
-# following paths, so be sure to include them in the list if you intend to use
-# native MPI support on a Cray machine:
-#   /var/opt/cray/alps/spool
-#   /etc/opt/cray
+# resources or dependencies that will be mounted in the container.
 #
 #siteMPIConfigurationFiles=

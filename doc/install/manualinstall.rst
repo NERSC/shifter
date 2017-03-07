@@ -130,7 +130,17 @@ be used, and the following parameters in *udiRoot.conf* need to be configured
 * **siteMPIDependencyLibs** A semicolon separated list of libraries that are
   dependencies of the site MPI libraries.
 * **siteMPIConfigurationFiles** A semicolon separated list of site configuration
-  files needed by MPI resources or dependencies that will be copied in the container.
+  files needed by MPI resources or dependencies that will be mounted in the container.
+
+.. note::
+    **Important note to enable native MPI support on Cray systems**
+
+    Cray systems require additional changes to be made to ``udiRoot.conf``:
+
+    * Add ``/var/opt/cray/alps:/var/opt/cray/alps:rec`` to the ``siteFs`` parameter
+      values
+    * If your system uses CLE6, also add ``/etc/opt/cray/wlm_detect:/etc/opt/cray/wlm_detect``
+      to ``siteFs`` values
 
 
 Shifter Startup
