@@ -102,11 +102,20 @@ To illustrate the configuration process, consider the following parameters that 
 * **autoLoadKernelModule=0** Flag to determine if kernel modules will be loaded by Shifter if required. This is limited to loop, squashfs, ext4 (and dependencies). *Recommend value 0* if kernel modules (loop, squashfs, and ext4) are already loaded as part of the node boot process, otherwise use *value 1* to let Shifter load the kernel modules.
 * **system=greina** The name of the computer cluster where shifter is deployed. It is **important for this to match the platform name in the json configuration file** for the Image Manager.
 * **imageGateway=http://greina9:5000** Space separated URLs for where the Image Gateway can be reached.
+* **siteFs=/home;/scratch** Semicolon seperated list of paths to be automatically bind-mounted from the host system into the container. This is typically used to make network filesystems accessible within the container, but could be used to allow certain other facilities.
 * **siteResources=/opt/shifter/site-resources** Absolute path to where site-specific resources will be bind-mounted inside the container to enable features like native MPI or GPU support. This configuration only affects the container. The specified path will be automatically created inside the container. The specified path doesn't need to exist on the host.
 
 .. warning::
+    If a path specified in ``siteFs`` contains a parent directory that also exists in 
+    the image, mount precedence will be given to the host path, and the resources
+    from the image will be skipped.
+
+    For example: if ``/var/spool/alps`` is in ``siteFs``, and the image contains
+    ``/var/spool/``, the image directory will not be mounted.
+
+.. warning::
     **Known issue on CLE**
-    
+
     On Cray's CLE the value of the configuration option **rootfsType** in **udiRoot.conf** should be set to **ramfs**. Using the recommended value, i.e. tmpfs, could not work on Cray's compute nodes.
 
 
@@ -141,6 +150,8 @@ be used, and the following parameters in *udiRoot.conf* need to be configured
       values
     * If your system uses CLE6, also add ``/etc/opt/cray/wlm_detect:/etc/opt/cray/wlm_detect``
       to ``siteFs`` values
+
+    *Be aware of the effects of using the* ``siteFs`` *parameter, as detailed in the warning of the previous section*
 
 
 Shifter Startup
