@@ -27,6 +27,7 @@ filesystems locally available.  Uses ssh for remote access to platforms.
 import os
 from subprocess import Popen, PIPE
 
+
 def _sh_cmd(system, *args):
     """
     Helper function to build a local shell command
@@ -35,11 +36,13 @@ def _sh_cmd(system, *args):
         return None
     return args
 
+
 def _cp_cmd(system, localfile, targetfile):
     """
     Helper function to build a local copy command
     """
     return ['cp', localfile, targetfile]
+
 
 def _ssh_cmd(system, *args):
     """
@@ -50,8 +53,8 @@ def _ssh_cmd(system, *args):
 
     ssh = ['ssh']
 
-    ### TODO think about if the host selection needs to be smarter
-    ### also, is this guaranteed to be an iterable object?
+    # TODO think about if the host selection needs to be smarter
+    # also, is this guaranteed to be an iterable object?
     hostname = system['host'][0]
     username = system['ssh']['username']
     if 'key' in system['ssh']:
@@ -62,14 +65,15 @@ def _ssh_cmd(system, *args):
     ssh.extend(args)
     return ssh
 
+
 def _scp_cmd(system, localfile, remotefile):
     """
     Helper function to build a remote copy command
     """
     ssh = ['scp']
 
-    ### TODO think about if the host selection needs to be smarter
-    ### also, is this guaranteed to be an iterable object?
+    # TODO think about if the host selection needs to be smarter
+    # also, is this guaranteed to be an iterable object?
     hostname = system['host'][0]
     username = system['ssh']['username']
     if 'key' in system['ssh']:
@@ -78,6 +82,7 @@ def _scp_cmd(system, localfile, remotefile):
         ssh.extend(system['ssh']['scpCmdOptions'])
     ssh.extend([localfile, '%s@%s:%s' % (username, hostname, remotefile)])
     return ssh
+
 
 def _exec_and_log(cmd, logger):
     """
@@ -97,6 +102,7 @@ def _exec_and_log(cmd, logger):
         if stderr is not None and len(stderr) > 0:
             logger.error("%s stderr: %s" % (cmd[0], stderr.strip()))
     return proc.returncode
+
 
 def pre_create_tempfile(basepath, filename, sh_cmd, system, logger=None):
     """
@@ -118,11 +124,12 @@ def pre_create_tempfile(basepath, filename, sh_cmd, system, logger=None):
             temp_fn = stdout.strip()
         else:
             memo = 'Failed to precreate transfer file, %s (%d)' \
-                    % (stderr, proc.returncode)
+                   % (stderr, proc.returncode)
             raise OSError(memo)
         if len(stderr) > 0 and logger is not None:
             logger.error("%s stderr: %s" % (cmd[0], stderr.strip()))
     return temp_fn
+
 
 def copy_file(filename, system, logger=None):
     """
@@ -154,7 +161,7 @@ def copy_file(filename, system, logger=None):
 
     if not temp_fn.startswith(basepath):
         memo = 'Got unexpected response back from tempfile precreation: %s' \
-                % temp_fn
+               % temp_fn
         raise OSError(memo)
 
     copyret = None
@@ -172,11 +179,12 @@ def copy_file(filename, system, logger=None):
             ret = _exec_and_log(mv_cmd, logger)
             return ret == 0
         except:
-            ### TODO we might also need to remove target_fn in this case
+            # TODO we might also need to remove target_fn in this case
             rm_cmd = sh_cmd(system, 'rm', temp_fn)
             _exec_and_log(rm_cmd, logger)
             raise
     return False
+
 
 def remove_file(filename, system, logger=None):
     """
@@ -195,6 +203,7 @@ def remove_file(filename, system, logger=None):
     rm_cmd = sh_cmd(system, 'rm', '-f', target_fn)
     _exec_and_log(rm_cmd, logger)
     return True
+
 
 def check_file(filename, system, logger=None):
     """
@@ -217,13 +226,16 @@ def check_file(filename, system, logger=None):
         return True
     return False
 
+
 def transfer(system, image_path, metadata_path=None, logger=None):
     """
     transfer an image and its metadata to the system
     """
+    # TODO: Catch copy_file fail here
     if metadata_path is not None:
         copy_file(metadata_path, system, logger)
-    if copy_file(image_path, system, logger):
+    # If image path is None then we are just transferring the meatfile
+    if image_path is None or copy_file(image_path, system, logger):
         return True
     if logger is not None:
         logger.error("Transfer of %s failed" % image_path)
@@ -241,6 +253,7 @@ def remove(system, image_path, metadata_path=None, logger=None):
     if logger is not None:
         logger.error("Remove of %s failed" % image_path)
     return False
+
 
 def imagevalid(system, image_path, metadata_path=None, logger=None):
     """

@@ -73,7 +73,7 @@ def unmunge(encoded, socket=None):
             index = line.find(':')
             if index >= 0:
                 key = line[:index]
-                value = line[index+1:].lstrip()
+                value = line[index + 1:].lstrip()
                 resp[key] = value
         if 'STATUS' not in resp:
             return None
@@ -92,6 +92,7 @@ def usage(program):
     """
     print "%s <munge|unmunge>" % (program)
 
+
 def _main():
     """
     Brief test/validation code for munge helpers
@@ -107,7 +108,7 @@ def _main():
     elif command == "unmunge":
         message = sys.stdin.read().strip()
         resp = unmunge(message, socket="/var/run/munge/munge.socket")
-        print resp
+        print "Response: " + resp
     else:
         usage(program)
 

@@ -74,6 +74,18 @@ test_shifter_CXXFLAGS = $(TEST_CFLAGS) -D_TESTHARNESS_SHIFTER
 test_shifter_CFLAGS = $(TEST_CFLAGS) -D_TESTHARNESS_SHIFTER
 test_shifter_LDFLAGS = $(TEST_LDFLAGS)
 
+test_shifterimg_SOURCES = \
+    test_shifterimg.cpp \
+    $(top_srcdir)/src/shifterimg.c \
+    $(top_srcdir)/src/UdiRootConfig.c \
+    $(top_srcdir)/src/VolumeMap.c \
+    $(top_srcdir)/src/ImageData.c \
+    $(top_srcdir)/src/utility.c
+test_shifterimg_LDFLAGS = $(TEST_LDFLAGS)
+test_shifterimg_LDFLAGS = $(MUNGE_LDFLAGS) $(JSON_LDFLAGS) $(LIBCURL) $(MUNGE_LDFLAGS) $(TEST_LDFLAGS)
+test_shifterimg_CFLAGS = $(AM_CPPFLAGS) $(MUNGE_CPPFLAGS) $(JSON_CPPFLAGS) $(LIBCURL_CPPFLAGS) $(MUNGE_CPPFLAGS) $(TEST_CFLAGS) -D_TESTHARNESS_SHIFTER
+test_shifterimg_CXXFLAGS = $(AM_CPPFLAGS) $(MUNGE_CPPFLAGS) $(JSON_CPPFLAGS) $(LIBCURL_CPPFLAGS) $(MUNGE_CPPFLAGS) $(TEST_CFLAGS) -D_TESTHARNESS_SHIFTER
+
 test_ImageData_SOURCES = \
     test_ImageData.cpp \
     $(top_srcdir)/src/ImageData.c \
