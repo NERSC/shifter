@@ -50,6 +50,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <linux/limits.h>
+#include <dirent.h>
 
 #include "utility.h"
 
@@ -531,4 +532,28 @@ int is_existing_file(const char* path) {
 int is_existing_directory(const char* path) {
     struct stat sb;
     return stat(path, &sb) == 0 && S_ISDIR(sb.st_mode);
+}
+
+/**
+ * Returns 1 if the specified directory is empty.
+ */
+int is_empty_directory(const char* path) {
+    DIR *dir = opendir(path);
+    if(dir == NULL) {
+        return 1;
+    }
+
+    struct dirent *entry = NULL;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 ||
+            strcmp(entry->d_name, "..") == 0)
+        {
+            continue;
+        }
+        closedir(dir);
+        return 0;
+    }
+
+    closedir(dir);
+    return 1;
 }
