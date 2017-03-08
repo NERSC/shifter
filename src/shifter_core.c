@@ -1062,8 +1062,8 @@ int create_site_resources_folder(const UdiRootConfig* udiConfig) {
  *  Some Linux systems default their mounts to "shared" mounts, which means
  *  that mount option changes Shifter makes (or unmounts) can propagate back up
  *  to the original mount, which is not desirable.  This function remounts the
- *  base udiMount point as MS_PRIVATE - which means that no external mount 
- *  changes propagate into these mountpoints, nor do these go back up the 
+ *  base udiMount point as MS_PRIVATE - which means that no external mount
+ *  changes propagate into these mountpoints, nor do these go back up the
  *  chain.  It may be desirable to allow sites to choose MS_SLAVE instead of
  *  MS_PRIVATE here, as that will allow site unmounts to propagate into shifter
  *  containers.
@@ -1153,7 +1153,7 @@ char **getSupportedFilesystems() {
     size_t listExtent = 10;
     size_t listLen = 0;
     FILE *fp = NULL;
-    
+
     if (ret == NULL) { // || buffer == NULL) {
         /* ran out of memory */
         return NULL;
@@ -1583,7 +1583,7 @@ int setupVolumeMapMounts(
         }
 
         /* if this is not a per-node cache (i.e., is a standand volume mount),
-         * then validate the user has permissions to view the content, by 
+         * then validate the user has permissions to view the content, by
          * performing realpath() and lstat() as the user */
         if (!(flagsInEffect & VOLMAP_FLAG_PERNODECACHE)) {
             uid_t orig_euid = geteuid();
@@ -1593,7 +1593,7 @@ int setupVolumeMapMounts(
             int switch_user_stage = 0;
 
             /* switch privileges if this is a user mount to ensure we only
-             * grant access to resources the user can reach at time of 
+             * grant access to resources the user can reach at time of
              * invocation */
             if (userRequested != 0) {
                 if (udiConfig->auxiliary_gids == NULL ||
@@ -1789,8 +1789,8 @@ _pass_check_fromvol:
                     fprintf(stderr, "Invalid source %s, not allowed, fail.\n", from_real);
                     goto _handleVolMountError;
                 } else {
-                    /* from_real is known to be longer than udiMountLen from 
-                     * previous check (i.e., don't remove the check!) */ 
+                    /* from_real is known to be longer than udiMountLen from
+                     * previous check (i.e., don't remove the check!) */
                     container_from_real = from_real + udiMountLen;
                 }
             } else {
@@ -1811,7 +1811,7 @@ _pass_check_fromvol:
 
             /* the destination mount must be either in the shifter root
              * filesystem, or on the orignal device providing the container
-             * image.  Should not allow volume mounts onto other imported 
+             * image.  Should not allow volume mounts onto other imported
              * content */
             memset(&toStat, 0, sizeof(struct stat));
             if (lstat(to_real, &toStat) != 0) {
@@ -1832,7 +1832,12 @@ _pass_check_fromvol:
                     break;
                 }
             }
-            if (volMountDevOk == 0){
+            /* Allow mounts if the user owns the destionation directory. */
+            int toDirOwnedByUser = 0;
+            if (statData.st_uid == geteuid()) {
+                toDirOwnedByUser = 1;
+            }
+            if (volMountDevOk == 0 && toDirOwnedByUser == 0){
                 fprintf(stderr, "Mount request path %s not on an approved "
                         "device for volume mounts.\n", to_real);
                 goto _handleVolMountError;
@@ -2500,7 +2505,7 @@ int _shifterCore_bindMount(UdiRootConfig *udiConfig, MountList *mountCache,
         return 1;
     }
 
-    privateRemountFlags = 
+    privateRemountFlags =
         udiConfig->mountPropagationStyle == VOLMAP_FLAG_SLAVE ?
         MS_SLAVE : MS_PRIVATE;
 
@@ -3635,7 +3640,7 @@ char *shifter_realpath(const char *src_path, UdiRootConfig *config) {
 
             continue;
         }
-        pathPtr = pathPtr->child; 
+        pathPtr = pathPtr->child;
     }
     if (currPath) free(currPath);
     currPath = pathList_string(searchPath);
