@@ -27,6 +27,11 @@ int execute_hook_to_activate_gpu_support(int verbose, const UdiRootConfig* udiCo
     int ret = 0;
 
     if(udiConfig->gpu_config.is_gpu_support_enabled) {
+        if(udiConfig->siteResources == NULL) {
+            fprintf(stderr, "FAILED to activate GPU support."
+                            " The configuration of the site resources folder is missing.\n");
+            return 1;
+        }
         char* script_path = alloc_strgenf("%s/bin/activate_gpu_support.sh", udiConfig->udiRootPath);
 
         char* args[8];

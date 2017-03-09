@@ -1,7 +1,7 @@
 /* Shifter, Copyright (c) 2016, The Regents of the University of California,
 ## through Lawrence Berkeley National Laboratory (subject to receipt of any
 ## required approvals from the U.S. Dept. of Energy).  All rights reserved.
-## 
+##
 ## Redistribution and use in source and binary forms, with or without
 ## modification, are permitted provided that the following conditions are met:
 ##  1. Redistributions of source code must retain the above copyright notice,
@@ -13,7 +13,7 @@
 ##     National Laboratory, U.S. Dept. of Energy nor the names of its
 ##     contributors may be used to endorse or promote products derived from this
 ##     software without specific prior written permission.
-## 
+##
 ## THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 ## AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 ## IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -25,7 +25,7 @@
 ## CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ## ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 ## POSSIBILITY OF SUCH DAMAGE.
-##  
+##
 ## You are under no obligation whatsoever to provide any bug fixes, patches, or
 ## upgrades to the features, functionality or performance of the source code
 ## ("Enhancements") to anyone; however, if you choose to make your Enhancements
@@ -230,19 +230,19 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
     if (config == NULL || fp == NULL) return 0;
 
     written += fprintf(fp, "***** UdiRootConfig *****\n");
-    written += fprintf(fp, "udiMountPoint = %s\n", 
+    written += fprintf(fp, "udiMountPoint = %s\n",
         (config->udiMountPoint != NULL ? config->udiMountPoint : ""));
-    written += fprintf(fp, "loopMountPoint = %s\n", 
+    written += fprintf(fp, "loopMountPoint = %s\n",
         (config->loopMountPoint != NULL ? config->loopMountPoint : ""));
-    written += fprintf(fp, "batchType = %s\n", 
+    written += fprintf(fp, "batchType = %s\n",
         (config->batchType != NULL ? config->batchType : ""));
-    written += fprintf(fp, "system = %s\n", 
+    written += fprintf(fp, "system = %s\n",
         (config->system != NULL ? config->system : ""));
     written += fprintf(fp, "defaultImageType = %s\n",
         (config->defaultImageType != NULL ? config->defaultImageType : ""));
-    written += fprintf(fp, "imageBasePath = %s\n", 
+    written += fprintf(fp, "imageBasePath = %s\n",
         (config->imageBasePath != NULL ? config->imageBasePath : ""));
-    written += fprintf(fp, "udiRootPath = %s\n", 
+    written += fprintf(fp, "udiRootPath = %s\n",
         (config->udiRootPath != NULL ? config->udiRootPath : ""));
     written += fprintf(fp, "perNodeCachePath = %s\n",
         (config->perNodeCachePath != NULL ? config->perNodeCachePath : ""));
@@ -258,9 +258,9 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->sitePreMountHook != NULL ? config->sitePreMountHook : ""));
     written += fprintf(fp, "sitePostMountHook = %s\n",
         (config->sitePostMountHook != NULL ? config->sitePostMountHook : ""));
-    written += fprintf(fp, "optUdiImage = %s\n", 
+    written += fprintf(fp, "optUdiImage = %s\n",
         (config->optUdiImage != NULL ? config->optUdiImage : ""));
-    written += fprintf(fp, "etcPath = %s\n", 
+    written += fprintf(fp, "etcPath = %s\n",
         (config->etcPath != NULL ? config->etcPath : ""));
     written += fprintf(fp, "allowLocalChroot = %d\n",
             config->allowLocalChroot);
@@ -275,11 +275,11 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
     written += fprintf(fp, "mountPropagationStyle = %s\n",
         (config->mountPropagationStyle == VOLMAP_FLAG_SLAVE ?
          "slave" : "private"));
-    written += fprintf(fp, "kmodBasePath = %s\n", 
+    written += fprintf(fp, "kmodBasePath = %s\n",
         (config->kmodBasePath != NULL ? config->kmodBasePath : ""));
-    written += fprintf(fp, "kmodPath = %s\n", 
+    written += fprintf(fp, "kmodPath = %s\n",
         (config->kmodPath != NULL ? config->kmodPath : ""));
-    written += fprintf(fp, "kmodCacheFile = %s\n", 
+    written += fprintf(fp, "kmodCacheFile = %s\n",
         (config->kmodCacheFile != NULL ? config->kmodCacheFile : ""));
     written += fprintf(fp, "rootfsType = %s\n",
         (config->rootfsType != NULL ? config->rootfsType : ""));
@@ -369,9 +369,6 @@ int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
         if (config->rootfsType == NULL || strlen(config->rootfsType) == 0) {
             VAL_ERROR("\"rootfsType\" is not defined", UDIROOT_VAL_PARSE);
         }
-        if (config->siteResources == NULL || strlen(config->siteResources) == 0) {
-            VAL_ERROR("\"siteResources\" is not defined", UDIROOT_VAL_PARSE);
-        }
     }
     if (validateFlags & UDIROOT_VAL_FILEVAL) {
         struct stat statData;
@@ -412,7 +409,7 @@ int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
                 VAL_ERROR("Specified \"mkfsXfsPath\" is not executable.", UDIROOT_VAL_FILEVAL);
             }
         }
-        if (config->siteResources[0] != '/') {
+        if (config->siteResources != NULL && config->siteResources[0] != '/') {
             // note: we will find out later, through "mkdir", whether it is a valid path name or not
             VAL_ERROR("Specified \"siteResources\" is not an absolute path.", UDIROOT_VAL_FILEVAL);
         }
@@ -607,7 +604,7 @@ static int _assign(const char *key, const char *value, void *t_config) {
         printf("Couldn't understand key: %s\n", key);
         return 2;
     }
-    return 0; 
+    return 0;
 }
 
 static int _validateConfigFile(const char *configFile) {

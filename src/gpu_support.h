@@ -10,7 +10,7 @@
 extern "C" {
 #endif
 
-typedef struct _UdiRootConfig UdiRootConfig;
+struct _UdiRootConfig;
 
 struct gpu_support_config {
     char* gpu_ids;
@@ -28,7 +28,7 @@ int parse_gpu_env(struct gpu_support_config* config);
  * Executes the external bash script responsible for exposing
  * to the container the GPU-support related site resources.
  */
-int execute_hook_to_activate_gpu_support(int verbose, const UdiRootConfig* udiConfig);
+int execute_hook_to_activate_gpu_support(int verbose, const struct _UdiRootConfig* udiConfig);
 
 /**
  * Prints the GPU configuration to the passed file and returns the number of bytes written.
