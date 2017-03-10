@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.62])
-AC_INIT([shifter], [16.08.3], [shifter-hpc@googlegroups.com])
+AC_INIT([shifter], [17.03.b1], [shifter-hpc@googlegroups.com])
 AC_CONFIG_SRCDIR([src/shifter_core.h])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_AUX_DIR([auxdir])
