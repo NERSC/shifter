@@ -22,15 +22,15 @@ class TestMPISupport(unittest.TestCase):
 
     _EXPECTED_CONTAINER_MPI_ENV_LD_LIB_PATH = { "/opt/shifter/site-resources/mpi/lib" }
 
-    _CONTAINER_IMAGES = { \
-        "mpich-compatible1" : "rukkal/shifter-mpi-support-test:mpich-compatible1", \
-        "mpich-compatible2" : "rukkal/shifter-mpi-support-test:mpich-compatible2", \
-        "mpich-compatible3" : "rukkal/shifter-mpi-support-test:mpich-compatible3", \
-        "mpich-compatible4" : "rukkal/shifter-mpi-support-test:mpich-compatible4", \
-        "mpich-incompatible1" : "rukkal/shifter-mpi-support-test:mpich-incompatible1", \
-        "mpich-incompatible2" : "rukkal/shifter-mpi-support-test:mpich-incompatible2", \
-        "mpich-incompatible3" : "rukkal/shifter-mpi-support-test:mpich-incompatible3", \
-        "ld.so.cache-without-mpi-libraries" : "rukkal/shifter-mpi-support-test:ld.so.cache-without-mpi-libraries", }
+    _CONTAINER_IMAGES = {
+        "mpich-compatible1" : "ethcscs/dockerfiles:shifter_mpi_support_test-mpich_compatible1",
+        "mpich-compatible2" : "ethcscs/dockerfiles:shifter_mpi_support_test-mpich_compatible2",
+        "mpich-compatible3" : "ethcscs/dockerfiles:shifter_mpi_support_test-mpich_compatible3",
+        "mpich-compatible4" : "ethcscs/dockerfiles:shifter_mpi_support_test-mpich_compatible4",
+        "mpich-incompatible1" : "ethcscs/dockerfiles:shifter_mpi_support_test-mpich_incompatible1",
+        "mpich-incompatible2" : "ethcscs/dockerfiles:shifter_mpi_support_test-mpich_incompatible2",
+        "mpich-incompatible3" : "ethcscs/dockerfiles:shifter_mpi_support_test-mpich_incompatible3",
+        "ld.so.cache-without-mpi-libraries" : "ethcscs/dockerfiles:shifter_mpi_support_test-no_mpi_libraries", }
 
     @classmethod
     def setUpClass(cls):
