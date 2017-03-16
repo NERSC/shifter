@@ -177,6 +177,18 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         free(config->siteResources);
         config->siteResources = NULL;
     }
+    if (config->siteMPISharedLibs != NULL) {
+        free(config->siteMPISharedLibs);
+        config->siteMPISharedLibs = NULL;
+    }
+    if (config->siteMPIDependencyLibs != NULL) {
+        free(config->siteMPIDependencyLibs);
+        config->siteMPIDependencyLibs = NULL;
+    }
+    if (config->siteMPIConfigurationFiles != NULL) {
+        free(config->siteMPIConfigurationFiles);
+        config->siteMPIConfigurationFiles = NULL;
+    }
     if (config->siteFs != NULL) {
         free_VolumeMap(config->siteFs, 1);
         config->siteFs = NULL;
@@ -300,6 +312,12 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->mkfsXfsPath != NULL ? config->mkfsXfsPath : ""));
     written += fprintf(fp, "siteResources = %s\n",
         (config->siteResources != NULL ? config->siteResources : ""));
+    written += fprintf(fp, "siteMPISharedLibs = %s\n",
+        (config->siteMPISharedLibs != NULL ? config->siteMPISharedLibs : ""));
+    written += fprintf(fp, "siteMPIDependencyLibs = %s\n",
+        (config->siteMPIDependencyLibs != NULL ? config->siteMPIDependencyLibs : ""));
+    written += fprintf(fp, "siteMPIConfigurationFiles = %s\n",
+        (config->siteMPIConfigurationFiles != NULL ? config->siteMPIConfigurationFiles : ""));
     written += fprintf(fp, "Image Gateway Servers = %lu servers\n", config->gwUrl_size);
     for (idx = 0; idx < config->gwUrl_size; idx++) {
         char *gwUrl = config->gwUrl[idx];
@@ -603,6 +621,12 @@ static int _assign(const char *key, const char *value, void *t_config) {
         config->defaultImageType = strdup(value);
     } else if (strcmp(key, "siteResources") == 0) {
         config->siteResources = strdup(value);
+    } else if (strcmp(key, "siteMPISharedLibs") == 0) {
+        config->siteMPISharedLibs = strdup(value);
+    } else if (strcmp(key, "siteMPIDependencyLibs") == 0) {
+        config->siteMPIDependencyLibs = strdup(value);
+    } else if (strcmp(key, "siteMPIConfigurationFiles") == 0) {
+        config->siteMPIConfigurationFiles = strdup(value);
     } else if (strcmp(key, "nodeContextPrefix") == 0) {
         /* do nothing, this key is defunct */
     } else {

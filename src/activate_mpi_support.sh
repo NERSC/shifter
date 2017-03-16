@@ -11,53 +11,14 @@
 # - The site's minor number (second from the left) must be greated or equal to the container's minor number.
 # - If the site's library name doesn't contain any version number, no compatibility check is performed.
 # This compatibility check is compatible with the MPICH ABI version number schema.
-site_mpi_shared_libraries="
-libmpi.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpi.so.12.0.5
-libmpicxx.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpicxx.so.12.0.5
-libmpifort.so:/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/lib/libmpifort.so.12.0.5"
+site_mpi_shared_libraries=
 
 # This is a list of libraries that are dependencies of the site MPI libraries.
 # These libraries are always bind mounted in the container when the MPI support is active.
-site_mpi_dependency_libraries="
-/cm/shared/apps/easybuild/software/GCC/5.3.0/lib64/libgfortran.so.3
-/cm/shared/apps/easybuild/software/GCC/5.3.0/lib64/libquadmath.so.0
-/lib64/libmlx5-rdmav2.so
-/lib64/libmlx4-rdmav2.so
-/lib64/libxml2.so.2
-/lib64/libgpfs.so
-/lib64/libibmad.so.5
-/lib64/librdmacm.so.1
-/lib64/libibumad.so.3
-/lib64/libibverbs.so.1
-/lib64/libnl.so.1
-/lib64/libnuma.so.1"
-
-# This is a list of site MPI command line tools that will be bind mounted in the container.
-site_mpi_binaries="
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/hydra_nameserver
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/hydra_pmi_proxy
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/mpicc
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/mpicxx
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/mpiexec.hydra
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/mpif77
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/mpifort
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/mpirun
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/mpispawn
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/parkill
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/hydra_persist
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/mpic++
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/mpichversion
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/mpiexec
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/mpiexec.mpirun_rsh
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/mpif90
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/mpiname
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/mpirun_rsh
-/cm/shared/apps/easybuild/software/MVAPICH2/2.2b-GCC-5.3.0/bin/mpivars"
+site_mpi_dependency_libraries=
 
 # This is a list of site configuration files that will be copied in the container.
-site_configuration_files="
-/etc/libibverbs.d/mlx4.driver
-/etc/libibverbs.d/mlx5.driver"
+site_configuration_files=
 
 #here is necessary to set PATH manually because shifter executes
 #this script with an empty environment
@@ -92,7 +53,7 @@ exit_if_previous_command_failed()
 
 parse_command_line_arguments()
 {
-    if [ ! $# -eq 3 ]; then
+    if [ ! $# -eq 6 ]; then
         log ERROR "Internal error: received bad number of command line arguments"
         exit 1
     fi
@@ -111,7 +72,11 @@ parse_command_line_arguments()
     container_mpi_lib_dir=$site_resources/mpi/lib
     container_mpi_bin_dir=$site_resources/mpi/bin
 
-    local verbose=$3
+    site_mpi_shared_libraries=$(echo $3 | tr ';' ' ')
+    site_mpi_dependency_libraries=$(echo $4 | tr ';' ' ')
+    site_configuration_files=$(echo $5 | tr ';' ' ')
+
+    local verbose=$6
     if [ $verbose = "verbose-on" ]; then
         is_verbose_active=true
     elif [ $verbose = "verbose-off" ]; then
@@ -234,9 +199,8 @@ are_mpi_libraries_abi_compatible()
 get_abi_compatible_site_mpi_library()
 {
     local container_lib=$1
-    for site_lib in $site_mpi_shared_libraries; do
-        local site_lib_id=$(echo $site_lib | cut -d: -f1)
-        local site_lib_realpath=$(echo $site_lib | cut -d: -f2)
+    for site_lib_realpath in $site_mpi_shared_libraries; do
+        local site_lib_id=$(strip_library_name $site_lib_realpath)
         if [ $(strip_library_name $site_lib_id) = $(strip_library_name $container_lib) ]; then
             if are_mpi_libraries_abi_compatible $site_lib_realpath $container_lib; then
                 echo $site_lib_realpath
@@ -251,8 +215,7 @@ cached_site_mpi_library_ids_stripped()
     # if cache is empty let's populate it
     if [ -z "$cached_lib_ids" ]; then
         for lib in $site_mpi_shared_libraries; do
-            local lib_id=$(echo $lib | cut -d: -f1)
-            local lib_id_stripped=$(strip_library_name $lib_id)
+            local lib_id_stripped=$(strip_library_name $lib)
             export cached_lib_ids="$cached_lib_ids $lib_id_stripped"
         done
     fi
@@ -313,5 +276,4 @@ parse_command_line_arguments $*
 check_that_image_contains_required_dependencies
 override_mpi_shared_libraries_of_container
 bind_mount_files_into_given_folder_of_container "$site_mpi_dependency_libraries" "$container_mpi_lib_dir"
-bind_mount_files_into_given_folder_of_container "$site_mpi_binaries" "$container_mpi_bin_dir"
 bind_mount_files_at_same_location_in_container "$site_configuration_files"

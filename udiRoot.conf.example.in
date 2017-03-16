@@ -204,7 +204,7 @@ rootfsType=@ROOTFS_TYPE@
 
 #siteFs
 #
-# Semicolon seperated list of paths to be automatically bind-mounted into the
+# Semicolon separated list of paths to be automatically bind-mounted into the
 # container. This is typically used to make network filesystems accessible
 # within the container, but could be used to allow certain other facilities,
 # like /var/run  or /var/spool/alps to be accessible within the image (depending
@@ -215,6 +215,13 @@ rootfsType=@ROOTFS_TYPE@
 #
 # It is OK to perform this under /var or /opt or a novel path that your site 
 # maintains (e.g., for NERSC, /global).
+#
+# **WARNING**: If a path on this list contains a parent directory that also exists in 
+# the image, mount precedence will be given to the host path specified here, and
+# the resources from the image will be skipped.
+# For example: if /var/spool/alps is in siteFs, and the image contains /var/spool/,
+# the image directory will not be mounted.
+#
 siteFs=/home:/home
 
 
@@ -288,7 +295,45 @@ defaultImageType=docker
 #
 # Absolute path to where site-specific resources will be bind-mounted inside the
 # container to enable features like native MPI or GPU support.
-# This configuration only affects the container. The specified path will be automatically
-# created inside the container. The specified path doesn't need to exist on the host.
+# This configuration only affects the container. The specified path will be
+# automatically created inside the container.
+# The specified path doesn't need to exist on the host.
 #
 siteResources=/opt/shifter/site-resources
+
+
+#siteMPISharedLibs
+#
+# This is a semicolon separated list of full paths to the site's library that
+# will substitute the container's library.
+#
+# The MPI support machinery will check that the site's library is ABI compatible
+# with the container's library to be substituted. The compatibility check is
+# performed by comparing the version numbers specified in the libraries' file
+# names as follows:
+# - The major numbers (first from the left) must be equal.
+# - The site's minor number (second from the left) must be greater or equal to
+#   the container's minor number.
+# - If the site's library name doesn't contain the version numbers or contains
+#   only the major version number, the missing numbers assumed to be zero.
+# This compatibility check is compatible with the MPICH ABI version number schema.
+#
+#siteMPISharedLibs=/path/to/my/libmpi.so;/path/to/my/libmpicxx.so;/path/to/my/libmpifort.so
+
+
+#siteMPIDependencyLibs
+#
+# This is a semicolon separated list of libraries that are dependencies of the
+# site MPI libraries.
+# These libraries are always bind mounted in the container when the MPI support
+# is active.
+#
+#siteMPIDependencyLibs=
+
+
+#siteMPIConfigurationFiles
+#
+# This is a semicolon separated list of site configuration files needed by MPI
+# resources or dependencies that will be mounted in the container.
+#
+#siteMPIConfigurationFiles=

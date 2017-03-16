@@ -96,6 +96,10 @@ typedef struct _UdiRootConfig {
     char *rootfsType;
     char **gwUrl;
     VolumeMap *siteFs;
+    char *siteResources;
+    char *siteMPISharedLibs;
+    char *siteMPIDependencyLibs;
+    char *siteMPIConfigurationFiles;
     char **siteEnv;
     char **siteEnvAppend;
     char **siteEnvPrepend;
@@ -117,8 +121,6 @@ typedef struct _UdiRootConfig {
     char *chmodPath;
     char *ddPath;
     char *mkfsXfsPath;
-
-    char *siteResources;
 
     /* support variables for above */
     size_t siteEnv_capacity;
