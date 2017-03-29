@@ -147,7 +147,6 @@ test_PathList_LDFLAGS = $(TEST_LDFLAGS)
 
 clean-local: clean-local-check
 clean-local-check:
-	-rm -rf chroot1 chroot2 chroot3
 	-rm -rf *.gcda
 	-rm -rf *.gcno
 	-rm -f test_udiRoot.conf 

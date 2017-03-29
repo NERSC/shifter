@@ -801,7 +801,7 @@ TEST(ShifterCoreTestGroup, copyenv_test) {
     char **cptr = NULL;
     setenv("ABCD", "DCBA", 1);
 
-    copied_env = shifter_copyenv(environ, 0);
+    copied_env = shifter_copyenv();
     CHECK(copied_env != NULL);
 
     /* environment variables should be identical and in
@@ -833,7 +833,7 @@ TEST(ShifterCoreTestGroup, setenv_test) {
     size_t newcnt = 0;
 
     unsetenv("FAKE_ENV_VAR_FOR_TEST");
-    copied_env = shifter_copyenv(environ, 0);
+    copied_env = shifter_copyenv();
     CHECK(copied_env != NULL);
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         cnt++;
@@ -881,7 +881,7 @@ TEST(ShifterCoreTestGroup, appendenv_test) {
     size_t newcnt = 0;
 
     setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
-    copied_env = shifter_copyenv(environ, 0);
+    copied_env = shifter_copyenv();
     CHECK(copied_env != NULL);
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         cnt++;
@@ -930,7 +930,7 @@ TEST(ShifterCoreTestGroup, prependenv_test) {
     size_t newcnt = 0;
 
     setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
-    copied_env = shifter_copyenv(environ, 0);
+    copied_env = shifter_copyenv();
     CHECK(copied_env != NULL);
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         cnt++;
@@ -979,7 +979,7 @@ TEST(ShifterCoreTestGroup, unsetenv_test) {
     size_t newcnt = 0;
 
     setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
-    copied_env = shifter_copyenv(environ, 0);
+    copied_env = shifter_copyenv();
     CHECK(copied_env != NULL);
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         cnt++;

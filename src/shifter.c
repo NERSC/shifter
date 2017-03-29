@@ -107,7 +107,6 @@ int check_permissions(uid_t actualUid, gid_t actualGid, ImageData imageData) {
 }
 
 #ifndef _TESTHARNESS_SHIFTER
-extern char** environ;
 
 int main(int argc, char **argv) {
     sighandler_t sighupHndlr = signal(SIGHUP, SIG_IGN);
@@ -116,7 +115,7 @@ int main(int argc, char **argv) {
     sighandler_t sigtermHndlr = signal(SIGTERM, SIG_IGN);
 
     /* save a copy of the environment for the exec */
-    char **environ_copy = shifter_copyenv(environ, 0);
+    char **environ_copy = shifter_copyenv();
 
     /* declare needed variables */
     char wd[PATH_MAX];

@@ -128,14 +128,12 @@ int shifter_set_capability_boundingset_null();
 gid_t *shifter_getgrouplist(const char *user, gid_t group, int *ngroups);
 
 /** shifter_copyenv
-  * copy the passed environ (array of strings) into a newly allocated array with newly
-  * allocated strings. Reserve some spots at the end of the array for additional
-  * environment variables. The number of spots to be reserved is specified through
-  * the "reserve" parameter
+  * copy current process environ into a newly allocated array with newly
+  * allocated strings
   *
   * @return copy of the environment, caller is responsible to deal with memory
   */
-char **shifter_copyenv(char** env, int reserve);
+char **shifter_copyenv(void);
 int shifter_putenv(char ***env, char *var);
 int shifter_appendenv(char ***env, char *var);
 int shifter_prependenv(char ***env, char *var);
