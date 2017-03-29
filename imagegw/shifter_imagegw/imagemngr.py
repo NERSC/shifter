@@ -151,7 +151,7 @@ class ImageMngr(object):
 
     def _checkread(self, session, rec):
         """
-        Checks if the user has read permissions to the image. (Not Implemented)
+        Checks if the user has read permissions to the image.
         """
 
         # Start by checking if the image is public (no ACLs)
@@ -439,7 +439,7 @@ class ImageMngr(object):
             'pulltag': image['tag']
         }
         self.logger.debug('Pull called Test Mode=%d', testmode)
-        #self.logger.debug(image)
+        # self.logger.debug(image)
         if not self.check_session(session, request['system']):
             self.logger.warn('Invalid session on system %s', request['system'])
             raise OSError("Invalid Session")
@@ -570,7 +570,7 @@ class ImageMngr(object):
             self.logger.error('ERROR: Missing pull request (r=%s)',
                               str(response))
             return
-        #Check that this image ident doesn't already exist for this system
+        # Check that this image ident doesn't already exist for this system
         rec = self._images_find_one({'id': response['id'], 'status': 'READY',
                                     'system': pullrec['system']})
         if rec is None:
@@ -603,7 +603,7 @@ class ImageMngr(object):
         if pullrec is None:
             self.logger.warn('Missing pull request (r=%s)', str(response))
             return
-        #Check that this image ident doesn't already exist for this system
+        # Check that this image ident doesn't already exist for this system
         rec = self._images_find_one({'id': response['id'],
                                     'system': pullrec['system']})
         tag = pullrec['pulltag']
@@ -653,16 +653,6 @@ class ImageMngr(object):
         for key in mappings.keys():
             if key in resp:
                 setline[mappings[key]] = resp[key]
-        #if 'id' in resp:
-        #    setline['id'] = resp['id']
-        # if 'entrypoint' in resp:
-        #     setline['ENTRY'] = resp['entrypoint']
-        # if 'env' in resp:
-        #     setline['ENV'] = resp['env']
-        # if 'workdir' in resp:
-        #     setline['WORKDIR'] = resp['workdir']
-        # if 'last_pull' in resp:
-        #     setline['last_pull'] = resp['last_pull']
 
         self._images_update({'_id': ident}, {'$set': setline})
 
@@ -684,7 +674,6 @@ class ImageMngr(object):
         Update the states of all active transactions.
         Cleanup failed transcations after a period
         """
-        #logger.debug("Update_states called")
         i = 0
         tasks = self.tasks
 
