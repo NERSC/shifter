@@ -14,7 +14,7 @@ that have been added.
 **imagemanager.json**
 
    * New optional parameter (Metrics). True/False parameter to enable basic
-     image metrics
+     image metrics.
 
 Version 15.12.0 to 16.08.1
 --------------------------
