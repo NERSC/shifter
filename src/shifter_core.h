@@ -134,10 +134,10 @@ gid_t *shifter_getgrouplist(const char *user, gid_t group, int *ngroups);
   * @return copy of the environment, caller is responsible to deal with memory
   */
 char **shifter_copyenv(void);
-int shifter_putenv(char ***env, char *var);
-int shifter_appendenv(char ***env, char *var);
-int shifter_prependenv(char ***env, char *var);
-int shifter_unsetenv(char ***env, char *var);
+int shifter_putenv(char ***env, const char *var);
+int shifter_appendenv(char ***env, const char *var);
+int shifter_prependenv(char ***env, const char *var);
+int shifter_unsetenv(char ***env, const char *var);
 int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig);
 int shifter_setupenv_site_resources(char ***env, UdiRootConfig *udiConfig);
 int shifter_setupenv_site_resources_rec(char ***env, const char* current_folder);

@@ -800,6 +800,7 @@ TEST(ShifterCoreTestGroup, copyenv_test) {
     char **eptr = NULL;
     char **cptr = NULL;
     setenv("ABCD", "DCBA", 1);
+    unsetenv("SHIFTERTEST");
 
     copied_env = shifter_copyenv();
     CHECK(copied_env != NULL);
@@ -814,6 +815,17 @@ TEST(ShifterCoreTestGroup, copyenv_test) {
         CHECK(*eptr != *cptr);
     } 
     CHECK(*eptr == NULL && *cptr == NULL);
+
+    CHECK(shifter_putenv(&copied_env, "SHIFTERTEST=20") == 0);
+    for (eptr = environ, cptr = copied_env;
+         eptr && *eptr && cptr && *cptr;
+         eptr++, cptr++)
+    {
+        CHECK(strcmp(*eptr, *cptr) == 0);
+        CHECK(*eptr != *cptr);
+    }
+    CHECK(strcmp(*cptr++, "SHIFTERTEST=20") == 0);
+    CHECK(*cptr == NULL);
 
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         free(*cptr);

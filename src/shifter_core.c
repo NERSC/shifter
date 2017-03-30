@@ -3181,7 +3181,7 @@ _validateUnmounted_error:
     return -1;
 }
 
-static char **_shifter_findenv(char ***env, char *var, size_t n, size_t *nElement) {
+static char **_shifter_findenv(char ***env, const char *var, size_t n, size_t *nElement) {
     char **ptr = NULL;
     char **ret = NULL;
     if (env == NULL || *env == NULL || var == NULL || n == 0) {
@@ -3201,7 +3201,7 @@ static char **_shifter_findenv(char ***env, char *var, size_t n, size_t *nElemen
     return ret;
 }
 
-static int _shifter_unsetenv(char ***env, char *var) {
+static int _shifter_unsetenv(char ***env, const char *var) {
     size_t namelen = 0;
     size_t envsize = 0;
     char **pptr = NULL;
@@ -3226,7 +3226,7 @@ static int _shifter_unsetenv(char ***env, char *var) {
     return 0;
 }
 
-static int _shifter_putenv(char ***env, char *var, int mode) {
+static int _shifter_putenv(char ***env, const char *var, int mode) {
     size_t namelen = 0;
     size_t envsize = 0;
     char *ptr = NULL;
@@ -3310,19 +3310,19 @@ char **shifter_copyenv(void) {
     return outenv;
 }
 
-int shifter_putenv(char ***env, char *var) {
+int shifter_putenv(char ***env, const char *var) {
     return _shifter_putenv(env, var, 0);
 }
 
-int shifter_appendenv(char ***env, char *var) {
+int shifter_appendenv(char ***env, const char *var) {
     return _shifter_putenv(env, var, 2);
 }
 
-int shifter_prependenv(char ***env, char *var) {
+int shifter_prependenv(char ***env, const char *var) {
     return _shifter_putenv(env, var, 1);
 }
 
-int shifter_unsetenv(char ***env, char *var) {
+int shifter_unsetenv(char ***env, const char *var) {
     return _shifter_unsetenv(env, var);
 }
 
