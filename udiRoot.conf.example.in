@@ -329,11 +329,3 @@ siteResources=/opt/shifter/site-resources
 # is active.
 #
 #siteMPIDependencyLibs=
-
-
-#siteMPIConfigurationFiles
-#
-# This is a semicolon separated list of site configuration files needed by MPI
-# resources or dependencies that will be mounted in the container.
-#
-#siteMPIConfigurationFiles=

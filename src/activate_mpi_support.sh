@@ -1,28 +1,11 @@
 #!/bin/bash
 
-# This is a list of key-value pairs defined in the form "<key1>:<value1>..."
-# The key is the name of the container's library to be substituted.
-# The value is the full path of the site's library that will substitute the container's library.
-#
-# The MPI support machinery will check that the site's library is ABI compatible with the
-# container's library to be substituted. The compatibility check is performed by comparing the
-# version numbers specified in the libraries' file names as follows:
-# - The major numbers (first from the left) must be equal.
-# - The site's minor number (second from the left) must be greated or equal to the container's minor number.
-# - If the site's library name doesn't contain any version number, no compatibility check is performed.
-# This compatibility check is compatible with the MPICH ABI version number schema.
-site_mpi_shared_libraries=
-
-# This is a list of libraries that are dependencies of the site MPI libraries.
-# These libraries are always bind mounted in the container when the MPI support is active.
-site_mpi_dependency_libraries=
-
-# This is a list of site configuration files that will be copied in the container.
-site_configuration_files=
-
 #here is necessary to set PATH manually because shifter executes
 #this script with an empty environment
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
+
+site_mpi_shared_libraries=
+site_mpi_dependency_libraries=
 
 container_root_dir=
 container_mpi_lib_dir=
@@ -53,7 +36,7 @@ exit_if_previous_command_failed()
 
 parse_command_line_arguments()
 {
-    if [ ! $# -eq 6 ]; then
+    if [ ! $# -eq 5 ]; then
         log ERROR "Internal error: received bad number of command line arguments"
         exit 1
     fi
@@ -74,9 +57,8 @@ parse_command_line_arguments()
 
     site_mpi_shared_libraries=$(echo $3 | tr ';' ' ')
     site_mpi_dependency_libraries=$(echo $4 | tr ';' ' ')
-    site_configuration_files=$(echo $5 | tr ';' ' ')
 
-    local verbose=$6
+    local verbose=$5
     if [ $verbose = "verbose-on" ]; then
         is_verbose_active=true
     elif [ $verbose = "verbose-off" ]; then
@@ -125,15 +107,6 @@ bind_mount_files_into_given_folder_of_container()
 
     for target in $targets; do
         local container_mount_point=$container_mount_dir/$(basename $target)
-        bind_mount_file_into_container $target $container_mount_point
-    done
-}
-
-bind_mount_files_at_same_location_in_container()
-{
-    local targets=$1
-    for target in $targets; do
-        local container_mount_point=$target
         bind_mount_file_into_container $target $container_mount_point
     done
 }
@@ -276,4 +249,4 @@ parse_command_line_arguments $*
 check_that_image_contains_required_dependencies
 override_mpi_shared_libraries_of_container
 bind_mount_files_into_given_folder_of_container "$site_mpi_dependency_libraries" "$container_mpi_lib_dir"
-bind_mount_files_at_same_location_in_container "$site_configuration_files"
+

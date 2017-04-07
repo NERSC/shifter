@@ -31,9 +31,8 @@ int execute_hook_to_activate_mpi_support(int verbose, const UdiRootConfig* udiCo
         args[3] = strdup(udiConfig->siteResources);
         args[4] = strdup(udiConfig->siteMPISharedLibs);
         args[5] = make_non_empty_argument(udiConfig->siteMPIDependencyLibs);
-        args[6] = make_non_empty_argument(udiConfig->siteMPIConfigurationFiles);
-        args[7] = verbose ? strdup("verbose-on") : strdup("verbose-off");
-        args[8] = NULL;
+        args[6] = verbose ? strdup("verbose-on") : strdup("verbose-off");
+        args[7] = NULL;
 
         /* Call the script to activate MPI support, then free argument pointers */
         ret = forkAndExecv(args);
