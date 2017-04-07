@@ -18,7 +18,6 @@ class TestMPISupport(unittest.TestCase):
 
     _SITE_MPI_LIBS = { "libmpi.so.12.5.5", "libmpich.so.12.5.5" }
     _SITE_MPI_DEPENDENCY_LIBS = { "libsitempidependency1.so", "libsitempidependency2.so" }
-    _SITE_MPI_CONFIGURATION_FILES = { "/etc/dummy-mpi-config-file" }
 
     _EXPECTED_CONTAINER_MPI_ENV_LD_LIB_PATH = { "/opt/shifter/site-resources/mpi/lib" }
 
@@ -36,12 +35,12 @@ class TestMPISupport(unittest.TestCase):
     def setUpClass(cls):
         cls._pull_docker_images()
         cls._create_site_resources()
-        cls._modify_site_mpi_configuration_file()
+        cls._modify_udiroot_conf()
 
     @classmethod
     def tearDownClass(cls):
         cls._undo_create_site_resources()
-        cls._undo_modify_site_mpi_configuration_file()
+        cls._undo_modify_udiroot_conf()
 
     @classmethod
     def _pull_docker_images(cls):
@@ -62,10 +61,6 @@ class TestMPISupport(unittest.TestCase):
             lib_path = site_resources_path + "/" + value
             subprocess.call(["cp", dummy_lib_path, lib_path])
             cls._created_site_resources.add(lib_path)
-        # MPI config files
-        for file_path in cls._SITE_MPI_CONFIGURATION_FILES:
-            subprocess.call(["sudo", "touch", file_path])
-            cls._created_site_resources.add(file_path)
 
     @classmethod
     def _undo_create_site_resources(cls):
@@ -73,11 +68,10 @@ class TestMPISupport(unittest.TestCase):
             subprocess.call(["sudo", "rm", resource])
 
     @classmethod
-    def _modify_site_mpi_configuration_file(cls):
+    def _modify_udiroot_conf(cls):
         subprocess.call(["sudo", "cp", cls._SHIFTER_MPI_CONFIGURATION_FILE, cls._SHIFTER_MPI_CONFIGURATION_FILE + ".bak"])
         cls._modify_mpi_libs_in_site_configuration_file()
         cls._modify_mpi_dependency_libs_in_site_configuration_file()
-        cls._modify_mpi_config_files_in_site_configuration_file()
 
     @classmethod
     def _modify_mpi_libs_in_site_configuration_file(cls):
@@ -94,14 +88,7 @@ class TestMPISupport(unittest.TestCase):
         subprocess.call(["sudo", "sed", "-i", cls._SHIFTER_MPI_CONFIGURATION_FILE, "-e", sed_command])
 
     @classmethod
-    def _modify_mpi_config_files_in_site_configuration_file(cls):
-        subprocess.call(["sudo", "sed", "-i", cls._SHIFTER_MPI_CONFIGURATION_FILE, "-e", "/^siteMPIConfigurationFiles=/,/\"$/d"])
-        mpi_configs_path_list = [cls._SITE_LIBS_PREFIX + "/" + value for value in cls._SITE_MPI_CONFIGURATION_FILES]
-        sed_command = "1asiteMPIConfigurationFiles=" + ";".join(cls._SITE_MPI_CONFIGURATION_FILES)
-        subprocess.call(["sudo", "sed", "-i", cls._SHIFTER_MPI_CONFIGURATION_FILE, "-e", sed_command])
-
-    @classmethod
-    def _undo_modify_site_mpi_configuration_file(cls):
+    def _undo_modify_udiroot_conf(cls):
         subprocess.call(["sudo", "mv", cls._SHIFTER_MPI_CONFIGURATION_FILE + ".bak", cls._SHIFTER_MPI_CONFIGURATION_FILE])
 
     def setUp(self):
@@ -123,7 +110,6 @@ class TestMPISupport(unittest.TestCase):
         properties = self._get_mpi_properties_in_container()
         self.assertEqual(properties["mpi-libs"], {"libmpi.so.12.5.5", "libmpich.so.12.5.5"})
         self.assertEqual(properties["mpi-dependency-libs"], self._SITE_MPI_DEPENDENCY_LIBS)
-        self.assertEqual(properties["mpi-config-files"], self._SITE_MPI_CONFIGURATION_FILES)
         self.assertEqual(properties["mpi-env-ld-library-path"], self._EXPECTED_CONTAINER_MPI_ENV_LD_LIB_PATH)
 
     def test_mpich_compatible_2(self):
@@ -132,7 +118,6 @@ class TestMPISupport(unittest.TestCase):
         properties = self._get_mpi_properties_in_container()
         self.assertEqual(properties["mpi-libs"], {"libmpi.so.12.5.0", "libmpich.so.12.5.0"})
         self.assertEqual(properties["mpi-dependency-libs"], self._SITE_MPI_DEPENDENCY_LIBS)
-        self.assertEqual(properties["mpi-config-files"], self._SITE_MPI_CONFIGURATION_FILES)
 
     def test_mpich_compatible_3(self):
         self._mpi_command_line_option = True
@@ -140,7 +125,6 @@ class TestMPISupport(unittest.TestCase):
         properties = self._get_mpi_properties_in_container()
         self.assertEqual(properties["mpi-libs"], {"libmpi.so.12.5.10", "libmpich.so.12.5.10"})
         self.assertEqual(properties["mpi-dependency-libs"], self._SITE_MPI_DEPENDENCY_LIBS)
-        self.assertEqual(properties["mpi-config-files"], self._SITE_MPI_CONFIGURATION_FILES)
 
     def test_mpich_compatible_4(self):
         self._mpi_command_line_option = True
@@ -148,7 +132,6 @@ class TestMPISupport(unittest.TestCase):
         properties = self._get_mpi_properties_in_container()
         self.assertEqual(properties["mpi-libs"], {"libmpi.so.12.0.5", "libmpich.so.12.0.5"})
         self.assertEqual(properties["mpi-dependency-libs"], self._SITE_MPI_DEPENDENCY_LIBS)
-        self.assertEqual(properties["mpi-config-files"], self._SITE_MPI_CONFIGURATION_FILES)
 
     def test_mpich_incompatible_1(self):
         self._mpi_command_line_option = True
@@ -175,10 +158,9 @@ class TestMPISupport(unittest.TestCase):
             text = "No MPI libraries found in the container")
 
     def _get_mpi_properties_in_container(self):
-        return {"mpi-libs" : self._get_mpi_libs_in_container(), \
-                "mpi-dependency-libs" : self._get_mpi_dependency_libs_in_container(), \
-                "mpi-config-files" : self._get_mpi_config_files_in_container() , \
-                "mpi-env-ld-library-path" : self._get_mpi_paths_in_container_environment_variable("LD_LIBRARY_PATH"), \
+        return {"mpi-libs" : self._get_mpi_libs_in_container(),
+                "mpi-dependency-libs" : self._get_mpi_dependency_libs_in_container(),
+                "mpi-env-ld-library-path" : self._get_mpi_paths_in_container_environment_variable("LD_LIBRARY_PATH"),
                 "mpi-env-path" : self._get_mpi_paths_in_container_environment_variable("PATH") }
 
     def _get_mpi_libs_in_container(self):
@@ -198,13 +180,6 @@ class TestMPISupport(unittest.TestCase):
             return set(self._get_command_output_in_container(["ls", "/opt/shifter/site-resources/mpi/lib"]))
         else:
             return set()
-
-    def _get_mpi_config_files_in_container(self):
-        config_files_in_container = set()
-        for site_config_file in self._SITE_MPI_CONFIGURATION_FILES:
-            if self._file_exists_in_container(site_config_file):
-                config_files_in_container.add(site_config_file)
-        return config_files_in_container
 
     def _get_mpi_paths_in_container_environment_variable(self, variable_name):
         output = self._get_command_output_in_container(["env"])
@@ -238,7 +213,7 @@ class TestMPISupport(unittest.TestCase):
         for message in messages:
             if text in message:
                 return
-        self.fail(  "Shifter didn't generate and MPI error containing the text \"{}\", " \
+        self.fail(  "Shifter didn't generate and MPI error containing the text \"{}\", "
                     "but one was expected.".format(text))
 
     def _get_shifter_mpi_support_error_messages(self):
