@@ -100,7 +100,6 @@ class TestMPISupport(unittest.TestCase):
         properties = self._get_mpi_properties_in_container()
         self.assertEqual(properties["mpi-libs"], set())
         self.assertEqual(properties["mpi-dependency-libs"], set())
-        self.assertEqual(properties["mpi-config-files"], set())
         self.assertEqual(properties["mpi-env-ld-library-path"], set())
         self.assertEqual(properties["mpi-env-path"], set())
 
