@@ -212,7 +212,7 @@ class TestMPISupport(unittest.TestCase):
         for message in messages:
             if text in message:
                 return
-        self.fail(  "Shifter didn't generate and MPI error containing the text \"{}\", "
+        self.fail(  "Shifter didn't generate an MPI error containing the text \"{}\", "
                     "but one was expected.".format(text))
 
     def _get_shifter_mpi_support_error_messages(self):

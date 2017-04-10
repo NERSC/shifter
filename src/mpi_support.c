@@ -21,6 +21,8 @@ int execute_hook_to_activate_mpi_support(int verbose, const UdiRootConfig* udiCo
     if(udiConfig->mpi_config.is_mpi_support_enabled) {
         if (udiConfig->siteMPISharedLibs == NULL || strlen(udiConfig->siteMPISharedLibs) == 0) {
             fprintf(stderr, "Native MPI support requested but no site-specific MPI libraries defined\n");
+            fprintf(stderr, "Native MPI support requested but no site-specific MPI libraries"
+                            "defined in udiRoot configuration file\n");
             return 1;
         }
 
