@@ -138,8 +138,6 @@ be used, and the following parameters in *udiRoot.conf* need to be configured
   library that will substitute the container's library.
 * **siteMPIDependencyLibs** A semicolon separated list of libraries that are
   dependencies of the site MPI libraries.
-* **siteMPIConfigurationFiles** A semicolon separated list of site configuration
-  files needed by MPI resources or dependencies that will be mounted in the container.
 
 .. note::
     **Important note to enable native MPI support on Cray systems**
