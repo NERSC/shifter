@@ -268,6 +268,13 @@ int shifterSpank_process_option_volume(
     return ERROR;
 }
 
+int shifterSpank_process_option_mpi(
+    shifterSpank_config *ssconfig, int val, const char *optarg, int remote)
+{
+    ssconfig->mpi_support = 1;
+    return SUCCESS;
+}
+
 int forkAndExecvLogToSlurm(const char *appname, char **args) {
     int rc = 0;
     pid_t pid = 0;
@@ -1032,7 +1039,7 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
         if (bytes <= 0 || bytes >= sizeof(buffer)) {
             PROLOG_ERROR("FAILED to write uid into job!\n", ERROR);
         }
-        strncpy_StringArray("-U", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+        strncpy_StringArray("-U", 2, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
         strncpy_StringArray(buffer, bytes, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
     if (gid != 0) {
@@ -1040,24 +1047,27 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
         if (bytes <= 0 || bytes >= sizeof(buffer)) {
             PROLOG_ERROR("FAILED to write gid into setupRoot args!", ERROR);
         }
-        strncpy_StringArray("-G", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+        strncpy_StringArray("-G", 2, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
         strncpy_StringArray(buffer, bytes, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
     if (username != NULL) {
-        strncpy_StringArray("-u", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+        strncpy_StringArray("-u", 2, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
         strncpy_StringArray(username, strlen(username), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
     if (sshPubKey != NULL) {
-        strncpy_StringArray("-s", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+        strncpy_StringArray("-s", 2, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
         strncpy_StringArray(sshPubKey, strlen(sshPubKey), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
     if (nodelist != NULL) {
-        strncpy_StringArray("-N", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+        strncpy_StringArray("-N", 2, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
         strncpy_StringArray(nodelist, strlen(nodelist), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
     for (idx = 0; idx < n_volArgs; idx++) {
-        strncpy_StringArray("-v", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+        strncpy_StringArray("-v", 2, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
         strncpy_StringArray(volArgs[idx], strlen(volArgs[idx]), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+    }
+    if(ssconfig->mpi_support) {
+        strncpy_StringArray("-m", 2, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
     strncpy_StringArray(ssconfig->imageType, strlen(ssconfig->imageType), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     strncpy_StringArray(ssconfig->image, strlen(ssconfig->image), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);

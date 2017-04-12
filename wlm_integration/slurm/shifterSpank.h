@@ -46,6 +46,7 @@ typedef struct {
     char *image;                  /*! user requested image identifier */
     char *imageType;              /*! image type */
     char *volume;                 /*! volume remap options */
+    int mpi_support;              /*! flag set if MPI support is active */
     int ccmMode;                  /*! flag if this is ccm mode */
 
     /* derived configurations */
@@ -131,6 +132,9 @@ int shifterSpank_process_option_image(
     shifterSpank_config *ssconfig, int val, const char *optarg, int remote);
 
 int shifterSpank_process_option_volume(
+    shifterSpank_config *ssconfig, int val, const char *optarg, int remote);
+
+int shifterSpank_process_option_mpi(
     shifterSpank_config *ssconfig, int val, const char *optarg, int remote);
 
 int shifterSpank_task_init_privileged(shifterSpank_config *ssconfig);

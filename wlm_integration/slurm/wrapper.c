@@ -29,6 +29,7 @@ SPANK_PLUGIN(shifter, 1)
 int wrap_opt_ccm(int val, const char *optarg, int remote);
 int wrap_opt_image(int val, const char *optarg, int remote);
 int wrap_opt_volume(int val, const char *optarg, int remote);
+int wrap_opt_mpi(int val, const char *optarg, int remote);
 
 /* global variable used by spank to get plugin options */
 struct spank_option spank_option_array[] = {
@@ -38,6 +39,8 @@ struct spank_option spank_option_array[] = {
       (spank_opt_cb_f) wrap_opt_volume },
     { "ccm", "ccm", "ccm emulation mode", 0, 0,
       (spank_opt_cb_f) wrap_opt_ccm},
+    { "shifter-mpi", NULL, "activate shifter MPI support", 0, 0,
+      (spank_opt_cb_f) wrap_opt_mpi},
     SPANK_OPTIONS_TABLE_END
 };
 
@@ -157,6 +160,9 @@ int wrap_opt_image(int val, const char *optarg, int remote) {
 }
 int wrap_opt_volume(int val, const char *optarg, int remote) {
     return shifterSpank_process_option_volume(ssconfig, val, optarg, remote);
+}
+int wrap_opt_mpi(int val, const char *optarg, int remote) {
+    return shifterSpank_process_option_mpi(ssconfig, val, optarg, remote);
 }
 
 int wrap_force_arg_parse(shifterSpank_config *_ssconfig) {

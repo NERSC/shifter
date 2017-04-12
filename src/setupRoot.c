@@ -88,7 +88,7 @@ typedef struct _SetupRootConfig {
 } SetupRootConfig;
 
 static void _usage(int);
-int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config);
+int parse_options(int argc, char **argv, SetupRootConfig *config, UdiRootConfig *);
 void free_SetupRootConfig(SetupRootConfig *config);
 void fprint_SetupRootConfig(FILE *, SetupRootConfig *config);
 int getImage(ImageData *, SetupRootConfig *, UdiRootConfig *);
@@ -107,7 +107,7 @@ int main(int argc, char **argv) {
     clearenv();
     setenv("PATH", "/usr/bin:/usr/sbin:/bin:/sbin", 1);
 
-    if (parse_SetupRootConfig(argc, argv, &config) != 0) {
+    if (parse_options(argc, argv, &config, &udiConfig) != 0) {
         fprintf(stderr, "FAILED to parse command line arguments. Exiting.\n");
         _usage(1);
     }
@@ -184,11 +184,11 @@ static void _usage(int exitStatus) {
     exit(exitStatus);
 }
 
-int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
+int parse_options(int argc, char **argv, SetupRootConfig *config, UdiRootConfig *udiConfig) {
     int opt = 0;
     optind = 1;
 
-    while ((opt = getopt(argc, argv, "v:s:u:U:G:N:V")) != -1) {
+    while ((opt = getopt(argc, argv, "v:s:u:mU:G:N:V")) != -1) {
         switch (opt) {
             case 'V': config->verbose = 1; break;
             case 'v':
@@ -203,6 +203,9 @@ int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
                 break;
             case 'u':
                 config->user = strdup(optarg);
+                break;
+            case 'm':
+                udiConfig->mpi_config.is_mpi_support_enabled = 1;
                 break;
             case 'U':
                 config->uid = strtoul(optarg, NULL, 10);
