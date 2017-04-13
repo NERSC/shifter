@@ -82,7 +82,7 @@ class Dockerv2TestCase(unittest.TestCase):
         self.cleanpaths.append(cache)
         self.cleanpaths.append(expand)
 
-        resp = dockerv2.pull_image(self.options, 'chgtype', 'latest',
+        resp = dockerv2.pull_image(self.options, 'scanon/chgtype', 'latest',
                                    cachedir=cache, expanddir=expand)
         assert os.path.exists(resp['expandedpath'])
         bfile = os.path.join(resp['expandedpath'], 'build/test')
