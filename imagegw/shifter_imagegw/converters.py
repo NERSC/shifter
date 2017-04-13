@@ -124,8 +124,9 @@ def writemeta(fmt, meta, metafile):
     with open(metafile, 'w') as meta_fd:
         # write out ENV, ENTRYPOINT, WORKDIR and format
         private = False
-        if 'private' in meta:
-            private = meta['private']
+        # Disable saving private image info for backwards support
+        # if 'private' in meta:
+        #     private = meta['private']
         meta_fd.write("FORMAT: %s\n" % (fmt))
         if 'entrypoint' in meta and meta['entrypoint'] is not None:
             meta_fd.write("ENTRY: %s\n" % (meta['entrypoint']))
