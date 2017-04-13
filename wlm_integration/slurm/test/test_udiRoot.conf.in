@@ -25,10 +25,9 @@ system=testSystem
 perNodeCachePath=/tmp
 perNodeCacheAllowedFsType=xfs
 perNodeCacheSizeLimit=100G
-mkfsXfsPath=/sbin/mkfs.xfs
+mkfsXfsPath=/usr/sbin/mkfs.xfs
 siteEnv=SHIFTER_RUNTIME=1 \
         TEST_ENV=yes
 siteEnvAppend=PATH=/opt/udiImage/bin\
               MANPATH=/opt/udiImage/share/man
 siteEnvPrepend=PKG_CONFIG_PATH=/this/is/fake
-siteResources=/opt/shifter/site-resources
