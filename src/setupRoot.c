@@ -97,8 +97,6 @@ int main(int argc, char **argv) {
     UdiRootConfig udiConfig;
     SetupRootConfig config;
     ImageData image;
-    struct gpu_support_config gpu_config = {};
-    struct mpi_support_config mpi_config = {};
 
     memset(&udiConfig, 0, sizeof(UdiRootConfig));
     memset(&config, 0, sizeof(SetupRootConfig));
