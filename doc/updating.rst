@@ -1,7 +1,7 @@
 Updating Shifter
 ================
 
-Version 16.08 to 17.03
+Version 16.08 to 17.04
 ----------------------
 Configurations should be backwards compatible.  There are new optional parameters
 that have been added.

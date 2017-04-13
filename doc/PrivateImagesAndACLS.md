@@ -1,4 +1,4 @@
-# Private Registries and ACLs (17.03 or newer)
+# Private Registries and ACLs (17.04 or newer)
 
 Private registries are useful for cases where a user has applications or source
 code that need to be protected.  This may be because of competitive reasons
