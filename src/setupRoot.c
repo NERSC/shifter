@@ -95,7 +95,6 @@ int main(int argc, char **argv) {
     UdiRootConfig udiConfig;
     SetupRootConfig config;
     ImageData image;
-    struct gpu_support_config gpu_config = {};
 
     memset(&udiConfig, 0, sizeof(UdiRootConfig));
     memset(&config, 0, sizeof(SetupRootConfig));
@@ -112,6 +111,9 @@ int main(int argc, char **argv) {
         fprintf(stderr, "FAILED to parse udiRoot configuration. Exiting.\n");
         exit(1);
     }
+
+    udiConfig.gpu_config.is_gpu_support_enabled = 1; //always attempt to enable GPU support
+
     udiConfig.target_uid = config.uid;
     udiConfig.target_gid = config.gid;
     udiConfig.auxiliary_gids = shifter_getgrouplist(config.user, udiConfig.target_gid, &(udiConfig.nauxiliary_gids));
