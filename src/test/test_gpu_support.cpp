@@ -15,7 +15,6 @@ TEST(GPUSupportTestGroup, parseGPUenv_test) {
     {
         parse_gpu_env(&config);
         CHECK(config.is_gpu_support_enabled == 0);
-        CHECK(config.gpu_ids == NULL);
         free_gpu_support_config(&config);
     }
     // CUDA_VISIBLE_DEVICES= (no value)
@@ -23,7 +22,6 @@ TEST(GPUSupportTestGroup, parseGPUenv_test) {
         setenv("CUDA_VISIBLE_DEVICES", "", 1);
         parse_gpu_env(&config);
         CHECK(config.is_gpu_support_enabled == 0);
-        CHECK(config.gpu_ids == NULL);
         free_gpu_support_config(&config);
     }
     // CUDA_VISIBLE_DEVICES=NoDevFiles
@@ -31,7 +29,6 @@ TEST(GPUSupportTestGroup, parseGPUenv_test) {
         setenv("CUDA_VISIBLE_DEVICES", "NoDevFiles", 1);
         parse_gpu_env(&config);
         CHECK(config.is_gpu_support_enabled == 0);
-        CHECK(config.gpu_ids == NULL);
         free_gpu_support_config(&config);
     }
     // CUDA_VISIBLE_DEVICES=0
@@ -39,7 +36,6 @@ TEST(GPUSupportTestGroup, parseGPUenv_test) {
         setenv("CUDA_VISIBLE_DEVICES", "0", 1);
         parse_gpu_env(&config);
         CHECK(config.is_gpu_support_enabled == 1);
-        CHECK(config.gpu_ids == std::string("0"));
         free_gpu_support_config(&config);
     }
     // CUDA_VISIBLE_DEVICES=0,1
@@ -47,7 +43,6 @@ TEST(GPUSupportTestGroup, parseGPUenv_test) {
         setenv("CUDA_VISIBLE_DEVICES", "0,1", 1);
         parse_gpu_env(&config);
         CHECK(config.is_gpu_support_enabled == 1);
-        CHECK(config.gpu_ids == std::string("0,1"));
         free_gpu_support_config(&config);
     }
 }

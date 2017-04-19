@@ -13,7 +13,6 @@ extern "C" {
 struct _UdiRootConfig;
 
 struct gpu_support_config {
-    char* gpu_ids;
     int is_gpu_support_enabled;
 };
 

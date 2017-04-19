@@ -4,7 +4,6 @@
 #this script with an empty environment
 export PATH=/usr/local/bin:/usr/bin:/bin:/sbin
 
-cuda_devices=
 container_root_dir=
 container_site_resources=
 is_verbose_active=
@@ -68,19 +67,18 @@ bind_mount_file_into_container()
 
 parse_command_line_arguments()
 {
-    if [ ! $# -eq 4 ]; then
+    if [ ! $# -eq 3 ]; then
         log ERROR "Internal error: received bad number of command line arguments"
         exit 1
     fi
 
-    cuda_devices=$1
-    container_root_dir=$2
-    container_site_resources=$3
+    container_root_dir=$1
+    container_site_resources=$2
     container_bin_path=$container_site_resources/gpu/bin
     container_lib_path=$container_site_resources/gpu/lib
     container_lib64_path=$container_site_resources/gpu/lib64
 
-    local verbose=$4
+    local verbose=$3
     if [ $verbose = "verbose-on" ]; then
         is_verbose_active=true
     elif [ $verbose = "verbose-off" ]; then
@@ -151,7 +149,7 @@ add_nvidia_binaries_to_container()
 
 parse_command_line_arguments $*
 validate_command_line_arguments
-log INFO "Activating support for CUDA devices $cuda_devices."
+log INFO "Activating GPU support"
 check_prerequisites
 add_nvidia_compute_libs_to_container
 add_nvidia_binaries_to_container
