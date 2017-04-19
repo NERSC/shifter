@@ -115,7 +115,7 @@ add_nvidia_compute_libs_to_container()
     for lib in $nvidia_compute_libs; do
         local libs_host=$( ldconfig -p | grep "lib${lib}.so" | awk '{print $4}' )
         if [ -z "$libs_host" ]; then
-            log WARNING "Could not find library: $lib"
+            log INFO "Could not find library: $lib"
             continue
         fi
 
@@ -139,7 +139,7 @@ add_nvidia_binaries_to_container()
     for bin in $nvidia_binaries; do
         local bin_host="$( which $bin )"
         if [ -z $bin_host ]; then
-            log WARNING "Could not find binary: $bin"
+            log INFO "Could not find binary: $bin"
             continue
         fi
         local bin_container=$container_bin_path/$bin
