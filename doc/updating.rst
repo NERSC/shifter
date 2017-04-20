@@ -16,6 +16,14 @@ that have been added.
    * New optional parameter (Metrics). True/False parameter to enable basic
      image metrics.
 
+If private images are pulled, the resulting metadata will be incompatible with
+previous versions of the shifter runtime.  Set an environment variable called
+DISABLE_ACL_METADATA to a value in order to enable backwards compatibility.
+Note that this means some access checks in the runtime will not be enforced
+and a determined user could use this to access a private image they should
+not have access to.  So this option should only be used as a temporary 
+bridge and sites should inform the users of the potential risks.
+
 Version 15.12.0 to 16.08.1
 --------------------------
 
