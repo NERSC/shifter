@@ -22,7 +22,11 @@ nvidia_compute_libs="cuda \
                     nvidia-opencl"
 
 #the NVIDIA binaries that will be bind mounted into the container
-nvidia_binaries="nvidia-smi"
+nvidia_binaries="nvidia-cuda-mps-control \
+               nvidia-cuda-mps-server \
+               nvidia-debugdump \
+               nvidia-persistenced \
+               nvidia-smi"
 
 log()
 {
