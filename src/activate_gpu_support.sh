@@ -153,9 +153,21 @@ add_nvidia_binaries_to_container()
     done
 }
 
+load_nvidia_uvm_if_necessary()
+{
+    # /dev/nvidia-uvm is available when the NVIDIA UVM kernel module is correctly loaded.
+    # Load the kernel module through nvidia-modprobe if /dev/nvidia-uvm doesn't exist.
+    if [ ! -e /dev/nvidia-uvm ]; then
+        log INFO "/dev/nvidia-uvm doesn't exist. Creating it with nvidia-modprobe."
+        nvidia-modprobe -u -c=0
+        exit_if_previous_command_failed "Cannot nvidia-modprobe -u -c=0"
+    fi
+}
+
 parse_command_line_arguments $*
 validate_command_line_arguments
 log INFO "Activating support for CUDA devices $cuda_devices."
 check_prerequisites
 add_nvidia_compute_libs_to_container
 add_nvidia_binaries_to_container
+load_nvidia_uvm_if_necessary
