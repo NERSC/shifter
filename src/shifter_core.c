@@ -1723,37 +1723,25 @@ _pass_check_fromvol:
             if (createToDev) {
                 int okToMkdir = 0;
 
-                /* search the first existing parent folder and check that it is on the device
-                   where we are authorized to create stuff */
                 char *ptr = strrchr(to_buffer, '/');
-                *ptr = '\0';
-                while (1) {
-                    int parent_folder_exists = (lstat(to_buffer, &statData) == 0);
-                    if (parent_folder_exists) {
-                        int is_parent_folder_on_authorized_device = (statData.st_dev == createToDev);
-                        if (is_parent_folder_on_authorized_device) {
-                            okToMkdir = 1;
-                        }
-                        *ptr = '/';
-                        break;
-                    }
-
-                    /* move to next parent folder */
-                    char *old_ptr = ptr;
-                    ptr = strrchr(to_buffer, '/');
-                    *old_ptr = '/';
+                if (ptr) {
+                    /* get parent path of intended dir */
                     *ptr = '\0';
 
-                    int went_through_all_parent_folders = (ptr == to_buffer);
-                    if(went_through_all_parent_folders)
-                    {
-                        *ptr = '/';
-                        break;
+                    /* if parent path is on the same device as is authorized by createToDev
+                       then ok the mkdir operation */
+                    if (lstat(to_buffer, &statData) == 0) {
+                        if (statData.st_dev == createToDev) {
+                            okToMkdir = 1;
+                        }
                     }
+
+                    /* reset to target path */
+                    *ptr = '/';
                 }
 
                 if (okToMkdir) {
-                    mkdir_p(to_buffer, 0755);
+                    mkdir(to_buffer, 0755);
                     if (lstat(to_buffer, &statData) != 0) {
                         fprintf(stderr, "FAILED to find volume \"to\": %s\n",
                                 to_buffer);
