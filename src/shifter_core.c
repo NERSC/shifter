@@ -179,11 +179,6 @@ int bindImageIntoUDI(
         mntBuffer[PATH_MAX-1] = 0;
         if (lstat(mntBuffer, &statData) == 0) {
             /* exists in UDI, skip */
-            fprintf(stderr, "WARNING: skipping mount of image's %s/%s. The file or directory already"
-                            " exists in the container and will not be bind mounted from the image. This"
-                            " could happen because the system administrator configured Shifter to create"
-                            " or mount resources in the container whose path conflicts with the contents"
-                            " of the image.\n", relpath, itemname);
             free(itemname);
             itemname = NULL;
             continue;
