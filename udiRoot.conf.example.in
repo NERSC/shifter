@@ -204,7 +204,7 @@ rootfsType=@ROOTFS_TYPE@
 
 #siteFs
 #
-# Semicolon separated list of paths to be automatically bind-mounted into the
+# Semicolon seperated list of paths to be automatically bind-mounted into the
 # container. This is typically used to make network filesystems accessible
 # within the container, but could be used to allow certain other facilities,
 # like /var/run  or /var/spool/alps to be accessible within the image (depending
@@ -215,13 +215,6 @@ rootfsType=@ROOTFS_TYPE@
 #
 # It is OK to perform this under /var or /opt or a novel path that your site 
 # maintains (e.g., for NERSC, /global).
-#
-# **WARNING**: If a path on this list contains a parent directory that also exists in 
-# the image, mount precedence will be given to the host path specified here, and
-# the resources from the image will be skipped.
-# For example: if /var/spool/alps is in siteFs, and the image contains /var/spool/,
-# the image directory will not be mounted.
-#
 siteFs=/home:/home
 
 
