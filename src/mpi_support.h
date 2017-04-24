@@ -14,6 +14,8 @@ typedef struct _UdiRootConfig UdiRootConfig;
 
 struct mpi_support_config {
     int is_mpi_support_enabled;
+    char* mpi_shared_libs;
+    char* mpi_dependency_libs;
 };
 
 /**
