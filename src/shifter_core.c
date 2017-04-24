@@ -174,43 +174,16 @@ int bindImageIntoUDI(
             continue;
         }
 
-        /* check to see if UDI version already exists,
-         * skip if UDI already contains the file or folder */
+        /* check to see if UDI version already exists */
         snprintf(mntBuffer, PATH_MAX, "%s/%s/%s", udiRoot, relpath, itemname);
         mntBuffer[PATH_MAX-1] = 0;
         if (lstat(mntBuffer, &statData) == 0) {
-
-            /* print warning if we are skipping potentially important image's data */
-            snprintf(srcBuffer, PATH_MAX, "%s/%s/%s", imgRoot, relpath, itemname);
-            srcBuffer[PATH_MAX-1] = 0;
-            char relBuffer[PATH_MAX];
-            snprintf(relBuffer, PATH_MAX, "%s/%s", relpath, itemname);
-            relBuffer[PATH_MAX-1] = 0;
-
-            int is_top_level_directory = strcmp(relpath, "/")==0 && is_existing_directory(srcBuffer);
-            if(!is_top_level_directory) {
-                int is_file = is_existing_file(srcBuffer) && !is_existing_directory(srcBuffer);
-                int is_non_empty_directory = (is_existing_directory(srcBuffer)
-                                                && !is_empty_directory(srcBuffer));
-                // we consider fine to skip the following directories:
-                // - /etc: is specially handled somewhere else (recursive copy, instead of mount)
-                // - /var/run: we don't care about the old container's runtime data
-                // - /var/spool: we don't care about the old container's spool data
-                // - /var/tmp: we prefer the site's /var/tmp so we can create/modify data (image is read-only)
-                int has_important_parent_folder = (strncmp(relBuffer, "/etc", 4) != 0
-                                                   && strncmp(relBuffer, "/var/run", 8) != 0
-                                                   && strncmp(relBuffer, "/var/spool", 10) != 0
-                                                   && strncmp(relBuffer, "/var/tmp", 8) != 0);
-                if((is_file || is_non_empty_directory) && has_important_parent_folder)
-                {
-                    fprintf(stderr, "WARNING: skipping mount of image's %s. The file or directory already"
-                                    " exists in the container and will not be bind mounted from the image. This"
-                                    " could happen because the system administrator configured Shifter to create"
-                                    " or mount resources in the container whose path conflicts with the contents"
-                                    " of the image.\n", relBuffer);
-                }
-            }
-
+            /* exists in UDI, skip */
+            fprintf(stderr, "WARNING: skipping mount of image's %s/%s. The file or directory already"
+                            " exists in the container and will not be bind mounted from the image. This"
+                            " could happen because the system administrator configured Shifter to create"
+                            " or mount resources in the container whose path conflicts with the contents"
+                            " of the image.\n", relpath, itemname);
             free(itemname);
             itemname = NULL;
             continue;
