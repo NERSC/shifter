@@ -97,8 +97,6 @@ typedef struct _UdiRootConfig {
     char **gwUrl;
     VolumeMap *siteFs;
     char *siteResources;
-    char *siteMPISharedLibs;
-    char *siteMPIDependencyLibs;
     char **siteEnv;
     char **siteEnvAppend;
     char **siteEnvPrepend;

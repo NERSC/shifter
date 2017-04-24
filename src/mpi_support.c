@@ -24,7 +24,8 @@ int execute_hook_to_activate_mpi_support(int verbose, const UdiRootConfig* udiCo
             return 1;
         }
 
-        if (udiConfig->siteMPISharedLibs == NULL || strlen(udiConfig->siteMPISharedLibs) == 0) {
+        if (udiConfig->mpi_config.mpi_shared_libs == NULL
+            || strlen(udiConfig->mpi_config.mpi_shared_libs) == 0) {
             fprintf(stderr, "Native MPI support requested but no site-specific MPI libraries "
                             "defined in udiRoot configuration file\n");
             return 1;
@@ -35,8 +36,8 @@ int execute_hook_to_activate_mpi_support(int verbose, const UdiRootConfig* udiCo
         args[1] = alloc_strgenf("%s/bin/activate_mpi_support.sh", udiConfig->udiRootPath);
         args[2] = strdup(udiConfig->udiMountPoint);
         args[3] = strdup(udiConfig->siteResources);
-        args[4] = strdup(udiConfig->siteMPISharedLibs);
-        args[5] = make_non_empty_argument(udiConfig->siteMPIDependencyLibs);
+        args[4] = strdup(udiConfig->mpi_config.mpi_shared_libs);
+        args[5] = make_non_empty_argument(udiConfig->mpi_config.mpi_dependency_libs);
         args[6] = verbose ? strdup("verbose-on") : strdup("verbose-off");
         args[7] = NULL;
 
@@ -55,9 +56,21 @@ int fprint_mpi_support_config(FILE* fp, const struct mpi_support_config* config)
     size_t written = 0;
     written += fprintf(fp, "***** MPI support config *****\n");
     written += fprintf(fp, "is_mpi_support_enabled = %d\n", config->is_mpi_support_enabled);
+    written += fprintf(fp, "siteMPISharedLibs = %s\n",
+        (config->mpi_shared_libs != NULL ? config->mpi_shared_libs : ""));
+    written += fprintf(fp, "siteMPIDependencyLibs = %s\n",
+        (config->mpi_dependency_libs != NULL ? config->mpi_dependency_libs : ""));
     return written;
 }
 
 void free_mpi_support_config(struct mpi_support_config* config) {
+    if(config->mpi_shared_libs != NULL) {
+        free(config->mpi_shared_libs);
+        config->mpi_shared_libs = NULL;
+    }
+    if(config->mpi_dependency_libs != NULL) {
+        free(config->mpi_dependency_libs);
+        config->mpi_dependency_libs = NULL;
+    }
 }
 
