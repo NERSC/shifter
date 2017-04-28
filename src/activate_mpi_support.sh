@@ -65,6 +65,7 @@ parse_command_line_arguments()
         is_verbose_active=false
     else
         log ERROR "Internal error: received bad 'verbose' parameter"
+        exit 1
     fi
 }
 
@@ -142,9 +143,11 @@ get_mpi_library_major_and_minor_version_numbers()
     is_number_regexp='^[0-9]+$'
     if ! [[ $major_number =~ $is_number_regexp ]]; then
         log ERROR "Internal error: major version string of MPI library $library is not a number"
+        exit 1
     fi
     if ! [[ $minor_number =~ $is_number_regexp ]]; then
         log ERROR "Internal error: minor version string of MPI library $library is not a number"
+        exit 1
     fi
 
     echo "$major_number $minor_number"
