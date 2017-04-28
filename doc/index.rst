@@ -35,7 +35,6 @@ Contents:
    install/centos6
    install/cle6
    install/manualinstall
-   install/required-permissions
    wlm/slurm
 
 
