@@ -434,6 +434,8 @@ class DockerV2Handle(object):
             config = meta['config']
             if 'Env' in config:
                 resp['env'] = config['Env']
+            if 'WorkingDir' in config:
+                resp['workdir'] = config['WorkingDir']
             if 'Entrypoint' in config:
                 resp['entrypoint'] = config['Entrypoint']
         resp['private'] = self.private
@@ -677,6 +679,8 @@ def pull_image(options, repo, tag, cachedir='./', expanddir='./'):
         config = meta['config']
         if 'Env' in config:
             resp['env'] = config['Env']
+        if 'WorkingDir' in config:
+            resp['workdir'] = config['WorkingDir']
         if 'Entrypoint' in config:
             resp['entrypoint'] = config['Entrypoint']
 
@@ -692,10 +696,6 @@ def main():
     cache_dir = os.environ['TMPDIR']
     pull_image({'baseUrl': 'https://registry-1.docker.io'}, 'scanon/shanetest',
                'latest', cachedir=cache_dir, expanddir=cache_dir)
-
-    pull_image({'baseUrl': 'https://registry-1.docker.io'},
-               'dlwoodruff/pyomodock', '4.3.1137', cachedir=cache_dir,
-               expanddir=cache_dir)
 
 if __name__ == '__main__':
     main()

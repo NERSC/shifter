@@ -65,7 +65,27 @@ class ImageWorkerTestCase(unittest.TestCase):
             if os.path.exists(fp):
                 os.remove(fp)
 
-    def test0_pull_image(self):
+    def get_metafile(self, id):
+        metafile = os.path.join(self.imageDir, '%s.meta' % (id))
+        return metafile
+
+    def read_metafile(self, metafile):
+        kv = {}
+        with open(metafile) as mf:
+            for line in mf:
+                (k, v) = line.rstrip().split(': ')
+                kv[k] = v
+        # Convert ACLs to list of ints
+        if 'USERACL' in kv:
+            list = map(lambda x: int(x), kv['USERACL'].split(','))
+            kv['USERACL'] = list
+        if 'GROUPACL' in kv:
+            list = map(lambda x: int(x), kv['GROUPACL'].split(','))
+            kv['GROUPACL'] = list
+
+        return kv
+
+    def test_pull_image_basic(self):
         self.cleanup_cache()
         request = {'system': self.system, 'itype': self.itype, 'tag': self.tag}
         status = self.imageworker.pull_image(request)
@@ -73,12 +93,10 @@ class ImageWorkerTestCase(unittest.TestCase):
         self.assertIn('meta', request)
         meta = request['meta']
         self.assertIn('id', meta)
+        self.assertIn('workdir', meta)
         self.assertEquals(meta['entrypoint'][0], "/bin/sh")
         self.assertTrue(os.path.exists(request['expandedpath']))
 
-        #fp = '%s/%s.meta' % (self.imageDir, request['id'])
-        #print fp
-        #self.assertTrue(os.path.exists(fp))
         return
 
     # Pull the image but explicitly specify dockerhub
@@ -173,29 +191,37 @@ class ImageWorkerTestCase(unittest.TestCase):
         resp = self.imageworker.pull_image(request, self.updater)
         self.assertTrue(resp)
 
-    def test_puller(self):
+    def test_puller_testmode(self):
         request = {
             'system': self.system,
             'itype': self.itype,
             'tag': self.tag
         }
-
         result = self.imageworker.pull(request, self.updater, testmode=1)
         self.assertIn('workdir', result)
         self.assertIn('env', result)
         self.assertTrue(result)
         with self.assertRaises(OSError):
             self.imageworker.pull(request, self.updater, testmode=2)
+
+    def test_puller_real(self):
+        request = {
+            'system': self.system,
+            'itype': self.itype,
+            'tag': self.tag
+        }
+
         result = self.imageworker.pull(request, self.updater)
+        mf = self.get_metafile(result['id'])
+        mfdata = self.read_metafile(mf)
+        self.assertIn('WORKDIR', mfdata)
         request['userACL'] = [1001]
         result = self.imageworker.pull(request, self.updater)
-        #sleep(6)
-        #print result
-        #self.imageworker.dopull.apply(request)
         self.imageworker.remove_image(request)
 
     def test_unimplemented_fuctions(self):
         pass
+
 
 if __name__ == '__main__':
     unittest.main()

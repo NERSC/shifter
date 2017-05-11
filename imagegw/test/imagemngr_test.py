@@ -685,7 +685,6 @@ class ImageMngrTestCase(unittest.TestCase):
             'groupACL': [1003, 1004]
         }
         rec = self.m.pull(session, pr)  # ,delay=False)
-        print rec
         assert rec['status'] == 'PULLING'
 
     def test_pull_logic(self):
@@ -771,6 +770,7 @@ class ImageMngrTestCase(unittest.TestCase):
         mrec = self.images.find_one(q)
         assert '_id' in mrec
         assert 'userACL' in mrec
+        self.assertIn('workdir', mrec)
         assert 1001 in mrec['userACL']
         # Track through transistions
         state = self.time_wait(id)
