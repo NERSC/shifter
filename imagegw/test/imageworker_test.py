@@ -22,7 +22,8 @@ import json
 
 
 def update_status(state, meta=None):
-    print 'state=%s' % (state)
+    if 'SHOWSTATE' in os.environ:
+        print 'state=%s' % (state)
 
 
 class ImageWorkerTestCase(unittest.TestCase):
@@ -153,8 +154,8 @@ class ImageWorkerTestCase(unittest.TestCase):
             'tag': self.tag
         }
         status = self.imageworker.pull_image(request)
-        # TODO: a little odd that is True and == True used here
         self.assertTrue(status)
+        self.assertIn('expandedpath', request)
         status = self.imageworker.convert_image(request)
         self.assertTrue(status)
 
