@@ -33,6 +33,7 @@ systema:
   privileged: true
   environment:
   - ADDUSER=canon
+  - ADDUSER=lgerhard
 workera:
   image: imagegwapi
   links:
