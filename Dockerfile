@@ -51,6 +51,11 @@ RUN \
 
 ADD ./imagegw/test/premount.sh /etc/shifter/premount.sh
 ADD ./imagegw/test/postmount.sh /etc/shifter/postmount.sh
+RUN mkdir -p /images/test/
+ADD ./imagegw/test/test.squashfs /images/test
+COPY ./imagegw/shifter_imagegw/fasthash.py /usr/local/bin
+RUN chmod a+rx /usr/local/bin/fasthash.py
+
 
 EXPOSE 22
 ENTRYPOINT [ "/entrypoint.sh" ]
