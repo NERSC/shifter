@@ -30,7 +30,8 @@ from shifter_imagegw.imagemngr import ImageMngr
 from flask import Flask, request, jsonify
 
 
-app = Flask(__name__)
+#app = Flask(__name__)
+app = Flask("shifter")
 config = {}
 AUTH_HEADER = 'authentication'
 
@@ -40,9 +41,13 @@ if 'GWCONFIG' in os.environ:
 else:
     CONFIG_FILE = '%s/imagemanager.json' % (shifter_imagegw.CONFIG_PATH)
 
-app.logger.setLevel(logging.INFO)
+# Make flask logging work with gunicorn
+#logHandler = logging.FileHandler('/var/log/app.log')
+gunicorn_error_logger = logging.getLogger('gunicorn.error')
+app.logger.handlers.extend(gunicorn_error_logger.handlers)
+app.logger.setLevel(logging.DEBUG)
 app.debug_log_format = '%(asctime)s [%(name)s] %(levelname)s : %(message)s'
-app.logger.debug('Initializing image manager')
+app.logger.debug('Initializing api image manager')
 
 app.logger.info("initializing with %s" % (CONFIG_FILE))
 with open(CONFIG_FILE) as config_file:
@@ -209,6 +214,79 @@ def pull(system, imgtype, tag):
         app.logger.exception('Exception in pull')
         return not_found('%s %s' % (sys.exc_type, sys.exc_value))
     return jsonify(create_response(rec))
+
+
+# Import image
+# This will import the requested image from a file path on the system.
+@app.route('/api/doimport/<system>/<imgtype>/<path:tag>/', methods=["POST"])
+def doimport(system, imgtype, tag):
+    """ 
+    Pull a specific image and tag for a systems. 
+    """
+    if imgtype == "docker" and tag.find(':') == -1:
+        tag = '%s:latest' % (tag)
+
+    auth = request.headers.get(AUTH_HEADER)
+    app.logger.debug("inside doimport")
+    data = {}
+    try:
+        rqd = request.get_data()
+        app.logger.debug("rqd '%s'" % (rqd))
+        if rqd is not "" and rqd is not None:
+            data = json.loads(rqd)
+            app.logger.debug("data '%s'" % (data))
+    except:
+        app.logger.warn("Unable to parse doimport data '%s'" %
+                        (request.get_data()))
+        pass
+
+    memo = "import system=%s imgtype=%s tag=%s" % (system, imgtype, tag)
+    app.logger.debug(memo)
+    i = {'system': system, 'itype': imgtype, 'tag': tag}
+    app.logger.debug("print data '%s'" % (data))
+    #Check for path to import file
+    if 'filepath' in data:
+        i['filepath'] = data['filepath']
+    else:
+        raise OSError("filepath required for direct image import")
+    if 'format' in data:
+        i['format'] = data['format']
+    else:
+        raise OSError("file type (e.g. squashfs) required for direct image import")        
+    #Check for list of allowed users or groups
+    if 'allowed_uids' in data:
+        # Convert to integers
+        i['userACL'] = map(lambda x: int(x),
+                           data['allowed_uids'].split(','))
+    if 'allowed_gids' in data:
+        # Convert to integers
+        i['groupACL'] = map(lambda x: int(x),
+                            data['allowed_gids'].split(','))
+    try:
+        app.logger.debug(i)
+        session = mgr.new_session(auth, system)
+        app.logger.debug(session)
+        #only allowed users can import images
+        user = session['user']
+        if 'ImportUsers' not in config.keys():
+            raise OSError("User image import from file disabled.")
+        iusers = config['ImportUsers']
+        #If ImportUsers is None, no one can do this
+        if iusers == "None" or iusers == "none":
+            raise OSError("User image import from file disabled.")
+
+        #Check if user on approved list
+        if len(iusers) > 0 and iusers != "all":
+            if user not in iusers:
+                raise OSError("User %s not allowed to import image from file.",user)
+        rec = mgr.mngrimport(session, i)
+        app.logger.debug(rec)
+    except:
+        app.logger.exception('Exception in import')
+        return not_found('%s %s' % (sys.exc_type, sys.exc_value))
+    return jsonify(create_response(rec))
+
+
 
 
 # auto expire
