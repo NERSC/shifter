@@ -303,7 +303,7 @@ def remove_file(filename, system, logger=None):
     return True
 
 
-def check_file(filename, system, logger=None):
+def check_file(filename, system, logger=None, import_image=False):
     """
     check the validatity of a file on the system
     """
@@ -311,13 +311,16 @@ def check_file(filename, system, logger=None):
     basepath = None
     if system['accesstype'] == 'local':
         sh_cmd = _sh_cmd
-#        basepath = system['local']['imageDir']
+        basepath = system['local']['imageDir']
     elif system['accesstype'] == 'remote':
         sh_cmd = _ssh_cmd
-#        basepath = system['ssh']['imageDir']
-#    image_fn = os.path.split(filename)[1]
-#    target_fn = os.path.join(basepath, image_fn)
-    ls_cmd = sh_cmd(system, 'ls', filename)
+        basepath = system['ssh']['imageDir']
+    image_fn = os.path.split(filename)[1]
+    target_fn = os.path.join(basepath, image_fn)
+    if import_image:
+        ls_cmd = sh_cmd(system, 'ls', target_fn)
+    else:
+        ls_cmd = sh_cmd(system, 'ls', filename)
     ret = _exec_and_log(ls_cmd, logger)
 
     if ret == 0:
