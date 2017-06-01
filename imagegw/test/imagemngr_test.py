@@ -630,6 +630,7 @@ class ImageMngrTestCase(unittest.TestCase):
         Let's simulate various permissions and test them.
         """
         user1 = {'uid': 1, 'gid': 1}
+        self.assertTrue(self.m._checkread(user1, {}))
         mock_image_rec = {
             'userACL': None,
             'groupACL': None
@@ -890,6 +891,46 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertEqual(rec['status'], 'READY')
         kv = self.read_metafile(mf)
         self.images.drop()
+        self.stop_worker()
+
+    def test_import(self):
+        """
+        Basic import test including an induced pull failure.
+        """
+        # Use defaults for format, arch, os, ostcount, replication
+        pr = {
+            'system': self.system,
+            'itype': self.itype,
+            'tag': self.tag,
+            'remotetype': 'dockerv2',
+            'userACL': [],
+            'groupAcl': []
+        }
+        # Do the pull
+        self.start_worker()
+        session = self.m.new_session(self.auth, self.system)
+        rec = self.m.mngrimport(session, pr, testmode=1)  # ,delay=False)
+        assert rec is not None
+        id = rec['_id']
+        # Confirm record
+        q = {'system': self.system, 'itype': self.itype, 'pulltag': self.tag}
+        mrec = self.images.find_one(q)
+        assert '_id' in mrec
+        # Track through transistions
+        state = self.time_wait(id)
+        #Debug
+        assert state == 'READY'
+        imagerec = self.m.lookup(session, pr)
+        assert 'ENTRY' in imagerec
+        assert 'ENV' in imagerec
+        # Cause a failure
+        self.images.drop()
+        rec = self.m.pull(session, pr, testmode=2)
+        time.sleep(10)
+        assert rec is not None
+        id = rec['_id']
+        state = self.m.get_state(id)
+        assert state == 'FAILURE'
         self.stop_worker()
 
     # TODO: Write a test that tries to update an image the
