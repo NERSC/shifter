@@ -126,6 +126,10 @@ def writemeta(fmt, meta, metafile):
         private = False
         if 'private' in meta:
             private = meta['private']
+        # Disable saving private image info for backwards support
+        # This can be deprecated in the future.
+        if 'DISABLE_ACL_METADATA' in os.environ:
+            private = False
         meta_fd.write("FORMAT: %s\n" % (fmt))
         if 'entrypoint' in meta and meta['entrypoint'] is not None:
             meta_fd.write("ENTRY: %s\n" % (meta['entrypoint']))
@@ -140,6 +144,8 @@ def writemeta(fmt, meta, metafile):
         if 'env' in meta and meta['env'] is not None:
             for keyval in meta['env']:
                 meta_fd.write("ENV: %s\n" % (keyval))
+        if 'user' in meta:
+            meta_fd.write("USER: %s\n" % meta['user'])
         meta_fd.close()
     # Some error must have occurred
     return True
