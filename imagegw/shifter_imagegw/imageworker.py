@@ -294,7 +294,7 @@ def check_image(request):
                                logging)
 
 
-def transfer_image(request, meta_only=False):
+def transfer_image(request, meta_only=False, import_image=False):
     """
     Transfers the image to the target system based on the configuration.
 
@@ -311,7 +311,11 @@ def transfer_image(request, meta_only=False):
         request['meta']['meta_only'] = True
         return transfer.transfer(sysconf, None, meta, logging)
     else:
-        return transfer.transfer(sysconf, request['imagefile'], meta, logging)
+        if not import_image:
+            return transfer.transfer(sysconf, request['imagefile'], meta, logging, import_image)
+        else:
+            return transfer.transfer(sysconf, request['filepath'], meta, logging, import_image, request['imagefile'])
+
 
 
 def remove_image(request):
@@ -331,11 +335,14 @@ def remove_image(request):
     return transfer.remove(sysconf, imagefile, meta, logging)
 
 
-def cleanup_temporary(request):
+def cleanup_temporary(request, import_image=False):
     """
     Helper function to cleanup any temporary files or directories.
     """
-    items = ('expandedpath', 'imagefile', 'metafile')
+    if not import_image:
+        items = ('expandedpath', 'imagefile', 'metafile')
+    else:
+        items = ('expandedpath', 'metafile')
     for item in items:
         if item not in request or request[item] is None:
             continue
@@ -432,7 +439,73 @@ def pull(request, updater, testmode=0):
         return request['meta']
 
     except:
-        logging.error("ERROR: dopull failed system=%s tag=%s",
+        logging.error("ERROR: dopull failed system=%s tag=%s", \
+                request['system'], request['tag'])
+        print sys.exc_value
+        updater.update_state('FAILURE', 'FAILED')
+
+        # TODO: add a debugging flag and only disable cleanup if debugging
+        cleanup_temporary(request)
+        raise
+
+
+def img_import(request, updater, testmode=0):
+    """
+    Celery task to do the full workflow of copying an image and processing it
+    """
+    tag = request['tag']
+    logging.debug("img_import system=%s tag=%s", request['system'], tag)
+    if testmode == 1:
+        states = ('HASHING', 'TRANSFER', 'READY')
+        for state in states:
+            logging.info("Worker: testmode Updating to %s", state)
+            updater.update_status(state, state)
+            sleep(1)
+        ident = '%x' % randint(0, 100000)
+        ret = {
+            'id': ident,
+            'entrypoint': ['./blah'],
+            'workdir': '/root',
+            'env': ['FOO=bar', 'BAZ=boz']
+        }
+        return ret
+    elif testmode == 2:
+        logging.info("Worker: testmode 2 setting failure")
+        raise OSError('task failed')
+    try:
+        # Step 0 - Check if path is valid
+        sysconf = CONFIG['Platforms'][request['system']]
+        if not transfer.check_file(request["filepath"],sysconf,logging):
+            raise OSError('Path not valid')
+        # Step 1 - Calculate the hash of the file
+        logging.info("starting step 1")
+        updater.update_status('HASHING', 'HASHING')
+        logging.info(request)
+        request['id'] = transfer.hash_file(request['filepath'],sysconf,logging)
+        # Step 2 - Populate the metadata file
+        logging.info("starting step 2")
+        if 'meta' not in request:
+            raise OSError('Metadata not populated')
+        request['meta']['format'] = request['format']
+        request['meta']['user'] = request['session']['user']
+        if not write_metadata(request):
+            logging.info("Writing metadata")
+            raise OSError('Metadata creation failed')
+        # Step 3 - Copy image and meta file from user space to shifter area
+        logging.info("starting step 3")
+        request['imagefile'] = request['id']+'.'+request['format']
+        updater.update_status('TRANSFER', 'TRANSFER')
+        if not transfer_image(request,import_image=True):
+            logging.info("Worker: Import copy failed")
+            raise OSError("Import copy failed")
+
+        # Done
+        updater.update_status('READY', 'Image ready')
+        cleanup_temporary(request,import_image=True)
+        return request['meta']
+
+    except:
+        logging.error("ERROR: img_import failed system=%s tag=%s",
                       request['system'], request['tag'])
         print sys.exc_value
         updater.update_state('FAILURE', 'FAILED')
@@ -449,6 +522,16 @@ def dopull(self, request, testmode=0):
     """
     updater = Updater(self.update_state)
     return pull(request, updater, testmode=testmode)
+
+
+@QUEUE.task(bind=True)
+def wrkimport(self, request, testmode=0):
+    """
+    Celery task to do the full workflow of importing an image and transferring it
+    """
+    logging.debug("wrkimport starting")
+    updater = Updater(self.update_state)
+    return img_import(request, updater, testmode=testmode)
 
 
 @QUEUE.task(bind=True)
