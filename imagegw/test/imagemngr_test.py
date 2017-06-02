@@ -903,6 +903,8 @@ class ImageMngrTestCase(unittest.TestCase):
             'itype': self.itype,
             'tag': self.tag,
             'remotetype': 'dockerv2',
+            'filepath': '/images/test/test.squashfs',
+            'format': 'squashfs',
             'userACL': [],
             'groupAcl': []
         }
