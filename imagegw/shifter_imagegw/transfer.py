@@ -318,9 +318,9 @@ def check_file(filename, system, logger=None, import_image=False):
     image_fn = os.path.split(filename)[1]
     target_fn = os.path.join(basepath, image_fn)
     if import_image:
-        ls_cmd = sh_cmd(system, 'ls', target_fn)
-    else:
         ls_cmd = sh_cmd(system, 'ls', filename)
+    else:
+        ls_cmd = sh_cmd(system, 'ls', target_fn)
     ret = _exec_and_log(ls_cmd, logger)
 
     if ret == 0:

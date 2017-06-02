@@ -475,7 +475,7 @@ def img_import(request, updater, testmode=0):
     try:
         # Step 0 - Check if path is valid
         sysconf = CONFIG['Platforms'][request['system']]
-        if not transfer.check_file(request["filepath"],sysconf,logging):
+        if not transfer.check_file(request["filepath"],sysconf,logging, import_image=True):
             raise OSError('Path not valid')
         # Step 1 - Calculate the hash of the file
         logging.info("starting step 1")
