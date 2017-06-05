@@ -47,7 +47,6 @@
 #include "UdiRootConfig.h"
 #include "VolumeMap.h"
 #include "MountList.h"
-#include "gpu_support.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -69,7 +68,6 @@ int mountImageVFS(ImageData *imageData,
                   int verbose,
                   const char *minNodeSpec,
                   UdiRootConfig *udiConfig);
-int create_site_resources_folder(const UdiRootConfig*);
 int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig);
 int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat format, UdiRootConfig *udiConfig, int readonly);
 int destructUDI(UdiRootConfig *udiConfig, int killSshd);
@@ -139,9 +137,6 @@ int shifter_appendenv(char ***env, const char *var);
 int shifter_prependenv(char ***env, const char *var);
 int shifter_unsetenv(char ***env, const char *var);
 int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig);
-int shifter_setupenv_site_resources(char ***env, UdiRootConfig *udiConfig);
-int shifter_setupenv_site_resources_rec(char ***env, const char* current_folder);
-int is_shared_library(char* file_name);
 struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config);
 struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config);
 
