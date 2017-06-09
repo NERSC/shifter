@@ -69,18 +69,6 @@ parse_command_line_arguments()
     fi
 }
 
-check_that_image_contains_required_dependencies()
-{
-    # we need the container image to provide these command line tools
-    command_line_tools="sed readlink"
-    for command_line_tool in $command_line_tools; do
-        if [ -z $(chroot $container_root_dir bash -c "which $command_line_tool") ]; then
-            log ERROR "Missing dependency: make sure that the container image contains the program \"$command_line_tool\""
-            exit 1
-        fi
-    done
-}
-
 bind_mount_file_into_container()
 {
     local target=$1
@@ -213,7 +201,7 @@ corresponding_site_mpi_library_exists()
 override_mpi_shared_libraries_of_container()
 {
     log INFO "Scanning container's ld.so.cache for MPI libraries"
-    local container_lib_realpaths=$(chroot $container_root_dir bash -c "ldconfig -p | sed -n -e 's/.* => \(.*\)/echo \$(readlink -e \1)/p' | bash")
+    local container_lib_realpaths=$(ldconfig -r $container_root_dir -p | sed -n -e "s@.* => \(.*\)@readlink -e $container_root_dir\1@p" | bash | sed "s@$container_root_dir\(.*\)@\1@")
     local container_lib_realpaths_mounted_so_far=
     local container_has_mpi_libraries=false
 
@@ -238,8 +226,7 @@ override_mpi_shared_libraries_of_container()
     if [ $container_has_mpi_libraries = false ]; then
         log ERROR "No MPI libraries found in the container.
 The container should be configured to access the MPI libraries through the dynamic linker.
-Hint: run 'ldconfig' inside the container to configure the dynamic linker
-and run 'ldconfig -p' to check the configuration."
+Hint: run 'ldconfig' inside the container to configure the dynamic linker."
         exit 1
     fi
 }
@@ -249,7 +236,6 @@ and run 'ldconfig -p' to check the configuration."
 cached_site_mpi_library_ids_stripped >/dev/null
 
 parse_command_line_arguments $*
-check_that_image_contains_required_dependencies
 override_mpi_shared_libraries_of_container
 bind_mount_files_into_given_folder_of_container "$site_mpi_dependency_libraries" "$container_mpi_lib_dir"
 
