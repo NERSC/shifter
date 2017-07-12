@@ -24,8 +24,10 @@ import json
 import os
 import shutil
 import sys
+import glob
 import subprocess
 import logging
+import select
 import tempfile
 from time import time, sleep
 from random import randint
@@ -35,6 +37,8 @@ from shifter_imagegw import CONFIG_PATH, dockerv2, converters, transfer
 
 QUEUE = None
 CONFIG = None
+reload(sys)
+sys.setdefaultencoding('utf8')
 
 if 'GWCONFIG' in os.environ:
     CONFIGFILE = os.environ['GWCONFIG']
@@ -94,9 +98,20 @@ def initqueue(newconfig):
 
 def _get_cacert(location):
     """ Private method to get the cert location """
+    print location
+    print "Cacert location",location
     params = CONFIG['Locations'][location]
+    print params
     cacert = None
-    currdir = os.getcwd()
+    try:
+      print "In try para:"
+      currdir = os.getcwd()
+    except OSError:
+      print "OSError para"
+      os.chdir("..")
+      print "Creating the directory"
+      currdir = os.getcwd()
+    #currdir = os.getcwd()
     if 'sslcacert' in params:
         if params['sslcacert'].startswith('/'):
             cacert = params['sslcacert']
@@ -168,14 +183,18 @@ def pull_image(request, updater=DEFAULT_UPDATER):
 
     Returns True on success
     """
+
+    print "Bharath Pull_image para"
+    print request
     params = None
     rtype = None
-
+    
     # See if there is a location specified
     location = CONFIG['DefaultImageLocation']
     tag = request['tag']
     if tag.find('/') > 0:
         parts = tag.split('/')
+        print "parts",parts
         if parts[0] in CONFIG['Locations']:
             # This is a location
             location = parts[0]
@@ -211,6 +230,57 @@ def examine_image(request):
 
     Returns True on success
     """
+    print "Bharath in examine_image para:"
+    image_id = request['id']
+    image_loc = request['expandedpath']
+    stdout_log_level=logging.DEBUG
+    stderr_log_level=logging.ERROR
+    subprocess.Popen(['cp -R %s /home/ec2-user/' %image_loc],shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    os.chdir(os.path.join(image_loc,'etc'))
+    for file in os.listdir('.'):
+    	    fname = glob.glob('*-release') 
+    finp = open(fname[0],'r')
+    fcont = finp.readline()
+    print fcont
+
+    if "Ubuntu" in fcont:
+          print "Image is Ubuntu_based"
+
+    elif fcont.find("CentOS") == 0:
+          print "Image is centos based"
+
+    elif fcont.find("Fedora") == 0:
+          print "Image is Fedora based"
+
+    elif "Debian" in fcont:
+          print "Image is Debian based"
+    elif "Red Hat" in fcont:
+          print "Image is Redhat Linux based"
+    elif "Scientific" in fcont:
+          print "Image is Scientific Linux based"
+    else:
+          print "Some other unsupported flavour of Scanner"
+            
+                             
+
+    child = subprocess.Popen(['oscap-chroot %s xccdf eval --fetch-remote-resources --profile xccdf_org.ssgproject.content_profile_rht-ccp --report %s_report.html /usr/share/xml/scap/ssg/content/ssg-rhel7-ds.xml' %(image_loc,image_id)],shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    log_level = {child.stdout: stdout_log_level,
+                 child.stderr: stderr_log_level}
+
+    def check_io():
+        ready_to_read = select.select([child.stdout, child.stderr], [], [], 1000)[0]
+        for io in ready_to_read:
+            line = io.readline()
+            print line
+
+    # keep checking stdout/stderr until the child exits
+    while child.poll() is None:
+        check_io()
+
+    check_io()  # check again to catch anything after the process exits
+
+    #return child.wait()
+
     # TODO: Add checks to examine the image.  Should be extensible.
     return True
 
@@ -320,6 +390,7 @@ def remove_image(request):
 
     Returns True on success
     """
+    print "Bharath in remove_image para:"
     system = request['system']
     if system not in CONFIG['Platforms']:
         raise KeyError('%s is not in the configuration' % system)
@@ -335,6 +406,7 @@ def cleanup_temporary(request):
     """
     Helper function to cleanup any temporary files or directories.
     """
+    print "Bharath In cleanup para"
     items = ('expandedpath', 'imagefile', 'metafile')
     for item in items:
         if item not in request or request[item] is None:
