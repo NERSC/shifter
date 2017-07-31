@@ -177,6 +177,10 @@ def copy_file(filename, system, logger=None):
         try:
             mv_cmd = sh_cmd(system, 'mv', temp_fn, target_fn)
             ret = _exec_and_log(mv_cmd, logger)
+            if ret == 0:
+                ## fix permissions on the image file
+                chmod_cmd = sh_cmd(system, 'chmod', 'a+r', target_fn)
+                ret = _exec_and_log(chmod_cmd, logger)
             return ret == 0
         except:
             # TODO we might also need to remove target_fn in this case
