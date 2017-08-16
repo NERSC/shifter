@@ -29,14 +29,7 @@ AUTH_HEADER = 'authentication'
 
 
 class GWTestCase(unittest.TestCase):
-
     def setUp(self):
-        self.configfile = 'test.json'
-        with open(self.configfile) as config_file:
-            self.config = json.load(config_file)
-        os.environ['GWCONFIG'] = self.configfile
-
-        from shifter_imagegw import api
         mongouri = self.config['MongoDBURI']
         print "Debug: Connecting to %s" % mongouri
         client = MongoClient(mongouri)
@@ -50,8 +43,6 @@ class GWTestCase(unittest.TestCase):
         self.images.drop()
         self.metrics = client[db].metrics
         self.metrics.remove({})
-        api.config['TESTING'] = True
-        self.app = api.app.test_client()
         self.url = "/api"
         self.system = "systema"
         self.type = "docker"
@@ -65,28 +56,21 @@ class GWTestCase(unittest.TestCase):
         self.auth_header = 'authentication'
         self.logfile = '/tmp/worker.log'
         self.pid = 0
-        self.start_worker()
 
-    def tearDown(self):
-        self.stop_worker()
+    @classmethod
+    def setUpClass(cls):
+        cls.configfile = 'test.json'
+        with open(cls.configfile) as config_file:
+            cls.config = json.load(config_file)
+        os.environ['GWCONFIG'] = cls.configfile
+        from shifter_imagegw import api
+        api.config['TESTING'] = True
+        cls.mgr = api.getmgr()
+        cls.app = api.app.test_client()
 
-    def start_worker(self, testmode=1, system='systema'):
-        # Start a celery worker.
-        pid = os.fork()
-        if pid == 0:  # Child process
-            os.environ['CONFIG'] = 'test.json'
-            os.environ['TESTMODE'] = '%d' % (testmode)
-            os.execvp('celery', ['celery', '-A', 'shifter_imagegw.imageworker',
-                                 'worker', '--quiet', '-Q', '%s' % (system),
-                                 '--loglevel=DEBUG', '-c', '1',
-                                 '-f', self.logfile])
-        else:
-            self.pid = pid
-
-    def stop_worker(self):
-        print "Stopping worker"
-        if self.pid > 0:
-            os.kill(self.pid, 9)
+    @classmethod
+    def tearDownClass(cls):
+        cls.mgr.shutdown()
 
     def time_wait(self, urlreq, state='READY', TIMEOUT=30):
         poll_interval = 0.5
@@ -133,7 +117,6 @@ class GWTestCase(unittest.TestCase):
         data = json.loads(rv.data)
         assert 'userACL' in data
         assert 'groupACL' in data
-        #assert (data['userACL'] == [1000, 1001])
         assert 1000 in data['userACL']
         assert 500 in data['userACL']
         assert 500 in data['groupACL']
@@ -218,13 +201,13 @@ class GWTestCase(unittest.TestCase):
                 break
             time.sleep(1)
             count = count - 1
-        #self.time_wait(self.urlreq,state='EXPIRE')
+        # self.time_wait(self.urlreq,state='EXPIRE')
         # Run again to trigger db update
         rv = self.app.get(uri, headers={AUTH_HEADER: self.authadmin})
         assert rv.status_code == 200
         r = self.images.find_one({'_id': id})
 
-        assert r['status'] == 'EXPIRED'
+        self.assertEquals(r['status'], 'EXPIRED')
 
     def test_metrics(self):
         rec = {
@@ -247,6 +230,7 @@ class GWTestCase(unittest.TestCase):
         data = json.loads(rv.data)
         self.assertEquals(len(data), 20)
         self.assertEquals(data[19]['time'], last_time)
+
 
 if __name__ == '__main__':
     unittest.main()

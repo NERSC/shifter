@@ -12,13 +12,6 @@ for service in $@ ; do
   echo "service: $service"
   if [ "$service"  == "api" ] ; then
     gunicorn -b 0.0.0.0:5000 --backlog 2048 shifter_imagegw.api:app --log-level info   
-  elif  [ $(echo $service|grep -c "worker:") -gt 0 ] ; then
-    queue=$(echo $service|sed 's/.*://')
-    echo "Worker Queue: $queue"
-    export PYTHONPATH=`pwd`
-    celery -c 1 -A shifter_imagegw.imageworker worker -Q $queue --loglevel=info &
-  elif  [ "$service"  == "flower" ] ; then
-    flower -A imageworker &
   elif  [ $(echo $service|grep -c "munge:") -gt 0 ] ; then
     socket=$(echo $service|awk -F: '{print $2}')
     key=$(echo $service|awk -F: '{print $3}')

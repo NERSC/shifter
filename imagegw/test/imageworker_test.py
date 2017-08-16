@@ -19,10 +19,12 @@
 import os
 import unittest
 import json
+DEBUG = False
 
 
-def update_status(state, meta=None):
-    print 'state=%s' % (state)
+def update_status(ident, state, meta=None):
+    if DEBUG:
+        print 'id=%s state=%s' % (ident, state)
 
 
 class ImageWorkerTestCase(unittest.TestCase):
@@ -32,7 +34,7 @@ class ImageWorkerTestCase(unittest.TestCase):
         os.environ['PATH'] = cwd + ':' + os.environ['PATH']
         from shifter_imagegw import imageworker
         self.imageworker = imageworker
-        self.updater = imageworker.Updater(update_status)
+        self.updater = imageworker.Updater('bogusid', update_status)
         self.configfile = 'test.json'
         with open(self.configfile) as config_file:
             self.config = json.load(config_file)
@@ -61,9 +63,10 @@ class ImageWorkerTestCase(unittest.TestCase):
 
     def cleanup_cache(self):
         for h in [self.hash, self.hash2, self.hash3]:
-            fp = '%s/%s.meta' % (self.imageDir, h)
-            if os.path.exists(fp):
-                os.remove(fp)
+            for ext in ['meta', 'squashfs']:
+                fp = '%s/%s.%s' % (self.imageDir, h, ext)
+                if os.path.exists(fp):
+                    os.remove(fp)
 
     def get_metafile(self, id):
         metafile = os.path.join(self.imageDir, '%s.meta' % (id))
@@ -88,7 +91,7 @@ class ImageWorkerTestCase(unittest.TestCase):
     def test_pull_image_basic(self):
         self.cleanup_cache()
         request = {'system': self.system, 'itype': self.itype, 'tag': self.tag}
-        status = self.imageworker.pull_image(request)
+        status = self.imageworker.pull_image(request, self.updater)
         self.assertTrue(status)
         self.assertIn('meta', request)
         meta = request['meta']
@@ -106,7 +109,7 @@ class ImageWorkerTestCase(unittest.TestCase):
             'itype': self.itype,
             'tag': 'index.docker.io/ubuntu:latest'
         }
-        status = self.imageworker.pull_image(request)
+        status = self.imageworker.pull_image(request, self.updater)
         self.assertTrue(status)
         self.assertIn('meta', request)
         meta = request['meta']
@@ -121,7 +124,7 @@ class ImageWorkerTestCase(unittest.TestCase):
             'itype': self.itype,
             'tag': 'urltest/ubuntu:latest'
         }
-        status = self.imageworker.pull_image(request)
+        status = self.imageworker.pull_image(request, self.updater)
         self.assertTrue(status)
         self.assertIn('meta', request)
         meta = request['meta']
@@ -138,7 +141,7 @@ class ImageWorkerTestCase(unittest.TestCase):
             'itype': self.itype,
             'tag': 'urltest/%s' % (self.tag)
         }
-        status = self.imageworker.pull_image(request)
+        status = self.imageworker.pull_image(request, self.updater)
         self.assertTrue(status)
         self.assertIn('meta', request)
         meta = request['meta']
@@ -147,12 +150,13 @@ class ImageWorkerTestCase(unittest.TestCase):
         return
 
     def test_convert_image(self):
+        self.cleanup_cache()
         request = {
             'system': self.system,
             'itype': self.itype,
             'tag': self.tag
         }
-        status = self.imageworker.pull_image(request)
+        status = self.imageworker.pull_image(request, self.updater)
         # TODO: a little odd that is True and == True used here
         self.assertTrue(status)
         status = self.imageworker.convert_image(request)
@@ -217,7 +221,7 @@ class ImageWorkerTestCase(unittest.TestCase):
         self.assertIn('WORKDIR', mfdata)
         request['userACL'] = [1001]
         result = self.imageworker.pull(request, self.updater)
-        self.imageworker.remove_image(request)
+        self.imageworker.remove_image(request, self.updater)
 
     def test_unimplemented_fuctions(self):
         pass

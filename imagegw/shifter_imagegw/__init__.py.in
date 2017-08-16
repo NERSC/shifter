@@ -20,7 +20,7 @@
 shifter_imagegw includes all software required for the importing, managing,
 and removing shifter images to and from computational platforms.  The files
 within are used by either the web RESTful API (recommend run with gunicorn)
-or the celery-based workers, which actually perform any needed actions on the
+or the thread-based workers, which actually perform any needed actions on the
 systems.
 """
 __all__ = ['api', 'imageworker', 'imagemngr']
