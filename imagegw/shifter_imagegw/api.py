@@ -135,7 +135,7 @@ def imglist(system):
 @app.route('/api/lookup/<system>/<imgtype>/<path:tag>/', methods=["GET"])
 def lookup(system, imgtype, tag):
     """ Lookup an image for a system and return its record """
-    if imgtype == "docker" and tag.find(':') == -1:
+    if (imgtype == "docker" or imgtype == "custom") and tag.find(':') == -1:
         tag = '%s:latest' % (tag)
 
     auth = request.headers.get(AUTH_HEADER)
