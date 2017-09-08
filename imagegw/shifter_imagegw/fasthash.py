@@ -10,7 +10,7 @@ args = parser.parse_args()
 infile = args.infile[0]
 
 """                                                                                                                      
-Calculate a sha256 hash of the first MB of a file                                                                        
+Calculate a sha256 hash of the first MB of a file and every 512MB offset
 """    
 
 m = hashlib.sha256()
