@@ -215,20 +215,20 @@ class TransferTestCase(unittest.TestCase):
     # TODO: Add a test_remove_remote
 
 #commenting this out until I can figure out how to get fasthash.py in the path
-#    def test_fasthash(self):
-#        (fdesc, tmp_path) = tempfile.mkstemp()
-#        os.close(fdesc)
-#        dname, fname = os.path.split(tmp_path)
-#        file=open(fname,'w')
-#        file.write("blah blah hash")
-#        file.close()
-#        self.system['local']['imageDir'] = dname
-#        self.system['ssh']['imageDir'] = dname
-#        self.system['accesstype'] = 'local'
-#
-#        hash = transfer.hash_file(fname, self.system)
-#        self.assertEquals(hash, 'ff68165577eb209adcfa2f793476a25da637142283409d6f4d8d61ee042c5e63')
-#        transfer.remove_file(fname, self.system)
+    def test_fasthash(self):
+        (fdesc, tmp_path) = tempfile.mkstemp()
+        os.close(fdesc)
+        dname, fname = os.path.split(tmp_path)
+        file=open(fname,'w')
+        file.write("blah blah hash")
+        file.close()
+        self.system['local']['imageDir'] = dname
+        self.system['ssh']['imageDir'] = dname
+        self.system['accesstype'] = 'local'
+
+        hash = transfer.hash_file(fname, self.system)
+        self.assertEquals(hash, 'ff68165577eb209adcfa2f793476a25da637142283409d6f4d8d61ee042c5e63')
+        transfer.remove_file(fname, self.system)
         
 if __name__ == '__main__':
     unittest.main()
