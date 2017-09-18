@@ -739,8 +739,8 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
      * specify MS_SLAVE.  Thus setting MS_SLAVE forces the one-way propagation
      * of mount/umounts that are desirable here
      */
-    if (config->chosLocation) {
-        if (mount(NULL, config->chosLocation, NULL, MS_SLAVE|MS_REC, NULL) != 0) {
+    if (udiConfig->chosLocation) {
+        if (mount(NULL, udiConfig->chosLocation, NULL, MS_SLAVE|MS_REC, NULL) != 0) {
             perror("Failed to remount \"/\" non-shared.");
             goto _loadImage_error;
         }
