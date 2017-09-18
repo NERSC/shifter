@@ -258,6 +258,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to setuid to %d\n", opts.tgtUid);
         exit(1);
     }
+#if 0 /* mendel only, newer build env than kernel */
 #if HAVE_DECL_PR_SET_NO_NEW_PRIVS == 1
     /* ensure this process and its heirs cannot gain privilege in recent kernels */
     /* see https://www.kernel.org/doc/Documentation/prctl/no_new_privs.txt */
@@ -267,6 +268,7 @@ int main(int argc, char **argv) {
         exit(1);
     }
 #endif
+#endif  /* mendel only */
 
     /* chdir (within chroot) to where we belong again */
     if (chdir(opts.workdir) != 0) {
