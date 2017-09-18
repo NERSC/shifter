@@ -3380,9 +3380,8 @@ int shifter_set_capability_boundingset_null() {
         return 1;
     }
 
-    if (possibleMaxCap > maxCap) {
-        maxCap = possibleMaxCap;
-    }
+    /* mendel ONLY! */
+    maxCap = possibleMaxCap;
 
     if (maxCap >= 100) {
         fprintf(stderr, "FAILED: max cap seems too high (%lu)\n", maxCap);

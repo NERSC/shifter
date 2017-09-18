@@ -741,7 +741,7 @@ int loadImage(ImageData *image, struct options *opts, UdiRootConfig *udiConfig) 
      */
     if (udiConfig->chosLocation) {
         if (mount(NULL, udiConfig->chosLocation, NULL, MS_SLAVE|MS_REC, NULL) != 0) {
-            perror("Failed to remount \"/\" non-shared.");
+            perror("Failed to remount chosLocation \"%s\" non-shared.", udiConfig->chosLocation);
             goto _loadImage_error;
         }
     } else {
