@@ -141,6 +141,7 @@ typedef struct _UdiRootConfig {
     char *jobIdentifier;
     dev_t *bindMountAllowedDevices;
     size_t bindMountAllowedDevices_sz;
+    char *chosLocation;
 } UdiRootConfig;
 
 int parse_UdiRootConfig(const char *, UdiRootConfig *, int validateFlags);

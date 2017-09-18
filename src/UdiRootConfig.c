@@ -169,6 +169,10 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         free(config->mkfsXfsPath);
         config->mkfsXfsPath = NULL;
     }
+    if (config->chosLocation != NULL) {
+        free(config->chosLocation);
+        config->chosLocation = NULL;
+    }
     if (config->rootfsType != NULL) {
         free(config->rootfsType);
         config->rootfsType = NULL;
@@ -292,6 +296,7 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->ddPath != NULL ? config->ddPath : ""));
     written += fprintf(fp, "mkfsXfsPath = %s\n",
         (config->mkfsXfsPath != NULL ? config->mkfsXfsPath : ""));
+    written += fprintf(fp, "chosLocation = %s\n", config->chosLocation);
     written += fprintf(fp, "Image Gateway Servers = %lu servers\n", config->gwUrl_size);
     for (idx = 0; idx < config->gwUrl_size; idx++) {
         char *gwUrl = config->gwUrl[idx];
@@ -489,6 +494,8 @@ static int _assign(const char *key, const char *value, void *t_config) {
         config->ddPath = strdup(value);
     } else if (strcmp(key, "mkfsXfsPath") == 0) {
         config->mkfsXfsPath = strdup(value);
+    } else if (strcmp(key, "chosLocation") == 0) {
+        config->chosLocation = strdup(value);
     } else if (strcmp(key, "rootfsType") == 0) {
         config->rootfsType = strdup(value);
     } else if (strcmp(key, "gatewayTimeout") == 0) {
