@@ -250,5 +250,19 @@ class GWTestCase(unittest.TestCase):
         self.assertEquals(len(data), 20)
         self.assertEquals(data[19]['time'], last_time)
 
+    def test_import(self):
+        with open("test/config/imagemanager.json") as config_file:
+            config = json.load(config_file)
+        uri = '%s/doimport/%s/' % (self.url, self.urlreq)
+        data = {'filepath': 'test.squashfs',
+                'format':'squashfs'}
+        datajson = json.dumps(data)
+        rv = self.app.post(uri, headers={AUTH_HEADER: self.auth},
+                           data=datajson)
+        data = json.loads(rv.data)
+        assert 'filepath' in data
+        assert rv.status_code == 200
+
+
 if __name__ == '__main__':
     unittest.main()
