@@ -251,8 +251,13 @@ class GWTestCase(unittest.TestCase):
         self.assertEquals(data[19]['time'], last_time)
 
     def test_import(self):
-        with open("test/config/imagemanager.json") as config_file:
-            config = json.load(config_file)
+        try:
+            with open("test/config/imagemanager.json") as config_file:
+                config = json.load(config_file)
+        except FileNotFoundError:
+            with open("config/imagemanager.json") as config_file:
+                config = json.load(config_file)
+
         uri = '%s/doimport/%s/' % (self.url, self.urlreq)
         data = {'filepath': 'test.squashfs',
                 'format':'squashfs'}
