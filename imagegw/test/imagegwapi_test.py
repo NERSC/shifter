@@ -254,7 +254,7 @@ class GWTestCase(unittest.TestCase):
         try:
             with open("test/config/imagemanager.json") as config_file:
                 config = json.load(config_file)
-        except FileNotFoundError:
+        except OSError:
             with open("config/imagemanager.json") as config_file:
                 config = json.load(config_file)
 
