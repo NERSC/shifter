@@ -13,7 +13,7 @@
     "MongoDB":"ShifterTest",
     "Broker":"redis://:mypassword@redis/",
     "Authentication":"munge",
-    "ImportUsers":"none",
+    "ImportUsers":"all",
 
     "Locations": {
         "index.docker.io": {
