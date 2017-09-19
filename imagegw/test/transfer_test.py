@@ -235,6 +235,8 @@ class TransferTestCase(unittest.TestCase):
         print "stderr",stderr
         print "stdout",stdout
         assert stderr is ""
+        assert stderr is not None
+        assert stdout is not None
         assert len(stdout) > 0
         
     def test_import_copy_file(self):
