@@ -251,10 +251,10 @@ class GWTestCase(unittest.TestCase):
         self.assertEquals(data[19]['time'], last_time)
 
     def test_import(self):
-        self.config["ImportUsers"] = all
+        self.config["ImportUsers"] = "all"
 
         uri = '%s/doimport/%s/' % (self.url, self.urlreq)
-        data = {'filepath': 'test.squashfs',
+        data = {'filepath': 'test/test.squashfs',
                 'format':'squashfs'}
         datajson = json.dumps(data)
         rv = self.app.post(uri, headers={AUTH_HEADER: self.auth},
