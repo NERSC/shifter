@@ -469,9 +469,6 @@ def img_import(request, updater, testmode=0):
             'env': ['FOO=bar', 'BAZ=boz']
         }
         return ret
-    elif testmode == 2:
-        logging.info("Worker: testmode 2 setting failure")
-        raise OSError('task failed')
     try:
         # Step 0 - Check if path is valid
         sysconf = CONFIG['Platforms'][request['system']]
