@@ -254,7 +254,7 @@ class GWTestCase(unittest.TestCase):
         self.config["ImportUsers"] = "all"
 
         uri = '%s/doimport/%s/' % (self.url, self.urlreq)
-        data = {'filepath': 'test/test.squashfs',
+        data = {'filepath': '/tmp/test.squashfs',
                 'format':'squashfs'}
         datajson = json.dumps(data)
         rv = self.app.post(uri, headers={AUTH_HEADER: self.auth},
