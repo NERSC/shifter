@@ -895,7 +895,7 @@ class ImageMngrTestCase(unittest.TestCase):
 
     def test_import(self):
         """
-        Basic import test including an induced pull failure.
+        Basic import test
         """
         # Use defaults for format, arch, os, ostcount, replication
         pr = {
@@ -925,14 +925,6 @@ class ImageMngrTestCase(unittest.TestCase):
         imagerec = self.m.lookup(session, pr)
         assert 'ENTRY' in imagerec
         assert 'ENV' in imagerec
-        # Cause a failure
-        self.images.drop()
-        rec = self.m.pull(session, pr, testmode=2)
-        time.sleep(10)
-        assert rec is not None
-        id = rec['_id']
-        state = self.m.get_state(id)
-        assert state == 'FAILURE'
         self.stop_worker()
 
     # TODO: Write a test that tries to update an image the
