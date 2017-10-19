@@ -1803,7 +1803,12 @@ _pass_check_fromvol:
                     break;
                 }
             }
-            if (volMountDevOk == 0){
+            /* Allow mounts if the user owns the destionation directory. */
+            int toDirOwnedByUser = 0;
+            if (statData.st_uid == geteuid()) {
+                toDirOwnedByUser = 1;
+            }
+            if (volMountDevOk == 0 && toDirOwnedByUser == 0){
                 fprintf(stderr, "Mount request path %s not on an approved "
                         "device for volume mounts.\n", to_real);
                 goto _handleVolMountError;
