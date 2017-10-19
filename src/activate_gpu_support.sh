@@ -4,7 +4,6 @@
 #this script with an empty environment
 export PATH=/usr/local/bin:/usr/bin:/bin:/sbin
 
-cuda_devices=
 container_root_dir=
 container_site_resources=
 is_verbose_active=
@@ -22,11 +21,7 @@ nvidia_compute_libs="cuda \
                     nvidia-opencl"
 
 #the NVIDIA binaries that will be bind mounted into the container
-nvidia_binaries="nvidia-cuda-mps-control \
-               nvidia-cuda-mps-server \
-               nvidia-debugdump \
-               nvidia-persistenced \
-               nvidia-smi"
+nvidia_binaries="nvidia-smi"
 
 log()
 {
@@ -72,19 +67,18 @@ bind_mount_file_into_container()
 
 parse_command_line_arguments()
 {
-    if [ ! $# -eq 4 ]; then
+    if [ ! $# -eq 3 ]; then
         log ERROR "Internal error: received bad number of command line arguments"
         exit 1
     fi
 
-    cuda_devices=$1
-    container_root_dir=$2
-    container_site_resources=$3
+    container_root_dir=$1
+    container_site_resources=$2
     container_bin_path=$container_site_resources/gpu/bin
     container_lib_path=$container_site_resources/gpu/lib
     container_lib64_path=$container_site_resources/gpu/lib64
 
-    local verbose=$4
+    local verbose=$3
     if [ $verbose = "verbose-on" ]; then
         is_verbose_active=true
     elif [ $verbose = "verbose-off" ]; then
@@ -121,7 +115,7 @@ add_nvidia_compute_libs_to_container()
     for lib in $nvidia_compute_libs; do
         local libs_host=$( ldconfig -p | grep "lib${lib}.so" | awk '{print $4}' )
         if [ -z "$libs_host" ]; then
-            log WARNING "Could not find library: $lib"
+            log INFO "Could not find library: $lib"
             continue
         fi
 
@@ -145,7 +139,7 @@ add_nvidia_binaries_to_container()
     for bin in $nvidia_binaries; do
         local bin_host="$( which $bin )"
         if [ -z $bin_host ]; then
-            log WARNING "Could not find binary: $bin"
+            log INFO "Could not find binary: $bin"
             continue
         fi
         local bin_container=$container_bin_path/$bin
@@ -153,21 +147,9 @@ add_nvidia_binaries_to_container()
     done
 }
 
-load_nvidia_uvm_if_necessary()
-{
-    # /dev/nvidia-uvm is available when the NVIDIA UVM kernel module is correctly loaded.
-    # Load the kernel module through nvidia-modprobe if /dev/nvidia-uvm doesn't exist.
-    if [ ! -e /dev/nvidia-uvm ]; then
-        log INFO "/dev/nvidia-uvm doesn't exist. Creating it with nvidia-modprobe."
-        nvidia-modprobe -u -c=0
-        exit_if_previous_command_failed "Cannot nvidia-modprobe -u -c=0"
-    fi
-}
-
 parse_command_line_arguments $*
 validate_command_line_arguments
-log INFO "Activating support for CUDA devices $cuda_devices."
+log INFO "Activating GPU support"
 check_prerequisites
 add_nvidia_compute_libs_to_container
 add_nvidia_binaries_to_container
-load_nvidia_uvm_if_necessary
