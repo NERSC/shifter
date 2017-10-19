@@ -174,11 +174,48 @@ int bindImageIntoUDI(
             continue;
         }
 
-        /* check to see if UDI version already exists */
+        /* check to see if UDI version already exists,
+         * skip if UDI already contains the file or folder */
         snprintf(mntBuffer, PATH_MAX, "%s/%s/%s", udiRoot, relpath, itemname);
         mntBuffer[PATH_MAX-1] = 0;
         if (lstat(mntBuffer, &statData) == 0) {
-            /* exists in UDI, skip */
+
+            /* print warning if we are skipping potentially important image's data */
+            snprintf(srcBuffer, PATH_MAX, "%s/%s/%s", imgRoot, relpath, itemname);
+            srcBuffer[PATH_MAX-1] = 0;
+            char relBuffer[PATH_MAX];
+            if(strcmp(relpath, "/") == 0) {
+                snprintf(relBuffer, PATH_MAX, "/%s", itemname);
+            }
+            else {
+                snprintf(relBuffer, PATH_MAX, "%s/%s", relpath, itemname);
+            }
+            relBuffer[PATH_MAX-1] = 0;
+
+            int is_file = is_existing_file(srcBuffer) && !is_existing_directory(srcBuffer);
+            int is_non_empty_directory = (is_existing_directory(srcBuffer)
+                                            && !is_empty_directory(srcBuffer));
+            /* We consider not important, i.e. ok to skip, the following items:
+             * - /etc and children: /etc is specially handled (recursive copy to merge image's /etc with site /etc)
+             * - /var: is specially handled (this function is also explicitely called to mount the first-level contents of /var)
+             * - /var/run and children: we don't care about the old container's runtime data
+             * - /var/spool and children: we don't care about the old container's spool data
+             * - /var/tmp and children: we want the site's /var/tmp so we can create/modify data (image's /var/tmp is read-only)
+             */
+            int is_important = (strncmp(relBuffer, "/etc", 4) != 0
+                                && strcmp(relBuffer, "/var") != 0
+                                && strncmp(relBuffer, "/var/run", 8) != 0
+                                && strncmp(relBuffer, "/var/spool", 10) != 0
+                                && strncmp(relBuffer, "/var/tmp", 8) != 0);
+            if((is_file || is_non_empty_directory) && is_important)
+            {
+                fprintf(stderr, "WARNING: skipping mount of image's %s. The file or directory already"
+                                " exists in the container and will not be bind mounted from the image. This"
+                                " could happen because the system administrator configured Shifter to create"
+                                " or mount resources in the container whose path conflicts with the contents"
+                                " of the image.\n", relBuffer);
+            }
+
             free(itemname);
             itemname = NULL;
             continue;
@@ -1717,25 +1754,37 @@ _pass_check_fromvol:
             if (createToDev) {
                 int okToMkdir = 0;
 
+                /* search the first existing parent folder and check that it is on the device
+                   where we are authorized to create stuff */
                 char *ptr = strrchr(to_buffer, '/');
-                if (ptr) {
-                    /* get parent path of intended dir */
-                    *ptr = '\0';
-
-                    /* if parent path is on the same device as is authorized by createToDev
-                       then ok the mkdir operation */
-                    if (lstat(to_buffer, &statData) == 0) {
-                        if (statData.st_dev == createToDev) {
+                *ptr = '\0';
+                while (1) {
+                    int parent_folder_exists = (lstat(to_buffer, &statData) == 0);
+                    if (parent_folder_exists) {
+                        int is_parent_folder_on_authorized_device = (statData.st_dev == createToDev);
+                        if (is_parent_folder_on_authorized_device) {
                             okToMkdir = 1;
                         }
+                        *ptr = '/';
+                        break;
                     }
 
-                    /* reset to target path */
-                    *ptr = '/';
+                    /* move to next parent folder */
+                    char *old_ptr = ptr;
+                    ptr = strrchr(to_buffer, '/');
+                    *old_ptr = '/';
+                    *ptr = '\0';
+
+                    int went_through_all_parent_folders = (ptr == to_buffer);
+                    if(went_through_all_parent_folders)
+                    {
+                        *ptr = '/';
+                        break;
+                    }
                 }
 
                 if (okToMkdir) {
-                    mkdir(to_buffer, 0755);
+                    mkdir_p(to_buffer, 0755);
                     if (lstat(to_buffer, &statData) != 0) {
                         fprintf(stderr, "FAILED to find volume \"to\": %s\n",
                                 to_buffer);
