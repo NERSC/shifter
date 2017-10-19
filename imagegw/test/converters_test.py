@@ -24,7 +24,7 @@ from shifter_imagegw import converters
 class ConvertersTestCase(unittest.TestCase):
 
     def setUp(self):
-        #os.environ['PATH']=os.environ['PATH']+":./test"
+        # os.environ['PATH']=os.environ['PATH']+":./test"
         test_dir = os.path.dirname(os.path.abspath(__file__)) + "/../test/"
         self.test_dir = test_dir
         if 'TMPDIR' in os.environ:
@@ -89,11 +89,14 @@ class ConvertersTestCase(unittest.TestCase):
                     meta['ENV'].append(v)
                 else:
                     meta[k] = v
-        keys = ('WORKDIR', 'FORMAT', 'ENTRY', 'USERACL', 'GROUPACL')
+        keys = ['WORKDIR', 'FORMAT', 'ENTRY']
+        if 'DISABLE_ACL_METADATA' not in os.environ:
+            keys.extend(['USERACL', 'GROUPACL'])
         for key in keys:
             self.assertIn(key, meta)
-        self.assertEquals(meta['USERACL'].find("["), -1)
-        self.assertEquals(meta['USERACL'].find("]"), -1)
+        if 'DISABLE_ACL_METADATA' not in os.environ:
+            self.assertEquals(meta['USERACL'].find("["), -1)
+            self.assertEquals(meta['USERACL'].find("]"), -1)
         self.assertGreater(len(meta['ENV']), 0)
 
     def test_ext4(self):
