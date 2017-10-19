@@ -54,8 +54,6 @@ class Dockerv2TestCase(unittest.TestCase):
             path = os.path.join(resp['expandedpath'], loc)
             assert not os.path.exists(path)
 
-        return
-
     # This test case has files that in one layer are made non-writeable.
     # This requires fixing permissions on the parent layers before extraction.
     # This test uses a prepared image scanon/shanetest
@@ -70,11 +68,12 @@ class Dockerv2TestCase(unittest.TestCase):
 
         assert os.path.exists(resp['expandedpath'])
         bfile = os.path.join(resp['expandedpath'], 'tmp/b')
+        self.assertIn('workdir', resp)
+        assert os.path.exists(resp['expandedpath'])
         assert os.path.exists(bfile)
         with open(bfile) as f:
             data = f.read()
             assert(data == 'blah\n')
-        return
 
     def test_chgtype(self):
         cache = tempfile.mkdtemp()

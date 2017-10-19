@@ -60,8 +60,6 @@ class ImageMngrTestCase(unittest.TestCase):
             pass  # os.unlink(self.logfile)
         # Cleanup Mongo
         self.images.remove({})
-        #if self.images.find_one(self.query):
-        #    self.images.remove(self.query)
 
     def tearDown(self):
         """
@@ -575,7 +573,7 @@ class ImageMngrTestCase(unittest.TestCase):
         assert '_id' in mrec
         # Track through transistions
         state = self.time_wait(id)
-        #Debug
+        # Debug
         assert state == 'READY'
         imagerec = self.m.lookup(session, pr)
         assert 'ENTRY' in imagerec
@@ -685,7 +683,6 @@ class ImageMngrTestCase(unittest.TestCase):
             'groupACL': [1003, 1004]
         }
         rec = self.m.pull(session, pr)  # ,delay=False)
-        print rec
         assert rec['status'] == 'PULLING'
 
     def test_pull_logic(self):
@@ -776,8 +773,9 @@ class ImageMngrTestCase(unittest.TestCase):
         state = self.time_wait(id)
         assert state == 'READY'
         mrec = self.images.find_one(q)
-        assert 'private' in mrec
-        assert mrec['private'] is False
+        self.assertIn('WORKDIR', mrec)
+        self.assertIn('private', mrec)
+        self.assertFalse(mrec['private'])
 
     def test_pull_public_acl_token(self):
         """
@@ -852,7 +850,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertIn(1001, mrec['userACL'])
         # Track through transistions
         state = self.time_wait(id)
-        #Debug
+        # Debug
         self.assertEquals(state, 'READY')
         imagerec = self.m.lookup(session, pr)
         assert 'ENTRY' in imagerec
@@ -1057,6 +1055,7 @@ class ImageMngrTestCase(unittest.TestCase):
         recs = self.m.get_metrics(session, self.system, 101)  # ,delay=False)
         self.assertIsNotNone(recs)
         self.assertEquals(len(recs), 100)
+
 
 if __name__ == '__main__':
     unittest.main()

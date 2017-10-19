@@ -182,10 +182,10 @@ int main(int argc, char **argv) {
 
         if (entry != NULL) {
             opts.args[0] = strdup(entry);
-            if (imageData.workdir != NULL) {
-                opts.workdir = strdup(imageData.workdir);
-            }
         }
+    }
+    if (imageData.workdir != NULL && opts.workdir == NULL) {
+        opts.workdir = strdup(imageData.workdir);
     }
 
     snprintf(udiRoot, PATH_MAX, "%s", udiConfig.udiMountPoint);
@@ -392,6 +392,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         {"verbose", 0, 0, 'v'},
         {"image", 1, 0, 'i'},
         {"entrypoint", 2, 0, 0},
+        {"workdir", 1, 0, 'w'},
         {"env", 0, 0, 'e'},
         {0, 0, 0, 0}
     };
@@ -410,7 +411,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     optind = 1;
     for ( ; ; ) {
         int longopt_index = 0;
-        opt = getopt_long(argc, argv, "hnvV:i:e:", long_options, &longopt_index);
+        opt = getopt_long(argc, argv, "hnvV:i:e:w:", long_options, &longopt_index);
         if (opt == -1) break;
 
         switch (opt) {
@@ -422,6 +423,11 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                             config->entrypoint = strdup(optarg);
                         }
                     }
+                }
+                break;
+            case 'w':
+                if (optarg != NULL) {
+                    config->workdir = strdup(optarg);
                 }
                 break;
             case 'v':

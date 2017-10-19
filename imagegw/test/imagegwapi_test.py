@@ -65,8 +65,6 @@ class GWTestCase(unittest.TestCase):
         self.auth_header = 'authentication'
         self.logfile = '/tmp/worker.log'
         self.pid = 0
-        #if os.path.exists(self.logfile):
-        #    os.unlink(self.logfile)
         self.start_worker()
 
     def tearDown(self):
@@ -80,7 +78,7 @@ class GWTestCase(unittest.TestCase):
             os.environ['TESTMODE'] = '%d' % (testmode)
             os.execvp('celery', ['celery', '-A', 'shifter_imagegw.imageworker',
                                  'worker', '--quiet', '-Q', '%s' % (system),
-                                 '--loglevel=INFO', '-c', '1',
+                                 '--loglevel=DEBUG', '-c', '1',
                                  '-f', self.logfile])
         else:
             self.pid = pid
