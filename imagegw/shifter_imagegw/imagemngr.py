@@ -32,7 +32,7 @@ from time import time, sleep
 from pymongo import MongoClient
 import pymongo.errors
 from shifter_imagegw.auth import Authentication
-from shifter_imagegw.imageworker import dopull, initqueue, doexpire
+from shifter_imagegw.imageworker import dopull, initqueue, doexpire, wrkimport
 import bson
 import celery
 
@@ -519,6 +519,72 @@ class ImageMngr(object):
             self.update_mongo(ident, {'last_pull': time()})
             self.task_image_id[pullreq] = ident
             self.tasks.append(pullreq)
+
+        return rec
+
+    def mngrimport(self, session, image, testmode=0):
+        """
+        import the image directly from a file
+        Only for allowed users
+        Takes an auth token, a request object
+        """
+        meta = {}
+
+        request = {
+            'system': image['system'],
+            'itype': image['itype'],
+            'pulltag': image['tag'],
+            'filepath': image['filepath'],
+            'format': image['format'],
+            'meta': meta
+        }
+        self.logger.debug('mngrmport called for file %s' % (request['filepath']))
+        #self.logger.debug(image)
+        if not self.check_session(session, request['system']):
+            self.logger.warn('Invalid session on system %s', request['system'])
+            raise OSError("Invalid Session")
+        # Skip checks about previous requests for now
+        # Future work could check the fasthash and not import if they're the same
+        rec = None
+        request['userACL'] = []
+        request['groupACL'] = []
+        if 'userACL' in image and image['userACL'] != []:
+            request['userACL'] = self._make_acl(image['userACL'],
+                                                session['uid'])
+        if 'groupACL' in image and image['groupACL'] != []:
+            request['groupACL'] = self._make_acl(image['groupACL'],
+                                                 session['gid'])
+        if self._compare_list(request, rec, 'userACL') and \
+                self._compare_list(request, rec, 'groupACL'):
+            acl_changed = False
+        else:
+            self.logger.debug("No ACL change detected.")
+            acl_changed = True
+
+        # We could hit a key error or some other edge case
+        # so just do our best and update if there are problems
+        update = True
+
+        self.logger.debug("Creating New Import Record")
+        # new_pull_record works for import too
+        rec = self.new_pull_record(request)
+        ident = rec['_id']
+        self.logger.debug("ENQUEUEING Request, ident %s" %(ident))
+        self.update_mongo_state(ident, 'ENQUEUED')
+        request['tag'] = request['pulltag']
+        request['session'] = session
+        self.logger.debug("Calling wrkimport with queue=%s",
+                          request['system'])
+        pullreq = wrkimport.apply_async([request], queue=request['system'],
+                                        kwargs={'testmode': testmode})
+
+        memo = "import request queued s=%s t=%s" \
+            % (request['system'], request['tag'])
+        self.logger.info(memo)
+
+        self.update_mongo(ident, {'last_pull': time()})
+        self.task_image_id[pullreq] = ident
+        self.tasks.append(pullreq)
 
         return rec
 

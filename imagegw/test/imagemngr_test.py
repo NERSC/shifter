@@ -893,6 +893,40 @@ class ImageMngrTestCase(unittest.TestCase):
         self.images.drop()
         self.stop_worker()
 
+    def test_import(self):
+        """
+        Basic import test
+        """
+        # Use defaults for format, arch, os, ostcount, replication
+        pr = {
+            'system': self.system,
+            'itype': self.itype,
+            'tag': self.tag,
+            'remotetype': 'dockerv2',
+            'filepath': '/images/test/test.squashfs',
+            'format': 'squashfs',
+            'userACL': [],
+            'groupAcl': []
+        }
+        # Do the pull
+        self.start_worker()
+        session = self.m.new_session(self.auth, self.system)
+        rec = self.m.mngrimport(session, pr, testmode=1)  # ,delay=False)
+        assert rec is not None
+        id = rec['_id']
+        # Confirm record
+        q = {'system': self.system, 'itype': self.itype, 'pulltag': self.tag}
+        mrec = self.images.find_one(q)
+        assert '_id' in mrec
+        # Track through transistions
+        state = self.time_wait(id)
+        #Debug
+        assert state == 'READY'
+        imagerec = self.m.lookup(session, pr)
+        assert 'ENTRY' in imagerec
+        assert 'ENV' in imagerec
+        self.stop_worker()
+
     # TODO: Write a test that tries to update an image the
     # user doesn't have permissions to
     def test_acl_update_denied(self):
