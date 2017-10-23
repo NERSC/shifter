@@ -72,18 +72,6 @@ typedef struct _ImageGwServer {
     int port;
 } ImageGwServer;
 
-/**
-module_mpich_userhook = /path/to/hook
-module_mpich_roothook = /path/to/hook
-module_mpich_siteEnvPrepend = LD_LIBRARY_PATH=something
-module_mpich_siteEnvAppend = <stuff>
-module_mpich_siteEnv = <stuff>
-module_mpich_siteEnvUnset = VARIABLE1 VARIABLE2
-module_mpich_siteFs = <stuff>
-module_mpich_copypath = /path/to/stuff/to/copy/in
-
-**/
-
 typedef struct _ShifterModule {
     char *name;
     char *userhook;

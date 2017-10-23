@@ -53,6 +53,7 @@
 
 #include "UdiRootConfig.h"
 #include "utility.h"
+#include "shifter_mem.h"
 
 #define SITEFS_ALLOC_BLOCK 16
 #define SERVER_ALLOC_BLOCK 3
@@ -60,31 +61,6 @@
 
 static int _assign(const char *key, const char *value, void *tUdiRootConfig);
 static int _validateConfigFile(const char *);
-
-static void *_realloc(void *ptr, size_t alloc_size) {
-    void *ret = realloc(ptr, alloc_size);
-    if (ret == NULL) {
-        fprintf(stderr, "%s\n", "FAILED to realloc memory, aborting");
-        abort();
-    }
-    return ret;
-}
-static char *_strdup(const char *input) {
-    char *ret = strdup(input);
-    if (ret == NULL) {
-        fprintf(stderr, "%s\n", "FAILED to strdup string, aborting");
-        abort();
-    }
-    return ret;
-}
-static void *_malloc(size_t alloc_size) {
-    void *ret = malloc(alloc_size);
-    if (ret == NULL) {
-        fprintf(stderr, "%s\n", "FAILED to malloc memory, aborting");
-        abort();
-    }
-    return ret;
-}
 
 void free_ShifterModule(ShifterModule *module, int free_struct) {
     char **ptr = NULL;

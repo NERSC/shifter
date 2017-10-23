@@ -48,6 +48,7 @@
 
 #include "UdiRootConfig.h"
 #include "shifter_core.h"
+#include "shifter_mem.h"
 #include "ImageData.h"
 #include "utility.h"
 #include "VolumeMap.h"
@@ -181,11 +182,11 @@ int main(int argc, char **argv) {
         }
 
         if (entry != NULL) {
-            opts.args[0] = strdup(entry);
+            opts.args[0] = _strdup(entry);
         }
     }
     if (imageData.workdir != NULL && opts.workdir == NULL) {
-        opts.workdir = strdup(imageData.workdir);
+        opts.workdir = _strdup(imageData.workdir);
     }
 
     snprintf(udiRoot, PATH_MAX, "%s", udiConfig.udiMountPoint);
@@ -200,11 +201,7 @@ int main(int argc, char **argv) {
 
     nGroups = getgroups(0, NULL);
     if (nGroups > 0) {
-        gidList = (gid_t *) malloc(sizeof(gid_t) * (nGroups + 1));
-        if (gidList == NULL) {
-            fprintf(stderr, "Failed to allocate memory for group list\n");
-            exit(1);
-        }
+        gidList = (gid_t *) _malloc(sizeof(gid_t) * (nGroups + 1));
         memset(gidList, 0, sizeof(gid_t) * (nGroups + 1));
         if (getgroups(nGroups, gidList) == -1) {
             fprintf(stderr, "Failed to get supplementary group list\n");
@@ -240,7 +237,7 @@ int main(int argc, char **argv) {
     }
     wd[PATH_MAX-1] = 0;
     if (opts.workdir == NULL) {
-        opts.workdir = strdup(wd);
+        opts.workdir = _strdup(wd);
     }
 
     if (isImageLoaded(&imageData, &opts, &udiConfig) == 0) {
@@ -323,65 +320,7 @@ int main(int argc, char **argv) {
 
     return 127;
 }
-#endif
-
-#if 0
-/* local_putenv
- * Provides similar functionality to linux putenv, but on a targetted
- * environment.  Expects all strings to be in "var=value" format.
- * Expects environment to be unsorted (linear search). The environ
- * may be reallocated by this code if it needs to add to the environment.
- * newVar will not be changed.
- *
- * environ: pointer to pointer to NULL-terminated array of points to key/value
- *          strings
- * newVar: key/value string to replace, add to environment
- */
-int local_putenv(char ***environ, const char *newVar) {
-    const char *ptr = NULL;
-    size_t envSize = 0;
-    int nameSize = 0;
-    char **envPtr = NULL;
-
-    if (environ == NULL || newVar == NULL || *environ == NULL) return 1;
-    ptr = strchr(newVar, '=');
-    if (ptr == NULL) {
-        fprintf(stderr, "WARNING: cannot parse container environment variable: %s\n", newVar);
-        return 1;
-    }
-    nameSize = ptr - newVar;
-
-    for (envPtr = *environ; *envPtr != NULL; envPtr++) {
-        if (strncmp(*envPtr, newVar, nameSize) == 0) {
-            free(*envPtr);
-            *envPtr = strdup(newVar);
-            return 0;
-        }
-        envSize++;
-    }
-
-    /* did not find newVar in the environment, need to add it */
-    char **tmp = (char **) realloc(*environ, sizeof(char *) * (envSize + 2));
-    if (tmp == NULL) {
-        fprintf(stderr, "WARNING: failed to add %*s to the environment, out of memory.\n", nameSize, newVar);
-        return 1;
-    }
-    *environ = tmp;
-    (*environ)[envSize++] = strdup(newVar);
-    (*environ)[envSize++] = NULL;
-    return 0;
-}
-
-int local_appendenv(char ***environ, const char *appvar) {
-    if (environ == NULL || appvar == NULL || *environ == NULL) return 1;
-    return 0;
-}
-
-int local_prependenv(char ***environ, const char *prepvar) {
-    if (environ == NULL || prepvar == NULL || *environ == NULL) return 1;
-    return 0;
-}
-#endif
+#endif /* TESTHARNESS */
 
 int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *udiConfig) {
     int opt = 0;
@@ -420,14 +359,14 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                     if (strcmp(long_options[longopt_index].name, "entrypoint") == 0) {
                         config->useEntryPoint = 1;
                         if (optarg != NULL) {
-                            config->entrypoint = strdup(optarg);
+                            config->entrypoint = _strdup(optarg);
                         }
                     }
                 }
                 break;
             case 'w':
                 if (optarg != NULL) {
-                    config->workdir = strdup(optarg);
+                    config->workdir = _strdup(optarg);
                 }
                 break;
             case 'v':
@@ -450,7 +389,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                     if (config->rawVolumes != NULL) {
                         raw_capacity = strlen(config->rawVolumes);
                     }
-                    config->rawVolumes = (char *) realloc(config->rawVolumes, sizeof(char) * (raw_capacity + new_capacity + 2));
+                    config->rawVolumes = (char *) _realloc(config->rawVolumes, sizeof(char) * (raw_capacity + new_capacity + 2));
                     char *ptr = config->rawVolumes + raw_capacity;
                     snprintf(ptr, new_capacity + 2, ";%s", optarg);
 
@@ -515,30 +454,30 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     int remaining = argc - optind;
     if (config->useEntryPoint == 1) {
         char **argsPtr = NULL;
-        config->args = (char **) malloc(sizeof(char *) * (remaining + 2));
+        config->args = (char **) _malloc(sizeof(char *) * (remaining + 2));
         argsPtr = config->args;
         *argsPtr++ = (char *) 0x1; /* leave space for entry point */
         for ( ; optind < argc; optind++) {
-            *argsPtr++ = strdup(argv[optind]);
+            *argsPtr++ = _strdup(argv[optind]);
         }
         *argsPtr = NULL;
     } else if (remaining > 0) {
         /* interpret all remaining arguments as the intended command */
         char **argsPtr = NULL;
-        config->args = (char **) malloc(sizeof(char *) * (remaining + 1));
+        config->args = (char **) _malloc(sizeof(char *) * (remaining + 1));
         for (argsPtr = config->args; optind < argc; optind++) {
-            *argsPtr++ = strdup(argv[optind]);
+            *argsPtr++ = _strdup(argv[optind]);
         }
         *argsPtr = NULL;
     } else if (getenv("SHELL") != NULL) {
         /* use the current shell */
-        config->args = (char **) malloc(sizeof(char *) * 2);
-        config->args[0] = strdup(getenv("SHELL"));
+        config->args = (char **) _malloc(sizeof(char *) * 2);
+        config->args[0] = _strdup(getenv("SHELL"));
         config->args[1] = NULL;
     } else {
         /* use /bin/sh */
-        config->args = (char **) malloc(sizeof(char*) * 2);
-        config->args[0] = strdup("/bin/sh");
+        config->args = (char **) _malloc(sizeof(char*) * 2);
+        config->args[0] = _strdup("/bin/sh");
         config->args[1] = NULL;
     }
 
@@ -553,7 +492,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     if (config->username == NULL) {
         struct passwd *pwd = shifter_getpwuid(config->tgtUid, udiConfig);
         if (pwd != NULL) {
-            config->username = strdup(pwd->pw_name);
+            config->username = _strdup(pwd->pw_name);
         }
     }
 
@@ -597,9 +536,9 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
     }
 
     if ((envPtr = getenv("SHIFTER")) != NULL) {
-        opts->request = strdup(envPtr);
+        opts->request = _strdup(envPtr);
     } else if ((envPtr = getenv("SLURM_SPANK_SHIFTER")) != NULL) {
-        opts->request = strdup(envPtr);
+        opts->request = _strdup(envPtr);
     }
     if (opts->request != NULL) {
         /* if the the imageType and Tag weren't specified earlier, parse from here */
@@ -619,9 +558,9 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
         }
     }
     if ((envPtr = getenv("SHIFTER_VOLUME")) != NULL) {
-        opts->rawVolumes = strdup(envPtr);
+        opts->rawVolumes = _strdup(envPtr);
     } else if ((envPtr = getenv("SLURM_SPANK_SHIFTER_VOLUME")) != NULL) {
-        opts->rawVolumes = strdup(envPtr);
+        opts->rawVolumes = _strdup(envPtr);
     }
 
     return 0;
