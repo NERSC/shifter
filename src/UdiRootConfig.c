@@ -99,7 +99,7 @@ void free_ShifterModule(ShifterModule *module, int free_struct) {
         for (ptr = module->siteEnvUnset; ptr && *ptr; ptr++) {
             free(*ptr);
         }
-        free(module->siteEnvUnset
+        free(module->siteEnvUnset);
         module->siteEnvUnset = NULL;
     }
     if (module->siteFs != NULL) {
@@ -744,7 +744,7 @@ int parse_ShifterModule_key(UdiRootConfig *config, const char *key,
         size_t capacity = 0;
         while ((ptr = strtok_r(search, " ", &svPtr)) != NULL) {
             end_ptrarray = ptrarray + count;
-            strncpy_StringArray(ptr, strlen(ptr), &end_ptrarray, &ptr_array,
+            strncpy_StringArray(ptr, strlen(ptr), &end_ptrarray, &ptrarray,
                                 &capacity, SITEFS_ALLOC_BLOCK);
             count++;
             search = NULL;
