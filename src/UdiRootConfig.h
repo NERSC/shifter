@@ -1,7 +1,7 @@
 /* Shifter, Copyright (c) 2015, The Regents of the University of California,
 ## through Lawrence Berkeley National Laboratory (subject to receipt of any
 ## required approvals from the U.S. Dept. of Energy).  All rights reserved.
-## 
+##
 ## Redistribution and use in source and binary forms, with or without
 ## modification, are permitted provided that the following conditions are met:
 ##  1. Redistributions of source code must retain the above copyright notice,
@@ -13,7 +13,7 @@
 ##     National Laboratory, U.S. Dept. of Energy nor the names of its
 ##     contributors may be used to endorse or promote products derived from this
 ##     software without specific prior written permission.
-## 
+##
 ## THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 ## AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 ## IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -25,7 +25,7 @@
 ## CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ## ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 ## POSSIBILITY OF SUCH DAMAGE.
-##  
+##
 ## You are under no obligation whatsoever to provide any bug fixes, patches, or
 ## upgrades to the features, functionality or performance of the source code
 ## ("Enhancements") to anyone; however, if you choose to make your Enhancements
@@ -58,7 +58,7 @@ extern "C" {
 
 #define UDIROOT_VAL_CFGFILE 0x01
 #define UDIROOT_VAL_PARSE   0x02
-#define UDIROOT_VAL_SSH     0x04 
+#define UDIROOT_VAL_SSH     0x04
 #define UDIROOT_VAL_KMOD    0x08
 #define UDIROOT_VAL_FILEVAL 0x10
 #define UDIROOT_VAL_ALL 0xffffffff
@@ -71,6 +71,35 @@ typedef struct _ImageGwServer {
     char *server;
     int port;
 } ImageGwServer;
+
+/**
+module_mpich_userhook = /path/to/hook
+module_mpich_roothook = /path/to/hook
+module_mpich_siteEnvPrepend = LD_LIBRARY_PATH=something
+module_mpich_siteEnvAppend = <stuff>
+module_mpich_siteEnv = <stuff>
+module_mpich_siteEnvUnset = VARIABLE1 VARIABLE2
+module_mpich_siteFs = <stuff>
+module_mpich_copypath = /path/to/stuff/to/copy/in
+
+**/
+
+typedef struct _ShifterModule {
+    char *name;
+    char *userhook;
+    char *roothook;
+    char **siteEnv;
+    char **siteEnvPrepend;
+    char **siteEnvAppend;
+    char **siteEnvUnset;
+    size_t n_siteEnv;
+    size_t n_siteEnvPrepend;
+    size_t n_siteEnvAppend;
+    size_t n_siteEnvUnset;
+    VolumeMap *siteFs;
+    char *copyPath;
+    int enabled;
+} ShifterModule;
 
 typedef struct _UdiRootConfig {
     /* long term configurations coming from configuration file */
@@ -98,6 +127,9 @@ typedef struct _UdiRootConfig {
     char **siteEnvAppend;
     char **siteEnvPrepend;
     char **siteEnvUnset;
+    ShifterModule *modules;
+    int n_modules;
+    char *defaultModulesStr;
     int allowLocalChroot;
     int allowLibcPwdCalls;
     int populateEtcDynamically;
@@ -141,6 +173,7 @@ typedef struct _UdiRootConfig {
     char *sshPubKey;
     char *nodeIdentifier;
     char *jobIdentifier;
+    char *selectedModulesStr;
     dev_t *bindMountAllowedDevices;
     size_t bindMountAllowedDevices_sz;
 } UdiRootConfig;
@@ -149,6 +182,8 @@ int parse_UdiRootConfig(const char *, UdiRootConfig *, int validateFlags);
 void free_UdiRootConfig(UdiRootConfig *, int freeStruct);
 size_t fprint_UdiRootConfig(FILE *, UdiRootConfig *);
 int validate_UdiRootConfig(UdiRootConfig *, int validateFlags);
+void free_ShifterModule(ShifterModule *module, int freeStruct);
+int parse_ShifterModule_key(UdiRootConfig *, const char *key, const char *value);
 
 #ifdef __cplusplus
 }
