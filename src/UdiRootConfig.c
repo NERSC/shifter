@@ -96,7 +96,7 @@ void free_ShifterModule(ShifterModule *module, int free_struct) {
         module->siteEnvAppend = NULL;
     }
     if (module->siteEnvUnset != NULL) {
-        for (ptr = module->siteEnvUnset ptr && *ptr; ptr++) {
+        for (ptr = module->siteEnvUnset; ptr && *ptr; ptr++) {
             free(*ptr);
         }
         free(module->siteEnvUnset
@@ -106,9 +106,9 @@ void free_ShifterModule(ShifterModule *module, int free_struct) {
         free_VolumeMap(module->siteFs, 1);
         module->siteFs = NULL;
     }
-    if (module->copypath != NULL) {
-        free(module->copypath);
-        module->copypath = NULL;
+    if (module->copyPath != NULL) {
+        free(module->copyPath);
+        module->copyPath = NULL;
     }
     if (free_struct) {
         free(module);
@@ -673,6 +673,7 @@ int parse_ShifterModule_key(UdiRootConfig *config, const char *key,
     int keycounter = 0;
     char *search = NULL;
     char *svPtr = NULL;
+    char *ptr = NULL;
     ShifterModule *module = NULL;
     int rc = 0;
     int idx = 0;
@@ -772,8 +773,8 @@ int parse_ShifterModule_key(UdiRootConfig *config, const char *key,
             rc = 1;
             goto cleanup;
         }
-    } else if (strcmp(subkey, "copypath") == 0) {
-        module->copypath = _strdup(value);
+    } else if (strcmp(subkey, "copyPath") == 0) {
+        module->copyPath = _strdup(value);
     }
 
 cleanup:
