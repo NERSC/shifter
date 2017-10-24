@@ -81,7 +81,7 @@ typedef struct _ShifterModule {
     char **siteEnvAppend;
     char **siteEnvUnset;
     char **conflict_str;
-    struct _ShifterModule *conflict;
+    struct _ShifterModule **conflict;
     size_t n_siteEnv;
     size_t n_siteEnvPrepend;
     size_t n_siteEnvAppend;

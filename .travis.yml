@@ -1,8 +1,11 @@
 sudo: true
 dist: trusty
-language: python
+language: c
 python:
   - "2.7"
+compiler:
+  - clang
+  - gcc
 # command to install dependencies
 env:
   - PATH
