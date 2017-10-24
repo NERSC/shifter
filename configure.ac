@@ -6,7 +6,7 @@ AC_INIT([shifter], [17.04.b1], [shifter-hpc@googlegroups.com])
 AC_CONFIG_SRCDIR([src/shifter_core.h])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_AUX_DIR([auxdir])
-AM_INIT_AUTOMAKE([subdir-objects])
+AM_INIT_AUTOMAKE
 AC_PROG_LIBTOOL
 
 # Checks for programs.
