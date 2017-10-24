@@ -134,8 +134,45 @@ int parse_UdiRootConfig(const char *configFile, UdiRootConfig *config, int valid
         return UDIROOT_VAL_PARSE;
     }
 
+    if (ShifterModule_postprocessing(config) != 0) {
+        return UDIROOT_VAL_PARSE;
+    }
+
     ret = validate_UdiRootConfig(config, validateFlags);
     return ret;
+}
+
+int ShifterModule_postprocessing(UdiRootConfig *config) {
+    int i = 0;
+    int j = 0;
+    char **ptr = NULL;
+    for (i = 0; i < config->n_modules; i++) {
+        int found_n_conflicts = 0;
+        int found = 0;
+        if (config->modules[i].n_conflict > 0) {
+            size_t alloc_size = sizeof(ShifterModule *) *
+                                (config->modules[i].n_conflict + 1);
+            config->modules[i].conflict = _malloc(alloc_size);
+            memset(config->modules[i].conflict, 0, alloc_size);
+        }
+        for (ptr = config->modules[i].conflict_str; ptr && *ptr; ptr++) {
+            for (j = 0; j < config->n_modules; j++) {
+                if (strcmp(*ptr, config->modules[j].name) == 0) {
+                    config->modules[i].conflict[found_n_conflicts] =
+                            &(config->modules[j]);
+                    found_n_conflicts++;
+                    found++;
+                    break;
+                }
+            }
+        }
+        if (!found) {
+            fprintf(stderr, "FAILED to find matching conflict \"%s\" for module %s\n",
+                    *ptr, config->modules[i].name);
+            return 1;
+        }
+    }
+    return 0;
 }
 
 void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {

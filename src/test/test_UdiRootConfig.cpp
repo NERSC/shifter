@@ -73,24 +73,28 @@ TEST(UdiRootConfigTestGroup, ParseUdiRootConfig_basic) {
     CHECK(config.modules[0].siteEnvUnset[1] == NULL);
     CHECK(config.modules[0].siteFs != NULL);
     CHECK(strcmp(config.modules[0].copyPath, "/path/to/localized/mpich/stuff") == 0);
-    CHECK(strcmp(config.modules[0].conflict[0], "openmpi") == 0);
+    CHECK(strcmp(config.modules[0].conflict_str[0], "openmpi") == 0);
+    CHECK(config.modules[0].conflict_str[1] == NULL);
+    CHECK(config.modules[0].conflict[0] == &(config.modules[1].conflict[1]));
     CHECK(config.modules[0].conflict[1] == NULL);
 
     CHECK(strcmp(config.modules[1].name, "openmpi") == 0);
     CHECK(strcmp(config.modules[1].userhook, "/path/to/openmpi_userhook") == 0);
     CHECK(config.modules[1].roothook == NULL);
-    CHECK(strcmp(config.modules[0].siteEnvPrepend[0], "LD_LIBRARY_PATH=/opt/udiImage/openmpi/lib64") == 0);
-    CHECK(strcmp(config.modules[0].siteEnvPrepend[1], "PATH=/opt/udiImage/openmpi/bin") == 0);
-    CHECK(config.modules[0].siteEnvPrepend[2] == NULL);
-    CHECK(strcmp(config.modules[0].siteEnvAppend[0], "PATH=/opt/udiImage/openmpi/sbin") == 0);
-    CHECK(config.modules[0].siteEnvAppend[1] == NULL);
-    CHECK(strcmp(config.modules[0].siteEnv[0], "SHIFTER_MODULE_OPENMPI=1") == 0);
-    CHECK(config.modules[0].siteEnv[1] == NULL);
-    CHECK(strcmp(config.modules[0].siteEnvUnset[0], "FAKE_MPI_VARIABLE") == 0);
-    CHECK(config.modules[0].siteEnvUnset[1] == NULL);
-    CHECK(config.modules[0].siteFs != NULL);
-    CHECK(strcmp(config.modules[0].conflict_str[0], "mpich") == 0);
-    CHECK(config.modules[0].conflict_str[1] == NULL);
+    CHECK(strcmp(config.modules[1].siteEnvPrepend[0], "LD_LIBRARY_PATH=/opt/udiImage/openmpi/lib64") == 0);
+    CHECK(strcmp(config.modules[1].siteEnvPrepend[1], "PATH=/opt/udiImage/openmpi/bin") == 0);
+    CHECK(config.modules[1].siteEnvPrepend[2] == NULL);
+    CHECK(strcmp(config.modules[1].siteEnvAppend[0], "PATH=/opt/udiImage/openmpi/sbin") == 0);
+    CHECK(config.modules[1].siteEnvAppend[1] == NULL);
+    CHECK(strcmp(config.modules[1].siteEnv[0], "SHIFTER_MODULE_OPENMPI=1") == 0);
+    CHECK(config.modules[1].siteEnv[1] == NULL);
+    CHECK(strcmp(config.modules[1].siteEnvUnset[0], "FAKE_MPI_VARIABLE") == 0);
+    CHECK(config.modules[1].siteEnvUnset[1] == NULL);
+    CHECK(config.modules[1].siteFs != NULL);
+    CHECK(strcmp(config.modules[1].conflict_str[0], "mpich") == 0);
+    CHECK(config.modules[1].conflict_str[1] == NULL);
+    CHECK(config.modules[1].conflict[0] == &(config.modules[0]));
+    CHECK(config.modules[1].conflict[1] == NULL);
     free_UdiRootConfig(&config, 0);
 }
 
