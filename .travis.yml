@@ -1,6 +1,6 @@
 sudo: true
 dist: trusty
-language: c
+language: python
 python:
   - "2.7"
 compiler:
