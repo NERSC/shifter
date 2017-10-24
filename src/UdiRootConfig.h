@@ -80,10 +80,13 @@ typedef struct _ShifterModule {
     char **siteEnvPrepend;
     char **siteEnvAppend;
     char **siteEnvUnset;
+    char **conflict_str;
+    struct _ShifterModule *conflict;
     size_t n_siteEnv;
     size_t n_siteEnvPrepend;
     size_t n_siteEnvAppend;
     size_t n_siteEnvUnset;
+    size_t n_conflict;
     VolumeMap *siteFs;
     char *copyPath;
     int enabled;

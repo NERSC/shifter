@@ -110,6 +110,13 @@ void free_ShifterModule(ShifterModule *module, int free_struct) {
         free(module->copyPath);
         module->copyPath = NULL;
     }
+    if (module->conflict_str != NULL) {
+        for (ptr = module->conflict_str; ptr && *ptr; ptr++) {
+            free(*ptr);
+        }
+        free(module->conflict_str);
+        module->conflict_str = NULL;
+    }
     if (free_struct) {
         free(module);
     }
@@ -743,7 +750,8 @@ int parse_ShifterModule_key(UdiRootConfig *config, const char *key,
     } else if (strcmp(subkey, "siteEnv") == 0 ||
                 strcmp(subkey, "siteEnvPrepend") == 0 ||
                 strcmp(subkey, "siteEnvAppend") == 0 ||
-                strcmp(subkey, "siteEnvUnset") == 0)
+                strcmp(subkey, "siteEnvUnset") == 0 ||
+                strcmp(subkey, "conflict") == 0)
     {
         tmpvalue = _strdup(value);
         search = tmpvalue;
@@ -772,6 +780,9 @@ int parse_ShifterModule_key(UdiRootConfig *config, const char *key,
         } else if (strcmp(subkey, "siteEnvUnset") == 0) {
             module->siteEnvUnset = ptrarray;
             module->n_siteEnvUnset = count;
+        } else if (strcmp(subkey, "conflict") == 0) {
+            module->conflict_str = ptrarray;
+            module->n_conflict = count;
         }
     } else if (strcmp(subkey, "siteFs") == 0) {
         if (module->siteFs == NULL) {
@@ -820,6 +831,10 @@ size_t fprint_ShifterModule(FILE *fp, ShifterModule *module) {
     }
     written += fprintf(fp, "siteEnvUnset:\n");
     for (ptr = module->siteEnvUnset; ptr && *ptr; ptr++) {
+        written += fprintf(fp, "        %s\n", *ptr);
+    }
+    written += fprintf(fp, "conflict:\n");
+    for (ptr = module->conflict_str; ptr && *ptr; ptr++) {
         written += fprintf(fp, "        %s\n", *ptr);
     }
     written += fprintf(fp, "VolumeMap: ");
