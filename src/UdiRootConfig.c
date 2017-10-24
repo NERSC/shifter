@@ -132,6 +132,7 @@ int parse_UdiRootConfig(const char *configFile, UdiRootConfig *config, int valid
 }
 
 void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
+    int iidx = 0;
     if (config == NULL) return;
 
     if (config->udiMountPoint != NULL) {
@@ -252,6 +253,21 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         free(config->jobIdentifier);
         config->jobIdentifier = NULL;
     }
+    for (iidx = 0; iidx < config->n_modules; iidx++) {
+        free_ShifterModule(&(config->modules[iidx]), 0);
+    }
+    if (config->modules) {
+        free(config->modules);
+        config->modules = NULL;
+    }
+    if (config->defaultModulesStr) {
+        free(config->defaultModulesStr);
+        config->defaultModulesStr = NULL;
+    }
+    if (config->selectedModulesStr) {
+        free(config->selectedModulesStr);
+        config->selectedModulesStr = NULL;
+    }
 
     char **arrays[] = {
         config->perNodeCacheAllowedFsType,
@@ -278,6 +294,7 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
 
 size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
     size_t idx = 0;
+    int iidx = 0;
     size_t written = 0;
 
     if (config == NULL || fp == NULL) return 0;
@@ -361,6 +378,10 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         written += fprintf(fp, "Site FS Bind-mounts = %lu fs\n", config->siteFs->n);
         written += fprint_VolumeMap(fp, config->siteFs);
     }
+    for (iidx = 0; iidx < config->n_modules; iidx++)) {
+        written += fprint_ShifterModule(fp, &(config->modules[iidx]));
+    }
+    written += fprintf(fp, "defaultModules: %s\n", config->defaultModulesStr);
     written += fprintf(fp, "\nRUNTIME Options:\n");
     written += fprintf(fp, "username: %s\n",
         (config->username != NULL ? config->username : ""));
@@ -372,6 +393,7 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->nodeIdentifier != NULL ? config->nodeIdentifier : ""));
     written += fprintf(fp, "jobIdentifier: %s\n",
         (config->jobIdentifier != NULL ? config->jobIdentifier : ""));
+    written += fprintf(fp, "selectedModules: %s\n", config->selectedModulesStr);
     written += fprintf(fp, "***** END UdiRootConfig *****\n");
     return written;
 }
@@ -783,6 +805,42 @@ cleanup:
     if (tmpvalue != NULL)
         free(tmpvalue);
     return rc;
+}
+
+size_t fprint_ShifterModule(FILE *fp, ShifterModule *module) {
+    size_t written = 0;
+    char **ptr = NULL;
+
+    if (fp == NULL || module == NULL)
+        return 0;
+
+    written += fprintf(fp, "Shifter Module: %s\n", module->name);
+    written += fprintf(fp, "====================================\n");
+    written += fprintf(fp, "userhook: %s\n", module->userhook);
+    written += fprintf(fp, "roothook: %s\n", module->roothook);
+    written += fprintf(fp, "siteEnv:\n");
+    for (ptr = module->siteEnv; ptr && *ptr; ptr++) {
+        written += fprintf(fp, "        %s\n", *ptr);
+    }
+    written += fprintf(fp, "siteEnvPrepend:\n");
+    for (ptr = module->siteEnvPrepend; ptr && *ptr; ptr++) {
+        written += fprintf(fp, "        %s\n", *ptr);
+    }
+    written += fprintf(fp, "siteEnvAppend:\n");
+    for (ptr = module->siteEnvAppend; ptr && *ptr; ptr++) {
+        written += fprintf(fp, "        %s\n", *ptr);
+    }
+    written += fprintf(fp, "siteEnvUnset:\n");
+    for (ptr = module->siteEnvUnset; ptr && *ptr; ptr++) {
+        written += fprintf(fp, "        %s\n", *ptr);
+    }
+    written += fprintf(fp, "VolumeMap: ");
+    written += fprint_VolumeMap(fp, module->siteFs);
+    written += fprintf(fp, "\n");
+    written += fprintf(fp, "copyPath: %s\n", module->copyPath);
+    written += fprintf(fp, "enabled: %d\n", module->enabled);
+    written += fprintf(fp, "====================================\n\n");
+    return 0;
 }
 
 static int _validateConfigFile(const char *configFile) {

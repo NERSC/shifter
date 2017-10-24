@@ -172,6 +172,8 @@ size_t fprint_UdiRootConfig(FILE *, UdiRootConfig *);
 int validate_UdiRootConfig(UdiRootConfig *, int validateFlags);
 void free_ShifterModule(ShifterModule *module, int freeStruct);
 int parse_ShifterModule_key(UdiRootConfig *, const char *key, const char *value);
+size_t fprint_ShifterModule(FILE *, ShifterModule *);
+/* TODO add validate_ShifterModule */
 
 #ifdef __cplusplus
 }
