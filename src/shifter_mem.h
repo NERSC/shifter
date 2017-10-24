@@ -30,6 +30,10 @@
 #define _GNU_SOURCE
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define _realloc(__p, __sz) \
     shifter_realloc(__p, __sz, __FILE__, __LINE__, __func__)
 
@@ -42,5 +46,9 @@
 void *shifter_realloc(void *, size_t, const char *, int, const char *);
 void *shifter_malloc(size_t, const char *, int, const char *);
 char *shifter_strdup(const char *, const char *, int, const char *);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
