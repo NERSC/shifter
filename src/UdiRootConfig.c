@@ -228,10 +228,6 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         free(config->rootfsType);
         config->rootfsType = NULL;
     }
-    if (config->siteResources != NULL) {
-        free(config->siteResources);
-        config->siteResources = NULL;
-    }
     if (config->siteFs != NULL) {
         free_VolumeMap(config->siteFs, 1);
         config->siteFs = NULL;
@@ -367,8 +363,6 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->ddPath != NULL ? config->ddPath : ""));
     written += fprintf(fp, "mkfsXfsPath = %s\n",
         (config->mkfsXfsPath != NULL ? config->mkfsXfsPath : ""));
-    written += fprintf(fp, "siteResources = %s\n",
-        (config->siteResources != NULL ? config->siteResources : ""));
     written += fprintf(fp, "Image Gateway Servers = %lu servers\n", config->gwUrl_size);
     for (idx = 0; idx < config->gwUrl_size; idx++) {
         char *gwUrl = config->gwUrl[idx];
@@ -378,7 +372,7 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         written += fprintf(fp, "Site FS Bind-mounts = %lu fs\n", config->siteFs->n);
         written += fprint_VolumeMap(fp, config->siteFs);
     }
-    for (iidx = 0; iidx < config->n_modules; iidx++)) {
+    for (iidx = 0; iidx < config->n_modules; iidx++) {
         written += fprint_ShifterModule(fp, &(config->modules[iidx]));
     }
     written += fprintf(fp, "defaultModules: %s\n", config->defaultModulesStr);
@@ -482,10 +476,6 @@ int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
             } else if (!(statData.st_mode & S_IXUSR)) {
                 VAL_ERROR("Specified \"mkfsXfsPath\" is not executable.", UDIROOT_VAL_FILEVAL);
             }
-        }
-        if (config->siteResources != NULL && config->siteResources[0] != '/') {
-            // note: we will find out later, through "mkdir", whether it is a valid path name or not
-            VAL_ERROR("Specified \"siteResources\" is not an absolute path.", UDIROOT_VAL_FILEVAL);
         }
     }
     return 0;
@@ -670,8 +660,6 @@ static int _assign(const char *key, const char *value, void *t_config) {
         if (config->system == NULL) return 1;
     } else if (strcmp(key, "defaultImageType") == 0) {
         config->defaultImageType = _strdup(value);
-    } else if (strcmp(key, "siteResources") == 0) {
-        config->siteResources = _strdup(value);
     } else if (strcmp(key, "nodeContextPrefix") == 0) {
         /* do nothing, this key is defunct */
     } else if (strncmp(key, "module_", 7) == 0) {

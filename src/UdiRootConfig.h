@@ -136,8 +136,6 @@ typedef struct _UdiRootConfig {
     char *ddPath;
     char *mkfsXfsPath;
 
-    char *siteResources;
-
     /* support variables for above */
     size_t siteEnv_capacity;
     size_t siteEnvAppend_capacity;
