@@ -423,33 +423,6 @@ TEST(UtilityTestGroup, pathcmp_basic) {
     CHECK(pathcmp("", "a/b/c") != 0);
 }
 
-TEST(UtilityTestGroup, mkdir_p) {
-    {
-        std::string dir = std::string(tmpDir) + "/";
-        printf("creating %s\n", dir.c_str());
-        CHECK(mkdir_p(dir.c_str(), 0775) == 0);
-        CHECK(is_existing_directory(dir.c_str()) == 1);
-    }
-    {
-        std::string dir = std::string(tmpDir) + "//";
-        printf("creating %s\n", dir.c_str());
-        CHECK(mkdir_p(dir.c_str(), 0775) == 0);
-        CHECK(is_existing_directory(dir.c_str()) == 1);
-    }
-    {
-        std::string dir = std::string(tmpDir) + "/subdir";
-        printf("creating %s\n", dir.c_str());
-        CHECK(mkdir_p(dir.c_str(), 0775) == 0);
-        CHECK(is_existing_directory(dir.c_str()) == 1);
-    }
-    {
-        std::string dir = std::string(tmpDir) + "/subdir1/subdir2";
-        printf("creating %s\n", dir.c_str());
-        CHECK(mkdir_p(dir.c_str(), 0775) == 0);
-        CHECK(is_existing_directory(dir.c_str()) == 1);
-    }
-}
-
 int main(int argc, char** argv) {
         return CommandLineTestRunner::RunAllTests(argc, argv);
 }

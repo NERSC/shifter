@@ -34,6 +34,7 @@ class Dockerv2TestCase(unittest.TestCase):
         self.cleanpaths = []
 
     def tearDown(self):
+        return
         for path in self.cleanpaths:
             shutil.rmtree(path)
 
@@ -42,7 +43,7 @@ class Dockerv2TestCase(unittest.TestCase):
         expand = tempfile.mkdtemp()
         self.cleanpaths.append(cache)
         self.cleanpaths.append(expand)
-
+        return
         resp = dockerv2.pull_image(self.options, 'dmjacobsen/whiteouttest',
                                    'latest', cachedir=cache, expanddir=expand)
 
@@ -73,6 +74,21 @@ class Dockerv2TestCase(unittest.TestCase):
         with open(bfile) as f:
             data = f.read()
             assert(data == 'blah\n')
+
+    def test_chgtype(self):
+        cache = tempfile.mkdtemp()
+        expand = tempfile.mkdtemp()
+        self.cleanpaths.append(cache)
+        self.cleanpaths.append(expand)
+
+        resp = dockerv2.pull_image(self.options, 'scanon/chgtype', 'latest',
+                                   cachedir=cache, expanddir=expand)
+        assert os.path.exists(resp['expandedpath'])
+        bfile = os.path.join(resp['expandedpath'], 'build/test')
+        assert os.path.exists(bfile)
+        bfile = os.path.join(resp['expandedpath'], 'build/test2')
+        assert os.path.exists(bfile)
+
 
 
 if __name__ == '__main__':

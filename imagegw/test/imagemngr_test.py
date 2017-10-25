@@ -752,8 +752,9 @@ class ImageMngrTestCase(unittest.TestCase):
         state = self.time_wait(id)
         assert state == 'READY'
         mrec = self.images.find_one(q)
-        assert 'private' in mrec
-        assert mrec['private'] is False
+        self.assertIn('WORKDIR', mrec)
+        self.assertIn('private', mrec)
+        self.assertFalse(mrec['private'])
 
     def test_pull_public_acl_token(self):
         """

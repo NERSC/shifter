@@ -188,7 +188,7 @@ class ImageMngr(object):
 
     def _checkread(self, session, rec):
         """
-        Checks if the user has read permissions to the image. (Not Implemented)
+        Checks if the user has read permissions to the image.
         """
 
         # Start by checking if the image is public (no ACLs)

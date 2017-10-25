@@ -609,6 +609,13 @@ class DockerV2Handle(object):
             # remove identical paths (not dirs) from all ancestral layers
             notdirs = [x.name for x in members if not x.isdir()]
             for idx, ancs_layer in enumerate(layer_paths):
+                # look for files that were directories
+                filter = [x.name for x in ancs_layer if x.isdir() and
+                          x.name in notdirs]
+                # And then filter them out and any files or subdirs
+                for f in filter:
+                    ancs_layer = [x for x in ancs_layer if x.name != f and
+                                  not x.name.startswith(f + '/')]
                 ancs_layer = [x for x in ancs_layer if x.name not in notdirs]
                 layer_paths[idx] = ancs_layer
 
