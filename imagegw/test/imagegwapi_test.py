@@ -26,12 +26,13 @@ See LICENSE for full text.
 """
 
 AUTH_HEADER = 'authentication'
+DEBUG = False
 
 
 class GWTestCase(unittest.TestCase):
     def setUp(self):
         mongouri = self.config['MongoDBURI']
-        print "Debug: Connecting to %s" % mongouri
+        # print "Debug: Connecting to %s" % mongouri
         client = MongoClient(mongouri)
         db = self.config['MongoDB']
         if not os.path.exists(self.config['CacheDirectory']):
@@ -76,9 +77,9 @@ class GWTestCase(unittest.TestCase):
         poll_interval = 0.5
         count = TIMEOUT / poll_interval
         cstate = 'UNKNOWN'
-        uri = '%s/lookup/%s/' % (self.url, urlreq)
+        uri = '%s/pull/%s/' % (self.url, urlreq)
         while (cstate != state and count > 0):
-            rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
+            rv = self.app.post(uri, headers={AUTH_HEADER: self.auth})
             if rv.status_code != 200:
                 time.sleep(1)
                 continue
@@ -88,10 +89,11 @@ class GWTestCase(unittest.TestCase):
                 break
             if r['status'] == 'FAILURE':
                 break
-            print '  %s...' % (r['status'])
+            if DEBUG:
+                print '  %s...' % (r['status'])
             time.sleep(1)
             count = count - 1
-        return cstate
+        return rv
 
     def good_record(self):
         return {'system': self.system,
@@ -121,6 +123,7 @@ class GWTestCase(unittest.TestCase):
         assert 500 in data['userACL']
         assert 500 in data['groupACL']
         assert 1002 in data['groupACL']
+        rv = self.time_wait(self.urlreq)
         assert rv.status_code == 200
 
     def test_list(self):
@@ -128,8 +131,9 @@ class GWTestCase(unittest.TestCase):
         uri = '%s/list/%s/' % (self.url, 'systemc')
         rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
         self.assertEquals(rv.status_code, 404)
-        uri = '%s/pull/%s/' % (self.url, self.urlreq)
-        rv = self.app.post(uri, headers={AUTH_HEADER: self.auth})
+        # uri = '%s/pull/%s/' % (self.url, self.urlreq)
+        # rv = self.app.post(uri, headers={AUTH_HEADER: self.auth})
+        rv = self.time_wait(self.urlreq)
         assert rv.status_code == 200
         uri = '%s/list/%s/' % (self.url, self.system)
         rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
@@ -142,25 +146,12 @@ class GWTestCase(unittest.TestCase):
         assert rv.status_code == 200
         uri = '%s/queue/%s/' % (self.url, self.system)
         rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
-        print rv.data
         assert rv.status_code == 200
 
     def test_pulllookup(self):
         # Do a pull so we can create an image record
         uri = '%s/pull/%s/' % (self.url, self.urlreq)
-        i = 0
-        while i < 200:
-            rv = self.app.post(uri, headers={AUTH_HEADER: self.auth})
-            assert rv.status_code == 200
-            r = json.loads(rv.data)
-            if r['status'] == 'READY':
-                break
-            if r['status'] == 'FAILURE':
-                break
-            print '  %s %s...' % (r['status'], r['status_message'])
-            time.sleep(1)
-            i = i + 1
-        print ''
+        rv = self.time_wait(self.urlreq)
         uri = '%s/lookup/%s/' % (self.url, self.urlreq)
         rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
         assert rv.status_code == 200
@@ -196,7 +187,6 @@ class GWTestCase(unittest.TestCase):
         while count > 0:
             rv = self.app.get(uri, headers={AUTH_HEADER: self.authadmin})
             r = self.images.find_one({'_id': id})
-            print '   %s...' % (r['status'])
             if r['status'] == 'EXPIRED':
                 break
             time.sleep(1)
