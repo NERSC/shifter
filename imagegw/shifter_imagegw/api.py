@@ -64,6 +64,14 @@ with open(CONFIG_FILE) as config_file:
 mgr = ImageMngr(config, logger=app.logger)
 
 
+def getmgr():
+    """
+    This is intended just for the testing layer so it can shutdown the
+    updater thread in the manager.
+    """
+    return mgr
+
+
 # For RESTful Service
 @app.errorhandler(404)
 def not_found(error=None):

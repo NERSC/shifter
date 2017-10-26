@@ -17,7 +17,7 @@
 
 Summary:   NERSC Shifter -- Containers for HPC
 Name:      shifter
-Version:   16.08.3
+Version:   DEVEL
 Release:   1.nersc%{?dist}
 License:   BSD (LBNL-modified)
 Group:     System Environment/Base
@@ -203,7 +203,6 @@ pip install celery
 %config(noreplace missingok) %verify(not filedigest mtime size) %{_sysconfdir}/shifter_etc_files/group
 %config(noreplace) %{_sysconfdir}/shifter_etc_files/nsswitch.conf
 %{_bindir}/shifterimg
-%{_bindir}/activate_gpu_support.sh
 %{_sbindir}/setupRoot
 %{_sbindir}/unsetupRoot
 %{_libexecdir}/shifter/mount

@@ -57,7 +57,6 @@
 #include "MountList.h"
 #include "config.h"
 #include "PathList.h"
-#include "gpu_support.h"
 
 #ifndef BINDMOUNT_OVERWRITE_UNMOUNT_RETRY
 #define BINDMOUNT_OVERWRITE_UNMOUNT_RETRY 3
@@ -1018,16 +1017,6 @@ int mountImageVFS(ImageData *imageData,
     /* copy image /etc into place */
     BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
 
-    if(udiConfig->siteResources!=NULL &&
-        create_site_resources_folder(udiConfig) != 0) {
-        goto _mountImgVfs_unclean;
-    }
-
-    if(execute_hook_to_activate_gpu_support(verbose, udiConfig) != 0)
-    {
-        fprintf(stderr, "activate_gpu_support hook failed\n");
-        goto _mountImgVfs_unclean;
-    }
 #undef BIND_IMAGE_INTO_UDI
 #undef _MKDIR
 
@@ -1038,25 +1027,6 @@ _mountImgVfs_unclean:
         free(sshPath);
     }
     return 1;
-}
-
-int create_site_resources_folder(const UdiRootConfig* udiConfig) {
-    char* site_resources_path = alloc_strgenf("%s%s", udiConfig->udiMountPoint, udiConfig->siteResources);
-    if(is_existing_file(site_resources_path)) {
-        fprintf(stderr, "Cannot create the site-resources directory %s in the container."
-                        " A file with the same path already exists in the container image."
-                        " Hint: remove the clashing file in the container or contact the"
-                        " system administrator to change the Shifter's site-resources path.", udiConfig->siteResources);
-        free(site_resources_path);
-        return 1;
-    }
-    if(mkdir_p(site_resources_path, 0755) != 0) {
-        fprintf(stderr, "cannot mkdir %s\n", site_resources_path);
-        free(site_resources_path);
-        return 1;
-    }
-    free(site_resources_path);
-    return 0;
 }
 
 /** makeUdiMountPrivate
@@ -1833,7 +1803,12 @@ _pass_check_fromvol:
                     break;
                 }
             }
-            if (volMountDevOk == 0){
+            /* Allow mounts if the user owns the destionation directory. */
+            int toDirOwnedByUser = 0;
+            if (statData.st_uid == geteuid()) {
+                toDirOwnedByUser = 1;
+            }
+            if (volMountDevOk == 0 && toDirOwnedByUser == 0) {
                 fprintf(stderr, "Mount request path %s not on an approved "
                         "device for volume mounts.\n", to_real);
                 goto _handleVolMountError;
@@ -3181,7 +3156,7 @@ _validateUnmounted_error:
     return -1;
 }
 
-static char **_shifter_findenv(char ***env, char *var, size_t n, size_t *nElement) {
+static char **_shifter_findenv(char ***env, const char *var, size_t n, size_t *nElement) {
     char **ptr = NULL;
     char **ret = NULL;
     if (env == NULL || *env == NULL || var == NULL || n == 0) {
@@ -3201,7 +3176,7 @@ static char **_shifter_findenv(char ***env, char *var, size_t n, size_t *nElemen
     return ret;
 }
 
-static int _shifter_unsetenv(char ***env, char *var) {
+static int _shifter_unsetenv(char ***env, const char *var) {
     size_t namelen = 0;
     size_t envsize = 0;
     char **pptr = NULL;
@@ -3226,19 +3201,7 @@ static int _shifter_unsetenv(char ***env, char *var) {
     return 0;
 }
 
-static void _shifter_create_new_env_variable(char ***env, char *var)
-{
-    char** ptr;
-    char** new_env = shifter_copyenv(*env, 1);
-    for(ptr=new_env; *ptr!=NULL; ++ptr)
-    {}
-    *ptr = strdup(var);
-    ++ptr;
-    *ptr = NULL;
-    *env = new_env;
-}
-
-static int _shifter_putenv(char ***env, char *var, int mode) {
+static int _shifter_putenv(char ***env, const char *var, int mode) {
     size_t namelen = 0;
     size_t envsize = 0;
     char *ptr = NULL;
@@ -3252,12 +3215,7 @@ static int _shifter_putenv(char ***env, char *var, int mode) {
     }
     namelen = ptr - var;
     pptr = _shifter_findenv(env, var, namelen, &envsize);
-    if (pptr == NULL)
-    {
-        _shifter_create_new_env_variable(env, var);
-    }
-    else
-    {
+    if (pptr != NULL) {
         char *value = strchr(*pptr, '=');
         if (value != NULL) {
             value++;
@@ -3306,19 +3264,19 @@ static int _shifter_putenv(char ***env, char *var, int mode) {
     return 0;
 }
 
-char **shifter_copyenv(char **source_environ, int reserve) {
+char **shifter_copyenv(void) {
     char **outenv = NULL;
     char **ptr = NULL;
     char **wptr = NULL;
 
-    if (source_environ == NULL) {
+    if (environ == NULL) {
         return NULL;
     }
 
-    for (ptr = source_environ; *ptr != NULL; ++ptr) {
+    for (ptr = environ; *ptr != NULL; ++ptr) {
     }
-    outenv = (char **) malloc(sizeof(char*) * ((ptr - source_environ) + reserve + 1));
-    ptr = source_environ;
+    outenv = (char **) malloc(sizeof(char*) * ((ptr - environ) + 1));
+    ptr = environ;
     wptr = outenv;
     for ( ; *ptr != NULL; ptr++) {
         *wptr++ = strdup(*ptr);
@@ -3327,19 +3285,19 @@ char **shifter_copyenv(char **source_environ, int reserve) {
     return outenv;
 }
 
-int shifter_putenv(char ***env, char *var) {
+int shifter_putenv(char ***env, const char *var) {
     return _shifter_putenv(env, var, 0);
 }
 
-int shifter_appendenv(char ***env, char *var) {
+int shifter_appendenv(char ***env, const char *var) {
     return _shifter_putenv(env, var, 2);
 }
 
-int shifter_prependenv(char ***env, char *var) {
+int shifter_prependenv(char ***env, const char *var) {
     return _shifter_putenv(env, var, 1);
 }
 
-int shifter_unsetenv(char ***env, char *var) {
+int shifter_unsetenv(char ***env, const char *var) {
     return _shifter_unsetenv(env, var);
 }
 
@@ -3364,127 +3322,6 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
         shifter_unsetenv(env, *envPtr);
     }
     return 0;
-}
-
-/*! Recursively searches the container's siteResources folder.
- * All subfolders that contain a shared library are prepended to the container's
- * LD_LIBRARY_PATH environment variable.
- * All subfolders that contain an executable file are prepended to the container's
- * PATH environment variable.
- */
-int shifter_setupenv_site_resources(char ***env, UdiRootConfig *udiConfig)
-{
-    if (udiConfig->siteResources != NULL)
-    {
-        if(shifter_setupenv_site_resources_rec(env, udiConfig->siteResources) != 0)
-        {
-            fprintf(stderr, "Failed to add the site-resources directories to the container's environment\n");
-            return 1;
-        }
-    }
-    return 0;
-}
-
-int shifter_setupenv_site_resources_rec(char ***env, const char* current_folder)
-{
-    int return_value = 0;
-    int is_current_folder_prepended_to_path = 0;
-    int is_current_folder_prepended_to_ld_library_path = 0;
-
-    DIR* dir = opendir(current_folder);
-    if(dir == NULL)
-    {
-        fprintf(stderr, "FAILED to opendir %s\n", current_folder);
-        perror(" --- REASON");
-        return 1;
-    }
-
-    //for each file/folder in current_folder
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != NULL)
-    {
-        // skip special files
-        if( strcmp(".", entry->d_name)==0
-            || strcmp("..", entry->d_name)==0)
-            continue;
-
-        char entry_full_path[PATH_MAX];
-        snprintf(entry_full_path, PATH_MAX, "%s/%s", current_folder, entry->d_name);
-
-        struct stat stat_result;
-        if (stat(entry_full_path, &stat_result) != 0)
-        {
-            fprintf(stderr, "failed to stat %s\n", entry_full_path);
-            perror(" --- REASON");
-            return_value = 1;
-            break;
-        }
-
-        // entry is folder => resursively search it
-        if((stat_result.st_mode & S_IFMT) == S_IFDIR)
-        {
-            if(shifter_setupenv_site_resources_rec(env, entry_full_path) != 0)
-            {
-                return_value = 1;
-                break;
-            }
-        }
-        // entry is executable program => add current folder to PATH
-        else if(!is_current_folder_prepended_to_path
-                && !is_shared_library(entry->d_name)
-                && (stat_result.st_mode & S_IXOTH))
-        {
-            char* env_variable = alloc_strgenf("PATH=%s", current_folder);
-            if(shifter_prependenv(env, env_variable) != 0)
-            {
-                fprintf(stderr, "Failed to prepend environment variable %s\n", env_variable);
-                free(env_variable);
-                return_value = 1;
-                break;
-            }
-            free(env_variable);
-            is_current_folder_prepended_to_path = 1;
-        }
-        // entry is library => add current folder to LD_LIBRARY_PATH
-        else if(!is_current_folder_prepended_to_ld_library_path
-                && is_shared_library(entry->d_name))
-        {
-            char *env_variable = alloc_strgenf("LD_LIBRARY_PATH=%s", current_folder);
-            if(shifter_prependenv(env, env_variable) != 0)
-            {
-                fprintf(stderr, "Failed to prepend environment variable %s\n", env_variable);
-                free(env_variable);
-                return_value = 1;
-                break;
-            }
-            free(env_variable);
-            is_current_folder_prepended_to_ld_library_path = 1;
-        }
-    }
-    closedir(dir);
-    return return_value;
-}
-
-int is_shared_library(char* file_name)
-{
-    char* pos = strstr(file_name, ".so");
-
-    if(pos == NULL)
-    {
-        return 0;
-    }
-
-    pos += 3;
-    while(*pos != '\0')
-    {
-        if(*pos!='.' && !isdigit(*pos))
-        {
-            return 0;
-        }
-        ++pos;
-    }
-
-    return 1;
 }
 
 int _shifter_get_max_capability(unsigned long *_maxCap) {

@@ -12,7 +12,6 @@
     "MongoDBURI":"mongodb://localhost/",
     "MongoDB":"ShifterTest",
     "Metrics":true,
-    "Broker":"redis://localhost/",
     "Authentication":"mock",
 
     "Locations": {

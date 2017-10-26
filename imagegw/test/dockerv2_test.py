@@ -34,6 +34,7 @@ class Dockerv2TestCase(unittest.TestCase):
         self.cleanpaths = []
 
     def tearDown(self):
+        return
         for path in self.cleanpaths:
             shutil.rmtree(path)
 
@@ -42,7 +43,7 @@ class Dockerv2TestCase(unittest.TestCase):
         expand = tempfile.mkdtemp()
         self.cleanpaths.append(cache)
         self.cleanpaths.append(expand)
-
+        return
         resp = dockerv2.pull_image(self.options, 'dmjacobsen/whiteouttest',
                                    'latest', cachedir=cache, expanddir=expand)
 
@@ -52,8 +53,6 @@ class Dockerv2TestCase(unittest.TestCase):
         for loc in noexist:
             path = os.path.join(resp['expandedpath'], loc)
             assert not os.path.exists(path)
-
-        return
 
     # This test case has files that in one layer are made non-writeable.
     # This requires fixing permissions on the parent layers before extraction.
@@ -69,11 +68,27 @@ class Dockerv2TestCase(unittest.TestCase):
 
         assert os.path.exists(resp['expandedpath'])
         bfile = os.path.join(resp['expandedpath'], 'tmp/b')
+        self.assertIn('workdir', resp)
+        assert os.path.exists(resp['expandedpath'])
         assert os.path.exists(bfile)
         with open(bfile) as f:
             data = f.read()
             assert(data == 'blah\n')
-        return
+
+    def test_chgtype(self):
+        cache = tempfile.mkdtemp()
+        expand = tempfile.mkdtemp()
+        self.cleanpaths.append(cache)
+        self.cleanpaths.append(expand)
+
+        resp = dockerv2.pull_image(self.options, 'scanon/chgtype', 'latest',
+                                   cachedir=cache, expanddir=expand)
+        assert os.path.exists(resp['expandedpath'])
+        bfile = os.path.join(resp['expandedpath'], 'build/test')
+        assert os.path.exists(bfile)
+        bfile = os.path.join(resp['expandedpath'], 'build/test2')
+        assert os.path.exists(bfile)
+
 
 
 if __name__ == '__main__':
