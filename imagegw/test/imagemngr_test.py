@@ -1025,6 +1025,49 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertIsNotNone(recs)
         self.assertEquals(len(recs), 100)
 
+    def test_status_thread(self):
+        # Stop the existing status thread
+        self.m.status_queue.put('stop')
+        time.sleep(1)
+        # Create a pull record
+        record = self.good_record()
+        record['pulltag'] = 'bogus'
+        record['status'] = 'PULLING'
+        rec = self.images.insert(record)
+        id = record['_id']
+        m = {
+            'id': id,
+            'state': 'READY',
+            'meta': {'response': {'id': 'fakeid'}}
+        }
+        # Create a fake response and queue it
+        self.m.status_queue.put(m)
+        self.m.status_queue.put('stop')
+        self.m.status_thread()
+        rec = self.images.find_one({'_id': id})
+        self.assertEquals(rec['status'], 'READY')
+        # Now do a meta_only update
+        # Let's add a new pull record
+        record = self.good_record()
+        record['pulltag'] = 'bogus'
+        record['status'] = 'PULLING'
+        id = self.images.insert(record)
+        m = {
+            'id': id,
+            'state': 'READY',
+            'meta': {'response': {'id': 'fakeid'}}
+        }
+        m['meta']['response']['meta_only'] = True
+        m['meta']['response']['userACL'] = 1
+        m['meta']['response']['groupACL'] = 1
+        m['meta']['response']['private'] = True
+        self.m.status_queue.put(m)
+        self.m.status_queue.put('stop')
+        self.m.status_thread()
+        rec = self.images.find_one()
+        self.assertIn('userACL', rec)
+        self.assertTrue(rec['private'])
+
 
 if __name__ == '__main__':
     unittest.main()

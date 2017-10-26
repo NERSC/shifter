@@ -136,10 +136,10 @@ class ImageMngr(object):
             if state == "FAILURE":
                 self.logger.warn("Operation failed for %s", ident)
 
-            self.update_mongo_state(ident, state, meta)
             # print "Status: %s" % (state)
             # A response message
             if state != 'READY':
+                self.update_mongo_state(ident, state, meta)
                 continue
             if 'response' in meta and meta['response']:
                 response = meta['response']
@@ -613,6 +613,7 @@ class ImageMngr(object):
             msg = "WARNING: No image record found for an ACL update"
             self.logger.warn(msg)
             response['last_pull'] = time()
+            response['status'] = 'READY'
             self.update_mongo(ident, response)
             self.add_tag(ident, pullrec['system'], pullrec['pulltag'])
         else:
@@ -623,6 +624,8 @@ class ImageMngr(object):
                 'last_pull': time()
             }
             self.logger.debug("Doing ACLs update")
+            response['last_pull'] = time()
+            response['status'] = 'READY'
             self.update_mongo(rec['_id'], updates)
             self._images_remove({'_id': ident})
 
@@ -638,7 +641,8 @@ class ImageMngr(object):
             return
         # Check that this image ident doesn't already exist for this system
         rec = self._images_find_one({'id': response['id'],
-                                    'system': pullrec['system']})
+                                    'system': pullrec['system'],
+                                    'status': 'READY'})
         tag = pullrec['pulltag']
         if rec is not None:
             # So we already had this image.
@@ -659,6 +663,7 @@ class ImageMngr(object):
             return True
         else:
             response['last_pull'] = time()
+            response['status'] = 'READY'
             self.update_mongo(ident, response)
             self.add_tag(ident, pullrec['system'], tag)
 
@@ -677,7 +682,8 @@ class ImageMngr(object):
             'last_pull': 'last_pull',
             'userACL': 'userACL',
             'groupACL': 'groupACL',
-            'private': 'private'
+            'private': 'private',
+            'status': 'status'
         }
         if 'private' in resp and resp['private'] is False:
             resp['userACL'] = []
