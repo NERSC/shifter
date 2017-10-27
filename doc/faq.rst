@@ -15,14 +15,12 @@ system or be installed in trusted locations.
 
 Can Shifter import Docker images with unicode filenames embedded?
 -----------------------------------------------------------------
-Yes.  If you are seeing errors similar to the following in the image worker log
+Yes.  If you are seeing errors similar to the following in the image gateway log
 then you'll need to include the provide sitecustomize.py in your python setup
-or just point the celery process's PYTHONPATH to include it::
+or just point the gateway's PYTHONPATH to include it::
 
     [2016-08-01 09:41:20,664: ERROR/MainProcess] Task shifter_imagegw.imageworker.dopull[XXXXXXX-omitted-XXXXXXX] raised unexpected: UnicodeDecodeError('ascii', '/path/is/omitted/some\xc3\xa9_unicode', 35, 36, 'ordinal not in range(128)')
     Traceback (most recent call last):
-      File "/usr/lib/python2.6/site-packages/celery/app/trace.py", line 240, in trace_task
-          R = retval = fun(*args, **kwargs)
       File "/usr/lib/python2.6/site-packages/celery/app/trace.py", line 438, in __protected_call__
           return self.run(*args, **kwargs)
       File "/usr/lib64/python2.6/site-packages/shifter_imagegw/imageworker.py", line 304, in dopull
@@ -39,8 +37,7 @@ or just point the celery process's PYTHONPATH to include it::
           path += '/' + b
           UnicodeDecodeError: 'ascii' codec can't decode byte 0xc3 in position 35: ordinal not in range(128)
 
-This error is being caused by the celery process not properly getting setup for
-unicode processing.  To fix this, either set PYTHONPATH to include
+To fix this, either set PYTHONPATH to include
 
 * /usr/libexec/shifter (RedHat variants)
 * /usr/lib/shifter (SLES variants)

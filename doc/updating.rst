@@ -77,23 +77,13 @@ To start with gunicorn do::
         --log-file=/var/log/shifter_imagegw/error.log \
         shifter_imagegw.api:app
 
-**Image Manager Workers**
+**Handling Unicode**
 
 The workers have been updated to do a better job of efficiently converting
-Docker images into Shifter's preferred squashfs format.  However, Celery (the
-vehicle by which workers are started) requires a minor configuration change to
-properly support unicode filenames in the converted images.  Start Celery with
+Docker images into Shifter's preferred squashfs format.  Start the gateway with
 the included sitecustomize.py in your PYTHONPATH.  This is typically installed
 in the libexec directory (in Redhat), or the lib directory (in SuSE).
 
 e.g.,::
 
-    PYTHONPATH=/usr/libexec/shifter /usr/bin/celery \
-               -A shifter_imagegw.imageworker \
-               worker \
-               -Q $MACHINE \
-               -n $MACHINE.%h \
-               --loglevel=debug \
-               --logfile=/var/log/shifter_imagegw_worker/$MACHINE.log
-
-where $MACHINE above refers to your cluster name.
+    export PYTHONPATH=/usr/libexec/shifter

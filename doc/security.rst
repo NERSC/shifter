@@ -112,26 +112,13 @@ Securing imagegw api
 1. run as a non-root user using gunicorn as the python flask host
 2. Use a firewall to restrict traffic just to the networks that need to access the
    imagegw
-
-Securing the imagegw worker
-+++++++++++++++++++++++++++
-
-1. run as a non-root special-purpose account (e.g., shifter)
-2. install the mksquashfs, ext3/4 utilities and xfs progs in a trusted way (e.g.,
+3. install the mksquashfs, ext3/4 utilities and xfs progs in a trusted way (e.g.,
    package manager of your distribution)
 
-Running the imagegw worker as a non-root user is particularly important to
+Running the imagegw as a non-root user is particularly important to
 ensure images generated do not have an Linux security capabilities embedded in
 the image.  This is a non-obvious way that a program may attempt to escalate
 privilege.  On more recent Linux systems (Linux kernel >= 3.5), this risk is
 somewhat mitigated so long as the shifter executable is rebuilt for those
 systems.
 
-Securing redis
-++++++++++++++
-
-1. Do _not_ run redis on public networks, ideally (if imagegw api and workers are on
-   same node), only bind to 127.0.0.1
-2. Use AUTH password (something long and complex); TODO: mention configuration
-   required
-3. Do not allow the CONFIG command to be used via the redis client (remap)
