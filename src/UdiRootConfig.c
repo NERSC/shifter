@@ -122,6 +122,18 @@ void free_ShifterModule(ShifterModule *module, int free_struct) {
     }
 }
 
+int parse_selected_ShifterModule(const char *selected, UdiRootConfig *config) {
+    char *selected_tmp = NULL;
+    char *search = NULL;
+    char *svPtr = NULL;
+
+    if (!selected || !config) {
+        return -1;
+    }
+    config->selectedModulesStr = _strdup(selected);
+    selected_tmp = _strdup(selected);
+}
+
 int parse_UdiRootConfig(const char *configFile, UdiRootConfig *config, int validateFlags) {
     int ret = 0;
 

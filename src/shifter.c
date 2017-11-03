@@ -72,6 +72,7 @@ struct options {
     gid_t tgtGid;
     char *username;
     char *workdir;
+    char *selectedModulesStr;
     char **args;
     char **env;
     VolumeMap volumeMap;
@@ -332,6 +333,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         {"image", 1, 0, 'i'},
         {"entrypoint", 2, 0, 0},
         {"workdir", 1, 0, 'w'},
+        {"module", 1, 0, 'm'},
         {"env", 0, 0, 'e'},
         {0, 0, 0, 0}
     };
@@ -350,7 +352,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     optind = 1;
     for ( ; ; ) {
         int longopt_index = 0;
-        opt = getopt_long(argc, argv, "hnvV:i:e:w:", long_options, &longopt_index);
+        opt = getopt_long(argc, argv, "hnvV:i:e:w:m:", long_options, &longopt_index);
         if (opt == -1) break;
 
         switch (opt) {
@@ -418,6 +420,12 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                 /* TODO - add support for explicitly overriding environment
                  * variables
                  */
+                break;
+            case 'm':
+                if (config->selectedModulesStr) {
+                    free(config->selectedModulesStr);
+                }
+                config->selectedModulesStr = _strdup(optarg);
                 break;
             case 'h':
                 _usage(0);
@@ -496,6 +504,14 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         }
     }
 
+    if (config->selectedModulesStr != NULL) {
+        if (parse_selected_ShifterModule(config->selectedModulesStr, udiConfig) != 0) {
+            fprintf(stderr, "Invalid shifter module selection: %s\n",
+                    config->selectedModulesStr);
+            _usage(1);
+        }
+    }
+
     udiConfig->target_uid = config->tgtUid;
     udiConfig->target_gid = config->tgtGid;
     seteuid(0);
@@ -506,6 +522,7 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
     char *envPtr = NULL;
     char *type = NULL;
     char *tag = NULL;
+    char *module = NULL;
 
     /* read type and tag from the environment */
     if ((envPtr = getenv("SHIFTER_IMAGETYPE")) != NULL) {
@@ -517,6 +534,15 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
         tag = imageDesc_filterString(envPtr, type);
     } else if ((envPtr = getenv("SLURM_SPANK_SHIFTER_IMAGE")) != NULL) {
         tag = imageDesc_filterString(envPtr, type);
+    }
+    if ((envPtr = getenv("SHIFTER_MODULE")) != NULL) {
+        module = _strdup(envPtr);
+    } else if ((ptr = getenv("SLURM_SPANK_SHIFTER_MODULE")) != NULL) {
+        module = _strdup(envPtr);
+    }
+
+    if (module) {
+        opts->selectedModulesStr = module;
     }
 
     /* validate type and tag */

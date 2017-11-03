@@ -120,6 +120,8 @@ typedef struct _UdiRootConfig {
     char **siteEnvUnset;
     ShifterModule *modules;
     int n_modules;
+    ShifterModule *active_modules;
+    int n_active_modules;
     char *defaultModulesStr;
     int allowLocalChroot;
     int allowLibcPwdCalls;
@@ -174,6 +176,7 @@ int validate_UdiRootConfig(UdiRootConfig *, int validateFlags);
 void free_ShifterModule(ShifterModule *module, int freeStruct);
 int parse_ShifterModule_key(UdiRootConfig *, const char *key, const char *value);
 size_t fprint_ShifterModule(FILE *, ShifterModule *);
+int parse_selected_ShifterModule(const char *selected, UdiRootConfig *config);
 int ShifterModule_postprocessing(UdiRootConfig *);
 /* TODO add validate_ShifterModule */
 
