@@ -51,7 +51,7 @@ def need_proxy(hostname):
     """
     Helper function to determine if a proxy should be used to connect to a host
     """
-    if os.environ['no_proxy']:
+    if 'no_proxy' in os.environ and os.environ['no_proxy']:
         domains = os.environ['no_proxy'].split(',')
         ismatch = True in map(lambda x: hostname.endswith(x), domains)
         return not ismatch
