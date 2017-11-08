@@ -49,3 +49,10 @@ In order to get the shifter sitecustomize.py into your PYTHONPATH.
 
 If that isn't appropriate for your site, then you can examine the contents of
 the sitecustomize.py and prepare your own that does similar.
+
+Can Shifter use a proxy to access registries
+--------------------------------------------
+Shifter does support using a proxy.  This is controlled through the enviornment variables, http_proxy.
+This should be set to the appropriate proxy (e.g. https://myproxy.me.org).  Domains can be excluded
+by setting no_proxy to a comma separated list of domains to exclude. A SOCKS proxy can be used for
+all connections by setting all_proxy to the socks proxy URL. 

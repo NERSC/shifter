@@ -89,6 +89,21 @@ class Dockerv2TestCase(unittest.TestCase):
         bfile = os.path.join(resp['expandedpath'], 'build/test2')
         assert os.path.exists(bfile)
 
+    def test_need_proxy(self):
+        os.environ['no_proxy'] = 'blah.com,blah2.com'
+        self.assertTrue(dockerv2.need_proxy('proxy.blah3.com'))
+        self.assertFalse(dockerv2.need_proxy('proxy.blah.com'))
+
+    def test_setup_conn(self):
+        url = 'https://registry-1.docker.io/v2/'
+        conn = dockerv2._setup_http_conn(url)
+        self.assertIsNotNone(conn)
+        url = 'http://registry-1.docker.io/v2/'
+        conn = dockerv2._setup_http_conn(url)
+        self.assertIsNotNone(conn)
+        url = 'ftp:/bogus.com/v2/'
+        with self.assertRaises(ValueError):
+            conn = dockerv2._setup_http_conn(url)
 
 
 if __name__ == '__main__':

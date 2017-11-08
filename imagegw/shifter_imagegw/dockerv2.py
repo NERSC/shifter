@@ -58,6 +58,7 @@ def need_proxy(hostname):
     else:
         return True
 
+
 def _jose_decode_base64(input_string):
     """
     Helper function to Decode base64
@@ -159,8 +160,7 @@ def _setup_http_conn(url, cacert=None):
                     cert_file=cacert
                 )
     else:
-        print "Error, unknown protocol %s" % protocol
-        return None
+        raise ValueError("Error, unknown protocol %s" % target.scheme)
     return conn
 
 
@@ -327,7 +327,7 @@ class DockerV2Handle(object):
             raise ValueError('if either username or password is specified, ' +
                              'both must be')
 
-        #if self.allow_authenticated is False and self.username is not None:
+        # if self.allow_authenticated is False and self.username is not None:
         #    raise ValueError('authentication not allowed with the current ' +
         #                     'settings (make sure you are using https)')
 
@@ -415,13 +415,6 @@ class DockerV2Handle(object):
         if conn is None:
             return None
 
-        #headers = {}
-        #if self.auth_method == 'token' and self.token is not None:
-        #    headers = {'Authorization': 'Bearer %s' % self.token}
-        #elif self.auth_method == 'basic' and self.username is not None:
-        #    auth = '%s:%s' % (self.username, self.password)
-        #    headers['Authorization'] = 'Basic %s' % base64.b64encode(auth)
-        # Todo: first try unauthenticated then authenticated
         self._get_auth_header()
 
         req_path = "/v2/%s/manifests/%s" % (self.repo, self.tag)
@@ -508,7 +501,6 @@ class DockerV2Handle(object):
         """
         Helper function to generate the header.
         """
-        #headers = {}
         if self.auth_method == 'token' and self.token is not None:
             self.headers = {'Authorization': 'Bearer %s' % self.token}
         elif self.auth_method == 'basic' and self.username is not None:
@@ -527,7 +519,6 @@ class DockerV2Handle(object):
             if conn is None:
                 return None
 
-            #headers = self._get_auth_header()
             filename = '%s/%s.tar' % (cachedir, layer)
 
             if os.path.exists(filename):
@@ -747,6 +738,7 @@ def main():
     cache_dir = os.environ['TMPDIR']
     pull_image({'baseUrl': 'https://registry-1.docker.io'}, 'scanon/shanetest',
                'latest', cachedir=cache_dir, expanddir=cache_dir)
+
 
 if __name__ == '__main__':
     main()
