@@ -1,3 +1,0 @@
-[Unit]
-Description=shifter imagegw worker target allowing to start/stop all shifter_imagegw_worker@.service instances at once
-

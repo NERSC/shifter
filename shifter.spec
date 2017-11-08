@@ -79,7 +79,7 @@ Requires(pre): shadow-utils
 %{systemd_requires}
 %endif
 %if 0%{?rhel}
-Requires: squashfs-tools python-pip python-flask python-pymongo python-redis python-gunicorn munge
+Requires: squashfs-tools python-pip python-flask python-pymongo python-gunicorn munge
 %endif
 
 %description imagegw
@@ -136,8 +136,8 @@ MAKEFLAGS=%{?_smp_mflags} %{__make}
 %install
 %make_install
 
-# Create directory for Celery/ImageGW API logs
-%{__mkdir_p} $RPM_BUILD_ROOT%{_localstatedir}/log/%{name}_imagegw{,_worker}
+# Create directory for ImageGW API logs
+%{__mkdir_p} $RPM_BUILD_ROOT%{_localstatedir}/log/%{name}_imagegw
 
 : > $RPM_BUILD_ROOT/%{_sysconfdir}/shifter_etc_files/passwd
 : > $RPM_BUILD_ROOT/%{_sysconfdir}/shifter_etc_files/group
@@ -154,8 +154,6 @@ rm -f $RPM_BUILD_ROOT/%{_libexecdir}/shifter/shifter_slurm_dws_support
 %if 0%{!?_without_systemd:1}
 %{__mkdir_p} $RPM_BUILD_ROOT%{_unitdir}
 %{__install} -m 0644 extra/systemd/shifter_imagegw.service $RPM_BUILD_ROOT%{_unitdir}/
-%{__install} -m 0644 extra/systemd/shifter_imagegw_worker@.service $RPM_BUILD_ROOT%{_unitdir}/
-%{__install} -m 0644 extra/systemd/shifter_imagegw_worker.target $RPM_BUILD_ROOT%{_unitdir}/
 %endif
 
 
@@ -181,13 +179,6 @@ getent passwd > %{_sysconfdir}/shifter_etc_files/passwd
 getent group > %{_sysconfdir}/shifter_etc_files/group
 
 %post imagegw
-%if 0%{?rhel}
-%if 0%{?el6}
-pip install celery==3.1.23
-%else
-pip install celery
-%endif
-%endif
 
 %files
 %defattr(-, root, root)
@@ -211,7 +202,6 @@ pip install celery
 %defattr(-, root, root)
 %doc AUTHORS LICENSE NEWS README* contrib extra/systemd
 %attr(0770, %{shifter_user}, %{shifter_group}) %dir %{_localstatedir}/log/%{name}_imagegw/
-%attr(0770, %{shifter_user}, %{shifter_group}) %dir %{_localstatedir}/log/%{name}_imagegw_worker/
 %{_libdir}/python2.*/site-packages/shifter_imagegw
 %{_libexecdir}/shifter/imagecli.py*
 %{_libexecdir}/shifter/imagegwapi.py*

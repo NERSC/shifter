@@ -4,7 +4,8 @@ api:
    - 5555:5000
   links:
    - mongo
-   - redis
+   - systema
+   - registry
   volumes:
    - imagegw:/data
    - ./test/config:/config
@@ -14,17 +15,12 @@ mongo:
   volumes:
     - /data/db
   command: --smallfiles
-redis:
-  image: redis
-  volumes:
-   - ./test/config:/config
-  command: redis-server /config/redis.conf
 systema:
   container_name: systema
   image: shifter-test
-  links:
-   - api
-   - registry
+  extra_hosts:
+   - "api:172.17.0.1"
+   - "registry:172.17.0.1"
   ports:
    - "2222:22"
   volumes:
@@ -33,36 +29,9 @@ systema:
   privileged: true
   environment:
   - ADDUSER=canon
-workera:
-  image: imagegwapi
-  links:
-   - api
-   - redis
-   - systema:systema
-   - registry
-  volumes:
-   - imagegw:/data
-   - ./test/config/:/config
-  command: worker:systema
 registry:
   image: registry
   ports:
    - "5000:5000"
   volumes:
   - registry:/var/lib/registry
-#workerb:
-#  image: imagegwapi
-#  links:
-#   - api
-#   - redis
-#  volumes:
-#   - imagegw:/data
-#   - ./test/config/:/config
-#  command: worker:systemb
-#flower:
-#  image: imagegwapi
-#  links:
-#   - redis
-#  ports:
-#   - 5556:5555
-#  command: flower

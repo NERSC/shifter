@@ -17,7 +17,7 @@ fi
 # CWD should be the local contrib directory
 CWD=${PWD}
 REQ_FILE="${CWD}/../src/requirements.txt"
-DEP_RPM_LIST="mongodb-server mongodb redis zlib zlib-devel munge munge-devel openssl openssl-devel"
+DEP_RPM_LIST="mongodb-server mongodb zlib zlib-devel munge munge-devel openssl openssl-devel"
 
 uname -a |grep Linux 2>&1 >> /dev/null
 if [ $? -eq 0 ]; then
@@ -27,7 +27,6 @@ if [ $? -eq 0 ]; then
     echo "*** Installing dependencies ${DEP_RPM_LIST}"
     sudo yum install -y ${DEP_RPM_LIST}
     sudo /etc/init.d/mongod start
-    sudo /etc/init.d/redis start
   fi
 fi
 
@@ -53,7 +52,7 @@ echo ">>> Virtualenv 13.1.2 build status: $?"
 echo "*** Installing python packages using pip on virtual environment ${PYTHON_VENV}"
 cd ${ROOT_TREE}
 source ${PYTHON_VENV}/bin/activate
-#pip install celery pymongo flask pysocks redis flower requests
+#pip install pymongo flask pysocks requests
 if [ -e ${REQ_FILE} ] ; then
   pip install -r ${REQ_FILE}
   echo ">>> pip install status: $?"

@@ -122,7 +122,6 @@ AC_CONFIG_FILES([Makefile
                  imagegw/shifter_imagegw/Makefile
                  imagegw/shifter_imagegw/__init__.py
                  udiRoot.conf.example
-                 extra/systemd/shifter_imagegw_worker@.service
                ])
 #                 config/Makefile
 #                 dep/Makefile

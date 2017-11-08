@@ -46,7 +46,7 @@ Not fully implemented yet.
 
 The manager layer contains functions that map to the API layer but also has a
 number of helper functions.  The manager layer uses a Mongo database to keep
-track of the images.  It uses Celery to asynchronously spawn task to pull, pack,
+track of the images.  It uses python threads to asynchronously spawn task to pull, pack,
 and transfer images.
 
 ### Configuration
@@ -59,7 +59,7 @@ TODO
 
 ## workers
 
-The image manager uses Celery based workers to do the low-level image
+The image manager uses python thread-based workers to do the low-level image
 manipulation.  This separation is primarily so the operations can be queued to
 prevent overloading the image manager, but also enables the workers being
 remotely executed.

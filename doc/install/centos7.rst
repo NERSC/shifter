@@ -34,22 +34,16 @@ Change "/usr" to the base path SLURM is installed in.
 Installing the Image Manager
 ============================
 
-Install epel, redis, and mongo
-
-    yum -y install epel-release
-    yum -y install redis mongodb-server
-
 Install the Shifter runtime RPM
 
     yum -y install shifter{,-imagegw}-1*rpm
 
-Create a config, create directories, start Mongo and Redis.
+Create a config, create directories, start Mongo.
 
     cp /etc/shifter/imagemanager.json.example /etc/shifter/imagemanager.json
     mkdir /images
     mkdir -p /data/db
     mongod --smallfiles &
-    redis-server  &
 
 Start Munge
 
@@ -61,7 +55,6 @@ Start Munge
 Start the image gateway and a worker for "mycluster"
 
     gunicorn -b 0.0.0.0:5000 --backlog 2048  shifter_imagegw.api:app &
-    celery -c 1 -A shifter_imagegw.imageworker worker -Q mycluster &
 
 Installing the Runtime
 ============================

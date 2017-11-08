@@ -20,11 +20,12 @@ import os
 import unittest
 import json
 import shutil
+DEBUG = False
 
 
-def update_status(state, meta=None):
-    if 'SHOWSTATE' in os.environ:
-        print 'state=%s' % (state)
+def update_status(ident, state, meta=None):
+    if DEBUG:
+        print 'id=%s state=%s' % (ident, state)
 
 
 class ImageWorkerTestCase(unittest.TestCase):
@@ -34,7 +35,7 @@ class ImageWorkerTestCase(unittest.TestCase):
         os.environ['PATH'] = cwd + ':' + os.environ['PATH']
         from shifter_imagegw import imageworker
         self.imageworker = imageworker
-        self.updater = imageworker.Updater(update_status)
+        self.updater = imageworker.Updater('bogusid', update_status)
         self.configfile = 'test.json'
         with open(self.configfile) as config_file:
             self.config = json.load(config_file)
@@ -92,8 +93,8 @@ class ImageWorkerTestCase(unittest.TestCase):
 
     def test_pull_image_basic(self):
         self.cleanup_cache()
-        request = self.request
-        status = self.imageworker.pull_image(request)
+        request = {'system': self.system, 'itype': self.itype, 'tag': self.tag}
+        status = self.imageworker.pull_image(request, self.updater)
         self.assertTrue(status)
         self.assertIn('meta', request)
         meta = request['meta']
@@ -106,10 +107,12 @@ class ImageWorkerTestCase(unittest.TestCase):
 
     # Pull the image but explicitly specify dockerhub
     def test_pull_image_dockerhub(self):
-        self.cleanup_cache()
-        request = self.request
-        request['tag'] = 'index.docker.io/ubuntu:latest'
-        status = self.imageworker.pull_image(request)
+        request = {
+            'system': self.system,
+            'itype': self.itype,
+            'tag': 'index.docker.io/ubuntu:latest'
+        }
+        status = self.imageworker.pull_image(request, self.updater)
         self.assertTrue(status)
         self.assertIn('meta', request)
         meta = request['meta']
@@ -125,7 +128,7 @@ class ImageWorkerTestCase(unittest.TestCase):
             'itype': self.itype,
             'tag': 'urltest/ubuntu:latest'
         }
-        status = self.imageworker.pull_image(request)
+        status = self.imageworker.pull_image(request, self.updater)
         self.assertTrue(status)
         self.assertIn('meta', request)
         meta = request['meta']
@@ -142,7 +145,7 @@ class ImageWorkerTestCase(unittest.TestCase):
             'itype': self.itype,
             'tag': 'urltest/%s' % (self.tag)
         }
-        status = self.imageworker.pull_image(request)
+        status = self.imageworker.pull_image(request, self.updater)
         self.assertTrue(status)
         self.assertIn('meta', request)
         meta = request['meta']
@@ -208,7 +211,7 @@ class ImageWorkerTestCase(unittest.TestCase):
         self.assertIn('WORKDIR', mfdata)
         request['userACL'] = [1001]
         result = self.imageworker.pull(request, self.updater)
-        self.imageworker.remove_image(request)
+        self.imageworker.remove_image(request, self.updater)
 
 
 if __name__ == '__main__':

@@ -42,17 +42,12 @@ Install the needed dependencies and shifter RPMs::
     ## shifter-runtime is optional, but recommended on the image gateway system
     rpm -i /path/to/rpmbuild/RPMS/x86_64/shifter-runtime-$VERSION.rpm
 
-    ## DO NOT use the EPEL rpm version of celery, it is too old
-    pip install celery pymongo flask redis
-
-
 Configuring the Image Manager
 =============================
 Copy /etc/shifter/imagemanager.json.example to /etc/shifter/imagemanager.json.
 At minimum you should check that:
 
 * "MongoDBURI" is correct URL to shifter imagegw mongodb server
-* "Broker" is correct url to redis
 * "CacheDirectory" exists, semi-permanent storage for docker layers
 * "ExpandDirectory" exists, temporary storage for converting images
 * Change "mycluster" under "Platforms" to match your system name, should match the "system" configuration in udiRoot.conf
@@ -109,16 +104,9 @@ the imagegw, do something like:
 1. ``yum install mongodb-server``
 2. ``/etc/init.d/mongod start``
 
-Ensure that redis is running, this needs to be on the same host as the
-imagegw:
-
-1. ``yum install redis``
-2. ``/etc/init.d/redis start``
-
 TODO:  put init scripts into RPM distribution
 Without init scripts, do something like:
 
-1. ``/usr/libexec/shifter/imagegwapi.py > /var/log/imagegwapi.log &``
-2. ``PYTHONPATH=/usr/libexec/shifter celery worker -A shifter_imagegw.imageworker -Q $CLUSTERNAME -t /var/log/imagegw_worker_$CLUSTERNAME.log &``
+``/usr/libexec/shifter/imagegwapi.py > /var/log/imagegwapi.log &``
 
    * Ensure that CLUSTERNAME matches the values in udiRoot.conf (system) and imagemanger.json (platform)
