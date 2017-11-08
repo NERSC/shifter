@@ -22,6 +22,7 @@ includes pulling down the manifest, pulling layers, and unpacking the layers.
 """
 
 import hashlib
+import urlparse
 import httplib
 import ssl
 import json
@@ -44,6 +45,18 @@ if 'all_proxy' in os.environ:
     SOCKS_HOST = SOCKS_HOST.replace('//', '')
     socks.set_default_proxy(socks.SOCKS5, SOCKS_HOST, int(SOCKS_PORT))
     socket.socket = socks.socksocket  # dont add ()!!!
+
+
+def need_proxy(hostname):
+    """
+    Helper function to determine if a proxy should be used to connect to a host
+    """
+    if 'no_proxy' in os.environ and os.environ['no_proxy']:
+        domains = os.environ['no_proxy'].split(',')
+        ismatch = True in map(lambda x: hostname.endswith(x), domains)
+        return not ismatch
+    else:
+        return True
 
 
 def _jose_decode_base64(input_string):
@@ -90,33 +103,64 @@ def _verify_manifest_signature(manifest, text, digest):
 
 def _setup_http_conn(url, cacert=None):
     """Prepare http connection object and return it."""
-    (protocol, url) = url.split('://', 1)
+    target = urlparse.urlparse(url)
     conn = None
-    if protocol == 'http':
-        port = 80
-    else:
-        port = 443
-    if url.find('/') >= 0:
-        (server, _) = url.split('/', 1)
-    else:
-        server = url
-    if ':' in server:
-        (server, portstr) = server.split(':', 1)
-        port = int(portstr)
-    if protocol == 'http':
-        conn = httplib.HTTPConnection(server, port=port)
-    elif protocol == 'https':
+
+    if target.scheme == 'http':
+        if 'http_proxy' in os.environ and need_proxy(target.hostname):
+            proxy = urlparse.urlparse(os.environ['http_proxy'])
+            conn = httplib.HTTPConnection(proxy.netloc)
+            conn.set_tunnel(
+                target.hostname,
+                target.port if target.port else 80
+            )
+            conn.connect()
+        else:
+            conn = httplib.HTTPConnection(target.netloc)
+    elif target.scheme == 'https':
+        useproxy = False
+        if 'https_proxy' in os.environ and need_proxy(target.hostname):
+            proxy = urlparse.urlparse(os.environ['https_proxy'])
+            useproxy = True
         try:
             ssl_context = ssl.create_default_context()
             if cacert is not None:
                 ssl_context = ssl.create_default_context(cafile=cacert)
-            conn = httplib.HTTPSConnection(server, port=port,
-                                           context=ssl_context)
+            if useproxy:
+                conn = httplib.HTTPSConnection(
+                    proxy.netloc,
+                    context=ssl_context
+                )
+                conn.set_tunnel(
+                    target.hostname,
+                    target.port if target.port else 443
+                )
+                conn.connect()
+            else:
+                conn = httplib.HTTPSConnection(
+                    target.netloc,
+                    context=ssl_context
+                )
         except AttributeError:
-            conn = httplib.HTTPSConnection(server, port, None, cacert)
+            if useproxy:
+                conn = httplib.HTTPSConnection(
+                    proxy.netloc,
+                    key_file=None,
+                    cert_file=cacert
+                )
+                conn.set_tunnel(
+                    target.hostname,
+                    target.port if target.port else 443
+                )
+                conn.connect()
+            else:
+                conn = httplib.HTTPSConnection(
+                    target.netloc,
+                    key_file=None,
+                    cert_file=cacert
+                )
     else:
-        print "Error, unknown protocol %s" % protocol
-        return None
+        raise ValueError("Error, unknown protocol %s" % target.scheme)
     return conn
 
 
@@ -283,7 +327,7 @@ class DockerV2Handle(object):
             raise ValueError('if either username or password is specified, ' +
                              'both must be')
 
-        #if self.allow_authenticated is False and self.username is not None:
+        # if self.allow_authenticated is False and self.username is not None:
         #    raise ValueError('authentication not allowed with the current ' +
         #                     'settings (make sure you are using https)')
 
@@ -371,13 +415,6 @@ class DockerV2Handle(object):
         if conn is None:
             return None
 
-        #headers = {}
-        #if self.auth_method == 'token' and self.token is not None:
-        #    headers = {'Authorization': 'Bearer %s' % self.token}
-        #elif self.auth_method == 'basic' and self.username is not None:
-        #    auth = '%s:%s' % (self.username, self.password)
-        #    headers['Authorization'] = 'Basic %s' % base64.b64encode(auth)
-        # Todo: first try unauthenticated then authenticated
         self._get_auth_header()
 
         req_path = "/v2/%s/manifests/%s" % (self.repo, self.tag)
@@ -465,7 +502,6 @@ class DockerV2Handle(object):
         """
         Helper function to generate the header.
         """
-        #headers = {}
         if self.auth_method == 'token' and self.token is not None:
             self.headers = {'Authorization': 'Bearer %s' % self.token}
         elif self.auth_method == 'basic' and self.username is not None:
@@ -484,7 +520,6 @@ class DockerV2Handle(object):
             if conn is None:
                 return None
 
-            #headers = self._get_auth_header()
             filename = '%s/%s.tar' % (cachedir, layer)
 
             if os.path.exists(filename):
@@ -704,6 +739,7 @@ def main():
     cache_dir = os.environ['TMPDIR']
     pull_image({'baseUrl': 'https://registry-1.docker.io'}, 'scanon/shanetest',
                'latest', cachedir=cache_dir, expanddir=cache_dir)
+
 
 if __name__ == '__main__':
     main()
