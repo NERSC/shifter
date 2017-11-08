@@ -120,6 +120,8 @@ class Dockerv2TestCase(unittest.TestCase):
         # should fail with an IOError because it is a bogus proxy
         with self.assertRaises(IOError):
             conn = dockerv2._setup_http_conn(url)
+        os.environ.pop('https_proxy')
+        os.environ.pop('http_proxy')
 
 
 if __name__ == '__main__':
