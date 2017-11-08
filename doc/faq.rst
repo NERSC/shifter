@@ -21,8 +21,6 @@ or just point the gateway's PYTHONPATH to include it::
 
     [2016-08-01 09:41:20,664: ERROR/MainProcess] Task shifter_imagegw.imageworker.dopull[XXXXXXX-omitted-XXXXXXX] raised unexpected: UnicodeDecodeError('ascii', '/path/is/omitted/some\xc3\xa9_unicode', 35, 36, 'ordinal not in range(128)')
     Traceback (most recent call last):
-      File "/usr/lib/python2.6/site-packages/celery/app/trace.py", line 438, in __protected_call__
-          return self.run(*args, **kwargs)
       File "/usr/lib64/python2.6/site-packages/shifter_imagegw/imageworker.py", line 304, in dopull
           if not pull_image(request,updater=us):
             File "/usr/lib64/python2.6/site-packages/shifter_imagegw/imageworker.py", line 161, in pull_image

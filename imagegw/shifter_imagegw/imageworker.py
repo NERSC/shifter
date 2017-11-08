@@ -106,7 +106,7 @@ class WorkerThreads(object):
 
     def dopull(self, ident, request, testmode=0):
         """
-        Kick off a pulll operation.
+        Kick off a pull operation.
         """
         updater = Updater(ident, self.updater)
         self.pools.apply_async(self.pull, [request, updater],

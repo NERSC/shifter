@@ -18,7 +18,7 @@
 # See LICENSE for full text.
 
 """
-Imagae Manager for the Shifter Gateway.
+Image Manager for the Shifter Gateway.
 
 This module is provides the interface layer for the image manager.  This
 compliments the api module which provides the REST interface.  This module
@@ -106,24 +106,24 @@ class ImageMngr(object):
         self.status_proc = Process(target=self.status_thread,
                                    name='StatusThread')
         self.status_proc.start()
+        self.mongo_init()
+
+    def shutdown(self):
+        self.status_queue.put('stop')
+
+    def mongo_init(self):
         client = MongoClient(self.config['MongoDBURI'])
         db_ = self.config['MongoDB']
         self.images = client[db_].images
         self.metrics = None
         if 'Metrics' in self.config and self.config['Metrics'] is True:
             self.metrics = client[db_].metrics
-        # Initialize data structures
-
-    def shutdown(self):
-        self.status_queue.put('stop')
 
     def status_thread(self):
         """
         This listens for update messages from a queue.
         """
-        client = MongoClient(self.config['MongoDBURI'])
-        db_ = self.config['MongoDB']
-        self.images = client[db_].images
+        self.mongo_init()
         while True:
             message = self.status_queue.get()
             if message == 'stop':
@@ -641,8 +641,8 @@ class ImageMngr(object):
             return
         # Check that this image ident doesn't already exist for this system
         rec = self._images_find_one({'id': response['id'],
-                                    'system': pullrec['system'],
-                                    'status': 'READY'})
+                                     'system': pullrec['system'],
+                                     'status': 'READY'})
         tag = pullrec['pulltag']
         if rec is not None:
             # So we already had this image.
