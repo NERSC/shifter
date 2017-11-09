@@ -40,6 +40,11 @@ if 'GWCONFIG' in os.environ:
 else:
     CONFIGFILE = '%s/imagemanager.json' % (CONFIG_PATH)
 
+if 'SERVER_SOFTWARE' in os.environ:
+    # Make flask logging work with gunicorn
+    gunicorn_error_logger = logging.getLogger('gunicorn.error')
+    logging = gunicorn_error_logger
+
 logging.info("Opening %s", CONFIGFILE)
 
 with open(CONFIGFILE) as configfile:
@@ -104,6 +109,14 @@ class WorkerThreads(object):
                     'message': str(err)}
             updater.update_status('FAILURE', 'FAILURE', response=resp)
 
+    def wrkimport(self, request, updater, testmode=0):
+        try:
+            img_import(request, updater, testmode=testmode)
+        except Exception as err:
+            resp = {'error_type': str(type(err)),
+                    'message': str(err)}
+            updater.update_status('FAILURE', 'FAILURE', response=resp)
+
     def dopull(self, ident, request, testmode=0):
         """
         Kick off a pull operation.
@@ -115,6 +128,12 @@ class WorkerThreads(object):
     def doexpire(self, ident, request, testmode=0):
         updater = Updater(ident, self.updater)
         self.pools.apply_async(self.expire, [request, updater])
+
+    def dowrkimport(self, ident, request, testmode=0):
+        logging.debug("wrkimport starting")
+        updater = Updater(ident, self.updater)
+        self.pools.apply_async(self.wrkimport, [request, updater],
+                               {'testmode': testmode})
 
 
 def _get_cacert(location):
@@ -326,7 +345,7 @@ def check_image(request):
                                logging)
 
 
-def transfer_image(request, meta_only=False):
+def transfer_image(request, meta_only=False, import_image=False):
     """
     Transfers the image to the target system based on the configuration.
 
@@ -343,7 +362,13 @@ def transfer_image(request, meta_only=False):
         request['meta']['meta_only'] = True
         return transfer.transfer(sysconf, None, meta, logging)
     else:
-        return transfer.transfer(sysconf, request['imagefile'], meta, logging)
+        if not import_image:
+            return transfer.transfer(sysconf, request['imagefile'], meta,
+                                     logging, import_image)
+        else:
+            return transfer.transfer(sysconf, request['filepath'], meta,
+                                     logging, import_image,
+                                     request['imagefile'])
 
 
 def remove_image(request, updater):
@@ -371,11 +396,14 @@ def remove_image(request, updater):
         raise OSError('Expire failed')
 
 
-def cleanup_temporary(request):
+def cleanup_temporary(request, import_image=False):
     """
     Helper function to cleanup any temporary files or directories.
     """
-    items = ('expandedpath', 'imagefile', 'metafile')
+    if not import_image:
+        items = ('expandedpath', 'imagefile', 'metafile')
+    else:
+        items = ('expandedpath', 'metafile')
     for item in items:
         if item not in request or request[item] is None:
             continue
@@ -475,6 +503,74 @@ def pull(request, updater, testmode=0):
 
     except:
         logging.error("ERROR: dopull failed system=%s tag=%s",
+                      request['system'], request['tag'])
+        print sys.exc_value
+        updater.update_state('FAILURE', 'FAILED')
+
+        # TODO: add a debugging flag and only disable cleanup if debugging
+        cleanup_temporary(request)
+        raise
+
+
+def img_import(request, updater, testmode=0):
+    """
+    Task to do the full workflow of copying an image and processing it
+    """
+    tag = request['tag']
+    logging.debug("img_import system=%s tag=%s", request['system'], tag)
+    if testmode == 1:
+        states = ('HASHING', 'TRANSFER', 'READY')
+        for state in states:
+            logging.info("Worker: testmode Updating to %s", state)
+            updater.update_status(state, state)
+            sleep(1)
+        ident = '%x' % randint(0, 100000)
+        ret = {
+            'id': ident,
+            'entrypoint': ['./blah'],
+            'workdir': '/root',
+            'env': ['FOO=bar', 'BAZ=boz']
+        }
+        state = 'READY'
+        updater.update_status(state, state, ret)
+        return ret
+    try:
+        # Step 0 - Check if path is valid
+        sysconf = CONFIG['Platforms'][request['system']]
+        if not transfer.check_file(request["filepath"], sysconf, logging,
+                                   import_image=True):
+            raise OSError('Path not valid')
+        # Step 1 - Calculate the hash of the file
+        logging.debug("starting import hashing")
+        updater.update_status('HASHING', 'HASHING')
+        logging.info(request)
+        request['id'] = transfer.hash_file(request['filepath'], sysconf,
+                                           logging)
+        # Step 2 - Populate the metadata file
+        logging.debug("starting writing metadata")
+        if 'meta' not in request:
+            raise OSError('Metadata not populated')
+        request['meta']['format'] = request['format']
+        request['meta']['user'] = request['session']['user']
+        if not write_metadata(request):
+            logging.info("Writing metadata")
+            raise OSError('Metadata creation failed')
+        # Step 3 - Copy image and meta file from user space to shifter area
+        logging.debug("starting transfer")
+        request['imagefile'] = request['id']+'.'+request['format']
+        request['meta']['id'] = request['id']
+        updater.update_status('TRANSFER', 'TRANSFER')
+        if not transfer_image(request, import_image=True):
+            logging.warn("Worker: Import copy failed")
+            raise OSError("Import copy failed")
+
+        # Done
+        updater.update_status('READY', 'Image ready', response=request['meta'])
+        cleanup_temporary(request, import_image=True)
+        return request['meta']
+
+    except:
+        logging.error("ERROR: img_import failed system=%s tag=%s",
                       request['system'], request['tag'])
         print sys.exc_value
         updater.update_status('FAILURE', 'FAILED')
