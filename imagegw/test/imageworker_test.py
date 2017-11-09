@@ -213,6 +213,18 @@ class ImageWorkerTestCase(unittest.TestCase):
         result = self.imageworker.pull(request, self.updater)
         self.imageworker.remove_image(request, self.updater)
 
+    def test_examine(self):
+        self.imageworker.CONFIG['examiner'] = 'exam.sh'
+        base = self.imageDir + '/image'
+        request = {'id': 'bogus',
+                   'expandedpath': base}
+        result = self.imageworker.examine_image(request)
+        self.assertTrue(result)
+        request['id'] = 'bad'
+        result = self.imageworker.examine_image(request)
+        self.assertFalse(result)
+        self.imageworker.CONFIG.pop('examiner')
+
 
 if __name__ == '__main__':
     unittest.main()
