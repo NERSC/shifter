@@ -236,7 +236,14 @@ def examine_image(request):
 
     Returns True on success
     """
-    # TODO: Add checks to examine the image.  Should be extensible.
+
+    if 'examiner' in CONFIG:
+        examiner = CONFIG['examiner']
+        retcode = subprocess.call([examiner, request['expandedpath'],
+                                   request['id']])
+        if retcode != 0:
+            return False
+
     return True
 
 
