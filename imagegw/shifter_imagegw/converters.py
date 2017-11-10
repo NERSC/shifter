@@ -81,7 +81,6 @@ def generate_squashfs_image(expand_path, image_path):
 def convert(fmt, expand_path, image_path):
     """ do the conversion """
     if os.path.exists(image_path):
-        print "file already exists"
         return True
 
     (dirname, fname) = os.path.split(image_path)

@@ -21,6 +21,7 @@ import unittest
 import tempfile
 from shifter_imagegw import transfer
 
+
 class TransferTestCase(unittest.TestCase):
     system = {}
     inodes = 0
@@ -45,47 +46,50 @@ class TransferTestCase(unittest.TestCase):
 
     def test_sh_cmd(self):
         cmd = transfer._sh_cmd(self.system, 'echo', 'test')
-        assert len(cmd) == 2
-        assert cmd[0] == 'echo'
-        assert cmd[1] == 'test'
+        self.assertEquals(len(cmd), 2)
+        self.assertEquals(cmd[0], 'echo')
+        self.assertEquals(cmd[1], 'test')
 
         cmd = transfer._sh_cmd(self.system, 'anotherCommand')
-        assert len(cmd) == 1
-        assert cmd[0] == 'anotherCommand'
+        self.assertEquals(len(cmd), 1)
+        self.assertEquals(cmd[0], 'anotherCommand')
 
         cmd = transfer._sh_cmd(self.system)
-        assert cmd is None
+        self.assertIsNone(cmd)
 
     def test_ssh_cmd(self):
         cmd = transfer._ssh_cmd(self.system, 'echo', 'test')
-        ## expect ssh -i somefile nobody@localhost echo test
-        assert len(cmd) == 6
-        assert '|'.join(cmd) == 'ssh|-i|somefile|nobody@localhost|echo|test'
+        # expect ssh -i somefile nobody@localhost echo test
+        self.assertEquals(len(cmd), 6)
+        self.assertEquals('|'.join(cmd),
+                          'ssh|-i|somefile|nobody@localhost|echo|test')
 
         self.system['ssh']['sshCmdOptions'] = ['-t']
         cmd = transfer._ssh_cmd(self.system, 'echo', 'test')
-        assert len(cmd) == 7
-        assert '|'.join(cmd) == 'ssh|-i|somefile|-t|nobody@localhost|echo|test'
+        self.assertEquals(len(cmd), 7)
+        self.assertEquals('|'.join(cmd),
+                          'ssh|-i|somefile|-t|nobody@localhost|echo|test')
         del self.system['ssh']['sshCmdOptions']
 
         cmd = transfer._ssh_cmd(self.system)
-        assert cmd is None
-
+        self.assertIsNone(cmd)
 
     def test_cp_cmd(self):
         cmd = transfer._cp_cmd(self.system, 'a', 'b')
-        assert len(cmd) == 3
-        assert '|'.join(cmd) == 'cp|a|b'
+        self.assertEquals(len(cmd), 3)
+        self.assertEquals('|'.join(cmd), 'cp|a|b')
 
     def test_scp_cmd(self):
         cmd = transfer._scp_cmd(self.system, 'a', 'b')
-        assert len(cmd) == 5
-        assert '|'.join(cmd) == 'scp|-i|somefile|a|nobody@localhost:b'
+        self.assertEquals(len(cmd), 5)
+        self.assertEquals('|'.join(cmd),
+                          'scp|-i|somefile|a|nobody@localhost:b')
 
         self.system['ssh']['scpCmdOptions'] = ['-t']
         cmd = transfer._scp_cmd(self.system, 'a', 'b')
-        assert len(cmd) == 6
-        assert '|'.join(cmd) == 'scp|-i|somefile|-t|a|nobody@localhost:b'
+        self.assertEquals(len(cmd), 6)
+        self.assertEquals('|'.join(cmd),
+                          'scp|-i|somefile|-t|a|nobody@localhost:b')
         del self.system['ssh']['scpCmdOptions']
 
     def inode_counter(self, ignore, dirname, fnames):
@@ -100,16 +104,16 @@ class TransferTestCase(unittest.TestCase):
         transfer.copy_file(__file__, self.system)
         fname = os.path.split(__file__)[1]
         file_path = os.path.join(tmp_path, fname)
-        assert os.path.exists(file_path)
+        self.assertTrue(os.path.exists(file_path))
 
         self.inodes = 0
         os.path.walk(tmp_path, self.inode_counter, None)
-        assert self.inodes == 1
+        self.assertEquals(self.inodes, 1)
         os.unlink(file_path)
 
         self.inodes = 0
         os.path.walk(tmp_path, self.inode_counter, None)
-        assert self.inodes == 0
+        self.assertEquals(self.inodes, 0)
 
         os.rmdir(tmp_path)
 
@@ -125,16 +129,16 @@ class TransferTestCase(unittest.TestCase):
         transfer.copy_file(__file__, self.system)
         fname = os.path.split(__file__)[1]
         file_path = os.path.join(tmp_path, fname)
-        assert os.path.exists(file_path)
+        self.assertTrue(os.path.exists(file_path))
 
         self.inodes = 0
         os.path.walk(tmp_path, self.inode_counter, None)
-        assert self.inodes == 1
+        self.assertEquals(self.inodes, 1)
         os.unlink(file_path)
 
         self.inodes = 0
         os.path.walk(tmp_path, self.inode_counter, None)
-        assert self.inodes == 0
+        self.assertEquals(self.inodes, 0)
 
         os.rmdir(tmp_path)
 
@@ -164,7 +168,7 @@ class TransferTestCase(unittest.TestCase):
 
         self.inodes = 0
         os.path.walk(tmp_path, self.inode_counter, None)
-        assert self.inodes == 0
+        self.assertEquals(self.inodes, 0)
         os.rmdir(tmp_path)
 
     def test_transfer_local(self):
@@ -176,14 +180,14 @@ class TransferTestCase(unittest.TestCase):
 
         transfer.transfer(self.system, __file__)
 
-        ## make sure transferred file exists
+        # make sure transferred file exists
         fname = os.path.split(__file__)[1]
         file_path = os.path.join(tmp_path, fname)
-        assert os.path.exists(file_path)
+        self.assertTrue(os.path.exists(file_path))
 
         self.inodes = 0
         os.path.walk(tmp_path, self.inode_counter, None)
-        assert self.inodes == 1
+        self.assertEquals(self.inodes, 1)
         os.unlink(file_path)
 
         dname, fname = os.path.split(__file__)
@@ -192,7 +196,7 @@ class TransferTestCase(unittest.TestCase):
         transfer.transfer(self.system, __file__, meta)
         self.inodes = 0
         os.path.walk(tmp_path, self.inode_counter, None)
-        assert self.inodes == 2
+        self.assertEquals(self.inodes, 2)
 
         file_path = os.path.join(tmp_path, fname)
         meta_path = os.path.join(tmp_path, '__init__.py')
@@ -218,7 +222,7 @@ class TransferTestCase(unittest.TestCase):
         (fdesc, tmp_path) = tempfile.mkstemp()
         os.close(fdesc)
         dname, fname = os.path.split(tmp_path)
-        file=open(fname,'w')
+        file = open(fname, 'w')
         file.write("blah blah hash")
         file.close()
         self.system['local']['imageDir'] = dname
@@ -226,19 +230,18 @@ class TransferTestCase(unittest.TestCase):
         self.system['accesstype'] = 'local'
 
         hash = transfer.hash_file(fname, self.system)
-        self.assertEquals(hash, 'ff68165577eb209adcfa2f793476a25da637142283409d6f4d8d61ee042c5e63')
+        gh = 'ff68165577eb209adcfa2f793476a25da637142283409d6f4d8d61ee042c5e63'
+        self.assertEquals(hash, gh)
         transfer.remove_file(fname, self.system)
 
     def test_get_stdout_and_log(self):
         cmd = "ls"
-        stderr,stdout = transfer._get_stdout_and_log(cmd,None) 
-        print "stderr",stderr
-        print "stdout",stdout
-        assert stderr is ""
-        assert stderr is not None
-        assert stdout is not None
-        assert len(stdout) > 0
-        
+        stderr, stdout = transfer._get_stdout_and_log(cmd, None)
+        self.assertIs(stderr, "")
+        self.assertIsNotNone(stderr)
+        self.assertIsNotNone(stdout)
+        self.assertGreater(len(stdout), 0)
+
     def test_import_copy_file(self):
         (fdesc, tmp_path) = tempfile.mkstemp()
         os.close(fdesc)
@@ -246,8 +249,9 @@ class TransferTestCase(unittest.TestCase):
         self.system['local']['imageDir'] = dname
         self.system['accesstype'] = 'local'
         cp_path = tmp_path+"_1"
-        status = transfer.import_copy_file(tmp_path,cp_path,self.system,None)
-        assert status
+        status = transfer.import_copy_file(tmp_path, cp_path,
+                                           self.system, None)
+        self.assertTrue(status)
 
 
 if __name__ == '__main__':

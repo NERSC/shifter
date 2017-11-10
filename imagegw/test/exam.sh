@@ -1,5 +1,4 @@
 #!/bin/sh
-echo $@
 path=$1
 id=$2
 

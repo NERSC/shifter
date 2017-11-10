@@ -3,6 +3,7 @@
 import hashlib
 import argparse
 
+
 def fast_hash(infile):
     """
     Calculate a sha256 hash of the first MB of a file and every 512MB offset

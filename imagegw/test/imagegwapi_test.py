@@ -76,7 +76,8 @@ class GWTestCase(unittest.TestCase):
     def tearDownClass(cls):
         cls.mgr.shutdown()
 
-    def time_wait(self, urlreq, data=None, state='READY', op='pull', TIMEOUT=30):
+    def time_wait(self, urlreq, data=None, state='READY', op='pull',
+                  TIMEOUT=30):
         poll_interval = 0.5
         count = TIMEOUT / poll_interval
         cstate = 'UNKNOWN'
