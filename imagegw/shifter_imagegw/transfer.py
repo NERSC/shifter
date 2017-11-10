@@ -335,14 +335,14 @@ def hash_file(filename, system, logger=None):
     """
     Calculate a hash of the image file,
     because this can be remote or local,
-    need to use a separate helper executable fasthash.py
+    need to use a separate helper executable fasthash
     assume it is in the path already
     """
     if system['accesstype'] == 'local':
         sh_cmd = _sh_cmd
     elif system['accesstype'] == 'remote':
         sh_cmd = _ssh_cmd
-    hash_cmd = sh_cmd(system, 'fasthash.py', filename)
+    hash_cmd = sh_cmd(system, 'fasthash', filename)
     ret = _get_stdout_and_log(hash_cmd, logger)
     if len(ret[0]) != 0:
         raise OSError("Error calculating hash: %s" % (ret[0]))

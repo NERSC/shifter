@@ -119,6 +119,25 @@ This package contains the Spank Plugin module which allows for the
 integration of Shifter with the SLURM Workload Manager.
 %endif
 
+%package fasthash
+Summary: fasthash utility to import images into shifter
+
+%description fasthash
+Shifter enables container images for HPC. In a nutshell, Shifter
+allows an HPC system to efficiently and safely permit end-users to run
+jobs inside a docker image. Shifter consists of a few moving parts:
+  1) a utility that typically runs on the compute node that creates the
+     runtime environment for the application,
+  2) an image gateway service that pulls images from a registry and
+     repacks them in a format suitable for the HPC system (typically
+     squashfs), and
+  3) example scripts/plugins to integrate Shifter with various batch
+     scheduler systems.
+
+This package contains a utility needed to import images directly
+into Shifter.  This is not required to pull docker images and is
+optional.  In a remote configuration, this RPM should be installed on
+the remote system.
 
 %prep
 %setup -q
@@ -135,6 +154,8 @@ MAKEFLAGS=%{?_smp_mflags} %{__make}
 
 %install
 %make_install
+# Yes, this is a bit of hack.
+install -o root -m 755 imagegw/shifter_imagegw/fasthash.py %{buildroot}/%{_bindir}/fasthash
 
 # Create directory for ImageGW API logs
 %{__mkdir_p} $RPM_BUILD_ROOT%{_localstatedir}/log/%{name}_imagegw
@@ -220,6 +241,9 @@ getent group > %{_sysconfdir}/shifter_etc_files/group
 %{_libexecdir}/shifter/shifter_slurm_dws_support
 %endif
 
+%files fasthash
+%defattr(-, root, root)
+%{_bindir}/fasthash
 
 %changelog
 * Sun Apr 24 2016 Douglas Jacobsen <dmjacobsen@lbl.gov> - 16.04.0pre1-1
