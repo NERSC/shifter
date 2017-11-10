@@ -3,6 +3,7 @@ import unittest
 import time
 import urllib
 import json
+from shifter_imagegw.fasthash import fast_hash
 from pymongo import MongoClient
 
 """
@@ -57,6 +58,8 @@ class GWTestCase(unittest.TestCase):
         self.auth_header = 'authentication'
         self.logfile = '/tmp/worker.log'
         self.pid = 0
+        test_dir = os.path.dirname(os.path.abspath(__file__)) + "/../test/"
+        self.test_dir = test_dir
 
     @classmethod
     def setUpClass(cls):
@@ -73,13 +76,14 @@ class GWTestCase(unittest.TestCase):
     def tearDownClass(cls):
         cls.mgr.shutdown()
 
-    def time_wait(self, urlreq, state='READY', TIMEOUT=30):
+    def time_wait(self, urlreq, data=None, state='READY', op='pull', TIMEOUT=30):
         poll_interval = 0.5
         count = TIMEOUT / poll_interval
         cstate = 'UNKNOWN'
-        uri = '%s/pull/%s/' % (self.url, urlreq)
+        uri = '%s/%s/%s/' % (self.url, op, urlreq)
         while (cstate != state and count > 0):
-            rv = self.app.post(uri, headers={AUTH_HEADER: self.auth})
+            rv = self.app.post(uri, data=data,
+                               headers={AUTH_HEADER: self.auth})
             if rv.status_code != 200:
                 time.sleep(1)
                 continue
@@ -220,6 +224,31 @@ class GWTestCase(unittest.TestCase):
         data = json.loads(rv.data)
         self.assertEquals(len(data), 20)
         self.assertEquals(data[19]['time'], last_time)
+
+    def test_import(self):
+        self.config["ImportUsers"] = "all"
+
+        uri = '%s/doimport/%s/' % (self.url, self.urlreq)
+        ifile = os.path.join(self.test_dir, 'test.squashfs')
+        data = {'filepath': ifile,
+                'format': 'squashfs'}
+        hash = fast_hash(ifile)
+        datajson = json.dumps(data)
+        rv = self.app.post(uri, headers={AUTH_HEADER: self.auth},
+                           data=datajson)
+        rv = self.time_wait(self.urlreq, op='doimport', data=datajson)
+        # for i in range(5):
+        #     rv = self.app.post(uri, headers={AUTH_HEADER: self.auth},
+        #                        data=datajson)
+        #     data = json.loads(rv.data)
+        #     if data['status'] == 'READY':
+        #         break
+        #     time.sleep(1)
+        data = json.loads(rv.data)
+        self.assertEquals(data['status'], 'READY')
+        self.assertEquals(data['id'], hash)
+#        assert 'filepath' in data
+#        assert rv.status_code == 200
 
 
 if __name__ == '__main__':

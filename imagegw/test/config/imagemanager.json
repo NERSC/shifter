@@ -11,7 +11,9 @@
     "ExpandDirectory": "/data/",
     "MongoDBURI":"mongodb://mongo/",
     "MongoDB":"ShifterTest",
+    "Broker":"redis://:mypassword@redis/",
     "Authentication":"munge",
+    "ImportUsers":"all",
 
     "Locations": {
         "index.docker.io": {

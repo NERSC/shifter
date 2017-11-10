@@ -13,6 +13,7 @@
     "MongoDB":"ShifterTest",
     "Metrics":true,
     "Authentication":"mock",
+    "ImportUsers":"all",
 
     "Locations": {
         "index.docker.io": {
