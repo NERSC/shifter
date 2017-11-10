@@ -3,7 +3,7 @@ import unittest
 import time
 import urllib
 import json
-from fasthash import fast_hash
+from shifter_imagegw.fasthash import fast_hash
 from pymongo import MongoClient
 
 """
