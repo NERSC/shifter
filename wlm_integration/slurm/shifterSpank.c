@@ -255,12 +255,9 @@ int shifterSpank_process_option_volume(
         }
         free_VolumeMap(vmap, 1);
         if (ssconfig->volume != NULL) {
-            char *tmpvol = alloc_strgenf("%s;%s", ssconfig->volume, optarg);
             free(ssconfig->volume);
-            ssconfig->volume = tmpvol;
-        } else {
-            ssconfig->volume = strdup(optarg);
         }
+        ssconfig->volume = strdup(optarg);
 
         return SUCCESS;
     }
