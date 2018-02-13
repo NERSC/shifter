@@ -1118,11 +1118,6 @@ char **getSupportedFilesystems() {
     size_t listLen = 0;
     FILE *fp = NULL;
 
-    if (ret == NULL) { // || buffer == NULL) {
-        /* ran out of memory */
-        return NULL;
-    }
-
     fp = fopen("/proc/filesystems", "r");
     if (fp == NULL) {
         free(ret);
@@ -1155,12 +1150,6 @@ char **getSupportedFilesystems() {
     fclose(fp);
     fp = NULL;
     return ret;
-error:
-    if (fp != NULL) {
-        fclose(fp);
-        fp = NULL;
-    }
-    return NULL;
 }
 
 int supportsFilesystem(char *const * fsTypes, const char *fsType) {
