@@ -537,7 +537,7 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
     }
     if ((envPtr = getenv("SHIFTER_MODULE")) != NULL) {
         module = _strdup(envPtr);
-    } else if ((ptr = getenv("SLURM_SPANK_SHIFTER_MODULE")) != NULL) {
+    } else if ((envPtr = getenv("SLURM_SPANK_SHIFTER_MODULE")) != NULL) {
         module = _strdup(envPtr);
     }
 
