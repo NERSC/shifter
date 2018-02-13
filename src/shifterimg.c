@@ -1039,8 +1039,6 @@ int _assignLoginCredential(const char *key, const char *value, void *_data) {
         *lcptr = NULL;
     }
     return 0;
-_error:
-    return 1;
 }
 
 int _lookup_user_id(const char *str) {
