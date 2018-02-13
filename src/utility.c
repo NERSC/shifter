@@ -295,7 +295,6 @@ char *alloc_strcatf(char *string, size_t *currLen, size_t *capacity, const char 
              * allocating eagerly to reduce cost for successive strcatf
              * operations */
             size_t newCapacity = *capacity * 2 + 1;
-            char *tmp = NULL;
             if (newCapacity < (size_t) (n + 1)) {
                 newCapacity = (size_t) (n + 1);
             }
