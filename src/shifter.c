@@ -166,13 +166,20 @@ int main(int argc, char **argv) {
         fprintf(stderr,"FAILED permission denied to image\n");
         exit(1);
     }
+    if ( (opts.args==NULL || opts.args[0]==NULL) && imageData.cmd!=NULL && opts.entrypoint==NULL) {
+        opts.args=imageData.cmd;
+    }
 
     /* check if entrypoint is defined and desired */
     if (opts.useEntryPoint == 1) {
-        char *entry = NULL;
+        char **entry = NULL;
 
         if (opts.entrypoint != NULL) {
-            entry = opts.entrypoint;
+            entry = make_char_array(opts.entrypoint);
+            if (entry == NULL) {
+                fprintf(stderr, "Failed to allocate memory for entry\n");
+                exit(1);
+            }
         } else if (imageData.entryPoint != NULL) {
             entry = imageData.entryPoint;
         } else {
@@ -181,7 +188,7 @@ int main(int argc, char **argv) {
         }
 
         if (entry != NULL) {
-            opts.args[0] = strdup(entry);
+            opts.args = merge_args(opts.args, entry);
         }
     }
     if (imageData.workdir != NULL && opts.workdir == NULL) {
@@ -383,9 +390,11 @@ int local_prependenv(char ***environ, const char *prepvar) {
 }
 #endif
 
+
 int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *udiConfig) {
     int opt = 0;
     int volOptCount = 0;
+    int rv;
     static struct option long_options[] = {
         {"help", 0, 0, 'h'},
         {"volume", 1, 0, 'V'},
@@ -403,7 +412,11 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     /* set some defaults */
     config->tgtUid = getuid();
     config->tgtGid = getgid();
-    seteuid(config->tgtUid);
+    rv = seteuid(config->tgtUid);
+    if (rv!=0) {
+      fprintf(stderr, "ERROR: seteuid failed\n");
+      exit(1);
+    }
 
     /* ensure that getopt processing stops at first non-option */
     setenv("POSIXLY_CORRECT", "1", 1);
@@ -513,15 +526,10 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     }
 
     int remaining = argc - optind;
-    if (config->useEntryPoint == 1) {
-        char **argsPtr = NULL;
-        config->args = (char **) malloc(sizeof(char *) * (remaining + 2));
-        argsPtr = config->args;
-        *argsPtr++ = (char *) 0x1; /* leave space for entry point */
-        for ( ; optind < argc; optind++) {
-            *argsPtr++ = strdup(argv[optind]);
-        }
-        *argsPtr = NULL;
+
+    if (config->useEntryPoint && remaining == 0) {
+        config->args = (char **) malloc(sizeof(char *) );
+        config->args[0] = NULL;
     } else if (remaining > 0) {
         /* interpret all remaining arguments as the intended command */
         char **argsPtr = NULL;
@@ -559,7 +567,11 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
 
     udiConfig->target_uid = config->tgtUid;
     udiConfig->target_gid = config->tgtGid;
-    seteuid(0);
+    rv = seteuid(0);
+    if (rv!=0) {
+      fprintf(stderr, "ERROR: seteuid failed\n");
+      exit(1);
+    }
     return 0;
 }
 

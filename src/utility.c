@@ -1,7 +1,7 @@
 /* Shifter, Copyright (c) 2015, The Regents of the University of California,
 ## through Lawrence Berkeley National Laboratory (subject to receipt of any
 ## required approvals from the U.S. Dept. of Energy).  All rights reserved.
-## 
+##
 ## Redistribution and use in source and binary forms, with or without
 ## modification, are permitted provided that the following conditions are met:
 ##  1. Redistributions of source code must retain the above copyright notice,
@@ -13,7 +13,7 @@
 ##     National Laboratory, U.S. Dept. of Energy nor the names of its
 ##     contributors may be used to endorse or promote products derived from this
 ##     software without specific prior written permission.
-## 
+##
 ## THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 ## AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 ## IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -25,7 +25,7 @@
 ## CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ## ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 ## POSSIBILITY OF SUCH DAMAGE.
-##  
+##
 ## You are under no obligation whatsoever to provide any bug fixes, patches, or
 ## upgrades to the features, functionality or performance of the source code
 ## ("Enhancements") to anyone; however, if you choose to make your Enhancements
@@ -296,14 +296,14 @@ char *alloc_strcatf(char *string, size_t *currLen, size_t *capacity, const char 
             break;
         } else if ((size_t) n >= (*capacity - *currLen)) {
             /* if vsnprintf returns larger than allowed buffer, need more space
-             * allocating eagerly to reduce cost for successive strcatf 
+             * allocating eagerly to reduce cost for successive strcatf
              * operations */
             size_t newCapacity = *capacity * 2 + 1;
             char *tmp = NULL;
             if (newCapacity < (size_t) (n + 1)) {
                 newCapacity = (size_t) (n + 1);
             }
-            
+
             tmp = (char *) realloc(string, sizeof(char) * newCapacity);
             if (tmp == NULL) {
                 status = 2;
@@ -361,7 +361,7 @@ char *alloc_strgenf(const char *format, ...) {
             break;
         } else if (n >= capacity) {
             /* if vsnprintf returns larger than allowed buffer, need more space
-             * allocating eagerly to reduce cost for successive strcatf 
+             * allocating eagerly to reduce cost for successive strcatf
              * operations */
             size_t newCapacity = n + 1;
             char *tmp = (char *) realloc(string, sizeof(char) * newCapacity);
@@ -389,7 +389,7 @@ char *alloc_strgenf(const char *format, ...) {
 
 /**
  * userInputPathFilter screens out certain characters from user-provided strings
-   
+
  * Parameters:
  *      input - the user provided string
  *      allowSlash - flag to allow a '/' in the string (1 for yes, 0 for no)
@@ -470,4 +470,143 @@ int pathcmp(const char *a, const char *b) {
     free(myA);
     free(myB);
     return ret;
+}
+
+int is_json_array(const char *value) {
+  if (value[0]=='[' && value[1]=='u' && value[2]=='\''){
+    return 1;
+  }
+  else {
+    return 0;
+  }
+}
+
+/**
+ * split_json_array - utility function to parse a JSON array and split it
+ * into an array of strings.  It will allocate the array but destroys the
+ * source string.
+ *
+ * The values in the array should be comma-separated quoted strings.
+ */
+char ** split_json_array(char *value) {
+  char *ptr = NULL;
+  int count=0;
+  int in=0;
+  char **array = NULL;
+  int i;
+  int vlen = strlen(value);
+
+  ptr=value;
+
+  in = 0;
+  count = 0;
+  ptr++; // Get past the [
+  for (i=2; i<vlen; i++, ptr++) {
+    if (*ptr!='\'')
+      continue;
+    if (in){
+      count++;
+      in = 0;
+    }
+    else {
+      in = 1;
+    }
+  }
+
+  // Confirm we aren't in the middle of a string
+  if (in) {
+    fprintf(stderr, "Still in a string\n");
+    return array;
+  }
+
+  // Confirm that the last character was a ]
+  if (*ptr!=']') {
+    fprintf(stderr, "Wrong termination\n");
+    return array;
+  }
+  count++;
+
+  array = (char **)malloc(sizeof(char *)*(count));
+  if (array==NULL) {
+    fprintf(stderr, "Allocation failed.\n");
+    return array;
+  }
+  ptr = value;
+  count = 0;
+  in = 0;
+  ptr++; // Get past the [
+  for (i=2; i<vlen; i++, ptr++) {
+    if (*ptr!='\'')
+      continue;
+    if (in){
+      in = 0;
+      // Terminate the string
+      *ptr = 0;
+      count++;
+    }
+    else {
+      in = 1;
+      array[count]=ptr;
+      array[count]++;
+    }
+  }
+  // Terminate the char array
+  array[count]=NULL;
+  i=0;
+  ptr=array[0];
+  while (array[i]!=NULL){
+    //printf("%s\n", array[i]);
+    i++;
+
+  }
+  return array;
+
+}
+
+/*
+ * count return the number of elements including the
+ * NULL termination.
+ */
+int _count_args(char **args) {
+  int i=0;
+  while (args[i]!=NULL) {
+    i++;
+  }
+  i++;
+  return i;
+}
+
+char ** merge_args(char **args1, char **args2) {
+   int nArgs = 0;
+   int s_index, d_index;
+   char **newargs;
+   nArgs=(_count_args(args1) + _count_args(args2) -1);
+   newargs = (char **) malloc(sizeof(char *) * (nArgs ));
+   d_index=0;
+   s_index=0;
+   while(args2[s_index]!=NULL) {
+     newargs[d_index]=args2[s_index];
+     s_index++;
+     d_index++;
+   }
+   s_index=0;
+   while(args1[s_index]!=NULL) {
+     newargs[d_index]=args1[s_index];
+     s_index++;
+     d_index++;
+   }
+   newargs[d_index]=NULL;
+   return  newargs;
+
+}
+
+char ** make_char_array(const char *value) {
+  char **arr;
+  arr = (char **)malloc(sizeof(char *)*2);
+  if (arr==NULL){
+    return NULL;
+  }
+  arr[0] = strdup(value);
+  arr[1] = NULL;
+  return arr;
 }

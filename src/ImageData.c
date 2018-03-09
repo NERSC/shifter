@@ -317,7 +317,7 @@ size_t fprint_ImageData(FILE *fp, ImageData *image) {
     for (tptr = image->env; tptr && *tptr; tptr++) {
         nWrite += fprintf(fp, "    %s\n", *tptr);
     }
-    nWrite += fprintf(fp, "EntryPoint: %s\n", (image->entryPoint != NULL ? image->entryPoint : ""));
+    nWrite += fprintf(fp, "EntryPoint: %s\n", (image->entryPoint[0] != NULL ? image->entryPoint[0] : ""));
     nWrite += fprintf(fp, "Volume Mounts: %lu mount points\n", image->volume_size);
     for (tptr = image->volume; tptr && *tptr; tptr++) {
         nWrite += fprintf(fp, "    %s\n", *tptr);
@@ -325,6 +325,7 @@ size_t fprint_ImageData(FILE *fp, ImageData *image) {
     nWrite += fprintf(fp, "***** END ImageData *****\n");
     return nWrite;
 }
+
 
 /**
  * _ImageData_assign - utility function to write data into ImageData structure when
@@ -367,10 +368,26 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
         image->env_size++;
 
     } else if (strcmp(key, "ENTRY") == 0) {
-        image->entryPoint = strdup(value);
+        if (is_json_array(value)){
+          image->entryPoint = split_json_array(strdup(value));
+        }
+        else {
+          image->entryPoint = make_char_array(value);
+        }
         if (image->entryPoint == NULL) {
             return 1;
         }
+      } else if (strcmp(key, "CMD") == 0) {
+          if (is_json_array(value)){
+            // tokenize json array
+            image->cmd = split_json_array(strdup(value));
+          }
+          else {
+            image->cmd = make_char_array(value);
+          }
+          if (image->cmd == NULL) {
+              return 1;
+          }
     } else if (strcmp(key, "WORKDIR") == 0) {
         image->workdir = strdup(value);
         if (image->workdir == NULL) {

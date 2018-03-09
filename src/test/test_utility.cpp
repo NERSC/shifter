@@ -1,7 +1,7 @@
 /* Shifter, Copyright (c) 2015, The Regents of the University of California,
 ## through Lawrence Berkeley National Laboratory (subject to receipt of any
 ## required approvals from the U.S. Dept. of Energy).  All rights reserved.
-## 
+##
 ## Redistribution and use in source and binary forms, with or without
 ## modification, are permitted provided that the following conditions are met:
 ##  1. Redistributions of source code must retain the above copyright notice,
@@ -13,7 +13,7 @@
 ##     National Laboratory, U.S. Dept. of Energy nor the names of its
 ##     contributors may be used to endorse or promote products derived from this
 ##     software without specific prior written permission.
-## 
+##
 ## THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 ## AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 ## IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -25,7 +25,7 @@
 ## CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ## ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 ## POSSIBILITY OF SUCH DAMAGE.
-##  
+##
 ## You are under no obligation whatsoever to provide any bug fixes, patches, or
 ## upgrades to the features, functionality or performance of the source code
 ## ("Enhancements") to anyone; however, if you choose to make your Enhancements
@@ -152,7 +152,7 @@ TEST(UtilityTestGroup, ShifterParseConfig_InvalidKey) {
     if (basePath == NULL) {
         basePath = ".";
     }
-   
+
     filename = alloc_strgenf("%s/%s", basePath, "data_config2.conf");
     ret = shifter_parseConfig(filename, ':', &config, _assignTestConfig);
     CHECK(ret == 1);
@@ -170,7 +170,7 @@ TEST(UtilityTestGroup, ShifterParseConfig_MultiLine) {
     if (basePath == NULL) {
         basePath = ".";
     }
-   
+
     filename = alloc_strgenf("%s/%s", basePath, "data_config3.conf");
     ret = shifter_parseConfig(filename, ':', &config, _assignTestConfig);
     CHECK(ret == 0);
@@ -327,7 +327,7 @@ TEST(UtilityTestGroup, userInputPathFilter_basic) {
     char *filtered = userInputPathFilter("benign", 0);
     CHECK(strcmp(filtered, "benign") == 0);
     free(filtered);
-    
+
     filtered = userInputPathFilter("benign; rm -rf *", 0);
     CHECK(strcmp(filtered, "benignrm-rf") == 0);
     free(filtered);
@@ -421,6 +421,58 @@ TEST(UtilityTestGroup, pathcmp_basic) {
     CHECK(pathcmp("/a/b/c", "/a/b/c") == 0);
     CHECK(pathcmp("a/b/c", "") != 0);
     CHECK(pathcmp("", "a/b/c") != 0);
+}
+
+TEST(UtilityTestGroup, split_json_basic) {
+    char **out = split_json_array(strdup("[u'how', u'now', u'brown', u'cow']"));
+    CHECK(strcmp(out[0],"how") == 0);
+    CHECK(strcmp(out[1],"now") == 0);
+    CHECK(strcmp(out[2],"brown") == 0);
+    CHECK(strcmp(out[3],"cow") == 0);
+    CHECK(out[4] == NULL);
+}
+
+TEST(UtilityTestGroup, split_json_errors) {
+    char **out = split_json_array(strdup("[u'missing quote]"));
+    CHECK(out == NULL);
+    out = split_json_array(strdup("[u'missing bracket'"));
+    CHECK(out == NULL);
+}
+
+TEST(UtilityTestGroup, count_args) {
+    char *args[10];
+    args[0] = strdup("a");
+    args[1] = strdup("b");
+    args[2] = NULL;
+    args[3] = NULL;
+    CHECK(_count_args(args) == 3);
+    args[2] = strdup("c");
+    CHECK(_count_args(args) == 4);
+}
+
+TEST(UtilityTestGroup, merge_args) {
+    char *args1[3];
+    char *args2[3];
+    char **merged;
+
+    args1[0] = strdup("b");
+    args1[1] = NULL;
+    args2[0] = strdup("echo");
+    args2[1] = strdup("a");
+    args2[2] = NULL;
+    merged = merge_args(args1, args2);
+    CHECK(strcmp(merged[0],"echo") == 0);
+    CHECK(strcmp(merged[1],"a") == 0);
+    CHECK(strcmp(merged[2],"b") == 0);
+    CHECK(merged[3] == NULL);
+}
+
+TEST(UtilityTestGroup, make_char_array_basic) {
+    const char *v="astring";
+    char **arr;
+    arr = make_char_array(v);
+    CHECK(strcmp(arr[0],"astring") == 0);
+    CHECK(arr[1] == NULL);
 }
 
 int main(int argc, char** argv) {
