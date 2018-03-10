@@ -75,7 +75,7 @@ TEST(UdiRootConfigTestGroup, ParseUdiRootConfig_basic) {
     CHECK(strcmp(config.modules[0].copyPath, "/path/to/localized/mpich/stuff") == 0);
     CHECK(strcmp(config.modules[0].conflict_str[0], "openmpi") == 0);
     CHECK(config.modules[0].conflict_str[1] == NULL);
-    CHECK(config.modules[0].conflict[0] == &(config.modules[1].conflict[1]));
+    CHECK(config.modules[0].conflict[0] == &config.modules[1]);
     CHECK(config.modules[0].conflict[1] == NULL);
 
     CHECK(strcmp(config.modules[1].name, "openmpi") == 0);
@@ -90,7 +90,7 @@ TEST(UdiRootConfigTestGroup, ParseUdiRootConfig_basic) {
     CHECK(config.modules[1].siteEnv[1] == NULL);
     CHECK(strcmp(config.modules[1].siteEnvUnset[0], "FAKE_MPI_VARIABLE") == 0);
     CHECK(config.modules[1].siteEnvUnset[1] == NULL);
-    CHECK(config.modules[1].siteFs != NULL);
+    CHECK(config.modules[1].siteFs == NULL);
     CHECK(strcmp(config.modules[1].conflict_str[0], "mpich") == 0);
     CHECK(config.modules[1].conflict_str[1] == NULL);
     CHECK(config.modules[1].conflict[0] == &(config.modules[0]));
