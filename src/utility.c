@@ -489,13 +489,13 @@ int is_json_array(const char *value) {
  * The values in the array should be comma-separated quoted strings.
  */
 char ** split_json_array(const char *value) {
-  char *ptr = NULL;
+  const char *ptr = NULL;
   int count=0;
   int in=0;
   char **array = NULL;
   int i;
   int vlen = strlen(value);
-  char *start;
+  const char *start;
   int length;
 
   ptr=value;

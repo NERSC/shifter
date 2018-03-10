@@ -256,7 +256,11 @@ void free_ImageData(ImageData *image, int freeStruct) {
         free(image->filename);
     }
     if (image->entryPoint != NULL) {
-        free(image->entryPoint);
+      char **epPtr = NULL;
+      for (epPtr = image->env ; *epPtr != NULL; epPtr++) {
+          free(*epPtr);
+      }
+      free(image->entryPoint);
     }
     if (image->volume != NULL) {
         char **volPtr = NULL;
@@ -317,7 +321,10 @@ size_t fprint_ImageData(FILE *fp, ImageData *image) {
     for (tptr = image->env; tptr && *tptr; tptr++) {
         nWrite += fprintf(fp, "    %s\n", *tptr);
     }
-    nWrite += fprintf(fp, "EntryPoint: %s\n", (image->entryPoint[0] != NULL ? image->entryPoint[0] : ""));
+    nWrite += fprintf(fp, "Image EntryPoint:\n");
+    for (tptr = image->entryPoint; tptr && *tptr; tptr++) {
+        nWrite += fprintf(fp, "    %s\n", *tptr);
+    }
     nWrite += fprintf(fp, "Volume Mounts: %lu mount points\n", image->volume_size);
     for (tptr = image->volume; tptr && *tptr; tptr++) {
         nWrite += fprintf(fp, "    %s\n", *tptr);
