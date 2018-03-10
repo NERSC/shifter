@@ -46,6 +46,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdbool.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -122,16 +123,69 @@ void free_ShifterModule(ShifterModule *module, int free_struct) {
     }
 }
 
+/* this function _requires_ that _all_ of the modules shifter will use for
+ * this invocataion are already parsed, since it is storing pointers into
+ * the array of modules */
 int parse_selected_ShifterModule(const char *selected, UdiRootConfig *config) {
     char *selected_tmp = NULL;
     char *search = NULL;
     char *svPtr = NULL;
+    char *ptr = NULL;
+    int rc = 0;
 
     if (!selected || !config) {
         return -1;
     }
     config->selectedModulesStr = _strdup(selected);
     selected_tmp = _strdup(selected);
+    search = shifter_trim(selected_tmp);
+
+    /* even if there are default modules active, disable them, user override */
+    if (config->active_modules) {
+        free(config->active_modules);
+        config->active_modules = NULL;
+    }
+    config->n_active_modules = 0;
+
+    /* if user specified none, then end */
+    if (strcasecmp(search, "none") == 0) {
+        rc = 0;
+        goto finish;
+    }
+
+    while ((ptr = strtok_r(search, ",", &svPtr)) != NULL) {
+        int idx = 0;
+        bool found = false;
+        search = NULL;
+
+        for (idx = 0; idx < config->n_modules; idx++) {
+            if (strcmp(ptr, config->modules[idx].name) == 0) {
+                config->active_modules =
+                    _realloc(config->active_modules,
+                             sizeof(ShifterModule *) *
+                             (config->n_active_modules + 2)
+                    );
+
+                config->active_modules[config->n_active_modules] =
+                    &config->modules[idx];
+
+                config->n_active_modules++;
+                config->active_modules[config->n_active_modules] = NULL;
+                found = true;
+            }
+        }
+        if (!found) {
+            fprintf(stderr, "Unknown shifter module: %s\n", ptr);
+            rc = -1;
+            goto finish;
+        }
+    }
+    rc = 0;
+
+finish:
+    if (selected_tmp)
+        free(selected_tmp);
+    return rc;
 }
 
 int parse_UdiRootConfig(const char *configFile, UdiRootConfig *config, int validateFlags) {

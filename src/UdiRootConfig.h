@@ -120,7 +120,7 @@ typedef struct _UdiRootConfig {
     char **siteEnvUnset;
     ShifterModule *modules;
     int n_modules;
-    ShifterModule *active_modules;
+    ShifterModule **active_modules;
     int n_active_modules;
     char *defaultModulesStr;
     int allowLocalChroot;
