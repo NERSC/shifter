@@ -64,7 +64,7 @@ int pathcmp(const char *a, const char *b);
 char *cleanPath(const char *path);
 char *userInputPathFilter(const char *input, int allowSlash);
 int is_json_array(const char *value);
-char ** split_json_array(char *value);
+char ** split_json_array(const char *value);
 int _count_args(char **args);
 char ** merge_args(char **args1, char **args2);
 char ** make_char_array(const char *value);

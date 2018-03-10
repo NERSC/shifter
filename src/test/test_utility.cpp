@@ -44,6 +44,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+void free_args(char **args) {
+  char **ptr=args;
+  while (*ptr!=NULL) {
+    free(*ptr);
+    ptr++;
+  }
+  free(args);
+}
+
 TEST_GROUP(UtilityTestGroup) {
     char *tmpDir;
 
@@ -424,18 +433,22 @@ TEST(UtilityTestGroup, pathcmp_basic) {
 }
 
 TEST(UtilityTestGroup, split_json_basic) {
-    char **out = split_json_array(strdup("[u'how', u'now', u'brown', u'cow']"));
+    const char *tstr = "[u'how', u'now', u'brown', u'cow']";
+    char **out = split_json_array(tstr);
     CHECK(strcmp(out[0],"how") == 0);
     CHECK(strcmp(out[1],"now") == 0);
     CHECK(strcmp(out[2],"brown") == 0);
     CHECK(strcmp(out[3],"cow") == 0);
     CHECK(out[4] == NULL);
+    free_args(out);
 }
 
 TEST(UtilityTestGroup, split_json_errors) {
-    char **out = split_json_array(strdup("[u'missing quote]"));
+    const char *tstr = "[u'missing quote]";
+    const char *tstr2 = "[u'missing bracket'";
+    char **out = split_json_array(tstr);
     CHECK(out == NULL);
-    out = split_json_array(strdup("[u'missing bracket'"));
+    out = split_json_array(tstr2);
     CHECK(out == NULL);
 }
 
@@ -448,6 +461,10 @@ TEST(UtilityTestGroup, count_args) {
     CHECK(_count_args(args) == 3);
     args[2] = strdup("c");
     CHECK(_count_args(args) == 4);
+    free(args[0]);
+    free(args[1]);
+    free(args[2]);
+
 }
 
 TEST(UtilityTestGroup, merge_args) {
@@ -465,6 +482,10 @@ TEST(UtilityTestGroup, merge_args) {
     CHECK(strcmp(merged[1],"a") == 0);
     CHECK(strcmp(merged[2],"b") == 0);
     CHECK(merged[3] == NULL);
+    free(args1[0]);
+    free(args2[0]);
+    free(args2[1]);
+    free(merged);
 }
 
 TEST(UtilityTestGroup, make_char_array_basic) {
@@ -473,6 +494,7 @@ TEST(UtilityTestGroup, make_char_array_basic) {
     arr = make_char_array(v);
     CHECK(strcmp(arr[0],"astring") == 0);
     CHECK(arr[1] == NULL);
+    free_args(arr);
 }
 
 int main(int argc, char** argv) {
