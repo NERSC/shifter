@@ -3324,6 +3324,41 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
     return 0;
 }
 
+/*
+ * Create the args to mimic Docker's behaviour.
+ */
+char ** calculate_args(int useEntry, char **clArgs, char *clEntry,
+                       ImageData *imageData) {
+  char **newArgs=NULL;
+  if ( (clArgs==NULL || clArgs[0]==NULL) &&
+        imageData->cmd!=NULL && clEntry==NULL) {
+      newArgs=imageData->cmd;
+  }
+
+  /* check if entrypoint is defined and desired */
+  if (useEntry) {
+      char **entry = NULL;
+
+      if (clEntry != NULL) {
+          entry = make_char_array(clEntry);
+          if (entry == NULL) {
+              fprintf(stderr, "Failed to allocate memory for entry\n");
+              exit(1);
+          }
+      } else if (imageData->entryPoint != NULL) {
+          entry = imageData->entryPoint;
+      } else {
+          fprintf(stderr, "Image does not have a defined entrypoint.\n");
+          exit(1);
+      }
+
+      if (entry != NULL) {
+          newArgs = merge_args(clArgs, entry);
+      }
+  }
+  return newArgs;
+}
+
 int _shifter_get_max_capability(unsigned long *_maxCap) {
     unsigned long maxCap = CAP_LAST_CAP;
     unsigned long idxCap = 0;

@@ -184,6 +184,8 @@ int parse_ImageData(char *type, char *identifier, UdiRootConfig *config, ImageDa
         image->identifier = strdup(identifier);
         image->filename = strdup(identifier);
         image->format = FORMAT_VFS;
+        image->entryPoint = NULL;
+        image->cmd = NULL;
         image->uids = NULL;
         image->gids = NULL;
         return 0;
@@ -256,11 +258,11 @@ void free_ImageData(ImageData *image, int freeStruct) {
         free(image->filename);
     }
     if (image->entryPoint != NULL) {
-      char **epPtr = NULL;
-      for (epPtr = image->env ; *epPtr != NULL; epPtr++) {
-          free(*epPtr);
-      }
-      free(image->entryPoint);
+        char **epPtr = NULL;
+        for (epPtr = image->env ; *epPtr != NULL; epPtr++) {
+            free(*epPtr);
+        }
+        free(image->entryPoint);
     }
     if (image->volume != NULL) {
         char **volPtr = NULL;
@@ -376,21 +378,21 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
 
     } else if (strcmp(key, "ENTRY") == 0) {
         if (is_json_array(value)){
-          image->entryPoint = split_json_array(strdup(value));
+            image->entryPoint = split_json_array(strdup(value));
         }
         else {
-          image->entryPoint = make_char_array(value);
+            image->entryPoint = make_char_array(value);
         }
         if (image->entryPoint == NULL) {
             return 1;
         }
       } else if (strcmp(key, "CMD") == 0) {
           if (is_json_array(value)){
-            // tokenize json array
-            image->cmd = split_json_array(strdup(value));
+              // tokenize json array
+              image->cmd = split_json_array(strdup(value));
           }
           else {
-            image->cmd = make_char_array(value);
+              image->cmd = make_char_array(value);
           }
           if (image->cmd == NULL) {
               return 1;

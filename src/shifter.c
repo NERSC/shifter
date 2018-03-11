@@ -166,6 +166,8 @@ int main(int argc, char **argv) {
         fprintf(stderr,"FAILED permission denied to image\n");
         exit(1);
     }
+
+    //run_args = determine_args(&opts, &imageDATA);
     if ( (opts.args==NULL || opts.args[0]==NULL) && imageData.cmd!=NULL && opts.entrypoint==NULL) {
         opts.args=imageData.cmd;
     }
@@ -394,7 +396,7 @@ int local_prependenv(char ***environ, const char *prepvar) {
 int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *udiConfig) {
     int opt = 0;
     int volOptCount = 0;
-    int rv;
+    int rc;
     static struct option long_options[] = {
         {"help", 0, 0, 'h'},
         {"volume", 1, 0, 'V'},
@@ -412,10 +414,10 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     /* set some defaults */
     config->tgtUid = getuid();
     config->tgtGid = getgid();
-    rv = seteuid(config->tgtUid);
-    if (rv!=0) {
-      fprintf(stderr, "ERROR: seteuid failed\n");
-      exit(1);
+    rc = seteuid(config->tgtUid);
+    if (rc != 0) {
+        fprintf(stderr, "ERROR: seteuid failed\n");
+        exit(1);
     }
 
     /* ensure that getopt processing stops at first non-option */
@@ -567,8 +569,8 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
 
     udiConfig->target_uid = config->tgtUid;
     udiConfig->target_gid = config->tgtGid;
-    rv = seteuid(0);
-    if (rv!=0) {
+    rc = seteuid(0);
+    if (rc != 0) {
       fprintf(stderr, "ERROR: seteuid failed\n");
       exit(1);
     }
