@@ -90,19 +90,19 @@ int isImageLoaded(ImageData *, struct options *, UdiRootConfig *);
 int loadImage(ImageData *, struct options *, UdiRootConfig *);
 int adoptPATH(char **environ);
 
-int check_permissions(uid_t actualUid, gid_t actualGid, ImageData imageData) {
+int check_permissions(uid_t actualUid, gid_t actualGid, ImageData *imageData) {
     uid_t *tuid;
     gid_t *tgid;
 
-    if (imageData.uids==NULL && imageData.gids==NULL) {
+    if (imageData->uids == NULL && imageData->gids == NULL) {
         return 1;
     }
 
-    for (tuid=imageData.uids;tuid!=NULL && *tuid!=-1;tuid++){
-        if (*tuid==actualUid) return 1;
+    for (tuid = imageData->uids; tuid != NULL && *tuid != -1; tuid++) {
+        if (*tuid == actualUid) return 1;
     }
-    for (tgid=imageData.gids;tgid!=NULL && *tgid!=-1;tgid++){
-        if (*tgid==actualGid) return 1;
+    for (tgid = imageData->gids; tgid != NULL && *tgid != -1; tgid++) {
+        if (*tgid == actualGid) return 1;
     }
     return 0;
 }
@@ -119,8 +119,8 @@ int main(int argc, char **argv) {
     char **environ_copy = shifter_copyenv();
 
     /* declare needed variables */
-    char wd[PATH_MAX];
-    char udiRoot[PATH_MAX];
+    char *wd = _malloc(sizeof(char) * PATH_MAX);
+    char *udiRoot = _malloc(sizeof(char) * PATH_MAX);
     uid_t actualUid = 0;
     uid_t actualGid = 0;
     uid_t eUid = 0;
@@ -128,18 +128,18 @@ int main(int argc, char **argv) {
     gid_t *gidList = NULL;
     int nGroups = 0;
     int idx = 0;
-    struct options opts;
-    UdiRootConfig udiConfig;
-    ImageData imageData;
-    memset(&opts, 0, sizeof(struct options));
-    memset(&udiConfig, 0, sizeof(UdiRootConfig));
-    memset(&imageData, 0, sizeof(ImageData));
+    struct options *opts = _malloc(sizeof(struct options));
+    UdiRootConfig *udiConfig = _malloc(sizeof(UdiRootConfig));
+    ImageData *imageData = _malloc(sizeof(ImageData));
+    memset(opts, 0, sizeof(struct options));
+    memset(udiConfig, 0, sizeof(UdiRootConfig));
+    memset(imageData, 0, sizeof(ImageData));
 
-    if (parse_UdiRootConfig(CONFIG_FILE, &udiConfig, UDIROOT_VAL_ALL) != 0) {
+    if (parse_UdiRootConfig(CONFIG_FILE, udiConfig, UDIROOT_VAL_ALL) != 0) {
         fprintf(stderr, "FAILED to parse udiRoot configuration.\n");
         exit(1);
     }
-    if (parse_environment(&opts, &udiConfig) != 0) {
+    if (parse_environment(opts, udiConfig) != 0) {
         fprintf(stderr, "FAILED to parse environment\n");
         exit(1);
     }
@@ -147,17 +147,17 @@ int main(int argc, char **argv) {
     clearenv();
 
     /* parse config file and command line options */
-    if (parse_options(argc, argv, &opts, &udiConfig) != 0) {
+    if (parse_options(argc, argv, opts, udiConfig) != 0) {
         fprintf(stderr, "FAILED to parse command line arguments.\n");
         exit(1);
     }
 
-
     /* discover information about this image */
-    if (parse_ImageData(opts.imageType, opts.imageIdentifier, &udiConfig, &imageData) != 0) {
+    if (parse_ImageData(opts->imageType, opts->imageIdentifier, udiConfig, imageData) != 0) {
         fprintf(stderr, "FAILED to find requested image.\n");
         exit(1);
     }
+
     /* figure out who we are and who we want to be */
     eUid = geteuid();
     eGid = getegid();
@@ -170,27 +170,27 @@ int main(int argc, char **argv) {
     }
 
     /* check if entrypoint is defined and desired */
-    if (opts.useEntryPoint == 1) {
+    if (opts->useEntryPoint == 1) {
         char *entry = NULL;
 
-        if (opts.entrypoint != NULL) {
-            entry = opts.entrypoint;
-        } else if (imageData.entryPoint != NULL) {
-            entry = imageData.entryPoint;
+        if (opts->entrypoint != NULL) {
+            entry = opts->entrypoint;
+        } else if (imageData->entryPoint != NULL) {
+            entry = imageData->entryPoint;
         } else {
             fprintf(stderr, "Image does not have a defined entrypoint.\n");
             exit(1);
         }
 
         if (entry != NULL) {
-            opts.args[0] = _strdup(entry);
+            opts->args[0] = _strdup(entry);
         }
     }
-    if (imageData.workdir != NULL && opts.workdir == NULL) {
-        opts.workdir = _strdup(imageData.workdir);
+    if (imageData->workdir != NULL && opts->workdir == NULL) {
+        opts->workdir = _strdup(imageData->workdir);
     }
 
-    snprintf(udiRoot, PATH_MAX, "%s", udiConfig.udiMountPoint);
+    snprintf(udiRoot, PATH_MAX, "%s", udiConfig->udiMountPoint);
     udiRoot[PATH_MAX-1] = 0;
 
     /* figure out who we are and who we want to be */
@@ -210,23 +210,23 @@ int main(int argc, char **argv) {
         }
         for (idx = 0; idx < nGroups; ++idx) {
             if (gidList[idx] == 0) {
-                gidList[idx] = opts.tgtGid;
+                gidList[idx] = opts->tgtGid;
             }
         }
     }
-    udiConfig.auxiliary_gids = gidList;
-    udiConfig.nauxiliary_gids = nGroups;
+    udiConfig->auxiliary_gids = gidList;
+    udiConfig->nauxiliary_gids = nGroups;
 
 
     if (eUid != 0 && eGid != 0) {
         fprintf(stderr, "%s\n", "Not running with root privileges, will fail.");
         exit(1);
     }
-    if (opts.tgtUid == 0 || opts.tgtGid == 0 || opts.username == NULL) {
+    if (opts->tgtUid == 0 || opts->tgtGid == 0 || opts->username == NULL) {
         fprintf(stderr, "%s\n", "Failed to lookup username or attempted to run as root.\n");
         exit(1);
     }
-    if (opts.tgtUid != actualUid || opts.tgtGid != actualGid) {
+    if (opts->tgtUid != actualUid || opts->tgtGid != actualGid) {
         fprintf(stderr, "Failed to correctly identify uid/gid, exiting.\n");
         exit(1);
     }
@@ -237,12 +237,12 @@ int main(int argc, char **argv) {
         exit(1);
     }
     wd[PATH_MAX-1] = 0;
-    if (opts.workdir == NULL) {
-        opts.workdir = _strdup(wd);
+    if (opts->workdir == NULL) {
+        opts->workdir = _strdup(wd);
     }
 
-    if (isImageLoaded(&imageData, &opts, &udiConfig) == 0) {
-        if (loadImage(&imageData, &opts, &udiConfig) != 0) {
+    if (isImageLoaded(imageData, opts, udiConfig) == 0) {
+        if (loadImage(imageData, opts, udiConfig) != 0) {
             fprintf(stderr, "FAILED to setup image.\n");
             exit(1);
         }
@@ -276,12 +276,12 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to setgroups\n");
         exit(1);
     }
-    if (setresgid(opts.tgtGid, opts.tgtGid, opts.tgtGid) != 0) {
-        fprintf(stderr, "Failed to setgid to %d\n", opts.tgtGid);
+    if (setresgid(opts->tgtGid, opts->tgtGid, opts->tgtGid) != 0) {
+        fprintf(stderr, "Failed to setgid to %d\n", opts->tgtGid);
         exit(1);
     }
-    if (setresuid(opts.tgtUid, opts.tgtUid, opts.tgtUid) != 0) {
-        fprintf(stderr, "Failed to setuid to %d\n", opts.tgtUid);
+    if (setresuid(opts->tgtUid, opts->tgtUid, opts->tgtUid) != 0) {
+        fprintf(stderr, "Failed to setuid to %d\n", opts->tgtUid);
         exit(1);
     }
 #if HAVE_DECL_PR_SET_NO_NEW_PRIVS == 1
@@ -295,12 +295,12 @@ int main(int argc, char **argv) {
 #endif
 
     /* chdir (within chroot) to where we belong again */
-    if (chdir(opts.workdir) != 0) {
-        fprintf(stderr, "Failed to switch to working dir: %s, staying in /\n", opts.workdir);
+    if (chdir(opts->workdir) != 0) {
+        fprintf(stderr, "Failed to switch to working dir: %s, staying in /\n", opts->workdir);
     }
 
     /* set the environment variables */
-    if (shifter_setupenv(&environ_copy, &imageData, &udiConfig) != 0) {
+    if (shifter_setupenv(&environ_copy, imageData, udiConfig) != 0) {
         fprintf(stderr, "Failed to setup container environment variables\n");
     }
 
@@ -314,10 +314,10 @@ int main(int argc, char **argv) {
     signal(SIGTERM, sigtermHndlr);
 
     /* attempt to execute user-requested exectuable */
-    execvpe(opts.args[0], opts.args, environ_copy);
+    execvpe(opts->args[0], opts->args, environ_copy);
 
     /* doh! how did we get here? return the error */
-    fprintf(stderr, "%s: %s: %s\n", argv[0], opts.args[0], strerror(errno));
+    fprintf(stderr, "%s: %s: %s\n", argv[0], opts->args[0], strerror(errno));
 
     return 127;
 }
