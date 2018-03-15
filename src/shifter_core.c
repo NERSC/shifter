@@ -3445,6 +3445,7 @@ int shifter_unsetenv(char ***env, const char *var) {
 
 int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
     char **envPtr = NULL;
+    int idx = 0;
     if (env == NULL || *env == NULL || image == NULL || udiConfig == NULL) {
         return 1;
     }
@@ -3462,6 +3463,20 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
     }
     for (envPtr = udiConfig->siteEnvUnset; envPtr && *envPtr; envPtr++) {
         shifter_unsetenv(env, *envPtr);
+    }
+    for (idx = 0; idx < udiConfig->n_active_modules; idx++) {
+        for (envPtr = udiConfig->active_modules[idx]->siteEnv; envPtr && *envPtr; envPtr++) {
+            shifter_putenv(env, *envPtr);
+        }
+        for (envPtr = udiConfig->active_modules[idx]->siteEnvAppend; envPtr && *envPtr; envPtr++) {
+            shifter_appendenv(env, *envPtr);
+        }
+        for (envPtr = udiConfig->active_modules[idx]->siteEnvPrepend; envPtr && *envPtr; envPtr++) {
+            shifter_prependenv(env, *envPtr);
+        }
+        for (envPtr = udiConfig->active_modules[idx]->siteEnvUnset; envPtr && *envPtr; envPtr++) {
+            shifter_unsetenv(env, *envPtr);
+        }
     }
     return 0;
 }
