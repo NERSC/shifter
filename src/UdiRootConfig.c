@@ -155,11 +155,36 @@ int parse_selected_ShifterModule(const char *selected, UdiRootConfig *config) {
 
     while ((ptr = strtok_r(search, ",", &svPtr)) != NULL) {
         int idx = 0;
+        int jdx = 0;
+        int kdx = 0;
         bool found = false;
         search = NULL;
 
         for (idx = 0; idx < config->n_modules; idx++) {
             if (strcmp(ptr, config->modules[idx].name) == 0) {
+                if (config->modules[idx].enabled == 0) {
+                    fprintf(stderr, "WARNING: module %s is not enabled for use.\n", config->modules[idx].name);
+                    continue;
+                }
+                for (jdx = 0; jdx < config->modules[idx].n_conflict; jdx++) {
+                    for (kdx = 0; kdx < config->n_active_modules; kdx++) {
+                        if (config->active_modules[kdx] == config->modules[idx].conflict[jdx]) {
+                            fprintf(stderr, "ERROR: cannot load conflicting modules %s and %s\n", config->modules[idx].name, config->active_modules[kdx]->name);
+                            rc = -1;
+                            goto finish;
+                        }
+                    }
+                }
+                for (jdx = 0; jdx < config->n_active_modules; jdx++) {
+                    for (kdx = 0; kdx < config->active_modules[jdx]->n_conflict; kdx++) {
+                        if (config->active_modules[jdx]->conflict[kdx] == &config->modules[idx]) {
+                            fprintf(stderr, "ERROR: cannot load conflicting modules %s and %s\n", config->modules[idx].name, config->active_modules[jdx]->name);
+                            rc = -1;
+                            goto finish;
+                        }
+                    }
+                }
+
                 config->active_modules =
                     _realloc(config->active_modules,
                              sizeof(ShifterModule *) *
@@ -237,6 +262,9 @@ int ShifterModule_postprocessing(UdiRootConfig *config) {
                     *ptr, config->modules[i].name);
             return 1;
         }
+    }
+    if (config->defaultModulesStr) {
+        return parse_selected_ShifterModule(config->defaultModulesStr, config);
     }
     return 0;
 }
