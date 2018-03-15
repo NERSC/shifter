@@ -129,20 +129,20 @@ The Image Gateway can run on any node in your cluster. The requirement for the I
 Software dependencies for the Image Gateway
 +++++++++++++++++++++++++++++++++++++++++++
 
-The Image Gateway depends on *MongoDB* server, *Redis*, *squashfs-tools*, virtualenv (to further install all other python dependencies on a virtual environment), and python2.7. It is recommended to also install the dependencies needed by the shifter runtime, as of this time we have not verified which of Shifter's dependencies can be omitted as they are not needed by the image gateway.
+The Image Gateway depends on *MongoDB* server, *squashfs-tools*, virtualenv (to further install all other python dependencies on a virtual environment), and python2.7. It is recommended to also install the dependencies needed by the shifter runtime, as of this time we have not verified which of Shifter's dependencies can be omitted as they are not needed by the image gateway.
 
 For RHEL/CentOS/Scientific Linux systems:
 
 .. code-block:: bash
 
-   yum install mongodb-server redis squashfs-tools
+   yum install mongodb-server squashfs-tools
 
 
 For Debian/Ubuntu systems:
 
 .. code-block:: bash
 
-   sudo apt-get install mongodb redis-server squashfs-tools
+   sudo apt-get install mongodb squashfs-tools
 
 Install *virtualenv* through  *pip* for Python:
 
@@ -239,7 +239,7 @@ Save the file to a local copy (e.g. *imagemanager.json.local*, just to have a ba
 
    sudo cp imagemanager.json.local $SHIFTER_SYSCONFDIR/imagemanager.json
 
-Lastly, open *$IMAGEGW_PATH/start-imagegw.sh* and enter the name of your system in the line. This will spawn Celery worker threads with a more identifiable name.
+Lastly, open *$IMAGEGW_PATH/start-imagegw.sh* and enter the name of your system in the line.
 
 .. code-block:: bash
 
@@ -249,11 +249,10 @@ Lastly, open *$IMAGEGW_PATH/start-imagegw.sh* and enter the name of your system 
 Image Gateway Startup
 +++++++++++++++++++++
 
-Start the services for Redis and MongoDB:
+Start the service MongoDB:
 
 .. code-block:: bash
 
-   sudo systemctl start redis
    sudo systemctl start mongod
 
 Start the Shifter Image Gateway:
@@ -261,18 +260,4 @@ Start the Shifter Image Gateway:
 .. code-block:: bash
 
    sudo /etc/init.d/shifter-imagegw start
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

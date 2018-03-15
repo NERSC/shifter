@@ -39,7 +39,7 @@ echo "Setting up imagegw configuration"
 sudo cp "$CIDIR/imagemanager.json" /etc/shifter
 
 me=$(whoami)
-for i in /var/log/shifter_imagegw /var/log/shifter_imagegw_worker /images; do
+for i in /var/log/shifter_imagegw /images; do
     sudo mkdir -p $i
     sudo chown -R $me $i
 done
@@ -52,9 +52,6 @@ sudo service munge start
 
 echo "Starting imagegw api"
 gunicorn -b 0.0.0.0:5000 --backlog 2048 --access-logfile=/var/log/shifter_imagegw/access.log --log-file=/var/log/shifter_imagegw/error.log shifter_imagegw.api:app &
-
-echo "Starting image worker"
-celery -A shifter_imagegw.imageworker worker -Q mycluster -n mycluster.%h --loglevel=debug --logfile=/var/log/shifter_imagegw_worker/mycluster.log &
 
 echo "setting up base config"
 sudo /bin/bash -c "cat /etc/shifter/udiRoot.conf.example | \
@@ -77,7 +74,7 @@ sudo chmod 755 /bin/nvidia-smi
 sudo touch /bin/nvidia-modprobe
 sudo chmod 755 /bin/nvidia-modprobe
 
-## need to sleep a bit to let celery and gunicorn get started
+## need to sleep a bit to let gunicorn get started
 sleep 10
 
 

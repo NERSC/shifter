@@ -144,6 +144,8 @@ def writemeta(fmt, meta, metafile):
         if 'env' in meta and meta['env'] is not None:
             for keyval in meta['env']:
                 meta_fd.write("ENV: %s\n" % (keyval))
+        if 'user' in meta:
+            meta_fd.write("USER: %s\n" % meta['user'])
         meta_fd.close()
     # Some error must have occurred
     return True

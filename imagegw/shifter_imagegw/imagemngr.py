@@ -17,12 +17,14 @@
 #
 # See LICENSE for full text.
 
-#
-# This module is provides the interface layer for the image manager.  This
-# compliments the api module which provides the REST interface.  This module
-# does much of the heavy lifting for the image manager.  It handles all
-# interactions with the Mongo Database and dispatches work through Celery.
-#
+"""
+Image Manager for the Shifter Gateway.
+
+This module is provides the interface layer for the image manager.  This
+compliments the api module which provides the REST interface.  This module
+does much of the heavy lifting for the image manager.  It handles all
+interactions with the Mongo Database and dispatches work through a thread pool.
+"""
 
 import json
 import sys
@@ -32,9 +34,8 @@ from time import time, sleep
 from pymongo import MongoClient
 import pymongo.errors
 from shifter_imagegw.auth import Authentication
-from shifter_imagegw.imageworker import dopull, initqueue, doexpire
-import bson
-import celery
+from shifter_imagegw.imageworker import WorkerThreads
+from multiprocessing.process import Process
 
 
 # decorator function to re-attempt any mongo operation that may have failed
@@ -58,7 +59,7 @@ def mongo_reconnect_reattempt(call):
 class ImageMngr(object):
     """
     This class handles most of the backend work for the image gateway.
-    It uses a Mongo Database to track state, uses celery to dispatch work,
+    It uses a Mongo Database to track state, uses threads to dispatch work,
     and has public functions to lookup, pull and expire images.
     """
 
@@ -66,24 +67,27 @@ class ImageMngr(object):
         """
         Create an instance of the image manager.
         """
-        if logger is None:
+        if logger is None and logname is None:
             self.logger = logging.getLogger(logname)
             log_handler = logging.StreamHandler()
             logfmt = '%(asctime)s [%(name)s] %(levelname)s : %(message)s'
             log_handler.setFormatter(logging.Formatter(logfmt))
             log_handler.setLevel(logging.INFO)
             self.logger.addHandler(log_handler)
+        elif logname is not None:
+            self.logger = logging.getLogger(logname)
+            self.logger.info('ImageMngr using logname %s' % (logname))
         else:
+            print "Using upstream logger"
             self.logger = logger
+            print logger
+            self.logger.info('ImageMngr using upstream logger')
 
         self.logger.debug('Initializing image manager')
         self.config = config
         if 'Platforms' not in self.config:
             raise NameError('Platforms not defined')
         self.systems = []
-        self.tasks = []
-        self.expire_requests = dict()
-        self.task_image_id = dict()
         # Time before another pull can be attempted
         self.pullupdatetimeout = 300
         if 'PullUpdateTime' in self.config:
@@ -101,18 +105,57 @@ class ImageMngr(object):
         for system in self.config['Platforms']:
             self.systems.append(system)
         # Connect to database
-        if 'MongoDBURI' in self.config:
-            client = MongoClient(self.config['MongoDBURI'])
-            db_ = self.config['MongoDB']
-            self.images = client[db_].images
-        else:
+        if 'MongoDBURI' not in self.config:
             raise NameError('MongoDBURI not defined')
+        self.workers = WorkerThreads()
+        self.status_queue = self.workers.get_updater_queue()
+        self.status_proc = Process(target=self.status_thread,
+                                   name='StatusThread')
+        self.status_proc.start()
+        self.mongo_init()
+
+    def shutdown(self):
+        self.status_queue.put('stop')
+
+    def mongo_init(self):
+        client = MongoClient(self.config['MongoDBURI'])
+        db_ = self.config['MongoDB']
+        self.images = client[db_].images
         self.metrics = None
         if 'Metrics' in self.config and self.config['Metrics'] is True:
             self.metrics = client[db_].metrics
 
-        initqueue(config)
-        # Initialize data structures
+    def status_thread(self):
+        """
+        This listens for update messages from a queue.
+        """
+        self.mongo_init()
+        while True:
+            message = self.status_queue.get()
+            if message == 'stop':
+                self.logger.info("Shutting down Status Thread")
+                break
+            ident = message['id']
+            state = message['state']
+            meta = message['meta']
+            # TODO: Handle a failed expire
+            if state == "FAILURE":
+                self.logger.warn("Operation failed for %s", ident)
+
+            # print "Status: %s" % (state)
+            # A response message
+            if state != 'READY':
+                self.update_mongo_state(ident, state, meta)
+                continue
+            if 'response' in meta and meta['response']:
+                response = meta['response']
+                self.logger.debug(response)
+                if 'meta_only' in response:
+                    self.logger.debug('Updating ACLs')
+                    self.update_acls(ident, response)
+                else:
+                    self.complete_pull(ident, response)
+                self.logger.debug('meta=%s', str(response))
 
     def check_session(self, session, system=None):
         """Check if this is a valid session
@@ -439,7 +482,6 @@ class ImageMngr(object):
             'pulltag': image['tag']
         }
         self.logger.debug('Pull called Test Mode=%d', testmode)
-        # self.logger.debug(image)
         if not self.check_session(session, request['system']):
             self.logger.warn('Invalid session on system %s', request['system'])
             raise OSError("Invalid Session")
@@ -509,16 +551,84 @@ class ImageMngr(object):
             request['session'] = session
             self.logger.debug("Calling do pull with queue=%s",
                               request['system'])
-            pullreq = dopull.apply_async([request], queue=request['system'],
-                                         kwargs={'testmode': testmode})
+            self.workers.dopull(ident, request, testmode=testmode)
 
             memo = "pull request queued s=%s t=%s" \
                 % (request['system'], request['tag'])
             self.logger.info(memo)
 
             self.update_mongo(ident, {'last_pull': time()})
-            self.task_image_id[pullreq] = ident
-            self.tasks.append(pullreq)
+
+        return rec
+
+    def mngrimport(self, session, image, testmode=0):
+        """
+        import the image directly from a file
+        Only for allowed users
+        Takes an auth token, a request object
+        """
+        meta = {}
+        fp = image['filepath']
+        request = {
+            'system': image['system'],
+            'itype': image['itype'],
+            'pulltag': image['tag'],
+            'filepath': image['filepath'],
+            'format': image['format'],
+            'meta': meta
+        }
+        self.logger.debug('mngrmport called for file %s' % (fp))
+        # self.logger.debug(image)
+        if not self.check_session(session, request['system']):
+            self.logger.warn('Invalid session on system %s', request['system'])
+            raise OSError("Invalid Session")
+        # Skip checks about previous requests for now
+        # Future work could check the fasthash and
+        # not import if they're the same
+        q = {
+            'system': image['system'],
+            'itype': image['itype'],
+            'pulltag': image['tag']
+        }
+        rec = self._images_find_one(q)
+        if not self._pullable(rec):
+            return rec
+        # rec = None
+        # request['userACL'] = []
+        # request['groupACL'] = []
+        # if 'userACL' in image and image['userACL'] != []:
+        #     request['userACL'] = self._make_acl(image['userACL'],
+        #                                         session['uid'])
+        # if 'groupACL' in image and image['groupACL'] != []:
+        #     request['groupACL'] = self._make_acl(image['groupACL'],
+        #                                          session['gid'])
+        # if self._compare_list(request, rec, 'userACL') and \
+        #         self._compare_list(request, rec, 'groupACL'):
+        #     acl_changed = False
+        # else:
+        #     self.logger.debug("No ACL change detected.")
+        #     acl_changed = True
+
+        # We could hit a key error or some other edge case
+        # so just do our best and update if there are problems
+
+        self.logger.debug("Creating New Import Record")
+        # new_pull_record works for import too
+        rec = self.new_pull_record(request)
+        ident = rec['_id']
+        self.logger.debug("ENQUEUEING Request, ident %s" % (ident))
+        self.update_mongo_state(ident, 'ENQUEUED')
+        request['tag'] = request['pulltag']
+        request['session'] = session
+        self.logger.debug("Calling wrkimport with queue=%s",
+                          request['system'])
+        self.workers.dowrkimport(ident, request, testmode=testmode)
+
+        memo = "import request queued s=%s t=%s" \
+            % (request['system'], request['tag'])
+        self.logger.info(memo)
+
+        self.update_mongo(ident, {'last_pull': time()})
 
         return rec
 
@@ -580,6 +690,7 @@ class ImageMngr(object):
             msg = "WARNING: No image record found for an ACL update"
             self.logger.warn(msg)
             response['last_pull'] = time()
+            response['status'] = 'READY'
             self.update_mongo(ident, response)
             self.add_tag(ident, pullrec['system'], pullrec['pulltag'])
         else:
@@ -590,6 +701,8 @@ class ImageMngr(object):
                 'last_pull': time()
             }
             self.logger.debug("Doing ACLs update")
+            response['last_pull'] = time()
+            response['status'] = 'READY'
             self.update_mongo(rec['_id'], updates)
             self._images_remove({'_id': ident})
 
@@ -605,7 +718,8 @@ class ImageMngr(object):
             return
         # Check that this image ident doesn't already exist for this system
         rec = self._images_find_one({'id': response['id'],
-                                    'system': pullrec['system']})
+                                     'system': pullrec['system'],
+                                     'status': 'READY'})
         tag = pullrec['pulltag']
         if rec is not None:
             # So we already had this image.
@@ -626,6 +740,7 @@ class ImageMngr(object):
             return True
         else:
             response['last_pull'] = time()
+            response['status'] = 'READY'
             self.update_mongo(ident, response)
             self.add_tag(ident, pullrec['system'], tag)
 
@@ -644,7 +759,8 @@ class ImageMngr(object):
             'last_pull': 'last_pull',
             'userACL': 'userACL',
             'groupACL': 'groupACL',
-            'private': 'private'
+            'private': 'private',
+            'status': 'status'
         }
         if 'private' in resp and resp['private'] is False:
             resp['userACL'] = []
@@ -671,48 +787,8 @@ class ImageMngr(object):
 
     def update_states(self):
         """
-        Update the states of all active transactions.
         Cleanup failed transcations after a period
         """
-        i = 0
-        tasks = self.tasks
-
-        for req in tasks:
-            state = 'PENDING'
-
-            if isinstance(req, celery.result.AsyncResult):
-                state = req.state
-                info = req.info
-            elif isinstance(req, bson.objectid.ObjectId):
-                self.logger.debug("Non-Async")
-
-            if req in self.expire_requests and state == 'SUCCESS':
-                self.expire_requests.pop(req)
-                self.tasks.remove(req)
-                state = 'EXPIRED'
-            elif req in self.expire_requests and state == 'FAILURE':
-                self.logger.warn("Expire request failed for %s", req)
-                self.expire_requests.pop(req)
-                self.tasks.remove(req)
-                continue
-            elif state == "FAILURE":
-                self.logger.warn("Pull failed for %s", req)
-
-            self.update_mongo_state(self.task_image_id[req], state, info)
-            if state == "READY" or state == "SUCCESS":
-                self.logger.debug("Completing pull request %d", i)
-                response = req.get()
-                self.logger.debug(response)
-                if 'meta_only' in response:
-                    self.logger.debug('Updating ACLs')
-                    self.update_acls(self.task_image_id[req], response)
-                else:
-                    self.complete_pull(self.task_image_id[req], response)
-                self.logger.debug('meta=%s', str(response))
-                # Now save the response
-                self.tasks.remove(req)
-            i += 1
-        # Look for failed pulls
         for rec in self._images_find({'status': 'FAILURE'}):
             nextpull = self.pullupdatetimeout + rec['last_pull']
             # It it has been a while then let's clean up
@@ -729,7 +805,6 @@ class ImageMngr(object):
         removed = []
         for rec in self._images_find({'status': {'$ne': 'READY'},
                                      'system': system}):
-            self.logger.debug(rec)
             if 'last_pull' not in rec:
                 self.logger.warning('Image missing last_pull for pulltag:' +
                                     rec['pulltag'])
@@ -741,7 +816,6 @@ class ImageMngr(object):
         expired = []
         # Look for READY images that haven't been pulled recently
         for rec in self._images_find({'status': 'READY', 'system': system}):
-            self.logger.debug(rec)
             if 'expiration' not in rec:
                 continue
             elif rec['expiration'] < time():
@@ -757,16 +831,13 @@ class ImageMngr(object):
 
     def expire_id(self, rec, ident, testmode=0):
         """ Helper function to expire by id """
-        memo = "Calling do expire with queue=%s id=%s TM=%d" \
-            % (rec['system'], ident, testmode)
+        memo = "Calling do expire id=%s TM=%d" \
+            % (ident, testmode)
         self.logger.debug(memo)
 
-        req = doexpire.apply_async([rec], queue=rec['system'])
+        self.workers.doexpire(ident, rec)
         self.logger.info("expire request queued s=%s t=%s",
                          rec['system'], ident)
-        self.task_image_id[req] = ident
-        self.expire_requests[req] = ident
-        self.tasks.append(req)
 
     def expire(self, session, image, testmode=0):
         """Expire an image.  (Not Implemented)"""
@@ -784,17 +855,11 @@ class ImageMngr(object):
         memo = "Calling do expire with queue=%s id=%s TM=%d" \
             % (image['system'], ident, testmode)
         self.logger.debug(memo)
-
-        req = doexpire.apply_async([rec], queue=image['system'],
-                                   kwargs={'testmode': testmode})
+        self.workers.doexpire(ident, rec)
 
         memo = "expire request queued s=%s t=%s" \
             % (image['system'], image['tag'])
         self.logger.info(memo)
-
-        self.task_image_id[req] = ident
-        self.expire_requests[req] = ident
-        self.tasks.append(req)
 
         return True
 
@@ -864,6 +929,7 @@ def main():
     else:
         print "Unknown command %s" % (command)
         usage()
+
 
 if __name__ == '__main__':
     main()

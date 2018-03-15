@@ -214,6 +214,41 @@ class TransferTestCase(unittest.TestCase):
 
     # TODO: Add a test_remove_remote
 
+    def test_fasthash(self):
+        (fdesc, tmp_path) = tempfile.mkstemp()
+        os.close(fdesc)
+        dname, fname = os.path.split(tmp_path)
+        file=open(fname,'w')
+        file.write("blah blah hash")
+        file.close()
+        self.system['local']['imageDir'] = dname
+        self.system['ssh']['imageDir'] = dname
+        self.system['accesstype'] = 'local'
+
+        hash = transfer.hash_file(fname, self.system)
+        self.assertEquals(hash, 'ff68165577eb209adcfa2f793476a25da637142283409d6f4d8d61ee042c5e63')
+        transfer.remove_file(fname, self.system)
+
+    def test_get_stdout_and_log(self):
+        cmd = "ls"
+        stderr,stdout = transfer._get_stdout_and_log(cmd,None) 
+        print "stderr",stderr
+        print "stdout",stdout
+        assert stderr is ""
+        assert stderr is not None
+        assert stdout is not None
+        assert len(stdout) > 0
+        
+    def test_import_copy_file(self):
+        (fdesc, tmp_path) = tempfile.mkstemp()
+        os.close(fdesc)
+        dname, fname = os.path.split(tmp_path)
+        self.system['local']['imageDir'] = dname
+        self.system['accesstype'] = 'local'
+        cp_path = tmp_path+"_1"
+        status = transfer.import_copy_file(tmp_path,cp_path,self.system,None)
+        assert status
+
 
 if __name__ == '__main__':
     unittest.main()

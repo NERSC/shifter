@@ -1,5 +1,7 @@
 #!/bin/bash
-
+if [ -z $LOG_LEVEL ] ; then
+  LOG_LEVEL=INFO
+fi
 if [ -e "/config/imagemanager.json" ] ; then
   echo "Copying configuration from /config"
   cp /config/imagemanager.json .
@@ -11,14 +13,8 @@ fi
 for service in $@ ; do
   echo "service: $service"
   if [ "$service"  == "api" ] ; then
-    gunicorn -b 0.0.0.0:5000 --backlog 2048 shifter_imagegw.api:app --log-level info   
-  elif  [ $(echo $service|grep -c "worker:") -gt 0 ] ; then
-    queue=$(echo $service|sed 's/.*://')
-    echo "Worker Queue: $queue"
-    export PYTHONPATH=`pwd`
-    celery -c 1 -A shifter_imagegw.imageworker worker -Q $queue --loglevel=info &
-  elif  [ "$service"  == "flower" ] ; then
-    flower -A imageworker &
+    gunicorn -b 0.0.0.0:5000 --log-file /var/log/gunicorn.log \
+        --log-level $LOG_LEVEL  --backlog 2048 shifter_imagegw.api:app
   elif  [ $(echo $service|grep -c "munge:") -gt 0 ] ; then
     socket=$(echo $service|awk -F: '{print $2}')
     key=$(echo $service|awk -F: '{print $3}')

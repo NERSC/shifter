@@ -89,6 +89,39 @@ class Dockerv2TestCase(unittest.TestCase):
         bfile = os.path.join(resp['expandedpath'], 'build/test2')
         assert os.path.exists(bfile)
 
+    def test_need_proxy(self):
+        """
+        Test if proxy is needed
+        """
+        os.environ['no_proxy'] = 'blah.com,blah2.com'
+        self.assertTrue(dockerv2.need_proxy('proxy.blah3.com'))
+        self.assertFalse(dockerv2.need_proxy('proxy.blah.com'))
+
+    def test_setup_conn(self):
+        """
+        Test setup connection
+        """
+        url = 'https://registry-1.docker.io/v2/'
+        conn = dockerv2._setup_http_conn(url)
+        self.assertIsNotNone(conn)
+        url = 'http://registry-1.docker.io/v2/'
+        conn = dockerv2._setup_http_conn(url)
+        self.assertIsNotNone(conn)
+        url = 'ftp:/bogus.com/v2/'
+        with self.assertRaises(ValueError):
+            conn = dockerv2._setup_http_conn(url)
+        os.environ['https_proxy'] = 'https://localhost:9999'
+        url = 'https://registry-1.docker.io/v2/'
+        # should fail with an IOError because it is a bogus proxy
+        with self.assertRaises(IOError):
+            conn = dockerv2._setup_http_conn(url)
+        os.environ['http_proxy'] = 'http://localhost:9999'
+        url = 'http://registry-1.docker.io/v2/'
+        # should fail with an IOError because it is a bogus proxy
+        with self.assertRaises(IOError):
+            conn = dockerv2._setup_http_conn(url)
+        os.environ.pop('https_proxy')
+        os.environ.pop('http_proxy')
 
 
 if __name__ == '__main__':
