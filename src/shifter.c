@@ -261,28 +261,28 @@ int main(int argc, char **argv) {
     }
     if (chdir("/") != 0) {
         perror("Could not chdir to new root: ");
-        exit(1);
+        abort();
     }
 
     /* attempt to prevent this process and its heirs from ever gaining any
      * privilege by any means */
     if (shifter_set_capability_boundingset_null() != 0) {
         fprintf(stderr, "Failed to restrict future capabilities\n");
-        exit(1);
+        abort();
     }
 
     /* drop privileges */
     if (setgroups(nGroups, gidList) != 0) {
         fprintf(stderr, "Failed to setgroups\n");
-        exit(1);
+        abort();
     }
     if (setresgid(opts->tgtGid, opts->tgtGid, opts->tgtGid) != 0) {
         fprintf(stderr, "Failed to setgid to %d\n", opts->tgtGid);
-        exit(1);
+        abort();
     }
     if (setresuid(opts->tgtUid, opts->tgtUid, opts->tgtUid) != 0) {
         fprintf(stderr, "Failed to setuid to %d\n", opts->tgtUid);
-        exit(1);
+        abort();
     }
 #if HAVE_DECL_PR_SET_NO_NEW_PRIVS == 1
     /* ensure this process and its heirs cannot gain privilege in recent kernels */
@@ -290,7 +290,7 @@ int main(int argc, char **argv) {
     if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) {
         fprintf(stderr, "Failed to fully drop privileges: %s",
                 strerror(errno));
-        exit(1);
+        abort();
     }
 #endif
 
@@ -302,6 +302,19 @@ int main(int argc, char **argv) {
     /* set the environment variables */
     if (shifter_setupenv(&environ_copy, imageData, udiConfig) != 0) {
         fprintf(stderr, "Failed to setup container environment variables\n");
+    }
+
+    /* run any user hooks */
+    for (idx = 0; idx < udiConfig->n_active_modules; idx++) {
+        if (udiConfig->active_modules[idx]->userhook == NULL)
+            continue;
+
+        char *args[] = { "/bin/sh", udiConfig->active_modules[idx]->userhook, NULL };
+        int rc = forkAndExecv(args);
+        if (rc != 0) {
+            fprintf(stderr, "Failed to setup module %s\n", udiConfig->active_modules[idx]->name);
+            exit(1);
+        }
     }
 
     /* immediately set PATH to container PATH to get search right */
