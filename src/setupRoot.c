@@ -78,6 +78,7 @@ typedef struct _SetupRootConfig {
     char *user;
     char *imageType;
     char *imageIdentifier;
+    char *modules;
     uid_t uid;
     gid_t gid;
     char *minNodeSpec;
@@ -115,6 +116,11 @@ int main(int argc, char **argv) {
     udiConfig.target_uid = config.uid;
     udiConfig.target_gid = config.gid;
     udiConfig.auxiliary_gids = shifter_getgrouplist(config.user, udiConfig.target_gid, &(udiConfig.nauxiliary_gids));
+
+    if (parse_selected_ShifterModule(config.modules, &udiConfig) != 0) {
+        fprintf(stderr, "Invalid shifter module selection: %s\n", config.modules);
+        exit(1);
+    }
 
     if (udiConfig.auxiliary_gids == NULL || udiConfig.nauxiliary_gids == 0) {
         fprintf(stderr, "FAILED to lookup auxiliary gids. Exiting.\n");
@@ -185,7 +191,7 @@ int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
     int opt = 0;
     optind = 1;
 
-    while ((opt = getopt(argc, argv, "v:s:u:U:G:N:V")) != -1) {
+    while ((opt = getopt(argc, argv, "v:s:u:U:G:N:m:V")) != -1) {
         switch (opt) {
             case 'V': config->verbose = 1; break;
             case 'v':
@@ -209,6 +215,9 @@ int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
                 break;
             case 'N':
                 config->minNodeSpec = _strdup(optarg);
+                break;
+            case 'm':
+                config->modules = _strdup(optarg);
                 break;
             case '?':
                 fprintf(stderr, "Missing an argument!\n");
