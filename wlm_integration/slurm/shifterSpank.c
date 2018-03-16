@@ -258,11 +258,24 @@ int shifterSpank_process_option_volume(
         if (ssconfig->volume != NULL) {
             free(ssconfig->volume);
         }
-        ssconfig->volume = strdup(optarg);
+        ssconfig->volume = _strdup(optarg);
 
         return SUCCESS;
     }
     _log(LOG_ERROR, "Invalid image volume options - if specified, must not be zero length");
+    return ERROR;
+}
+
+int shifterSpank_process_option_module(
+    shifterSpank_config *ssconfig, int val, const char *optarg, int remote)
+{
+    if (optarg != NULL && strlen(optarg) > 0) {
+        if (ssconfig->modules)
+            free(ssconfig->modules);
+        ssconfig->modules = _strdup(optarg);
+        return SUCCESS;
+    }
+    _log(LOG_ERROR, "Invalid shifter module options - if specified, must not be zero length");
     return ERROR;
 }
 
@@ -680,11 +693,9 @@ void shifterSpank_init_setup(shifterSpank_config *ssconfig) {
         wrap_spank_setenv(ssconfig, "SHIFTER_VOLUME", ssconfig->volume, 1);
         wrap_spank_job_control_setenv(ssconfig, "SHIFTER_VOLUME", ssconfig->volume, 1);
     }
-    if (getgid() != 0) {
-        char buffer[128];
-        snprintf(buffer, 128, "%d", getgid());
-        wrap_spank_setenv(ssconfig, "SHIFTER_GID", buffer, 1);
-        wrap_spank_job_control_setenv(ssconfig, "SHIFTER_GID", buffer, 1);
+    if (ssconfig->modules != NULL && strlen(ssconfig->modules) > 0) {
+        wrap_spank_setenv(ssconfig, "SHIFTER_MODULE", ssconfig->modules, 1);
+        wrap_spank_job_control_setenv(ssconfig, "SHIFTER_MODULE", ssconfig->modules, 1);
     }
     if (ssconfig->ccmMode != 0) {
         wrap_spank_setenv(ssconfig, "SHIFTER_CCM", "1", 1);
@@ -859,6 +870,7 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     char *username = NULL;
     char *uid_str = NULL;
     char *sshPubKey = NULL;
+    char *modules = NULL;
     size_t tasksPerNode = 0;
     pid_t pid = 0;
 
