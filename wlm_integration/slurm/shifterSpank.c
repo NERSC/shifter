@@ -256,12 +256,9 @@ int shifterSpank_process_option_volume(
         }
         free_VolumeMap(vmap, 1);
         if (ssconfig->volume != NULL) {
-            char *tmpvol = alloc_strgenf("%s;%s", ssconfig->volume, optarg);
             free(ssconfig->volume);
-            ssconfig->volume = tmpvol;
-        } else {
-            ssconfig->volume = _strdup(optarg);
         }
+        ssconfig->volume = strdup(optarg);
 
         return SUCCESS;
     }
@@ -887,8 +884,17 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
 #endif
 
     int set_type = 0;
-    ptr = getenv("SHIFTER_IMAGETYPE");
+    ptr = getenv("SPANK_SHIFTER_IMAGETYPE");
     if (ptr != NULL) {
+        char *tmp = imageDesc_filterString(ptr, NULL);
+        if (ssconfig->imageType != NULL) {
+            free(ssconfig->imageType);
+        }
+        ssconfig->imageType = tmp;
+        set_type = 1;
+    }
+    ptr = getenv("SHIFTER_IMAGETYPE");
+    if (!set_type && ptr != NULL) {
         char *tmp = imageDesc_filterString(ptr, NULL);
         if (ssconfig->imageType != NULL) {
             free(ssconfig->imageType);
@@ -898,6 +904,14 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     }
 
     _log(LOG_ERROR, "about to lookup image in prolog env");
+    ptr = getenv("SPANK_SHIFTER_IMAGE");
+    if (ptr != NULL) {
+        char *tmp = imageDesc_filterString(ptr, set_type ? ssconfig->imageType : NULL);
+        if (ssconfig->image != NULL) {
+            free(ssconfig->image);
+        }
+        ssconfig->image = tmp;
+    }
     ptr = getenv("SHIFTER_IMAGE");
     if (ptr != NULL) {
         char *tmp = imageDesc_filterString(ptr, set_type ? ssconfig->imageType : NULL);
@@ -907,6 +921,13 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
         ssconfig->image = tmp;
     }
 
+    ptr = getenv("SPANK_SHIFTER_VOLUME");
+    if (ptr != NULL) {
+        if (ssconfig->volume != NULL) {
+            free(ssconfig->volume);
+        }
+        ssconfig->volume = strdup(ptr);
+    }
     ptr = getenv("SHIFTER_VOLUME");
     if (ptr != NULL) {
         if (ssconfig->volume != NULL) {
@@ -935,6 +956,7 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     rc = read_data_from_job(ssconfig, &job, &nodelist, &tasksPerNode, &shared);
     if (rc != SUCCESS) {
         PROLOG_ERROR("FAILED to get job information.", ERROR);
+	goto _prolog_exit_unclean;
     }
 
     /* this prolog should not be used for shared-node jobs */
@@ -944,9 +966,16 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     }
 
     /* try to recover ssh public key */
-    sshPubKey = getenv("SHIFTER_SSH_PUBKEY");
-    if (sshPubKey != NULL && ssconfig->sshdEnabled) {
-        char *ptr = _strdup(sshPubKey);
+    ptr = getenv("SPANK_SHIFTER_SSH_PUBKEY");
+    if (ptr != NULL && ssconfig->sshdEnabled) {
+        ptr = strdup(ptr);
+        sshPubKey = shifter_trim(ptr);
+        sshPubKey = strdup(sshPubKey);
+        free(ptr);
+    }
+    ptr = getenv("SHIFTER_SSH_PUBKEY");
+    if (ptr != NULL && ssconfig->sshdEnabled) {
+        ptr = strdup(ptr);
         sshPubKey = shifter_trim(ptr);
         sshPubKey = _strdup(sshPubKey);
         free(ptr);
