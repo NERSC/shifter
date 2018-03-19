@@ -3327,12 +3327,13 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
 /*
  * Create the args to mimic Docker's behaviour.
  */
-char ** calculate_args(int useEntry, char **clArgs, char *clEntry,
+char **calculate_args(int useEntry, char **clArgs, char *clEntry,
                        ImageData *imageData) {
-  char **newArgs=NULL;
-  if ( (clArgs==NULL || clArgs[0]==NULL) &&
+  char **cmdArgs = clArgs;
+
+  if ( ( clArgs == NULL || clArgs[0] == NULL) &&
         imageData->cmd!=NULL && clEntry==NULL) {
-      newArgs=imageData->cmd;
+      cmdArgs = imageData->cmd;
   }
 
   /* check if entrypoint is defined and desired */
@@ -3345,18 +3346,33 @@ char ** calculate_args(int useEntry, char **clArgs, char *clEntry,
               fprintf(stderr, "Failed to allocate memory for entry\n");
               exit(1);
           }
-      } else if (imageData->entryPoint != NULL) {
+      } else if (imageData->entryPoint != NULL && imageData->entryPoint[0]) {
           entry = imageData->entryPoint;
       } else {
           fprintf(stderr, "Image does not have a defined entrypoint.\n");
-          exit(1);
+          return NULL;
       }
 
-      if (entry != NULL) {
-          newArgs = merge_args(clArgs, entry);
+      if (entry != NULL && cmdArgs!=NULL) {
+          return merge_args(entry, cmdArgs);
+      }
+      else if (entry != NULL) {
+          return entry;
       }
   }
-  return newArgs;
+  else if (clArgs == NULL) {
+      cmdArgs = (char **) malloc(sizeof(char *) * 2);
+
+      if (getenv("SHELL") != NULL) {
+        cmdArgs[0] = strdup(getenv("SHELL"));
+      } else {
+         /* use /bin/sh */
+         cmdArgs[0] = strdup("/bin/sh");
+      }
+      cmdArgs[1] = NULL;
+  }
+
+  return cmdArgs;
 }
 
 int _shifter_get_max_capability(unsigned long *_maxCap) {

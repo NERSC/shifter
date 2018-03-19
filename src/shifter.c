@@ -119,6 +119,7 @@ int main(int argc, char **argv) {
     /* declare needed variables */
     char wd[PATH_MAX];
     char udiRoot[PATH_MAX];
+    char **run_args = NULL;
     uid_t actualUid = 0;
     uid_t actualGid = 0;
     uid_t eUid = 0;
@@ -167,31 +168,11 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    //run_args = determine_args(&opts, &imageDATA);
-    if ( (opts.args==NULL || opts.args[0]==NULL) && imageData.cmd!=NULL && opts.entrypoint==NULL) {
-        opts.args=imageData.cmd;
-    }
-
-    /* check if entrypoint is defined and desired */
-    if (opts.useEntryPoint == 1) {
-        char **entry = NULL;
-
-        if (opts.entrypoint != NULL) {
-            entry = make_char_array(opts.entrypoint);
-            if (entry == NULL) {
-                fprintf(stderr, "Failed to allocate memory for entry\n");
-                exit(1);
-            }
-        } else if (imageData.entryPoint != NULL) {
-            entry = imageData.entryPoint;
-        } else {
-            fprintf(stderr, "Image does not have a defined entrypoint.\n");
-            exit(1);
-        }
-
-        if (entry != NULL) {
-            opts.args = merge_args(opts.args, entry);
-        }
+    run_args = calculate_args(opts.useEntryPoint, opts.args, opts.entrypoint,
+                              &imageData);
+    if (run_args == NULL || run_args == NULL ) {
+      fprintf(stderr, "Error calculating run arguements\n");
+      exit(1);
     }
     if (imageData.workdir != NULL && opts.workdir == NULL) {
         opts.workdir = strdup(imageData.workdir);
@@ -325,7 +306,7 @@ int main(int argc, char **argv) {
     signal(SIGTERM, sigtermHndlr);
 
     /* attempt to execute user-requested exectuable */
-    execvpe(opts.args[0], opts.args, environ_copy);
+    execvpe(run_args[0], run_args, environ_copy);
 
     /* doh! how did we get here? return the error */
     fprintf(stderr, "%s: %s: %s\n", argv[0], opts.args[0], strerror(errno));
@@ -540,18 +521,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
             *argsPtr++ = strdup(argv[optind]);
         }
         *argsPtr = NULL;
-    } else if (getenv("SHELL") != NULL) {
-        /* use the current shell */
-        config->args = (char **) malloc(sizeof(char *) * 2);
-        config->args[0] = strdup(getenv("SHELL"));
-        config->args[1] = NULL;
-    } else {
-        /* use /bin/sh */
-        config->args = (char **) malloc(sizeof(char*) * 2);
-        config->args[0] = strdup("/bin/sh");
-        config->args[1] = NULL;
     }
-
     /* validate and organize any user-requested bind-mounts */
     if (config->rawVolumes != NULL) {
         if (parseVolumeMap(config->rawVolumes, &(config->volumeMap)) != 0) {

@@ -577,6 +577,8 @@ char **split_json_array(const char *value) {
  */
 int _count_args(char **args) {
     int i=0;
+    if (args==NULL)
+      return 0;
     while (args[i]!=NULL) {
         i++;
     }
@@ -585,7 +587,7 @@ int _count_args(char **args) {
 }
 
 /*
- * This function merges to character arrays together.
+ * This function merges two character arrays together.
  * It allocates the new array but reuses the strings
  * from the source arrays.
  * Aborts on errors.
@@ -602,14 +604,14 @@ char **merge_args(char **args1, char **args2) {
     }
     d_index=0;
     s_index=0;
-    while(args2[s_index] != NULL) {
-        newargs[d_index] = args2[s_index];
+    while(args1[s_index] != NULL) {
+        newargs[d_index] = args1[s_index];
         s_index++;
         d_index++;
     }
     s_index=0;
-    while(args1[s_index] != NULL) {
-        newargs[d_index] = args1[s_index];
+    while(args2[s_index] != NULL) {
+        newargs[d_index] = args2[s_index];
         s_index++;
         d_index++;
     }

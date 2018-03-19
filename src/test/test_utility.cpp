@@ -472,11 +472,11 @@ TEST(UtilityTestGroup, merge_args) {
     char *args2[3];
     char **merged;
 
-    args1[0] = strdup("b");
-    args1[1] = NULL;
-    args2[0] = strdup("echo");
-    args2[1] = strdup("a");
-    args2[2] = NULL;
+    args1[0] = strdup("echo");
+    args1[1] = strdup("a");
+    args1[2] = NULL;
+    args2[0] = strdup("b");
+    args2[1] = NULL;
     merged = merge_args(args1, args2);
     CHECK(strcmp(merged[0],"echo") == 0);
     CHECK(strcmp(merged[1],"a") == 0);
