@@ -15,7 +15,7 @@ Next, if not using a prepared source tarball, generate one from the repo::
 
     git clone https://github.com/NERSC/shifter.git
     [[ perform any needed git operations to get a particular branch or commit
-       you require ]]
+       you require.  We currently recommend the 16.08.3_2 tag. ]]
     VERSION=$(grep Version: shifter/shifter.spec | awk '{print $2}')
     cp -rp shifter "shifter-$VERSION"
     tar cf "shifter-$VERSION.tar.gz" "shifter-$VERSION"
