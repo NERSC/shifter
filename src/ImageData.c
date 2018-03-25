@@ -373,7 +373,7 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
 
     } else if (strcmp(key, "ENTRY") == 0) {
         if (is_json_array(value)) {
-            char *tmp = strdup(value);
+            char *tmp = _strdup(value);
             image->entryPoint = split_json_array(tmp);
             free(tmp);
         } else {
@@ -385,7 +385,7 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
     } else if (strcmp(key, "CMD") == 0) {
         if (is_json_array(value)){
             /* tokenize json array */
-            char *tmp = strdup(value);
+            char *tmp = _strdup(value);
             image->cmd = split_json_array(tmp);
             free(tmp);
         } else {

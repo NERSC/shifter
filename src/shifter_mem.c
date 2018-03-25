@@ -63,3 +63,15 @@ char *shifter_strdup(const char *input, const char *file, int line,
     }
     return ret;
 }
+
+char *shifter_strndup(const char *input, size_t len, const char *file, int line,
+                        const char *function)
+{
+    char *ret = strndup(input, len);
+    if (ret == NULL) {
+        fprintf(stderr, "FAILED to duplicate string at %s: %d in %s\n",
+                file, line, function);
+        abort();
+    }
+    return ret;
+}

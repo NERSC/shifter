@@ -43,9 +43,13 @@ extern "C" {
 #define _strdup(__str) \
     shifter_strdup(__str, __FILE__, __LINE__, __func__)
 
+#define _strndup(__str, __sz) \
+    shifter_strndup(__str, __sz, __FILE__, __LINE__, __func__)
+
 void *shifter_realloc(void *, size_t, const char *, int, const char *);
 void *shifter_malloc(size_t, const char *, int, const char *);
 char *shifter_strdup(const char *, const char *, int, const char *);
+char *shifter_strndup(const char *, size_t, const char *, int, const char *);
 
 #ifdef __cplusplus
 }

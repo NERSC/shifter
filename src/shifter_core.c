@@ -3523,10 +3523,10 @@ char **calculate_args(int useEntry, char **clArgs, char *clEntry,
         cmdArgs = malloc(sizeof(char *) * 2);
 
         if (getenv("SHELL") != NULL) {
-            cmdArgs[0] = strdup(getenv("SHELL"));
+            cmdArgs[0] = _strdup(getenv("SHELL"));
         } else {
             /* use /bin/sh */
-            cmdArgs[0] = strdup("/bin/sh");
+            cmdArgs[0] = _strdup("/bin/sh");
         }
         cmdArgs[1] = NULL;
     }

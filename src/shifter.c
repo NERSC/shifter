@@ -139,8 +139,8 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    run_args = calculate_args(opts.useEntryPoint, opts.args, opts.entrypoint,
-                              &imageData);
+    run_args = calculate_args(opts->useEntryPoint, opts->args, opts->entrypoint,
+                              imageData);
     if (run_args == NULL || run_args == NULL ) {
         fprintf(stderr, "Error calculating run arguements\n");
         exit(1);
@@ -288,7 +288,6 @@ int main(int argc, char **argv) {
 int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *udiConfig) {
     int opt = 0;
     int volOptCount = 0;
-    int rc;
     static struct option long_options[] = {
         {"help", 0, 0, 'h'},
         {"volume", 1, 0, 'V'},

@@ -163,7 +163,6 @@ _parseConfig_errCleanup:
     return ret;
 }
 
-
 char *shifter_trim(char *str) {
     char *ptr = str;
     ssize_t len = 0;
@@ -515,11 +514,7 @@ char **split_json_array(const char *value) {
     }
     count++;
 
-    array = (char **) malloc(sizeof(char *) * count);
-    if (array == NULL) {
-        fprintf(stderr, "Allocation failed.\n");
-        return NULL;
-    }
+    array = (char **) _malloc(sizeof(char *) * count);
     ptr = value;
     count = 0;
     in = 0;
@@ -533,11 +528,7 @@ char **split_json_array(const char *value) {
         if (in) {
             in = 0;
             /* Terminate the string */
-            array[count] = strndup(start, length);
-            if (array[count] == NULL) {
-                fprintf(stderr, "Memory allocation failed\n");
-                abort();
-            }
+            array[count] = _strndup(start, length);
             count++;
         } else {
             in = 1;
@@ -584,11 +575,7 @@ char **merge_args(char **args1, char **args2) {
     int s_index, d_index;
     char **newargs;
     nArgs = _count_args(args1) + _count_args(args2) - 1;
-    newargs = (char **) malloc(sizeof(char *) * nArgs);
-    if (newargs == NULL) {
-        fprintf(stderr, "memory allocation failed\n");
-        exit(1);
-    }
+    newargs = (char **) _malloc(sizeof(char *) * nArgs);
     d_index = 0;
     s_index = 0;
     while(args1[s_index] != NULL) {
@@ -613,12 +600,8 @@ char **merge_args(char **args1, char **args2) {
  */
 char **make_char_array(const char *value) {
     char **arr;
-    arr = (char **) malloc(sizeof(char *) * 2);
-    if (!arr){
-        fprintf(stderr, "Allocation error.");
-        abort();
-    }
-    arr[0] = strdup(value);
+    arr = (char **) _malloc(sizeof(char *) * 2);
+    arr[0] = _strdup(value);
     if (!arr[0]) {
         fprintf(stderr, "Allocation error.");
         abort();
