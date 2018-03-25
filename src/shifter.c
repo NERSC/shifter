@@ -171,8 +171,8 @@ int main(int argc, char **argv) {
     run_args = calculate_args(opts.useEntryPoint, opts.args, opts.entrypoint,
                               &imageData);
     if (run_args == NULL || run_args == NULL ) {
-      fprintf(stderr, "Error calculating run arguements\n");
-      exit(1);
+        fprintf(stderr, "Error calculating run arguements\n");
+        exit(1);
     }
     if (imageData.workdir != NULL && opts.workdir == NULL) {
         opts.workdir = strdup(imageData.workdir);
@@ -309,7 +309,7 @@ int main(int argc, char **argv) {
     execvpe(run_args[0], run_args, environ_copy);
 
     /* doh! how did we get here? return the error */
-    fprintf(stderr, "%s: %s: %s\n", argv[0], opts.args[0], strerror(errno));
+    fprintf(stderr, "%s: %s: %s\n", argv[0], run_args[0], strerror(errno));
 
     return 127;
 }
