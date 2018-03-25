@@ -225,15 +225,15 @@ def copy_file(filename, system, logger=None):
 
     if copyret == 0:
         try:
+            chmod_cmd = sh_cmd(system, 'chmod', '0600', temp_fn)
+            ret = _exec_and_log(chmod_cmd, logger)
+            if ret != 0:
+                raise OSError('failed chmod command')
+
             mv_cmd = sh_cmd(system, 'mv', temp_fn, target_fn)
             ret = _exec_and_log(mv_cmd, logger)
             if ret != 0:
                 raise OSError('failed mv command')
-
-            chmod_cmd = sh_cmd(system, 'chmod', '0600', target_fn)
-            ret = _exec_and_log(chmod_cmd, logger)
-            if ret != 0:
-                raise OSError('failed chmod command')
 
             return ret == 0
         except:
