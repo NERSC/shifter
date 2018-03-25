@@ -60,7 +60,8 @@ typedef struct _ImageData {
     ImageFormat format;     /*!< image format  */
     char *filename;         /*!< path to image */
     char **env;             /*!< array of environment variables */
-    char *entryPoint;       /*!< default command used */
+    char **entryPoint;       /*!< default entrypoint used */
+    char **cmd;             /*!< default command used */
     char *workdir;          /*!< working dir of entrypoint */
     char **volume;          /*!< array of volume mounts */
     int useLoopMount;       /*!< flag if image requires loop mount */

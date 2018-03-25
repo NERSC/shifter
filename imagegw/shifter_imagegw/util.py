@@ -29,6 +29,7 @@
 
 import os
 
+
 def program_exists(program):
     """
     Checks if a program (bin) exists and raises an exception if not found.
@@ -37,10 +38,12 @@ def program_exists(program):
         raise IOError('Binary %s not found or not executable.' % str(program))
     return True
 
+
 def which(program):
     """
     Sees if a program (bin) is executable and returns the path
-    Borrowed from: http://stackoverflow.com/questions/377017/test-if-executable-exists-in-python
+    Borrowed from:
+    http://stackoverflow.com/questions/377017/test-if-executable-exists-in-python
     """
     def is_exe(fpath):
         """

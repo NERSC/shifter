@@ -24,6 +24,7 @@ Module to abstract authentication.  Currently just wraps munge.
 import json
 from shifter_imagegw import munge
 
+
 class Authentication(object):
     """
     Authentication Class to authenticate user requests

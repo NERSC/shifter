@@ -456,3 +456,173 @@ int pathcmp(const char *a, const char *b) {
     free(myB);
     return ret;
 }
+
+int is_json_array(const char *value) {
+    if (value[0] == '[' && value[1] == 'u' && value[2] == '\'') {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+/**
+ * split_json_array - utility function to parse a JSON array and split it
+ * into an array of strings.  It will allocate the array but destroys the
+ * source string.
+ *
+ * The values in the array should be comma-separated quoted strings.
+ */
+char **split_json_array(const char *value) {
+    const char *ptr = NULL;
+    int count = 0;
+    int in = 0;
+    char **array = NULL;
+    int i;
+    int vlen = strlen(value);
+    const char *start;
+    int length;
+
+    if (!is_json_array(value)) {
+        return NULL;
+    }
+
+    ptr = value;
+    in = 0;
+    count = 0;
+    ptr++; /* Get past the [ */
+    for (i = 2; i < vlen; i++, ptr++) {
+        if (*ptr != '\'') {
+            continue;
+        }
+        if (in) {
+            count++;
+            in = 0;
+        } else {
+            in = 1;
+        }
+    }
+
+    /* Confirm we aren't in the middle of a string */
+    if (in) {
+        fprintf(stderr, "Malformed JSON\n");
+        return NULL;
+    }
+
+    /* Confirm that the last character was a ] */
+    if (*ptr != ']') {
+        fprintf(stderr, "Malformed JSON\n");
+        return NULL;
+    }
+    count++;
+
+    array = (char **) malloc(sizeof(char *) * count);
+    if (array == NULL) {
+        fprintf(stderr, "Allocation failed.\n");
+        return NULL;
+    }
+    ptr = value;
+    count = 0;
+    in = 0;
+    ptr++; /* Get past the [ */
+    length = 0;
+    for (i = 2; i < vlen; i++, ptr++) {
+        if (*ptr != '\''){
+            length++;
+            continue;
+        }
+        if (in) {
+            in = 0;
+            /* Terminate the string */
+            array[count] = strndup(start, length);
+            if (array[count] == NULL) {
+                fprintf(stderr, "Memory allocation failed\n");
+                abort();
+            }
+            count++;
+        } else {
+            in = 1;
+            start = ptr;
+            /* Get past the quote */
+            start++;
+            length = 0;
+        }
+    }
+    /* Terminate the char array */
+    array[count] = NULL;
+    i = 0;
+    ptr = array[0];
+    while (array[i] != NULL) {
+        i++;
+    }
+    return array;
+}
+
+/*
+ * count return the number of elements including the
+ * NULL termination.
+ */
+int _count_args(char **args) {
+    int i = 0;
+    if (args == NULL) {
+        return 0;
+    }
+    while (args[i] != NULL) {
+        i++;
+    }
+    i++;
+    return i;
+}
+
+/*
+ * This function merges two character arrays together.
+ * It allocates the new array but reuses the strings
+ * from the source arrays.
+ * Aborts on errors.
+ */
+char **merge_args(char **args1, char **args2) {
+    int nArgs = 0;
+    int s_index, d_index;
+    char **newargs;
+    nArgs = _count_args(args1) + _count_args(args2) - 1;
+    newargs = (char **) malloc(sizeof(char *) * nArgs);
+    if (newargs == NULL) {
+        fprintf(stderr, "memory allocation failed\n");
+        exit(1);
+    }
+    d_index = 0;
+    s_index = 0;
+    while(args1[s_index] != NULL) {
+        newargs[d_index] = args1[s_index];
+        s_index++;
+        d_index++;
+    }
+    s_index = 0;
+    while(args2[s_index] != NULL) {
+        newargs[d_index] = args2[s_index];
+        s_index++;
+        d_index++;
+    }
+    newargs[d_index] = NULL;
+    return  newargs;
+}
+
+/*
+ * Convert a simple character string into a
+ * character array with one entry.
+ * Aborts on errors.
+ */
+char **make_char_array(const char *value) {
+    char **arr;
+    arr = (char **) malloc(sizeof(char *) * 2);
+    if (!arr){
+        fprintf(stderr, "Allocation error.");
+        abort();
+    }
+    arr[0] = strdup(value);
+    if (!arr[0]) {
+        fprintf(stderr, "Allocation error.");
+        abort();
+    }
+    arr[1] = NULL;
+    return arr;
+}
