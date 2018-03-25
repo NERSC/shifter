@@ -52,6 +52,7 @@
 #include <linux/limits.h>
 
 #include "utility.h"
+#include "shifter_mem.h"
 
 
 int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assign_fp)(const char *, const char *, void *)) {
@@ -87,7 +88,7 @@ int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assig
             ptr = strchr(linePtr, delim);
             if (ptr == NULL) continue;
             *ptr++ = 0;
-            key_alloc = strdup(linePtr);
+            key_alloc = _strdup(linePtr);
             key = shifter_trim(key_alloc);
             if (key == NULL) {
                 goto _parseConfig_errCleanup;
@@ -110,7 +111,7 @@ int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assig
 
         /* merge value and tValue */
         if (value == NULL) {
-            value = strdup(tValue);
+            value = _strdup(tValue);
         } else {
             if (asprintf(&tmp_value, "%s %s", value, tValue) < 0) {
                 goto _parseConfig_errCleanup;
@@ -161,7 +162,6 @@ _parseConfig_errCleanup:
     }
     return ret;
 }
-
 
 char *shifter_trim(char *str) {
     char *ptr = str;
@@ -221,20 +221,15 @@ int strncpy_StringArray(const char *str, size_t n, char ***wptr,
 
     /* allocate more space at a time */
     count = *wptr - *array;
-    if (*capacity - count < 2) {
+    while (*capacity - count < 2) {
         size_t new_capacity = *capacity + allocationBlock;
-        char **tmp = (char **) realloc(*array, sizeof(char *) * new_capacity);
-        if (tmp == NULL) {
-            fprintf(stderr, "ERROR: failed to allocate memory, append failed\n");
-            return 1;
-        }
-        *array = tmp;
+        *array = _realloc(*array, sizeof(char *) * new_capacity);
         *wptr = *array + count;
         *capacity += allocationBlock;
     }
 
     /* append string to array, add ternminated NULL */
-    **wptr = (char *) malloc(sizeof(char) * (n + 1));
+    **wptr = _malloc(sizeof(char) * (n + 1));
     memcpy(**wptr, str, n);
     (**wptr)[n] = 0;
     (*wptr)++;
@@ -278,7 +273,7 @@ char *alloc_strcatf(char *string, size_t *currLen, size_t *capacity, const char 
     }
 
     if (string == NULL || *capacity == 0) {
-        string = (char *) malloc(sizeof(char) * 128);
+        string = _malloc(sizeof(char) * 128);
         *capacity = 128;
     }
 
@@ -299,17 +294,11 @@ char *alloc_strcatf(char *string, size_t *currLen, size_t *capacity, const char 
              * allocating eagerly to reduce cost for successive strcatf
              * operations */
             size_t newCapacity = *capacity * 2 + 1;
-            char *tmp = NULL;
             if (newCapacity < (size_t) (n + 1)) {
                 newCapacity = (size_t) (n + 1);
             }
 
-            tmp = (char *) realloc(string, sizeof(char) * newCapacity);
-            if (tmp == NULL) {
-                status = 2;
-                break;
-            }
-            string = tmp;
+            string = _realloc(string, sizeof(char) * newCapacity);
             *capacity = newCapacity;
         } else {
             /* success */
@@ -345,7 +334,7 @@ char *alloc_strgenf(const char *format, ...) {
         return NULL;
     }
 
-    string = (char *) malloc(sizeof(char) * 128);
+    string = _malloc(sizeof(char) * 128);
     capacity = 128;
 
     while (1) {
@@ -364,12 +353,7 @@ char *alloc_strgenf(const char *format, ...) {
              * allocating eagerly to reduce cost for successive strcatf
              * operations */
             size_t newCapacity = n + 1;
-            char *tmp = (char *) realloc(string, sizeof(char) * newCapacity);
-            if (tmp == NULL) {
-                status = 2;
-                break;
-            }
-            string = tmp;
+            string = _realloc(string, sizeof(char) * newCapacity);
             capacity = newCapacity;
         } else {
             /* success */
@@ -406,7 +390,7 @@ char *userInputPathFilter(const char *input, int allowSlash) {
     if (input == NULL) return NULL;
 
     len = strlen(input) + 1;
-    ret = (char *) malloc(sizeof(char) * len);
+    ret = _malloc(sizeof(char) * len);
     if (ret == NULL) return NULL;
 
     rptr = input;
@@ -428,7 +412,7 @@ char *cleanPath(const char *path) {
     if (!path) return NULL;
     ssize_t len = strlen(path) + 1;
 
-    char *ret = (char *) malloc(sizeof(char) * len);
+    char *ret = _malloc(sizeof(char) * len);
     memset(ret, 0, sizeof(char) * len);
 
     char *wPtr = ret;
@@ -530,11 +514,7 @@ char **split_json_array(const char *value) {
     }
     count++;
 
-    array = (char **) malloc(sizeof(char *) * count);
-    if (array == NULL) {
-        fprintf(stderr, "Allocation failed.\n");
-        return NULL;
-    }
+    array = (char **) _malloc(sizeof(char *) * count);
     ptr = value;
     count = 0;
     in = 0;
@@ -548,11 +528,7 @@ char **split_json_array(const char *value) {
         if (in) {
             in = 0;
             /* Terminate the string */
-            array[count] = strndup(start, length);
-            if (array[count] == NULL) {
-                fprintf(stderr, "Memory allocation failed\n");
-                abort();
-            }
+            array[count] = _strndup(start, length);
             count++;
         } else {
             in = 1;
@@ -599,11 +575,7 @@ char **merge_args(char **args1, char **args2) {
     int s_index, d_index;
     char **newargs;
     nArgs = _count_args(args1) + _count_args(args2) - 1;
-    newargs = (char **) malloc(sizeof(char *) * nArgs);
-    if (newargs == NULL) {
-        fprintf(stderr, "memory allocation failed\n");
-        exit(1);
-    }
+    newargs = (char **) _malloc(sizeof(char *) * nArgs);
     d_index = 0;
     s_index = 0;
     while(args1[s_index] != NULL) {
@@ -628,12 +600,8 @@ char **merge_args(char **args1, char **args2) {
  */
 char **make_char_array(const char *value) {
     char **arr;
-    arr = (char **) malloc(sizeof(char *) * 2);
-    if (!arr){
-        fprintf(stderr, "Allocation error.");
-        abort();
-    }
-    arr[0] = strdup(value);
+    arr = (char **) _malloc(sizeof(char *) * 2);
+    arr[0] = _strdup(value);
     if (!arr[0]) {
         fprintf(stderr, "Allocation error.");
         abort();

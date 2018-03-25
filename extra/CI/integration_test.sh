@@ -89,5 +89,8 @@ python $CIDIR/integration/test_shifterConfig_format.py ubuntu:16.04
 echo "Check capabilities and bounding sets"
 python $CIDIR/integration/test_capabilities.py ubuntu:16.04
 
+echo "Check /etc/mtab symlink"
+python $CIDIR/integration/test_etcmtab.py ubuntu:16.04
+
 #echo "Test GPU support"
 #python $CIDIR/integration/test_gpu_support.py ubuntu:16.04

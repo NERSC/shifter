@@ -54,6 +54,7 @@
 #include "ImageData.h"
 #include "UdiRootConfig.h"
 #include "utility.h"
+#include "shifter_mem.h"
 
 #define ENV_ALLOC_SIZE 512
 #define VOL_ALLOC_SIZE 256
@@ -66,7 +67,7 @@ static const char *allowedImageTypes[] = {
     NULL
 };
 
-uid_t * _Convert_to_list(const char *text);
+uid_t * _convert_to_list(const char *text);
 int _ImageData_assign(const char *key, const char *value, void *t_imageData);
 char *_ImageData_filterString(const char *input, int allowSlash);
 
@@ -113,7 +114,7 @@ char *lookup_ImageIdentifier(
     if (strlen(imageType) == 0 || strlen(imageTag) == 0) return NULL;
 
     if (strcmp(imageType, "id") == 0 || strcmp(imageType, "local") == 0) {
-        return strdup(imageTag);
+        return _strdup(imageTag);
     }
 
     snprintf(lookupCmd, PATH_MAX, "%s/bin/shifterimg lookup %s:%s",
@@ -143,7 +144,7 @@ char *lookup_ImageIdentifier(
             }
         } else if (identifier == NULL && strchr(ptr, ':') == NULL) {
             /* this is the image id */
-            identifier = strdup(ptr);
+            identifier = _strdup(ptr);
             break;
         }
     }
@@ -181,8 +182,8 @@ int parse_ImageData(char *type, char *identifier, UdiRootConfig *config, ImageDa
     }
 
     if (type != NULL && strcmp(type, "local") == 0) {
-        image->identifier = strdup(identifier);
-        image->filename = strdup(identifier);
+        image->identifier = _strdup(identifier);
+        image->filename = _strdup(identifier);
         image->format = FORMAT_VFS;
         image->entryPoint = NULL;
         image->cmd = NULL;
@@ -192,10 +193,7 @@ int parse_ImageData(char *type, char *identifier, UdiRootConfig *config, ImageDa
     }
 
     fname_len = strlen(config->imageBasePath) + strlen(identifier) + 7;
-    fname = (char *) malloc(sizeof(char) * fname_len);
-    if (fname == NULL) {
-        return 1;
-    }
+    fname = (char *) _malloc(sizeof(char) * fname_len);
     snprintf(fname, fname_len, "%s/%s.meta", config->imageBasePath, identifier);
 
     ret = shifter_parseConfig(fname, ':', image, _ImageData_assign);
@@ -233,13 +231,10 @@ int parse_ImageData(char *type, char *identifier, UdiRootConfig *config, ImageDa
     };
 
     fname_len = strlen(config->imageBasePath) + strlen(identifier) + strlen(extension) + 3;
-    image->filename = (char *) malloc(sizeof(char)*fname_len);
-    if (image->filename == NULL) {
-        return 1;
-    }
+    image->filename = (char *) _malloc(sizeof(char)*fname_len);
     snprintf(image->filename, fname_len, "%s/%s.%s", config->imageBasePath, identifier, extension);
 
-    image->identifier = strdup(identifier);
+    image->identifier = _strdup(identifier);
 
     return 0;
 }
@@ -378,7 +373,7 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
 
     } else if (strcmp(key, "ENTRY") == 0) {
         if (is_json_array(value)) {
-            char *tmp = strdup(value);
+            char *tmp = _strdup(value);
             image->entryPoint = split_json_array(tmp);
             free(tmp);
         } else {
@@ -390,7 +385,7 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
     } else if (strcmp(key, "CMD") == 0) {
         if (is_json_array(value)){
             /* tokenize json array */
-            char *tmp = strdup(value);
+            char *tmp = _strdup(value);
             image->cmd = split_json_array(tmp);
             free(tmp);
         } else {
@@ -400,14 +395,14 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
             return 1;
         }
     } else if (strcmp(key, "WORKDIR") == 0) {
-        image->workdir = strdup(value);
+        image->workdir = _strdup(value);
         if (image->workdir == NULL) {
             return 1;
         }
     } else if (strcmp(key, "USERACL") == 0) {
-        image->uids = _Convert_to_list(value);
+        image->uids = _convert_to_list(value);
     } else if (strcmp(key, "GROUPACL") == 0) {
-        image->gids = _Convert_to_list(value);
+        image->gids = _convert_to_list(value);
     } else if (strcmp(key, "VOLUME") == 0) {
         char **tmp = image->volume + image->volume_size;
         char *tvalue = _ImageData_filterString(value, 1);
@@ -420,42 +415,35 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
     return 0;
 }
 
-uid_t * _Convert_to_list(const char *text){
+uid_t * _convert_to_list(const char *text){
     uid_t *ids = NULL;
-    const char *ptr;
-    int count;
-    int i;
+    size_t id_capacity = 0;
+    size_t id_count = 0;
+    char *ptr = NULL;
+    char *buffer = NULL;
+    char *search = NULL;
+    char *svPtr = NULL;
 
-    if (text[0] == '\0'){
+    if (!text || text[0] == '\0') {
         return NULL;
     }
 
-    /* Figure out the number of elements */
-    for (ptr = text, count = 0; ptr != NULL; count++) {
-        ptr = strstr(ptr, ",");
-        if (ptr != NULL) {
-            ptr++;
+    buffer = _strdup(text);
+    search = buffer;
+    svPtr = NULL;
+    while ((ptr = strtok_r(search, ",", &svPtr)) != NULL) {
+        search = NULL;
+        if (id_count + 2 < id_capacity) {
+            size_t alloc_size = sizeof(uid_t) * (id_count + 2) * 2;
+            ids = _realloc(ids, alloc_size);
+            id_capacity = (id_count + 2) * 2;
         }
+        ids[id_count++] = atoi(ptr);
     }
 
-    /* Alloc an array */
-    ids = malloc(sizeof(uid_t) * (count + 1));
-    if (ids == NULL) {
-        fprintf(stderr, "ERROR: Alloc failed for ids\n");
-        return NULL;
-    }
-
-    /* Populate with the uid/gid */
-    for (ptr = text, i = 0; i < count; i++) {
-        ids[i] = atol(ptr);
-        ptr = strstr(ptr, ",");
-        if (ptr != NULL) {
-            ptr++;
-        }
-    }
-
-    /* Terminate with a -1 */
-    ids[count] = -1;
+    /* terminate with a -1 */
+    ids[id_count] = -1;
+    free(buffer);
     return ids;
 }
 
@@ -467,8 +455,7 @@ char *_ImageData_filterString(const char *input, int allowSlash) {
     if (input == NULL) return NULL;
 
     len = strlen(input) + 1;
-    ret = (char *) malloc(sizeof(char) * len);
-    if (ret == NULL) return NULL;
+    ret = (char *) _malloc(sizeof(char) * len);
 
     rptr = input;
     wptr = ret;
@@ -532,7 +519,7 @@ int parse_ImageDescriptor(char *userinput, char **imageType, char **imageTag, Ud
         }
 
         if (foundType) {
-            type = strdup(tmp);
+            type = _strdup(tmp);
             if (type == NULL) {
                 fprintf(stderr, "ERROR: failed to copy type string (out of "
                         "mem?) when attempting to parse image descriptor.\n");
@@ -551,7 +538,7 @@ int parse_ImageDescriptor(char *userinput, char **imageType, char **imageTag, Ud
     /* if no type is found, then the whole userinput string must be the image
      * descriptor, so assume default image type from udiRoot.conf */
     if (!foundType && udiConfig->defaultImageType != NULL) {
-        type = strdup(udiConfig->defaultImageType);
+        type = _strdup(udiConfig->defaultImageType);
         if (type == NULL) {
             fprintf(stderr, "ERROR: failed to copy type string (out of mem?) "
                     "when attempting to parse image descriptor.\n");
@@ -605,4 +592,27 @@ _error:
         tag = NULL;
     }
     return -1;
+}
+
+int check_image_permissions(uid_t actualUid, gid_t actualGid, gid_t *aux_gids,
+                            int naux_gids, ImageData *imageData)
+{
+    uid_t *tuid;
+    gid_t *tgid;
+    int idx = 0;
+
+    if (imageData->uids == NULL && imageData->gids == NULL) {
+        return 1;
+    }
+
+    for (tuid = imageData->uids; tuid != NULL && *tuid != -1; tuid++) {
+        if (*tuid == actualUid) return 1;
+    }
+    for (tgid = imageData->gids; tgid != NULL && *tgid != -1; tgid++) {
+        if (*tgid == actualGid) return 1;
+        for (idx = 0; idx < naux_gids; idx++) {
+            if (*tgid == aux_gids[idx]) return 1;
+        }
+    }
+    return 0;
 }

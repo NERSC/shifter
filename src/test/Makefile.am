@@ -30,6 +30,7 @@ chroot3/nss:
 
 test_utility_SOURCES = \
     test_utility.cpp \
+    $(top_srcdir)/src/shifter_mem.c \
     $(top_srcdir)/src/utility.c
 test_utility_CXXFLAGS = $(TEST_CFLAGS)
 test_utility_CFLAGS = $(TEST_CFLAGS)
@@ -38,6 +39,7 @@ test_utility_LDFLAGS = $(TEST_LDFLAGS)
 test_VolumeMap_SOURCES = \
     test_VolumeMap.cpp \
     $(top_srcdir)/src/VolumeMap.c \
+    $(top_srcdir)/src/shifter_mem.c \
     $(top_srcdir)/src/utility.c
 test_VolumeMap_CXXFLAGS = $(TEST_CFLAGS)
 test_VolumeMap_CFLAGS = $(TEST_CFLAGS)
@@ -50,6 +52,7 @@ test_UdiRootConfig_SOURCES = \
     $(top_srcdir)/src/VolumeMap.c \
     $(top_srcdir)/src/PathList.c \
     $(top_srcdir)/src/MountList.c \
+    $(top_srcdir)/src/shifter_mem.c \
     $(top_srcdir)/src/shifter_core.c
 
 test_UdiRootConfig_CXXFLAGS = $(TEST_CFLAGS)
@@ -59,6 +62,7 @@ test_UdiRootConfig_LDFLAGS = $(TEST_LDFLAGS)
 test_shifter_SOURCES = \
     test_shifter.cpp \
     $(top_srcdir)/src/shifter.c \
+    $(top_srcdir)/src/shifter_mem.c \
     $(top_srcdir)/src/shifter_core.c \
     $(top_srcdir)/src/UdiRootConfig.c \
     $(top_srcdir)/src/utility.c \
@@ -76,6 +80,7 @@ test_shifterimg_SOURCES = \
     $(top_srcdir)/src/UdiRootConfig.c \
     $(top_srcdir)/src/VolumeMap.c \
     $(top_srcdir)/src/ImageData.c \
+    $(top_srcdir)/src/shifter_mem.c \
     $(top_srcdir)/src/utility.c
 test_shifterimg_LDFLAGS = $(TEST_LDFLAGS)
 test_shifterimg_LDFLAGS = $(MUNGE_LDFLAGS) $(JSON_LDFLAGS) $(LIBCURL) $(MUNGE_LDFLAGS) $(TEST_LDFLAGS)
@@ -85,6 +90,7 @@ test_shifterimg_CXXFLAGS = $(AM_CPPFLAGS) $(MUNGE_CPPFLAGS) $(JSON_CPPFLAGS) $(L
 test_ImageData_SOURCES = \
     test_ImageData.cpp \
     $(top_srcdir)/src/ImageData.c \
+    $(top_srcdir)/src/shifter_mem.c \
     $(top_srcdir)/src/utility.c
 test_ImageData_CXXFLAGS = $(TEST_CFLAGS)
 test_ImageData_CFLAGS = $(TEST_CFLAGS)
@@ -93,6 +99,7 @@ test_ImageData_LDFLAGS = $(TEST_LDFLAGS)
 test_shifter_core_SOURCES = \
     test_shifter_core.cpp \
     $(top_srcdir)/src/shifter_core.c \
+    $(top_srcdir)/src/shifter_mem.c \
     $(top_srcdir)/src/utility.c \
     $(top_srcdir)/src/UdiRootConfig.c \
     $(top_srcdir)/src/VolumeMap.c \
@@ -116,6 +123,7 @@ test_shifter_core_AsRootDangerous_LDFLAGS = $(TEST_LDFLAGS)
 test_MountList_SOURCES = \
     test_MountList.cpp \
     $(top_srcdir)/src/MountList.c \
+    $(top_srcdir)/src/shifter_mem.c \
     $(top_srcdir)/src/utility.c
 test_MountList_CXXFLAGS = $(TEST_CFLAGS)
 test_MountList_CFLAGS = $(TEST_CFLAGS)
@@ -123,6 +131,7 @@ test_MountList_LDFLAGS = $(TEST_LDFLAGS)
 
 test_PathList_SOURCES = \
     test_PathList.cpp \
+    $(top_srcdir)/src/shifter_mem.c \
     $(top_srcdir)/src/PathList.c
 test_PathList_CXXFLAGS = $(TEST_CFLAGS)
 test_PathList_CFLAGS = $(TEST_CFLAGS)

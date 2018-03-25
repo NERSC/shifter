@@ -1,7 +1,7 @@
 /* Shifter, Copyright (c) 2016, The Regents of the University of California,
 ## through Lawrence Berkeley National Laboratory (subject to receipt of any
 ## required approvals from the U.S. Dept. of Energy).  All rights reserved.
-## 
+##
 ## Redistribution and use in source and binary forms, with or without
 ## modification, are permitted provided that the following conditions are met:
 ##  1. Redistributions of source code must retain the above copyright notice,
@@ -13,7 +13,7 @@
 ##     National Laboratory, U.S. Dept. of Energy nor the names of its
 ##     contributors may be used to endorse or promote products derived from this
 ##     software without specific prior written permission.
-## 
+##
 ## THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 ## AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 ## IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -25,7 +25,7 @@
 ## CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ## ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 ## POSSIBILITY OF SUCH DAMAGE.
-##  
+##
 ## You are under no obligation whatsoever to provide any bug fixes, patches, or
 ## upgrades to the features, functionality or performance of the source code
 ## ("Enhancements") to anyone; however, if you choose to make your Enhancements
@@ -48,6 +48,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include "PathList.h"
+#include "shifter_mem.h"
 
 PathList *pathList_init(const char *path) {
     PathList *ret = NULL;
@@ -65,16 +66,9 @@ PathList *pathList_init(const char *path) {
     path_len = strlen(path);
     if (path_len == 0) return NULL;
 
-    buffer = strdup(path);
-    if (buffer == NULL) {
-        return NULL;
-    }
+    buffer = _strdup(path);
 
-    ret = (PathList *) malloc(sizeof(PathList));
-    if (ret == NULL) {
-        free(buffer);
-        return NULL;
-    }
+    ret = (PathList *) _malloc(sizeof(PathList));
     ret->path = NULL;
     ret->relroot = NULL;
     ret->terminal = NULL;
@@ -95,8 +89,8 @@ PathList *pathList_init(const char *path) {
             continue;
         }
 
-        comp = (PathComponent *) malloc(sizeof(PathComponent));
-        comp->item = strdup(tgt);
+        comp = (PathComponent *) _malloc(sizeof(PathComponent));
+        comp->item = _strdup(tgt);
         comp->child = NULL;
         comp->parent = parent;
         comp->list = ret;
@@ -181,7 +175,7 @@ PathList *pathList_duplicate(PathList *src) {
 
     if (src == NULL) return NULL;
 
-    ret = (PathList *) malloc(sizeof(PathList));
+    ret = (PathList *) _malloc(sizeof(PathList));
     if (ret == NULL) return NULL;
 
     ret->path = NULL;
@@ -190,11 +184,11 @@ PathList *pathList_duplicate(PathList *src) {
     ret->terminal = NULL;
 
     for (rptr = src->path; rptr != NULL; rptr = rptr->child) {
-        wptr = (PathComponent *) malloc(sizeof(PathComponent));
+        wptr = (PathComponent *) _malloc(sizeof(PathComponent));
         wptr->list = ret;
         wptr->parent = wptr_parent;
         wptr->child = NULL;
-        wptr->item = strdup(rptr->item);
+        wptr->item = _strdup(rptr->item);
 
         if (src->relroot == rptr) {
             ret->relroot = wptr;
@@ -307,7 +301,7 @@ void pathList_resolve(PathList *path) {
             target = curr->child;
             pathList_freeComponent(curr);
             curr = target;
-            continue; 
+            continue;
         }
         if (curr->parent == path->relroot) {
             /* cannot traverse above relroot */
@@ -401,8 +395,7 @@ PathList *pathList_commonPath(PathList *a, PathList *b) {
     if (a->relroot != NULL && b->relroot == NULL) return NULL;
     if (a->relroot == NULL && b->relroot != NULL) return NULL;
 
-    ret = (PathList *) malloc(sizeof(PathList));
-    if (ret == NULL) return NULL;
+    ret = (PathList *) _malloc(sizeof(PathList));
     ret->absolute = a->absolute;
     ret->path = NULL;
     ret->relroot = NULL;
@@ -416,8 +409,8 @@ PathList *pathList_commonPath(PathList *a, PathList *b) {
             break;
         }
 
-        newcomp = (PathComponent *) malloc(sizeof(PathComponent));
-        newcomp->item = strdup(aptr->item);
+        newcomp = (PathComponent *) _malloc(sizeof(PathComponent));
+        newcomp->item = _strdup(aptr->item);
         newcomp->parent = ret->terminal;
         if (ret->terminal != NULL) {
             ret->terminal->child = newcomp;
@@ -461,22 +454,8 @@ PathComponent *pathList_appendComponents(
 
     parent = dest->terminal;
     while (compPtr) {
-        newComp = (PathComponent *) malloc(sizeof(PathComponent));
-        if (newComp == NULL) {
-            if (retComp != NULL) {
-                pathList_freeComponents(retComp);
-                retComp = NULL;
-            }
-            return NULL;
-        }
-        newComp->item = strdup(compPtr->item);
-        if (newComp->item == NULL) {
-            if (retComp != NULL) {
-                pathList_freeComponents(retComp);
-            }
-            pathList_freeComponent(newComp);
-            return NULL;
-        }
+        newComp = (PathComponent *) _malloc(sizeof(PathComponent));
+        newComp->item = _strdup(compPtr->item);
         newComp->list = dest;
         newComp->parent = parent;
         newComp->child = NULL;
@@ -575,7 +554,7 @@ char *pathList_stringPartial(PathList *path, PathComponent *pos) {
     if (pos == NULL && path->path != NULL) return NULL;
     if (pos != NULL && pos->list != path) return NULL;
 
-    ret = (char *) malloc(sizeof(char) * PATH_MAX);
+    ret = (char *) _malloc(sizeof(char) * PATH_MAX);
     memset(ret, 0, sizeof(char) * PATH_MAX);
     wptr = ret;
 
@@ -619,7 +598,7 @@ PathComponent *pathList_symlinkSubstitute(PathList *path,
     PathComponent *unchecked = NULL;
 
     if (path == NULL || path->path == NULL || link == NULL
-            || link->list == NULL || linkVal == NULL) 
+            || link->list == NULL || linkVal == NULL)
     {
         goto _symlink_sub_error;
     }
@@ -725,7 +704,7 @@ void pathList_freeComponents(PathComponent *parent) {
         parent = next;
     }
 }
-    
+
 void pathList_freeComponent(PathComponent *comp) {
     if (comp == NULL) return;
 

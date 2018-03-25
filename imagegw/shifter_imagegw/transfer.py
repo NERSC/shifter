@@ -174,6 +174,10 @@ def pre_create_tempfile(basepath, filename, sh_cmd, system, logger=None):
             raise OSError(memo)
         if len(stderr) > 0 and logger is not None:
             logger.error("%s" % (stderr.strip()))
+    chmod_cmd = sh_cmd(system, 'chmod', '0600', temp_fn)
+    ret = _exec_and_log(chmod_cmd, logger)
+    if ret != 0:
+        raise OSError('Failed to chmod precreated xfer file')
     return temp_fn
 
 
@@ -211,6 +215,7 @@ def copy_file(filename, system, logger=None):
         raise OSError(memo)
 
     copyret = None
+    mvret = None
     try:
         copy = cp_cmd(system, filename, temp_fn)
         copyret = _exec_and_log(copy, logger)
@@ -221,16 +226,34 @@ def copy_file(filename, system, logger=None):
 
     if copyret == 0:
         try:
+            chmod_cmd = sh_cmd(system, 'chmod', '0600', temp_fn)
+            ret = _exec_and_log(chmod_cmd, logger)
+            if ret != 0:
+                raise OSError('failed chmod command')
+
             mv_cmd = sh_cmd(system, 'mv', temp_fn, target_fn)
-            ret = _exec_and_log(mv_cmd, logger)
-            return ret == 0
+            mvret = _exec_and_log(mv_cmd, logger)
+            if mvret != 0:
+                raise OSError('failed mv command')
         except:
             # TODO we might also need to remove target_fn in this case
             rm_cmd = sh_cmd(system, 'rm', temp_fn)
             _exec_and_log(rm_cmd, logger)
             raise
-    return False
 
+    if mvret == 0:
+        try:
+            chmod_cmd = sh_cmd(system, 'chmod', '0600', target_fn)
+            ret = _exec_and_log(chmod_cmd, logger)
+            if ret != 0:
+                raise OSError('failed chmod command')
+            return ret == 0
+        except:
+            rm_cmd = sh_cmd(system, "rm", target_fn);
+            _exec_and_log(rm_cmd, logger)
+            raise
+
+    return False
 
 def import_copy_file(filename, destfilename, system, logger=None):
     """
