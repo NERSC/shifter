@@ -408,7 +408,7 @@ int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
             }
         }
         if (config->siteResources != NULL && config->siteResources[0] != '/') {
-            // note: we will find out later, through "mkdir", whether it is a valid path name or not
+            /* note: we will find out later, through "mkdir", whether it is a valid path name or not */
             VAL_ERROR("Specified \"siteResources\" is not an absolute path.", UDIROOT_VAL_FILEVAL);
         }
     }

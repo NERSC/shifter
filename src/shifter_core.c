@@ -3328,51 +3328,48 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
  * Create the args to mimic Docker's behaviour.
  */
 char **calculate_args(int useEntry, char **clArgs, char *clEntry,
-                       ImageData *imageData) {
-  char **cmdArgs = clArgs;
+                      ImageData *imageData)
+{
+    char **cmdArgs = clArgs;
+    if ((clArgs == NULL || clArgs[0] == NULL) &&
+            imageData->cmd != NULL && clEntry == NULL) {
+        cmdArgs = imageData->cmd;
+    }
 
-  if ( ( clArgs == NULL || clArgs[0] == NULL) &&
-        imageData->cmd!=NULL && clEntry==NULL) {
-      cmdArgs = imageData->cmd;
-  }
+    /* check if entrypoint is defined and desired */
+    if (useEntry) {
+        char **entry = NULL;
 
-  /* check if entrypoint is defined and desired */
-  if (useEntry) {
-      char **entry = NULL;
+        if (clEntry != NULL) {
+            entry = make_char_array(clEntry);
+            if (entry == NULL) {
+                fprintf(stderr, "Failed to allocate memory for entry\n");
+                exit(1);
+            }
+        } else if (imageData->entryPoint != NULL && imageData->entryPoint[0]) {
+            entry = imageData->entryPoint;
+        } else {
+            fprintf(stderr, "Image does not have a defined entrypoint.\n");
+            return NULL;
+        }
 
-      if (clEntry != NULL) {
-          entry = make_char_array(clEntry);
-          if (entry == NULL) {
-              fprintf(stderr, "Failed to allocate memory for entry\n");
-              exit(1);
-          }
-      } else if (imageData->entryPoint != NULL && imageData->entryPoint[0]) {
-          entry = imageData->entryPoint;
-      } else {
-          fprintf(stderr, "Image does not have a defined entrypoint.\n");
-          return NULL;
-      }
+        if (entry != NULL && cmdArgs != NULL) {
+            return merge_args(entry, cmdArgs);
+        } else if (entry != NULL) {
+            return entry;
+        }
+    } else if (clArgs == NULL) {
+        cmdArgs = malloc(sizeof(char *) * 2);
 
-      if (entry != NULL && cmdArgs!=NULL) {
-          return merge_args(entry, cmdArgs);
-      }
-      else if (entry != NULL) {
-          return entry;
-      }
-  }
-  else if (clArgs == NULL) {
-      cmdArgs = (char **) malloc(sizeof(char *) * 2);
-
-      if (getenv("SHELL") != NULL) {
-        cmdArgs[0] = strdup(getenv("SHELL"));
-      } else {
-         /* use /bin/sh */
-         cmdArgs[0] = strdup("/bin/sh");
-      }
-      cmdArgs[1] = NULL;
-  }
-
-  return cmdArgs;
+        if (getenv("SHELL") != NULL) {
+            cmdArgs[0] = strdup(getenv("SHELL"));
+        } else {
+            /* use /bin/sh */
+            cmdArgs[0] = strdup("/bin/sh");
+        }
+        cmdArgs[1] = NULL;
+    }
+    return cmdArgs;
 }
 
 int _shifter_get_max_capability(unsigned long *_maxCap) {

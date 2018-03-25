@@ -377,26 +377,28 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
         image->env_size++;
 
     } else if (strcmp(key, "ENTRY") == 0) {
-        if (is_json_array(value)){
-            image->entryPoint = split_json_array(strdup(value));
-        }
-        else {
+        if (is_json_array(value)) {
+            char *tmp = strdup(value);
+            image->entryPoint = split_json_array(tmp);
+            free(tmp);
+        } else {
             image->entryPoint = make_char_array(value);
         }
         if (image->entryPoint == NULL) {
             return 1;
         }
-      } else if (strcmp(key, "CMD") == 0) {
-          if (is_json_array(value)){
-              // tokenize json array
-              image->cmd = split_json_array(strdup(value));
-          }
-          else {
-              image->cmd = make_char_array(value);
-          }
-          if (image->cmd == NULL) {
-              return 1;
-          }
+    } else if (strcmp(key, "CMD") == 0) {
+        if (is_json_array(value)){
+            /* tokenize json array */
+            char *tmp = strdup(value);
+            image->cmd = split_json_array(tmp);
+            free(tmp);
+        } else {
+            image->cmd = make_char_array(value);
+        }
+        if (image->cmd == NULL) {
+            return 1;
+        }
     } else if (strcmp(key, "WORKDIR") == 0) {
         image->workdir = strdup(value);
         if (image->workdir == NULL) {
@@ -419,34 +421,42 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
 }
 
 uid_t * _Convert_to_list(const char *text){
-  uid_t *ids=NULL;
-  const char *ptr;
-  int count;
-  int i;
+    uid_t *ids = NULL;
+    const char *ptr;
+    int count;
+    int i;
 
-  if (text[0]==0){
-    return NULL;
-  }
-  /* Figure out the number of elements */
-  for (ptr=text,count=0;ptr!=NULL;count++){
-    ptr=strstr(ptr,",");
-    if (ptr!=NULL) ptr++;
-  }
-  /* Alloc an array */
-  ids=malloc(sizeof(uid_t)*(count+1));
-  if (ids==NULL){
-      fprintf(stderr, "ERROR: Alloc failed for ids\n");
-      return NULL;
-  }
-  /* Populate with the uid/gid */
-  for (ptr=text,i=0;i<count;i++){
-    ids[i]=atol(ptr);
-    ptr=strstr(ptr,",");
-    if (ptr!=NULL) ptr++;
-  }
-  /* Terminate with a -1 */
-  ids[count]=-1;
-  return ids;
+    if (text[0] == '\0'){
+        return NULL;
+    }
+
+    /* Figure out the number of elements */
+    for (ptr = text, count = 0; ptr != NULL; count++) {
+        ptr = strstr(ptr, ",");
+        if (ptr != NULL) {
+            ptr++;
+        }
+    }
+
+    /* Alloc an array */
+    ids = malloc(sizeof(uid_t) * (count + 1));
+    if (ids == NULL) {
+        fprintf(stderr, "ERROR: Alloc failed for ids\n");
+        return NULL;
+    }
+
+    /* Populate with the uid/gid */
+    for (ptr = text, i = 0; i < count; i++) {
+        ids[i] = atol(ptr);
+        ptr = strstr(ptr, ",");
+        if (ptr != NULL) {
+            ptr++;
+        }
+    }
+
+    /* Terminate with a -1 */
+    ids[count] = -1;
+    return ids;
 }
 
 char *_ImageData_filterString(const char *input, int allowSlash) {

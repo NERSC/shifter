@@ -873,7 +873,7 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
       free(payload);
     }
     if (err) {
-        if (err == 7) { // 7 means Failed to connect to host.
+        if (err == 7) { /* 7 means Failed to connect to host. */
           printf("ERROR: failed to contact the image gateway.\n");
         } else {
           printf("err %d\n", err);
