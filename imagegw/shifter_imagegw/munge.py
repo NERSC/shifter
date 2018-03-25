@@ -15,7 +15,7 @@
 #    contributors may be used to endorse or promote products derived from this
 #    software without specific prior written permission.`
 #
-#See LICENSE for full text.
+# See LICENSE for full text.
 
 """
 Helper routines for munge
@@ -23,6 +23,7 @@ Helper routines for munge
 
 import sys
 from subprocess import Popen, PIPE
+debug = False
 
 
 def munge(text, socket=None):
@@ -82,7 +83,8 @@ def unmunge(encoded, socket=None):
         resp['MESSAGE'] = message
         return resp
     except:
-        print sys.exc_value
+        if debug:
+            print sys.exc_value
         raise
 
 
@@ -111,6 +113,7 @@ def _main():
         print "Response: " + resp
     else:
         usage(program)
+
 
 if __name__ == '__main__':
     _main()

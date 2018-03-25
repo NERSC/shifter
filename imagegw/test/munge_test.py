@@ -20,11 +20,12 @@ import os
 import unittest
 from shifter_imagegw import munge
 
+
 class MungeTestCase(unittest.TestCase):
 
     def setUp(self):
-        #os.environ['PATH']=os.environ['PATH']+":./test"
-        self.test_dir = os.path.dirname(os.path.abspath(__file__)) + "/../test/"
+        self.test_dir = os.path.dirname(os.path.abspath(__file__)) + \
+                        "/../test/"
         self.encoded = "xxxx\n"
         self.message = "test"
         self.expired = "expired"
@@ -46,20 +47,15 @@ class MungeTestCase(unittest.TestCase):
     def test_unmunge_expired(self):
         with open(self.test_dir + "munge.expired", 'w') as f:
             f.write(self.expired)
-        try:
-            resp = munge.unmunge(self.expired)
-            assert False
-        except OSError:
-            assert True
+        with self.assertRaises(OSError):
+            munge.unmunge(self.expired)
 
     def test_unmunge_replay(self):
         resp = munge.unmunge(self.encoded)
         assert resp['MESSAGE'] == self.message
-        try:
-            resp = munge.unmunge(self.encoded)
-            assert False
-        except OSError:
-            assert True
+        with self.assertRaises(OSError):
+            munge.unmunge(self.encoded)
+
 
 if __name__ == '__main__':
     unittest.main()

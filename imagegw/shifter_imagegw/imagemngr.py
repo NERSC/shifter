@@ -36,6 +36,7 @@ import pymongo.errors
 from shifter_imagegw.auth import Authentication
 from shifter_imagegw.imageworker import WorkerThreads
 from multiprocessing.process import Process
+import atexit
 
 
 # decorator function to re-attempt any mongo operation that may have failed
@@ -112,6 +113,7 @@ class ImageMngr(object):
         self.status_proc = Process(target=self.status_thread,
                                    name='StatusThread')
         self.status_proc.start()
+        atexit.register(self.shutdown)
         self.mongo_init()
 
     def shutdown(self):

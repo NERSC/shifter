@@ -51,10 +51,9 @@ class ImageMngrTestCase(unittest.TestCase):
         self.m = ImageMngr(self.config, logger=self.logger)
         self.system = 'systema'
         self.itype = 'docker'
-        self.tag = 'test'
+        self.tag = 'alpine:latest'
         self.id = 'fakeid'
         self.tag2 = 'test2'
-        self.tag3 = 'scanon/shanetest:latest'
         self.public = 'index.docker.io/busybox:latest'
         self.private = 'index.docker.io/scanon/shaneprivate:latest'
         self.format = 'squashfs'
@@ -65,6 +64,9 @@ class ImageMngrTestCase(unittest.TestCase):
         self.pid = 0
         self.query = {'system': self.system, 'itype': self.itype,
                       'tag': self.tag}
+        self.pull = {'system': self.system, 'itype': self.itype,
+                     'tag': self.tag, 'remotetype': 'dockerv2',
+                     'userACL': [], 'groupACL': []}
         if os.path.exists(self.logfile):
             pass  # os.unlink(self.logfile)
         # Cleanup Mongo
@@ -427,15 +429,7 @@ class ImageMngrTestCase(unittest.TestCase):
         # Create a fake record in mongo
         id = self.images.insert(record)
         assert id is not None
-
-        pr = {
-            'system': self.system,
-            'itype': self.itype,
-            'tag': self.tag,
-            'remotetype': 'dockerv2',
-            'userACL': [],
-            'groupAcl': []
-        }
+        pr = self.pull
         session = self.m.new_session(self.auth, self.system)
         pull = self.m.pull(session, pr)
         assert pull is not None
@@ -456,16 +450,8 @@ class ImageMngrTestCase(unittest.TestCase):
         assert id is not None
 
         # Now let's try pulling it
-        pr = {
-            'system': self.system,
-            'itype': self.itype,
-            'tag': self.tag,
-            'remotetype': 'dockerv2',
-            'userACL': [],
-            'groupAcl': []
-        }
         session = self.m.new_session(self.auth, self.system)
-        pull = self.m.pull(session, pr)
+        pull = self.m.pull(session, self.pull)
         assert pull is not None
         self.assertEqual(pull['status'], 'READY')
 
@@ -484,16 +470,8 @@ class ImageMngrTestCase(unittest.TestCase):
         assert id is not None
 
         # Now let's try pulling it
-        pr = {
-            'system': self.system,
-            'itype': self.itype,
-            'tag': self.tag,
-            'remotetype': 'dockerv2',
-            'userACL': [],
-            'groupAcl': []
-        }
         session = self.m.new_session(self.auth, self.system)
-        pull = self.m.pull(session, pr)
+        pull = self.m.pull(session, self.pull)
         assert pull is not None
         self.assertEqual(pull['status'], 'PULLING')
 
@@ -506,7 +484,7 @@ class ImageMngrTestCase(unittest.TestCase):
             'tag': 'scanon/shanetest:latest',
             'remotetype': 'dockerv2',
             'userACL': [],
-            'groupAcl': []
+            'groupACL': []
         }
         # Do the pull
         session = self.m.new_session(self.auth, self.system)
@@ -536,14 +514,7 @@ class ImageMngrTestCase(unittest.TestCase):
         Basic pull test including an induced pull failure.
         """
         # Use defaults for format, arch, os, ostcount, replication
-        pr = {
-            'system': self.system,
-            'itype': self.itype,
-            'tag': self.tag,
-            'remotetype': 'dockerv2',
-            'userACL': [],
-            'groupAcl': []
-        }
+        pr = self.pull
         # Do the pull
         session = self.m.new_session(self.auth, self.system)
         rec = self.m.pull(session, pr, testmode=1)  # ,delay=False)
@@ -556,7 +527,7 @@ class ImageMngrTestCase(unittest.TestCase):
         # Track through transistions
         state = self.time_wait(id)
         self.assertEquals(state, 'READY')
-        imagerec = self.m.lookup(session, pr)
+        imagerec = self.m.lookup(session, self.pull)
         assert 'ENTRY' in imagerec
         assert 'ENV' in imagerec
         # Cause a failure
@@ -574,13 +545,7 @@ class ImageMngrTestCase(unittest.TestCase):
         """
 
         # Use defaults for format, arch, os, ostcount, replication
-        pr = {'system': self.system,
-              'itype': self.itype,
-              'tag': self.tag,
-              'remotetype': 'dockerv2',
-              'userACL': [],
-              'groupAcl': []
-              }
+        pr = self.pull
         # Do the pull
         session = self.m.new_session(self.auth, self.system)
         rec1 = self.m.pull(session, pr, testmode=1)  # ,delay=False)
@@ -730,7 +695,7 @@ class ImageMngrTestCase(unittest.TestCase):
         pr = {
             'system': self.system,
             'itype': self.itype,
-            'tag': self.tag3,
+            'tag': self.tag,
             'remotetype': 'dockerv2',
             'userACL': [1001, 1002],
             'groupACL': [1003, 1004]
@@ -742,17 +707,17 @@ class ImageMngrTestCase(unittest.TestCase):
         assert rec is not None
         # Confirm record
         q = {'system': self.system, 'itype': self.itype,
-             'pulltag': self.tag3}
+             'pulltag': self.tag}
         state = self.time_wait(id)
         mrec = self.images.find_one(q)
         assert '_id' in mrec
         assert 'userACL' in mrec
-        self.assertIn('WORKDIR', mrec)
+        self.assertIn('ENV', mrec)
         # Track through transistions
         state = self.time_wait(id)
         assert state == 'READY'
         mrec = self.images.find_one(q)
-        self.assertIn('WORKDIR', mrec)
+        self.assertIn('ENV', mrec)
         self.assertIn('private', mrec)
         self.assertFalse(mrec['private'])
 
@@ -771,8 +736,7 @@ class ImageMngrTestCase(unittest.TestCase):
             'tag': self.public,
             'remotetype': 'dockerv2',
             'userACL': [1001, 1002],
-            'groupACL': [1003, 1004],
-            'groupAcl': []
+            'groupACL': [1003, 1004]
         }
         # Do the pull
         session = self.m.new_session(self.auth, self.system)
@@ -804,8 +768,7 @@ class ImageMngrTestCase(unittest.TestCase):
             'tag': self.private,
             'remotetype': 'dockerv2',
             'userACL': [1001, 1002],
-            'groupACL': [1003, 1004],
-            'groupAcl': []
+            'groupACL': [1003, 1004]
         }
         # Do the pull
         tokens = self.read_tokens()
@@ -879,7 +842,7 @@ class ImageMngrTestCase(unittest.TestCase):
             'filepath': '/images/test/test.squashfs',
             'format': 'squashfs',
             'userACL': [],
-            'groupAcl': []
+            'groupACL': []
         }
         # Do the pull
         session = self.m.new_session(self.auth, self.system)

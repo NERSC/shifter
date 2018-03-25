@@ -384,7 +384,6 @@ class DockerV2Handle(object):
 
         headers = {}
         if creds and self.username is not None and self.password is not None:
-            print "\nUsing Usernmae/Password: private set to True\n"
             self.private = True
             auth = '%s:%s' % (self.username, self.password)
             headers['Authorization'] = 'Basic %s' % base64.b64encode(auth)
@@ -414,7 +413,6 @@ class DockerV2Handle(object):
         conn = _setup_http_conn(self.url, self.cacert)
         if conn is None:
             return None
-
         self._get_auth_header()
 
         req_path = "/v2/%s/manifests/%s" % (self.repo, self.tag)
