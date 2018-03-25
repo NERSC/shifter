@@ -565,3 +565,26 @@ _error:
     }
     return -1;
 }
+
+int check_image_permissions(uid_t actualUid, gid_t actualGid, gid_t *aux_gids,
+                            int naux_gids, ImageData *imageData)
+{
+    uid_t *tuid;
+    gid_t *tgid;
+    int idx = 0;
+
+    if (imageData->uids == NULL && imageData->gids == NULL) {
+        return 1;
+    }
+
+    for (tuid = imageData->uids; tuid != NULL && *tuid != -1; tuid++) {
+        if (*tuid == actualUid) return 1;
+    }
+    for (tgid = imageData->gids; tgid != NULL && *tgid != -1; tgid++) {
+        if (*tgid == actualGid) return 1;
+        for (idx = 0; idx < naux_gids; idx++) {
+            if (*tgid == aux_gids[idx]) return 1;
+        }
+    }
+    return 0;
+}

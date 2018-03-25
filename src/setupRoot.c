@@ -113,17 +113,18 @@ int main(int argc, char **argv) {
         fprintf(stderr, "FAILED to parse udiRoot configuration. Exiting.\n");
         exit(1);
     }
+
     udiConfig.target_uid = config.uid;
     udiConfig.target_gid = config.gid;
     udiConfig.auxiliary_gids = shifter_getgrouplist(config.user, udiConfig.target_gid, &(udiConfig.nauxiliary_gids));
 
-    if (parse_selected_ShifterModule(config.modules, &udiConfig) != 0) {
-        fprintf(stderr, "Invalid shifter module selection: %s\n", config.modules);
+    if (udiConfig.auxiliary_gids == NULL || udiConfig.nauxiliary_gids == 0) {
+        fprintf(stderr, "FAILED to lookup auxiliary gids. Exiting.\n");
         exit(1);
     }
 
-    if (udiConfig.auxiliary_gids == NULL || udiConfig.nauxiliary_gids == 0) {
-        fprintf(stderr, "FAILED to lookup auxiliary gids. Exiting.\n");
+    if (parse_selected_ShifterModule(config.modules, &udiConfig) != 0) {
+        fprintf(stderr, "Invalid shifter module selection: %s\n", config.modules);
         exit(1);
     }
 
@@ -136,6 +137,15 @@ int main(int argc, char **argv) {
         fprintf(stderr, "FAILED to get image %s of type %s\n", config.imageIdentifier, config.imageType);
         exit(1);
     }
+    if (!check_image_permissions(config.uid, config.gid,
+                                udiConfig.auxiliary_gids,
+                                udiConfig.nauxiliary_gids,
+                                &image))
+    {
+        fprintf(stderr,"FAILED permission denied to image\n");
+        exit(1);
+    }
+
     if (config.verbose) {
         fprint_ImageData(stdout, &image);
     }

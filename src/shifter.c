@@ -80,7 +80,6 @@ struct options {
     int useEntryPoint;
 };
 
-
 static void _usage(int);
 int parse_options(int argc, char **argv, struct options *opts, UdiRootConfig *);
 int parse_environment(struct options *opts, UdiRootConfig *);
@@ -89,23 +88,6 @@ void free_options(struct options *, int freeStruct);
 int isImageLoaded(ImageData *, struct options *, UdiRootConfig *);
 int loadImage(ImageData *, struct options *, UdiRootConfig *);
 int adoptPATH(char **environ);
-
-int check_permissions(uid_t actualUid, gid_t actualGid, ImageData *imageData) {
-    uid_t *tuid;
-    gid_t *tgid;
-
-    if (imageData->uids == NULL && imageData->gids == NULL) {
-        return 1;
-    }
-
-    for (tuid = imageData->uids; tuid != NULL && *tuid != -1; tuid++) {
-        if (*tuid == actualUid) return 1;
-    }
-    for (tgid = imageData->gids; tgid != NULL && *tgid != -1; tgid++) {
-        if (*tgid == actualGid) return 1;
-    }
-    return 0;
-}
 
 #ifndef _TESTHARNESS_SHIFTER
 
@@ -125,8 +107,6 @@ int main(int argc, char **argv) {
     uid_t actualGid = 0;
     uid_t eUid = 0;
     gid_t eGid = 0;
-    gid_t *gidList = NULL;
-    int nGroups = 0;
     int idx = 0;
     struct options *opts = _malloc(sizeof(struct options));
     UdiRootConfig *udiConfig = _malloc(sizeof(UdiRootConfig));
@@ -158,17 +138,6 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    /* figure out who we are and who we want to be */
-    eUid = geteuid();
-    eGid = getegid();
-    actualUid = getuid();
-    actualGid = getgid();
-
-    if (check_permissions(actualUid, actualGid, imageData) == 0){
-        fprintf(stderr,"FAILED permission denied to image\n");
-        exit(1);
-    }
-
     /* check if entrypoint is defined and desired */
     if (opts->useEntryPoint == 1) {
         char *entry = NULL;
@@ -191,32 +160,14 @@ int main(int argc, char **argv) {
     }
 
     snprintf(udiRoot, PATH_MAX, "%s", udiConfig->udiMountPoint);
-    udiRoot[PATH_MAX-1] = 0;
+    udiRoot[PATH_MAX - 1] = 0;
 
     /* figure out who we are and who we want to be */
     eUid = geteuid();
     eGid = getegid();
     actualUid = getuid();
     actualGid = getgid();
-
-
-    nGroups = getgroups(0, NULL);
-    if (nGroups > 0) {
-        gidList = (gid_t *) _malloc(sizeof(gid_t) * (nGroups + 1));
-        memset(gidList, 0, sizeof(gid_t) * (nGroups + 1));
-        if (getgroups(nGroups, gidList) == -1) {
-            fprintf(stderr, "Failed to get supplementary group list\n");
-            exit(1);
-        }
-        for (idx = 0; idx < nGroups; ++idx) {
-            if (gidList[idx] == 0) {
-                gidList[idx] = opts->tgtGid;
-            }
-        }
-    }
-    udiConfig->auxiliary_gids = gidList;
-    udiConfig->nauxiliary_gids = nGroups;
-
+    udiConfig->auxiliary_gids = shifter_getgrouplist(opts->username, opts->tgtGid, &(udiConfig->nauxiliary_gids));
 
     if (eUid != 0 && eGid != 0) {
         fprintf(stderr, "%s\n", "Not running with root privileges, will fail.");
@@ -230,13 +181,21 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to correctly identify uid/gid, exiting.\n");
         exit(1);
     }
+    if (!check_image_permissions(opts->tgtUid, opts->tgtGid,
+                                udiConfig->auxiliary_gids,
+                                udiConfig->nauxiliary_gids,
+                                imageData))
+    {
+        fprintf(stderr,"FAILED permission denied to image\n");
+        exit(1);
+    }
 
     /* keep cwd to switch back to it (if possible), after chroot */
     if (getcwd(wd, PATH_MAX) == NULL) {
         perror("Failed to determine current working directory: ");
         exit(1);
     }
-    wd[PATH_MAX-1] = 0;
+    wd[PATH_MAX - 1] = 0;
     if (opts->workdir == NULL) {
         opts->workdir = _strdup(wd);
     }
@@ -272,7 +231,7 @@ int main(int argc, char **argv) {
     }
 
     /* drop privileges */
-    if (setgroups(nGroups, gidList) != 0) {
+    if (setgroups(udiConfig->nauxiliary_gids, udiConfig->auxiliary_gids) != 0) {
         fprintf(stderr, "Failed to setgroups\n");
         abort();
     }
@@ -357,7 +316,6 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     /* set some defaults */
     config->tgtUid = getuid();
     config->tgtGid = getgid();
-    seteuid(config->tgtUid);
 
     /* ensure that getopt processing stops at first non-option */
     setenv("POSIXLY_CORRECT", "1", 1);
@@ -457,7 +415,19 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         _usage(1);
     }
     if (config->imageIdentifier == NULL) {
-        config->imageIdentifier = lookup_ImageIdentifier(config->imageType, config->imageTag, config->verbose, udiConfig);
+        int curr_euid = geteuid();
+        if (seteuid(config->tgtUid) != 0) {
+            fprintf(stderr, "FAILED to change permissions to uid %d\n", config->tgtUid);
+            abort();
+        }
+        config->imageIdentifier = lookup_ImageIdentifier(config->imageType,
+                                      config->imageTag, config->verbose,
+                                      udiConfig);
+
+        if (seteuid(curr_euid) != 0) {
+            fprintf(stderr, "FAILED to change permissions back to uid %d\n", curr_euid);
+            abort();
+        }
     }
     if (config->imageIdentifier == NULL) {
         fprintf(stderr, "FAILED to lookup %s image %s\n", config->imageType, config->imageTag);
@@ -527,7 +497,6 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
 
     udiConfig->target_uid = config->tgtUid;
     udiConfig->target_gid = config->tgtGid;
-    seteuid(0);
     return 0;
 }
 
