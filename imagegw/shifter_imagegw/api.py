@@ -30,7 +30,7 @@ from shifter_imagegw.imagemngr import ImageMngr
 from flask import Flask, request, jsonify
 
 
-app = Flask(__name__)
+app = Flask("shifter")
 config = {}
 AUTH_HEADER = 'authentication'
 
@@ -40,9 +40,14 @@ if 'GWCONFIG' in os.environ:
 else:
     CONFIG_FILE = '%s/imagemanager.json' % (shifter_imagegw.CONFIG_PATH)
 
-app.logger.setLevel(logging.INFO)
-app.debug_log_format = '%(asctime)s [%(name)s] %(levelname)s : %(message)s'
-app.logger.debug('Initializing image manager')
+if 'SERVER_SOFTWARE' in os.environ:
+    # Make flask logging work with gunicorn
+    logname = 'gunicorn.error'
+    gunicorn_error_logger = logging.getLogger('gunicorn.error')
+    app.logger.handlers.extend(gunicorn_error_logger.handlers)
+else:
+    logname = 'shifter'
+app.logger.debug('Initializing api image manager')
 
 app.logger.info("initializing with %s" % (CONFIG_FILE))
 with open(CONFIG_FILE) as config_file:
@@ -61,7 +66,15 @@ with open(CONFIG_FILE) as config_file:
             app.logger.setLevel(logging.CRITICAL)
         else:
             app.logger.critical('Unrecongnized Log Level specified')
-mgr = ImageMngr(config, logger=app.logger)
+mgr = ImageMngr(config, logname=logname)
+
+
+def getmgr():
+    """
+    This is intended just for the testing layer so it can shutdown the
+    updater thread in the manager.
+    """
+    return mgr
 
 
 # For RESTful Service
@@ -130,7 +143,7 @@ def imglist(system):
 @app.route('/api/lookup/<system>/<imgtype>/<path:tag>/', methods=["GET"])
 def lookup(system, imgtype, tag):
     """ Lookup an image for a system and return its record """
-    if imgtype == "docker" and tag.find(':') == -1:
+    if (imgtype == "docker" or imgtype == "custom") and tag.find(':') == -1:
         tag = '%s:latest' % (tag)
 
     auth = request.headers.get(AUTH_HEADER)
@@ -211,6 +224,73 @@ def pull(system, imgtype, tag):
     return jsonify(create_response(rec))
 
 
+# Import image
+# This will import the requested image from a file path on the system.
+@app.route('/api/doimport/<system>/<imgtype>/<path:tag>/', methods=["POST"])
+def doimport(system, imgtype, tag):
+    """
+    Pull a specific image and tag for a systems.
+    """
+    if imgtype == "docker" and tag.find(':') == -1:
+        tag = '%s:latest' % (tag)
+
+    auth = request.headers.get(AUTH_HEADER)
+    data = {}
+    try:
+        rqd = request.get_data()
+        if rqd is not "" and rqd is not None:
+            data = json.loads(rqd)
+    except:
+        app.logger.warn("Unable to parse doimport data '%s'" %
+                        (request.get_data()))
+        pass
+
+    memo = "import system=%s imgtype=%s tag=%s" % (system, imgtype, tag)
+    app.logger.debug(memo)
+    i = {'system': system, 'itype': imgtype, 'tag': tag}
+    # Check for path to import file
+    if 'filepath' in data:
+        i['filepath'] = data['filepath']
+    else:
+        raise OSError("filepath required for direct image import")
+    if 'format' in data:
+        i['format'] = data['format']
+    else:
+        msg = "file type (e.g. squashfs) required for direct image import"
+        raise OSError(msg)
+    # Check for list of allowed users or groups
+    if 'allowed_uids' in data:
+        # Convert to integers
+        i['userACL'] = map(lambda x: int(x),
+                           data['allowed_uids'].split(','))
+    if 'allowed_gids' in data:
+        # Convert to integers
+        i['groupACL'] = map(lambda x: int(x),
+                            data['allowed_gids'].split(','))
+    try:
+        session = mgr.new_session(auth, system)
+        # only allowed users can import images
+        user = session['user']
+        if 'ImportUsers' not in config.keys():
+            raise OSError("User image import from file disabled.")
+        iusers = config['ImportUsers']
+        # If ImportUsers is None, no one can do this
+        if iusers == "None" or iusers == "none":
+            raise OSError("User image import from file disabled.")
+
+        # Check if user on approved list
+        if len(iusers) > 0 and iusers != "all":
+            if user not in iusers:
+                msg = "User %s not allowed to import image from file." % (user)
+                raise OSError(msg)
+        rec = mgr.mngrimport(session, i)
+        app.logger.debug(rec)
+    except:
+        app.logger.exception('Exception in import')
+        return not_found('%s %s' % (sys.exc_type, sys.exc_value))
+    return jsonify(create_response(rec))
+
+
 # auto expire
 # This will autoexpire images and cleanup stuck pulls
 @app.route('/api/autoexpire/<system>/', methods=["GET"])
@@ -254,7 +334,7 @@ def expire(system, imgtype, tag):
 @app.route('/api/queue/<system>/', methods=["GET"])
 def queue(system):
     """ List images for a specific system. """
-    #auth = request.headers.get(AUTH_HEADER)
+    # auth = request.headers.get(AUTH_HEADER)
     app.logger.debug("show queue system=%s" % (system))
     try:
         session = mgr.new_session(None, system)

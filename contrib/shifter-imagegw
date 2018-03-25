@@ -19,7 +19,5 @@ QA="${SHIFTER_SYSTEM_NAME}"
 
 cd ${ROOT_TREE}
 source ${PYTHON_VENV}/bin/activate
-echo "Starting Celery Queue $QA"
-celery -A imageworker worker -Q $QA --loglevel=DEBUG -n worker.queue.$QA &
 echo "Starting imagegw API"
 python ./imagegwapi.py

@@ -81,7 +81,6 @@ def generate_squashfs_image(expand_path, image_path):
 def convert(fmt, expand_path, image_path):
     """ do the conversion """
     if os.path.exists(image_path):
-        print "file already exists"
         return True
 
     (dirname, fname) = os.path.split(image_path)
@@ -144,6 +143,8 @@ def writemeta(fmt, meta, metafile):
         if 'env' in meta and meta['env'] is not None:
             for keyval in meta['env']:
                 meta_fd.write("ENV: %s\n" % (keyval))
+        if 'user' in meta:
+            meta_fd.write("USER: %s\n" % meta['user'])
         meta_fd.close()
     # Some error must have occurred
     return True

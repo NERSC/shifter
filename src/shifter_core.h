@@ -47,7 +47,6 @@
 #include "UdiRootConfig.h"
 #include "VolumeMap.h"
 #include "MountList.h"
-#include "gpu_support.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -69,7 +68,6 @@ int mountImageVFS(ImageData *imageData,
                   int verbose,
                   const char *minNodeSpec,
                   UdiRootConfig *udiConfig);
-int create_site_resources_folder(const UdiRootConfig*);
 int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig);
 int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat format, UdiRootConfig *udiConfig, int readonly);
 int destructUDI(UdiRootConfig *udiConfig, int killSshd);
@@ -93,13 +91,14 @@ int isSharedMount(const char *);
 int writeHostFile(const char *minNodeSpec, UdiRootConfig *udiConfig);
 int forkAndExecv(char *const *args);
 int forkAndExecvSilent(char *const *args);
-
+char **calculate_args(int useEntry, char **clArgs, char *clEntry,
+                       ImageData *imageData);
 /** shifter_set_capability_boundingset_null
   * attempts to prevent any capabilities from ever being assumed again by this
   * process and its heirs
   *
   * Returns 0 upon success, non-zero upon any failure
-  */  
+  */
 int shifter_set_capability_boundingset_null();
 
 /** shifter_getgrouplist
@@ -110,7 +109,7 @@ int shifter_set_capability_boundingset_null();
   * \param pointer to ngroups, can be pointer to an zero-value integer (ngroups
   *     itself must not be NULL)
   *
-  * \returns 0-terminated array of gids (malloc'd, user responsible for 
+  * \returns 0-terminated array of gids (malloc'd, user responsible for
   *     freeing it)
   *
   * Upon successful run, will be return array populated with the valid gids for
@@ -128,22 +127,17 @@ int shifter_set_capability_boundingset_null();
 gid_t *shifter_getgrouplist(const char *user, gid_t group, int *ngroups);
 
 /** shifter_copyenv
-  * copy the passed environ (array of strings) into a newly allocated array with newly
-  * allocated strings. Reserve some spots at the end of the array for additional
-  * environment variables. The number of spots to be reserved is specified through
-  * the "reserve" parameter
+  * copy current process environ into a newly allocated array with newly
+  * allocated strings
   *
   * @return copy of the environment, caller is responsible to deal with memory
   */
-char **shifter_copyenv(char** env, int reserve);
-int shifter_putenv(char ***env, char *var);
-int shifter_appendenv(char ***env, char *var);
-int shifter_prependenv(char ***env, char *var);
-int shifter_unsetenv(char ***env, char *var);
+char **shifter_copyenv(void);
+int shifter_putenv(char ***env, const char *var);
+int shifter_appendenv(char ***env, const char *var);
+int shifter_prependenv(char ***env, const char *var);
+int shifter_unsetenv(char ***env, const char *var);
 int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig);
-int shifter_setupenv_site_resources(char ***env, UdiRootConfig *udiConfig);
-int shifter_setupenv_site_resources_rec(char ***env, const char* current_folder);
-int is_shared_library(char* file_name);
 struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config);
 struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config);
 

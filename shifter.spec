@@ -17,7 +17,7 @@
 
 Summary:   NERSC Shifter -- Containers for HPC
 Name:      shifter
-Version:   16.08.3
+Version:   DEVEL
 Release:   1.nersc%{?dist}
 License:   BSD (LBNL-modified)
 Group:     System Environment/Base
@@ -80,7 +80,7 @@ Requires(pre): shadow-utils
 %{systemd_requires}
 %endif
 %if 0%{?rhel}
-Requires: squashfs-tools python-pip python-flask python-pymongo python-redis python-gunicorn munge
+Requires: squashfs-tools python-pip python-flask python-pymongo python-gunicorn munge
 %endif
 
 %description imagegw
@@ -121,6 +121,25 @@ This package contains the Spank Plugin module which allows for the
 integration of Shifter with the SLURM Workload Manager.
 %endif
 
+%package fasthash
+Summary: fasthash utility to import images into shifter
+
+%description fasthash
+Shifter enables container images for HPC. In a nutshell, Shifter
+allows an HPC system to efficiently and safely permit end-users to run
+jobs inside a docker image. Shifter consists of a few moving parts:
+  1) a utility that typically runs on the compute node that creates the
+     runtime environment for the application,
+  2) an image gateway service that pulls images from a registry and
+     repacks them in a format suitable for the HPC system (typically
+     squashfs), and
+  3) example scripts/plugins to integrate Shifter with various batch
+     scheduler systems.
+
+This package contains a utility needed to import images directly
+into Shifter.  This is not required to pull docker images and is
+optional.  In a remote configuration, this RPM should be installed on
+the remote system.
 
 %prep
 %setup -q
@@ -137,9 +156,11 @@ MAKEFLAGS=%{?_smp_mflags} %{__make}
 
 %install
 %make_install
+# Yes, this is a bit of hack.
+install -o root -m 755 imagegw/shifter_imagegw/fasthash.py %{buildroot}/%{_bindir}/fasthash
 
-# Create directory for Celery/ImageGW API logs
-%{__mkdir_p} $RPM_BUILD_ROOT%{_localstatedir}/log/%{name}_imagegw{,_worker}
+# Create directory for ImageGW API logs
+%{__mkdir_p} $RPM_BUILD_ROOT%{_localstatedir}/log/%{name}_imagegw
 
 : > $RPM_BUILD_ROOT/%{_sysconfdir}/shifter_etc_files/passwd
 : > $RPM_BUILD_ROOT/%{_sysconfdir}/shifter_etc_files/group
@@ -156,8 +177,6 @@ rm -f $RPM_BUILD_ROOT/%{_libexecdir}/shifter/shifter_slurm_dws_support
 %if 0%{!?_without_systemd:1}
 %{__mkdir_p} $RPM_BUILD_ROOT%{_unitdir}
 %{__install} -m 0644 extra/systemd/shifter_imagegw.service $RPM_BUILD_ROOT%{_unitdir}/
-%{__install} -m 0644 extra/systemd/shifter_imagegw_worker@.service $RPM_BUILD_ROOT%{_unitdir}/
-%{__install} -m 0644 extra/systemd/shifter_imagegw_worker.target $RPM_BUILD_ROOT%{_unitdir}/
 %endif
 
 
@@ -183,13 +202,6 @@ getent passwd > %{_sysconfdir}/shifter_etc_files/passwd
 getent group > %{_sysconfdir}/shifter_etc_files/group
 
 %post imagegw
-%if 0%{?rhel}
-%if 0%{?el6}
-pip install celery==3.1.23
-%else
-pip install celery
-%endif
-%endif
 
 %files
 %defattr(-, root, root)
@@ -203,7 +215,6 @@ pip install celery
 %config(noreplace missingok) %verify(not filedigest mtime size) %{_sysconfdir}/shifter_etc_files/group
 %config(noreplace) %{_sysconfdir}/shifter_etc_files/nsswitch.conf
 %{_bindir}/shifterimg
-%{_bindir}/activate_gpu_support.sh
 %{_sbindir}/setupRoot
 %{_sbindir}/unsetupRoot
 %{_libexecdir}/shifter/mount
@@ -214,7 +225,6 @@ pip install celery
 %defattr(-, root, root)
 %doc AUTHORS LICENSE NEWS README* contrib extra/systemd
 %attr(0770, %{shifter_user}, %{shifter_group}) %dir %{_localstatedir}/log/%{name}_imagegw/
-%attr(0770, %{shifter_user}, %{shifter_group}) %dir %{_localstatedir}/log/%{name}_imagegw_worker/
 %{_libdir}/python2.*/site-packages/shifter_imagegw
 %{_libexecdir}/shifter/imagecli.py*
 %{_libexecdir}/shifter/imagegwapi.py*
@@ -233,6 +243,9 @@ pip install celery
 %{_libexecdir}/shifter/shifter_slurm_dws_support
 %endif
 
+%files fasthash
+%defattr(-, root, root)
+%{_bindir}/fasthash
 
 %changelog
 * Sun Apr 24 2016 Douglas Jacobsen <dmjacobsen@lbl.gov> - 16.04.0pre1-1

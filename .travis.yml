@@ -3,6 +3,9 @@ dist: trusty
 language: python
 python:
   - "2.7"
+compiler:
+  - clang
+  - gcc
 # command to install dependencies
 env:
   - PATH

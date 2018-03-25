@@ -42,7 +42,7 @@ TEST_GROUP(ShifterTestGroup) {
 TEST(ShifterTestGroup, CopyEnv_basic) {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();
     setenv("TESTENV0", "gfedcba", 1);
-    char **origEnv = shifter_copyenv(environ, 0);
+    char **origEnv = shifter_copyenv();
     CHECK(origEnv != NULL);
     clearenv();
     setenv("TESTENV1", "abcdefg", 1);

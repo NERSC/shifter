@@ -1,7 +1,7 @@
 /* Shifter, Copyright (c) 2015, The Regents of the University of California,
 ## through Lawrence Berkeley National Laboratory (subject to receipt of any
 ## required approvals from the U.S. Dept. of Energy).  All rights reserved.
-## 
+##
 ## Redistribution and use in source and binary forms, with or without
 ## modification, are permitted provided that the following conditions are met:
 ##  1. Redistributions of source code must retain the above copyright notice,
@@ -13,7 +13,7 @@
 ##     National Laboratory, U.S. Dept. of Energy nor the names of its
 ##     contributors may be used to endorse or promote products derived from this
 ##     software without specific prior written permission.
-## 
+##
 ## THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 ## AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 ## IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -25,7 +25,7 @@
 ## CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ## ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 ## POSSIBILITY OF SUCH DAMAGE.
-##  
+##
 ## You are under no obligation whatsoever to provide any bug fixes, patches, or
 ## upgrades to the features, functionality or performance of the source code
 ## ("Enhancements") to anyone; however, if you choose to make your Enhancements
@@ -43,6 +43,15 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+
+void free_args(char **args) {
+  char **ptr=args;
+  while (*ptr!=NULL) {
+    free(*ptr);
+    ptr++;
+  }
+  free(args);
+}
 
 TEST_GROUP(UtilityTestGroup) {
     char *tmpDir;
@@ -152,7 +161,7 @@ TEST(UtilityTestGroup, ShifterParseConfig_InvalidKey) {
     if (basePath == NULL) {
         basePath = ".";
     }
-   
+
     filename = alloc_strgenf("%s/%s", basePath, "data_config2.conf");
     ret = shifter_parseConfig(filename, ':', &config, _assignTestConfig);
     CHECK(ret == 1);
@@ -170,7 +179,7 @@ TEST(UtilityTestGroup, ShifterParseConfig_MultiLine) {
     if (basePath == NULL) {
         basePath = ".";
     }
-   
+
     filename = alloc_strgenf("%s/%s", basePath, "data_config3.conf");
     ret = shifter_parseConfig(filename, ':', &config, _assignTestConfig);
     CHECK(ret == 0);
@@ -327,7 +336,7 @@ TEST(UtilityTestGroup, userInputPathFilter_basic) {
     char *filtered = userInputPathFilter("benign", 0);
     CHECK(strcmp(filtered, "benign") == 0);
     free(filtered);
-    
+
     filtered = userInputPathFilter("benign; rm -rf *", 0);
     CHECK(strcmp(filtered, "benignrm-rf") == 0);
     free(filtered);
@@ -423,31 +432,69 @@ TEST(UtilityTestGroup, pathcmp_basic) {
     CHECK(pathcmp("", "a/b/c") != 0);
 }
 
-TEST(UtilityTestGroup, mkdir_p) {
-    {
-        std::string dir = std::string(tmpDir) + "/";
-        printf("creating %s\n", dir.c_str());
-        CHECK(mkdir_p(dir.c_str(), 0775) == 0);
-        CHECK(is_existing_directory(dir.c_str()) == 1);
-    }
-    {
-        std::string dir = std::string(tmpDir) + "//";
-        printf("creating %s\n", dir.c_str());
-        CHECK(mkdir_p(dir.c_str(), 0775) == 0);
-        CHECK(is_existing_directory(dir.c_str()) == 1);
-    }
-    {
-        std::string dir = std::string(tmpDir) + "/subdir";
-        printf("creating %s\n", dir.c_str());
-        CHECK(mkdir_p(dir.c_str(), 0775) == 0);
-        CHECK(is_existing_directory(dir.c_str()) == 1);
-    }
-    {
-        std::string dir = std::string(tmpDir) + "/subdir1/subdir2";
-        printf("creating %s\n", dir.c_str());
-        CHECK(mkdir_p(dir.c_str(), 0775) == 0);
-        CHECK(is_existing_directory(dir.c_str()) == 1);
-    }
+TEST(UtilityTestGroup, split_json_basic) {
+    const char *tstr = "[u'how', u'now', u'brown', u'cow']";
+    char **out = split_json_array(tstr);
+    CHECK(strcmp(out[0],"how") == 0);
+    CHECK(strcmp(out[1],"now") == 0);
+    CHECK(strcmp(out[2],"brown") == 0);
+    CHECK(strcmp(out[3],"cow") == 0);
+    CHECK(out[4] == NULL);
+    free_args(out);
+}
+
+TEST(UtilityTestGroup, split_json_errors) {
+    const char *tstr = "[u'missing quote]";
+    const char *tstr2 = "[u'missing bracket'";
+    char **out = split_json_array(tstr);
+    CHECK(out == NULL);
+    out = split_json_array(tstr2);
+    CHECK(out == NULL);
+}
+
+TEST(UtilityTestGroup, count_args) {
+    char *args[10];
+    args[0] = strdup("a");
+    args[1] = strdup("b");
+    args[2] = NULL;
+    args[3] = NULL;
+    CHECK(_count_args(args) == 3);
+    args[2] = strdup("c");
+    CHECK(_count_args(args) == 4);
+    free(args[0]);
+    free(args[1]);
+    free(args[2]);
+
+}
+
+TEST(UtilityTestGroup, merge_args) {
+    char *args1[3];
+    char *args2[3];
+    char **merged;
+
+    args1[0] = strdup("echo");
+    args1[1] = strdup("a");
+    args1[2] = NULL;
+    args2[0] = strdup("b");
+    args2[1] = NULL;
+    merged = merge_args(args1, args2);
+    CHECK(strcmp(merged[0],"echo") == 0);
+    CHECK(strcmp(merged[1],"a") == 0);
+    CHECK(strcmp(merged[2],"b") == 0);
+    CHECK(merged[3] == NULL);
+    free(args1[0]);
+    free(args2[0]);
+    free(args2[1]);
+    free(merged);
+}
+
+TEST(UtilityTestGroup, make_char_array_basic) {
+    const char *v="astring";
+    char **arr;
+    arr = make_char_array(v);
+    CHECK(strcmp(arr[0],"astring") == 0);
+    CHECK(arr[1] == NULL);
+    free_args(arr);
 }
 
 int main(int argc, char** argv) {

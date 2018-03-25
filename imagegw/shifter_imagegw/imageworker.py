@@ -17,7 +17,7 @@
 # See LICENSE for full text.
 
 """
-This module provides the celery worker function for the image gateway.
+This module provides the worker function for the image gateway.
 """
 
 import json
@@ -27,19 +27,23 @@ import sys
 import subprocess
 import logging
 import tempfile
+from multiprocessing.queues import Queue
+from multiprocessing.pool import ThreadPool
 from time import time, sleep
 from random import randint
-from celery import Celery
 from shifter_imagegw import CONFIG_PATH, dockerv2, converters, transfer
 
-
-QUEUE = None
 CONFIG = None
 
 if 'GWCONFIG' in os.environ:
     CONFIGFILE = os.environ['GWCONFIG']
 else:
     CONFIGFILE = '%s/imagemanager.json' % (CONFIG_PATH)
+
+if 'SERVER_SOFTWARE' in os.environ:
+    # Make flask logging work with gunicorn
+    gunicorn_error_logger = logging.getLogger('gunicorn.error')
+    logging = gunicorn_error_logger
 
 logging.info("Opening %s", CONFIGFILE)
 
@@ -54,42 +58,82 @@ if 'ExpandDirectory' in CONFIG:
         os.mkdir(CONFIG['ExpandDirectory'])
 
 
-# Create Celery Queue and configure serializer
-#
-QUEUE = Celery('tasks', backend=CONFIG['Broker'], broker=CONFIG['Broker'])
-QUEUE.conf.update(CELERY_ACCEPT_CONTENT=['json'])
-QUEUE.conf.update(CELERY_TASK_SERIALIZER='json')
-QUEUE.conf.update(CELERY_RESULT_SERIALIZER='json')
-
-
 class Updater(object):
     """
     This is a helper class to update the status for the request.
     """
-    def __init__(self, update_state):
+    def __init__(self, ident, update_method):
         """ init the updater. """
-        self.update_state = update_state
+        self.ident = ident
+        self.update_method = update_method
 
-    def update_status(self, state, message):
+    def update_status(self, state, message, response=None):
         """ update the status including the heartbeat and message """
-        if self.update_state is not None:
-            metadata = {'heartbeat': time(), 'message': message}
-            self.update_state(state=state, meta=metadata)
+        if self.update_method is not None:
+            metadata = {'heartbeat': time(),
+                        'message': message,
+                        'response': response}
+            self.update_method(ident=self.ident, state=state, meta=metadata)
 
-DEFAULT_UPDATER = Updater(None)
 
+class WorkerThreads(object):
+    def __init__(self, threads=1):
+        """
+        Initialize the thread pool and queues.
+        """
+        self.pools = ThreadPool(processes=threads)
+        self.updater_queue = Queue()
 
-def initqueue(newconfig):
-    """
-    This is mainly used by the manager to configure the broker
-    after the module is already loaded
-    """
-    global CONFIG, QUEUE
-    CONFIG = newconfig
-    QUEUE = Celery('tasks', backend=CONFIG['Broker'], broker=CONFIG['Broker'])
-    QUEUE.conf.update(CELERY_ACCEPT_CONTENT=['json'])
-    QUEUE.conf.update(CELERY_TASK_SERIALIZER='json')
-    QUEUE.conf.update(CELERY_RESULT_SERIALIZER='json')
+    def get_updater_queue(self):
+        return self.updater_queue
+
+    def updater(self, ident, state, meta):
+        """
+        Updater function: This just post a message to a queue.
+        """
+        self.updater_queue.put({'id': ident, 'state': state, 'meta': meta})
+
+    def pull(self, request, updater, testmode=0):
+        try:
+            pull(request, updater, testmode=testmode)
+        except Exception as err:
+            resp = {'error_type': str(type(err)),
+                    'message': str(err)}
+            updater.update_status('FAILURE', 'FAILURE', response=resp)
+
+    def expire(self, request, updater):
+        try:
+            remove_image(request, updater)
+        except Exception as err:
+            resp = {'error_type': str(type(err)),
+                    'message': str(err)}
+            updater.update_status('FAILURE', 'FAILURE', response=resp)
+
+    def wrkimport(self, request, updater, testmode=0):
+        try:
+            img_import(request, updater, testmode=testmode)
+        except Exception as err:
+            resp = {'error_type': str(type(err)),
+                    'message': str(err)}
+            updater.update_status('FAILURE', 'FAILURE', response=resp)
+
+    def dopull(self, ident, request, testmode=0):
+        """
+        Kick off a pull operation.
+        """
+        updater = Updater(ident, self.updater)
+        self.pools.apply_async(self.pull, [request, updater],
+                               {'testmode': testmode})
+
+    def doexpire(self, ident, request, testmode=0):
+        updater = Updater(ident, self.updater)
+        self.pools.apply_async(self.expire, [request, updater])
+
+    def dowrkimport(self, ident, request, testmode=0):
+        logging.debug("wrkimport starting")
+        updater = Updater(ident, self.updater)
+        self.pools.apply_async(self.wrkimport, [request, updater],
+                               {'testmode': testmode})
 
 
 def _get_cacert(location):
@@ -162,7 +206,7 @@ def _pull_dockerv2(request, location, repo, tag, updater):
     return False
 
 
-def pull_image(request, updater=DEFAULT_UPDATER):
+def pull_image(request, updater):
     """
     pull the image down and extract the contents
 
@@ -211,7 +255,14 @@ def examine_image(request):
 
     Returns True on success
     """
-    # TODO: Add checks to examine the image.  Should be extensible.
+
+    if 'examiner' in CONFIG:
+        examiner = CONFIG['examiner']
+        retcode = subprocess.call([examiner, request['expandedpath'],
+                                   request['id']])
+        if retcode != 0:
+            return False
+
     return True
 
 
@@ -294,7 +345,7 @@ def check_image(request):
                                logging)
 
 
-def transfer_image(request, meta_only=False):
+def transfer_image(request, meta_only=False, import_image=False):
     """
     Transfers the image to the target system based on the configuration.
 
@@ -311,15 +362,25 @@ def transfer_image(request, meta_only=False):
         request['meta']['meta_only'] = True
         return transfer.transfer(sysconf, None, meta, logging)
     else:
-        return transfer.transfer(sysconf, request['imagefile'], meta, logging)
+        if not import_image:
+            return transfer.transfer(sysconf, request['imagefile'], meta,
+                                     logging, import_image)
+        else:
+            return transfer.transfer(sysconf, request['filepath'], meta,
+                                     logging, import_image,
+                                     request['imagefile'])
 
 
-def remove_image(request):
+def remove_image(request, updater):
     """
     Remove the image to the target system based on the configuration.
 
     Returns True on success
     """
+    logging.debug("do expire system=%s tag=%s", request['system'],
+                  request['tag'])
+    updater.update_status('EXPIRING', 'EXPIRING')
+
     system = request['system']
     if system not in CONFIG['Platforms']:
         raise KeyError('%s is not in the configuration' % system)
@@ -328,14 +389,21 @@ def remove_image(request):
     meta = request['id'] + '.meta'
     if 'metafile' in request:
         meta = request['metafile']
-    return transfer.remove(sysconf, imagefile, meta, logging)
+    if transfer.remove(sysconf, imagefile, meta, logging):
+        updater.update_status('EXPIRED', 'EXPIRED')
+    else:
+        logging.warn("Worker: Expire failed")
+        raise OSError('Expire failed')
 
 
-def cleanup_temporary(request):
+def cleanup_temporary(request, import_image=False):
     """
     Helper function to cleanup any temporary files or directories.
     """
-    items = ('expandedpath', 'imagefile', 'metafile')
+    if not import_image:
+        items = ('expandedpath', 'imagefile', 'metafile')
+    else:
+        items = ('expandedpath', 'metafile')
     for item in items:
         if item not in request or request[item] is None:
             continue
@@ -365,12 +433,12 @@ def cleanup_temporary(request):
 
 def pull(request, updater, testmode=0):
     """
-    Celery task to do the full workflow of pulling an image and transferring it
+    Main task to do the full workflow of pulling an image and transferring it
     """
     tag = request['tag']
     logging.debug("dopull system=%s tag=%s", request['system'], tag)
     if testmode == 1:
-        states = ('PULLING', 'EXAMINATION', 'CONVERSION', 'TRANSFER', 'READY')
+        states = ('PULLING', 'EXAMINATION', 'CONVERSION', 'TRANSFER')
         for state in states:
             logging.info("Worker: testmode Updating to %s", state)
             updater.update_status(state, state)
@@ -382,6 +450,8 @@ def pull(request, updater, testmode=0):
             'workdir': '/root',
             'env': ['FOO=bar', 'BAZ=boz']
         }
+        state = 'READY'
+        updater.update_status(state, state, ret)
         return ret
     elif testmode == 2:
         logging.info("Worker: testmode 2 setting failure")
@@ -427,7 +497,7 @@ def pull(request, updater, testmode=0):
                 raise OSError('Transfer failed')
 
         # Done
-        updater.update_status('READY', 'Image ready')
+        updater.update_status('READY', 'Image ready', response=request['meta'])
         cleanup_temporary(request)
         return request['meta']
 
@@ -442,42 +512,69 @@ def pull(request, updater, testmode=0):
         raise
 
 
-@QUEUE.task(bind=True)
-def dopull(self, request, testmode=0):
+def img_import(request, updater, testmode=0):
     """
-    Celery task to do the full workflow of pulling an image and transferring it
+    Task to do the full workflow of copying an image and processing it
     """
-    updater = Updater(self.update_state)
-    return pull(request, updater, testmode=testmode)
-
-
-@QUEUE.task(bind=True)
-def doexpire(self, request, testmode=0):
-    """
-    Celery task to do the full workflow of pulling an image and transferring it
-    """
-    logging.debug("do expire system=%s tag=%s TM=%d", request['system'],
-                  request['tag'], testmode)
+    tag = request['tag']
+    logging.debug("img_import system=%s tag=%s", request['system'], tag)
+    if testmode == 1:
+        states = ('HASHING', 'TRANSFER', 'READY')
+        for state in states:
+            logging.info("Worker: testmode Updating to %s", state)
+            updater.update_status(state, state)
+            sleep(1)
+        ident = '%x' % randint(0, 100000)
+        ret = {
+            'id': ident,
+            'entrypoint': ['./blah'],
+            'workdir': '/root',
+            'env': ['FOO=bar', 'BAZ=boz']
+        }
+        state = 'READY'
+        updater.update_status(state, state, ret)
+        return ret
     try:
-        self.update_state(state='EXPIRING')
-        if not remove_image(request):
-            logging.info("Worker: Expire failed")
-            raise OSError('Expire failed')
+        # Step 0 - Check if path is valid
+        sysconf = CONFIG['Platforms'][request['system']]
+        if not transfer.check_file(request["filepath"], sysconf, logging,
+                                   import_image=True):
+            raise OSError('Path not valid')
+        # Step 1 - Calculate the hash of the file
+        logging.debug("starting import hashing")
+        updater.update_status('HASHING', 'HASHING')
+        logging.info(request)
+        request['id'] = transfer.hash_file(request['filepath'], sysconf,
+                                           logging)
+        # Step 2 - Populate the metadata file
+        logging.debug("starting writing metadata")
+        if 'meta' not in request:
+            raise OSError('Metadata not populated')
+        request['meta']['format'] = request['format']
+        request['meta']['user'] = request['session']['user']
+        if not write_metadata(request):
+            logging.info("Writing metadata")
+            raise OSError('Metadata creation failed')
+        # Step 3 - Copy image and meta file from user space to shifter area
+        logging.debug("starting transfer")
+        request['imagefile'] = request['id']+'.'+request['format']
+        request['meta']['id'] = request['id']
+        updater.update_status('TRANSFER', 'TRANSFER')
+        if not transfer_image(request, import_image=True):
+            logging.warn("Worker: Import copy failed")
+            raise OSError("Import copy failed")
 
-        self.update_state(state='EXPIRED')
-        return True
+        # Done
+        updater.update_status('READY', 'Image ready', response=request['meta'])
+        cleanup_temporary(request, import_image=True)
+        return request['meta']
 
     except:
-        logging.error("ERROR: doexpire failed system=%s tag=%s",
+        logging.error("ERROR: img_import failed system=%s tag=%s",
                       request['system'], request['tag'])
+        print sys.exc_value
+        updater.update_status('FAILURE', 'FAILED')
+
+        # TODO: add a debugging flag and only disable cleanup if debugging
+        cleanup_temporary(request)
         raise
-
-
-@QUEUE.task(bind=True)
-def doimagevalid(self, request, testmode=0):
-    """
-    Celery task to check if a pulled image exists and if it is valid
-    """
-    logging.debug("do imagevalid system=%s tag=%s TM=%d", request['system'],
-                  request['tag'], testmode)
-    raise NotImplementedError('no image validity checks implemented yet')

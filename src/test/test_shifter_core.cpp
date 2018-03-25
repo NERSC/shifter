@@ -7,7 +7,7 @@
 /* Shifter, Copyright (c) 2016, The Regents of the University of California,
  * through Lawrence Berkeley National Laboratory (subject to receipt of any
  * required approvals from the U.S. Dept. of Energy).  All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *  1. Redistributions of source code must retain the above copyright notice,
@@ -19,7 +19,7 @@
  *     National Laboratory, U.S. Dept. of Energy nor the names of its
  *     contributors may be used to endorse or promote products derived from this
  *     software without specific prior written permission.
- * 
+ *
  * See LICENSE for full text.
  */
 
@@ -72,7 +72,7 @@ int setupLocalRootVFSConfig(UdiRootConfig **config, ImageData **image, const cha
     memset(*image, 0, sizeof(ImageData));
 
     (*image)->type = strdup("local");
-    parse_ImageData((*image)->type, strdup("/"), *config, *image);
+    parse_ImageData((*image)->type, "/", *config, *image);
     (*config)->udiMountPoint = strdup(tmpDir);
     (*config)->udiRootPath = alloc_strgenf("/usr", basePath);
     (*config)->rootfsType = strdup(ROOTFS_TYPE);
@@ -106,11 +106,11 @@ TEST_GROUP(ShifterCoreTestGroup) {
             fprintf(stderr, "WARNING: the bulk of the functional tests are"
                     " disabled because the test suite is compiled with "
                     "-DNOTROOT, but could have run since you have root "
-                    "privileges.");
+                    "privileges.\n");
         } else if (!isRoot && macroIsRoot) {
             fprintf(stderr, "WARNING: the test suite is built to run root-"
                     "privileged tests, but you don't have those privileges."
-                    " Several tests will fail.");
+                    " Several tests will fail.\n");
         }
         if (mkdtemp(tmpDir) == NULL) {
             fprintf(stderr, "WARNING mkdtemp failed, some tests will crash.\n");
@@ -167,13 +167,159 @@ TEST(ShifterCoreTestGroup, check_find_process_by_cmdline) {
     free(cmd);
 };
 
+void print_args(char **args) {
+  char **ptr=args;
+  if (args==NULL) {
+    printf("null args\n");
+    return;
+  }
+  while (*ptr!=NULL) {
+    printf("%s\n", *ptr);
+    ptr++;
+  }
+  printf("\n");
+}
+
+/*
+ * Test the args logic
+ */
+TEST(ShifterCoreTestGroup, calculate_args) {
+  char *clargs[2];
+  char *idEntry[3];
+  char *idCmd[2];
+  char *entry;
+  char **nargs;
+  ImageData id;
+  char *shell;
+
+  if (getenv("SHELL") != NULL) {
+      shell = strdup(getenv("SHELL"));
+  } else {
+     /* use /bin/sh */
+     shell = strdup("/bin/sh");
+  }
+
+  clargs[0]=NULL;
+  clargs[1]=NULL;
+
+  id.entryPoint=idEntry;
+  idEntry[0]=strdup("echo");
+  idEntry[1]=strdup("howdy");
+  idEntry[2]=NULL;
+
+  id.cmd=idCmd;
+  idCmd[0]=strdup("guys");
+  idCmd[1]=NULL;
+
+  // Legacy behaviour
+  // shifter
+  nargs = calculate_args(0, NULL, NULL, &id);
+  print_args(nargs);
+  CHECK(strcmp(shell, nargs[0])==0);
+  free(nargs[0]);
+  free(nargs);
+
+  // shifter you
+  clargs[0]=strdup("you");
+  nargs = calculate_args(0, clargs, NULL, &id);
+  print_args(nargs);
+  CHECK(strcmp("you",nargs[0])==0);
+
+  // Get everything from the image
+  // equiv: shifter --entry
+  nargs = calculate_args(1, NULL, NULL, &id);
+  print_args(nargs);
+  CHECK(strcmp("echo",nargs[0])==0);
+  CHECK(strcmp("howdy",nargs[1])==0);
+  CHECK(strcmp("guys",nargs[2])==0);
+  CHECK(nargs[3]==NULL);
+  free(nargs);
+
+  // equiv: shifter --entry you
+  nargs = calculate_args(1, clargs, NULL, &id);
+  print_args(nargs);
+  CHECK(strcmp("echo",nargs[0])==0);
+  CHECK(strcmp("howdy",nargs[1])==0);
+  CHECK(strcmp("you",nargs[2])==0);
+  CHECK(nargs[3]==NULL);
+  free(nargs);
+
+  // equiv: shifter --entry=echo
+  entry=strdup("echo");
+  nargs = calculate_args(1, NULL, entry, &id);
+  print_args(nargs);
+  CHECK(strcmp("echo",nargs[0])==0);
+  CHECK(nargs[1]==NULL);
+  free(nargs[0]);
+  free(nargs);
+
+  // equiv: shifter --entry=echo you
+  nargs = calculate_args(1, clargs, entry, &id);
+  print_args(nargs);
+  CHECK(strcmp("echo",nargs[0])==0);
+  CHECK(strcmp("you",nargs[1])==0);
+  CHECK(nargs[2]==NULL);
+  free(nargs[0]);
+  free(nargs);
+
+  free(idEntry[0]);
+  free(idEntry[1]);
+  free(idCmd[0]);
+
+  idEntry[0]=NULL;
+  idCmd[0]=NULL;
+
+  // Test for an image without an entrypoint
+  // equiv: shifter --entry
+  nargs = calculate_args(1, NULL, NULL, &id);
+  CHECK(nargs==NULL);
+
+  // equiv: shifter --entry
+  nargs = calculate_args(0, NULL, NULL, &id);
+  CHECK(strcmp(shell, nargs[0])==0);
+  CHECK(nargs[1]==NULL);
+  free(nargs[0]);
+  free(nargs);
+
+  // equiv: shifter --entry
+  id.entryPoint=NULL;
+  nargs = calculate_args(1, NULL, NULL, &id);
+  CHECK(nargs==NULL);
+
+  // equiv: shifter --entry
+  nargs = calculate_args(0, NULL, NULL, &id);
+  CHECK(strcmp(shell, nargs[0])==0);
+  CHECK(nargs[1]==NULL);
+  free(nargs[0]);
+  free(nargs);
+
+  // equiv: shifter --entry=echo
+  nargs = calculate_args(1, NULL, entry, &id);
+  print_args(nargs);
+  CHECK(strcmp("echo",nargs[0])==0);
+  CHECK(nargs[1]==NULL);
+  free(nargs[0]);
+  free(nargs);
+
+  // equiv: shifter you
+  nargs = calculate_args(0, clargs, NULL, &id);
+  print_args(nargs);
+  CHECK(strcmp("you",nargs[0])==0);
+  CHECK(nargs[1]==NULL);
+
+  free(entry);
+
+  free(clargs[0]);
+  free(shell);
+
+}
+
 #ifdef NOTROOT
 IGNORE_TEST(ShifterCoreTestGroup, CopyFile_basic) {
 #else
 TEST(ShifterCoreTestGroup, CopyFile_basic) {
 #endif
     char *toFile = NULL;
-    char *ptr = NULL;
     int ret = 0;
     struct stat statData;
 
@@ -258,7 +404,6 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
 #endif
     gid_t *groups = NULL;
     int ngroups = 0;
-    pid_t pid = 0;
     int ret = 0;
 
     /* set bad data to ensure it gets reset correctly */
@@ -289,23 +434,23 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
     SETUP_CHROOT("chroot1")
     groups = shifter_getgrouplist("dmj", 1000, &ngroups);
     fprintf(stderr, "got back %d groups\n", ngroups);
-    int ok[] = {10, 990, 1000};
+    unsigned int ok[] = {10, 990, 1000};
     int expcnt[] = {1, 1, 1};
     int gotcnt[] = {0, 0, 0};
 
     for (int idx = 0; idx < ngroups; idx++) {
         fprintf(stderr, "have gid: %d\n", groups[idx]);
-        for (int grpidx = 0; grpidx < 3; grpidx++) {
+        for (unsigned int grpidx = 0; grpidx < 3; grpidx++) {
             if (groups[idx] == ok[grpidx]) {
                 gotcnt[grpidx]++;
             }
         }
     }
-    for (int grpidx = 0; grpidx < 3; grpidx++) {
+    for (unsigned int grpidx = 0; grpidx < 3; grpidx++) {
         if (expcnt[grpidx] != gotcnt[grpidx]) {
             fprintf(stderr, "%d != %d occurences for gid %d\n", expcnt[grpidx], gotcnt[grpidx], ok[grpidx]);
             exit(1);
-        } 
+        }
     }
     CHECK(ret == 0);
     CHECK(ngroups == 3);
@@ -318,7 +463,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
     SETUP_CHROOT("chroot2")
     groups = shifter_getgrouplist("dmj", 1000, &ngroups);
     fprintf(stderr, "got back %d groups\n", ngroups);
-    int ok[] = {10, 990, 1000};
+    unsigned int ok[] = {10, 990, 1000};
     int expcnt[] = {1, 1, 2};
     int gotcnt[] = {0, 0, 0};
 
@@ -334,7 +479,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
         if (expcnt[grpidx] != gotcnt[grpidx]) {
             fprintf(stderr, "%d != %d occurences for gid %d\n", expcnt[grpidx], gotcnt[grpidx], ok[grpidx]);
             exit(1);
-        } 
+        }
     }
     CHECK_CHROOT(ret == 0 && ngroups == 4, returndir)
 
@@ -342,12 +487,12 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
     free(groups);
     groups = (gid_t *) malloc(sizeof(gid_t) * 1);
     ngroups = 1;
-  
+
     /* after making buffer too small, re-run test from above */
     SETUP_CHROOT("chroot1")
     groups = shifter_getgrouplist("dmj", 1000, &ngroups);
     fprintf(stderr, "got back %d groups\n", ngroups);
-    int ok[] = {10, 990, 1000};
+    unsigned int ok[] = {10, 990, 1000};
     int expcnt[] = {1, 1, 1};
     int gotcnt[] = {0, 0, 0};
 
@@ -363,7 +508,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
         if (expcnt[grpidx] != gotcnt[grpidx]) {
             fprintf(stderr, "%d != %d occurences for gid %d\n", expcnt[grpidx], gotcnt[grpidx], ok[grpidx]);
             exit(1);
-        } 
+        }
     }
     CHECK_CHROOT(ret == 0 && ngroups == 3, returndir)
 
@@ -372,7 +517,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
     SETUP_CHROOT("chroot3")
     groups = shifter_getgrouplist("dmj", 1000, &ngroups);
     fprintf(stderr, "got back %d groups\n", ngroups);
-    int ok[] = {1000};
+    unsigned int ok[] = {1000};
     int expcnt[] = {1};
     int gotcnt[] = {0};
 
@@ -388,7 +533,7 @@ TEST(ShifterCoreTestGroup, test_getgrouplist_basic) {
         if (expcnt[grpidx] != gotcnt[grpidx]) {
             fprintf(stderr, "%d != %d occurences for gid %d\n", expcnt[grpidx], gotcnt[grpidx], ok[grpidx]);
             exit(1);
-        } 
+        }
     }
     CHECK_CHROOT(ret == 0 && ngroups == 1, returndir)
 }
@@ -450,7 +595,6 @@ IGNORE_TEST(ShifterCoreTestGroup, setupPerNodeCacheBackingStore_tests) {
     UdiRootConfig *config = NULL;
     ImageData *image = NULL;
     char backingStorePath[PATH_MAX];
-    char *ptr = NULL;
 
     CHECK(setupLocalRootVFSConfig(&config, &image, tmpDir, cwd) == 0);
     memset(cache, 0, sizeof(VolMapPerNodeCacheConfig));
@@ -501,13 +645,12 @@ IGNORE_TEST(ShifterCoreTestGroup, CopyFile_chown) {
 TEST(ShifterCoreTestGroup, CopyFile_chown) {
 #endif
     char *toFile = NULL;
-    char *ptr = NULL;
     int ret = 0;
     struct stat statData;
 
     toFile = alloc_strgenf("%s/passwd", tmpDir);
     CHECK(toFile != NULL);
-    
+
     ret = _shifterCore_copyFile("/bin/cp", "/etc/passwd", toFile, 0, 2, 2, 0644);
     tmpFiles.push_back(toFile);
     CHECK(ret == 0);
@@ -559,7 +702,7 @@ TEST(ShifterCoreTestGroup, validatePrivateNamespace) {
 
     CHECK(stat("/tmp", &statInfo) == 0);
     CHECK(stat("/tmp/test_shifter_core", &statInfo) != 0);
-    
+
     child = fork();
     if (child == 0) {
         char currDir[PATH_MAX];
@@ -588,7 +731,7 @@ TEST(ShifterCoreTestGroup, validatePrivateNamespace) {
     }
 }
 
-TEST(ShifterCoreTestGroup, writeHostFile_basic) { 
+TEST(ShifterCoreTestGroup, writeHostFile_basic) {
    char tmpDirVar[] = "/tmp/shifter.XXXXXX/var";
    char hostsFilename[] = "/tmp/shifter.XXXXXX/var/hostsfile";
    FILE *fp = NULL;
@@ -659,9 +802,9 @@ TEST(ShifterCoreTestGroup, writeHostFile_basic) {
 }
 
 #ifdef NOTROOT
-IGNORE_TEST(ShifterCoreTestGroup, validateUnmounted_Basic) { 
+IGNORE_TEST(ShifterCoreTestGroup, validateUnmounted_Basic) {
 #else
-TEST(ShifterCoreTestGroup, validateUnmounted_Basic) { 
+TEST(ShifterCoreTestGroup, validateUnmounted_Basic) {
 #endif
     int rc = 0;
     MountList mounts;
@@ -675,7 +818,7 @@ TEST(ShifterCoreTestGroup, validateUnmounted_Basic) {
     CHECK(rc == 0);
 
     CHECK(_shifterCore_bindMount(&config, &mounts, "/", tmpDir, 1, 0) == 0);
-    
+
     rc = validateUnmounted(tmpDir, 0);
     CHECK(rc == 1);
 
@@ -693,7 +836,6 @@ IGNORE_TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
 TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
 #endif
     UdiRootConfig *config = NULL;
-    struct gpu_support_config gpu_config = {};
     ImageData *image = NULL;
     MountList mounts;
     int rc = 0;
@@ -800,8 +942,9 @@ TEST(ShifterCoreTestGroup, copyenv_test) {
     char **eptr = NULL;
     char **cptr = NULL;
     setenv("ABCD", "DCBA", 1);
+    unsetenv("SHIFTERTEST");
 
-    copied_env = shifter_copyenv(environ, 0);
+    copied_env = shifter_copyenv();
     CHECK(copied_env != NULL);
 
     /* environment variables should be identical and in
@@ -812,8 +955,19 @@ TEST(ShifterCoreTestGroup, copyenv_test) {
     {
         CHECK(strcmp(*eptr, *cptr) == 0);
         CHECK(*eptr != *cptr);
-    } 
+    }
     CHECK(*eptr == NULL && *cptr == NULL);
+
+    CHECK(shifter_putenv(&copied_env, "SHIFTERTEST=20") == 0);
+    for (eptr = environ, cptr = copied_env;
+         eptr && *eptr && cptr && *cptr;
+         eptr++, cptr++)
+    {
+        CHECK(strcmp(*eptr, *cptr) == 0);
+        CHECK(*eptr != *cptr);
+    }
+    CHECK(strcmp(*cptr++, "SHIFTERTEST=20") == 0);
+    CHECK(*cptr == NULL);
 
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         free(*cptr);
@@ -833,7 +987,7 @@ TEST(ShifterCoreTestGroup, setenv_test) {
     size_t newcnt = 0;
 
     unsetenv("FAKE_ENV_VAR_FOR_TEST");
-    copied_env = shifter_copyenv(environ, 0);
+    copied_env = shifter_copyenv();
     CHECK(copied_env != NULL);
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         cnt++;
@@ -841,7 +995,7 @@ TEST(ShifterCoreTestGroup, setenv_test) {
 
     ret = shifter_putenv(&copied_env, tmpvar);
     CHECK(ret == 0);
-    
+
     /* make sure we cannot compare against original string */
     tmpvar[0] = 0;
     free(tmpvar);
@@ -881,7 +1035,7 @@ TEST(ShifterCoreTestGroup, appendenv_test) {
     size_t newcnt = 0;
 
     setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
-    copied_env = shifter_copyenv(environ, 0);
+    copied_env = shifter_copyenv();
     CHECK(copied_env != NULL);
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         cnt++;
@@ -889,7 +1043,7 @@ TEST(ShifterCoreTestGroup, appendenv_test) {
 
     ret = shifter_appendenv(&copied_env, tmpvar);
     CHECK(ret == 0);
-    
+
     /* make sure we cannot compare against original string */
     tmpvar[0] = 0;
     free(tmpvar);
@@ -930,7 +1084,7 @@ TEST(ShifterCoreTestGroup, prependenv_test) {
     size_t newcnt = 0;
 
     setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
-    copied_env = shifter_copyenv(environ, 0);
+    copied_env = shifter_copyenv();
     CHECK(copied_env != NULL);
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         cnt++;
@@ -938,7 +1092,7 @@ TEST(ShifterCoreTestGroup, prependenv_test) {
 
     ret = shifter_prependenv(&copied_env, tmpvar);
     CHECK(ret == 0);
-    
+
     /* make sure we cannot compare against original string */
     tmpvar[0] = 0;
     free(tmpvar);
@@ -979,7 +1133,7 @@ TEST(ShifterCoreTestGroup, unsetenv_test) {
     size_t newcnt = 0;
 
     setenv("FAKE_ENV_VAR_FOR_TEST", "4:5", 1);
-    copied_env = shifter_copyenv(environ, 0);
+    copied_env = shifter_copyenv();
     CHECK(copied_env != NULL);
     for (cptr = copied_env; cptr && *cptr; cptr++) {
         cnt++;
@@ -987,7 +1141,7 @@ TEST(ShifterCoreTestGroup, unsetenv_test) {
 
     ret = shifter_unsetenv(&copied_env, tmpvar);
     CHECK(ret == 0);
-    
+
     /* make sure we cannot compare against original string */
     tmpvar[0] = 0;
     free(tmpvar);
@@ -1024,10 +1178,10 @@ TEST(ShifterCoreTestGroup, setupenv_test) {
 
     memset(config, 0, sizeof(UdiRootConfig));
     memset(image, 0, sizeof(ImageData));
-   
+
     /* initialize empty environment */
     local_env = (char **) malloc(sizeof(char *) * 2);
-    local_env[0] = strdup("PATH=/incorrect");
+    local_env[0] = "PATH=/incorrect";
     local_env[1] = NULL;
 
     /* copy arrays into config */
@@ -1091,191 +1245,6 @@ bool are_environments_equal(const std::vector<std::string>& expected_env, char**
     return true;
 }
 
-TEST(ShifterCoreTestGroup, setupenv_site_resources_test) {
-    char* site_resources_path = alloc_strgenf("%s%s", tmpDir, "/site-resources");
-    UdiRootConfig config = {};
-    config.udiMountPoint = strdup(tmpDir);
-    config.siteResources = site_resources_path;
-
-    // site resources folder is not configured
-    {
-        char* oldSiteResources = config.siteResources;
-        config.siteResources = NULL;
-        char** actual_environment;
-        actual_environment = (char **) malloc(sizeof(char *) * 3);
-        actual_environment[0] = strdup("PATH=/initial-path");
-        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
-        actual_environment[2] = NULL;
-
-        std::vector<std::string> expected_environment;
-        expected_environment.push_back("PATH=/initial-path");
-        expected_environment.push_back("LD_LIBRARY_PATH=/initial-ld-library-path");
-        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
-
-        CHECK(are_environments_equal(expected_environment, actual_environment));
-        config.siteResources = oldSiteResources;
-        free(actual_environment[0]);
-        free(actual_environment[1]);
-    }
-
-    // site resources folder is empty
-    {
-        char** actual_environment;
-        actual_environment = (char **) malloc(sizeof(char *) * 3);
-        actual_environment[0] = strdup("PATH=/initial-path");
-        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
-        actual_environment[2] = NULL;
-
-        CHECK(system((std::string("mkdir ") + site_resources_path).c_str()) == 0);
-        std::vector<std::string> expected_environment;
-        expected_environment.push_back("PATH=/initial-path");
-        expected_environment.push_back("LD_LIBRARY_PATH=/initial-ld-library-path");
-        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
-
-        CHECK(are_environments_equal(expected_environment, actual_environment));
-        CHECK(system((std::string("rm -r ") + site_resources_path).c_str()) == 0);
-        free(actual_environment[0]);
-        free(actual_environment[1]);
-        free(actual_environment);
-    }
-
-    // site resources folder contains executable file
-    {
-        char** actual_environment;
-        actual_environment = (char **) malloc(sizeof(char *) * 3);
-        actual_environment[0] = strdup("PATH=/initial-path");
-        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
-        actual_environment[2] = NULL;
-
-        std::string bins_path = std::string(site_resources_path) +  "/bins_path";
-        std::string bin = bins_path + "/executable_file";
-        CHECK(system((std::string("mkdir -p ") + bins_path).c_str()) == 0);
-        CHECK(system((std::string("touch ") + bin).c_str()) == 0);
-        CHECK(system((std::string("chmod 755 ") + bin).c_str()) == 0);
-        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
-
-        std::vector<std::string> expected_environment;
-        expected_environment.push_back("PATH=" + bins_path + ":/initial-path");
-        expected_environment.push_back("LD_LIBRARY_PATH=/initial-ld-library-path");
-
-        CHECK(are_environments_equal(expected_environment, actual_environment));
-        CHECK(system((std::string("rm -r ") + site_resources_path).c_str()) == 0);
-        free(actual_environment[0]);
-        free(actual_environment[1]);
-        free(actual_environment);
-    }
-
-    // site resources folder contains shared library (*.so)
-    {
-        char** actual_environment;
-        actual_environment = (char **) malloc(sizeof(char *) * 3);
-        actual_environment[0] = strdup("PATH=/initial-path");
-        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
-        actual_environment[2] = NULL;
-
-        std::string libs_path = std::string(site_resources_path) + "/libs_path";
-        std::string lib = libs_path + "/libtest.so";
-        CHECK(system((std::string("mkdir -p ") + libs_path).c_str()) == 0);
-        CHECK(system((std::string("touch ") + lib).c_str()) == 0);
-        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
-
-        std::vector<std::string> expected_environment;
-        expected_environment.push_back("PATH=/initial-path");
-        expected_environment.push_back("LD_LIBRARY_PATH=" + libs_path + ":/initial-ld-library-path");
-        CHECK(are_environments_equal(expected_environment, actual_environment));
-
-        CHECK(system((std::string("rm -r ") + site_resources_path).c_str()) == 0);
-        free(actual_environment[0]);
-        free(actual_environment[1]);
-        free(actual_environment);
-    }
-
-    // site resources folder contains shared library (*.so.1)
-    {
-        char** actual_environment;
-        actual_environment = (char **) malloc(sizeof(char *) * 3);
-        actual_environment[0] = strdup("PATH=/initial-path");
-        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
-        actual_environment[2] = NULL;
-
-        std::string libs_path = std::string(site_resources_path) + "/libs_path";
-        std::string lib = libs_path + "/libtest.so.1";
-        CHECK(system((std::string("mkdir -p ") + libs_path).c_str()) == 0);
-        CHECK(system((std::string("touch ") + lib).c_str()) == 0);
-        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
-
-        std::vector<std::string> expected_environment;
-        expected_environment.push_back("PATH=/initial-path");
-        expected_environment.push_back("LD_LIBRARY_PATH=" + libs_path + ":/initial-ld-library-path");
-        CHECK(are_environments_equal(expected_environment, actual_environment));
-
-        CHECK(system((std::string("rm -r ") + site_resources_path).c_str()) == 0);
-        free(actual_environment[0]);
-        free(actual_environment[1]);
-        free(actual_environment);
-    }
-
-    // site resources folder contains executable shared libraries (*.so)
-    {
-        char** actual_environment;
-        actual_environment = (char **) malloc(sizeof(char *) * 3);
-        actual_environment[0] = strdup("PATH=/initial-path");
-        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
-        actual_environment[2] = NULL;
-
-        std::string libs_path = std::string(site_resources_path) + "/libs_path";
-        std::string lib1 = libs_path + "/libtest1.so";
-        std::string lib2 = libs_path + "/libtest2.so";
-        CHECK(system((std::string("mkdir -p ") + libs_path).c_str()) == 0);
-        CHECK(system((std::string("touch ") + lib1).c_str()) == 0);
-        CHECK(system((std::string("touch ") + lib2).c_str()) == 0);
-        CHECK(system((std::string("chmod 755 ") + lib1).c_str()) == 0);
-        CHECK(system((std::string("chmod 755 ") + lib2).c_str()) == 0);
-        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
-
-        std::vector<std::string> expected_environment;
-        expected_environment.push_back("PATH=/initial-path");
-        expected_environment.push_back("LD_LIBRARY_PATH=" + libs_path + ":/initial-ld-library-path");
-        CHECK(are_environments_equal(expected_environment, actual_environment));
-
-        CHECK(system((std::string("rm -r ") + site_resources_path).c_str()) == 0);
-        free(actual_environment[0]);
-        free(actual_environment[1]);
-        free(actual_environment);
-    }
-
-    // site resources folder contains shared library and executable in deeper folder
-    {
-        char** actual_environment;
-        actual_environment = (char **) malloc(sizeof(char *) * 3);
-        actual_environment[0] = strdup("PATH=/initial-path");
-        actual_environment[1] = strdup("LD_LIBRARY_PATH=/initial-ld-library-path");
-        actual_environment[2] = NULL;
-
-        std::string deep_path = std::string(site_resources_path) + "/the/deep/path";
-        std::string lib = deep_path + "/libtest.so";
-        std::string bin = deep_path + "/bintest";
-        CHECK(system((std::string("mkdir -p ") + deep_path).c_str()) == 0);
-        CHECK(system((std::string("touch ") + lib).c_str()) == 0);
-        CHECK(system((std::string("touch ") + bin).c_str()) == 0);
-        CHECK(system((std::string("chmod 755 ") + bin).c_str()) == 0);
-        CHECK(shifter_setupenv_site_resources(&actual_environment, &config) == 0);
-
-        std::vector<std::string> expected_environment;
-        expected_environment.push_back("PATH=" + deep_path + ":/initial-path");
-        expected_environment.push_back("LD_LIBRARY_PATH=" + deep_path + ":/initial-ld-library-path");
-        CHECK(are_environments_equal(expected_environment, actual_environment));
-
-        CHECK(system((std::string("rm -r ") + site_resources_path).c_str()) == 0);
-        free(actual_environment[0]);
-        free(actual_environment[1]);
-        free(actual_environment);
-    }
-
-    free(config.udiMountPoint);
-    free(config.siteResources);
-}
-
 TEST(ShifterCoreTestGroup, shifterRealpath_test) {
     UdiRootConfig *config = (UdiRootConfig *) malloc(sizeof(UdiRootConfig));
     memset(config, 0, sizeof(UdiRootConfig));
@@ -1319,11 +1288,9 @@ TEST(ShifterCoreTestGroup, destructUDI_test) {
 IGNORE_TEST(ShifterCoreTestGroup, destructUDI_test) {
 #endif
     UdiRootConfig *config = NULL;
-    struct gpu_support_config gpu_config = {};
     ImageData *image = NULL;
     MountList mounts;
-    struct stat statData;
-    int rc = 0;
+
     memset(&mounts, 0, sizeof(MountList));
 
     CHECK(setupLocalRootVFSConfig(&config, &image, tmpDir, cwd) == 0);
@@ -1332,7 +1299,7 @@ IGNORE_TEST(ShifterCoreTestGroup, destructUDI_test) {
 
     CHECK(parse_MountList(&mounts) == 0);
     CHECK(find_MountList(&mounts, tmpDir) != NULL);
-    
+
     free_MountList(&mounts, 0);
     memset(&mounts, 0, sizeof(MountList));
 

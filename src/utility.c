@@ -1,7 +1,7 @@
 /* Shifter, Copyright (c) 2015, The Regents of the University of California,
 ## through Lawrence Berkeley National Laboratory (subject to receipt of any
 ## required approvals from the U.S. Dept. of Energy).  All rights reserved.
-## 
+##
 ## Redistribution and use in source and binary forms, with or without
 ## modification, are permitted provided that the following conditions are met:
 ##  1. Redistributions of source code must retain the above copyright notice,
@@ -13,7 +13,7 @@
 ##     National Laboratory, U.S. Dept. of Energy nor the names of its
 ##     contributors may be used to endorse or promote products derived from this
 ##     software without specific prior written permission.
-## 
+##
 ## THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 ## AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 ## IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -25,7 +25,7 @@
 ## CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ## ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 ## POSSIBILITY OF SUCH DAMAGE.
-##  
+##
 ## You are under no obligation whatsoever to provide any bug fixes, patches, or
 ## upgrades to the features, functionality or performance of the source code
 ## ("Enhancements") to anyone; however, if you choose to make your Enhancements
@@ -52,6 +52,7 @@
 #include <linux/limits.h>
 
 #include "utility.h"
+#include "shifter_mem.h"
 
 
 int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assign_fp)(const char *, const char *, void *)) {
@@ -87,7 +88,7 @@ int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assig
             ptr = strchr(linePtr, delim);
             if (ptr == NULL) continue;
             *ptr++ = 0;
-            key_alloc = strdup(linePtr);
+            key_alloc = _strdup(linePtr);
             key = shifter_trim(key_alloc);
             if (key == NULL) {
                 goto _parseConfig_errCleanup;
@@ -110,7 +111,7 @@ int shifter_parseConfig(const char *filename, char delim, void *obj, int (*assig
 
         /* merge value and tValue */
         if (value == NULL) {
-            value = strdup(tValue);
+            value = _strdup(tValue);
         } else {
             if (asprintf(&tmp_value, "%s %s", value, tValue) < 0) {
                 goto _parseConfig_errCleanup;
@@ -161,7 +162,6 @@ _parseConfig_errCleanup:
     }
     return ret;
 }
-
 
 char *shifter_trim(char *str) {
     char *ptr = str;
@@ -221,20 +221,15 @@ int strncpy_StringArray(const char *str, size_t n, char ***wptr,
 
     /* allocate more space at a time */
     count = *wptr - *array;
-    if (*capacity - count < 2) {
+    while (*capacity - count < 2) {
         size_t new_capacity = *capacity + allocationBlock;
-        char **tmp = (char **) realloc(*array, sizeof(char *) * new_capacity);
-        if (tmp == NULL) {
-            fprintf(stderr, "ERROR: failed to allocate memory, append failed\n");
-            return 1;
-        }
-        *array = tmp;
+        *array = _realloc(*array, sizeof(char *) * new_capacity);
         *wptr = *array + count;
         *capacity += allocationBlock;
     }
 
     /* append string to array, add ternminated NULL */
-    **wptr = (char *) malloc(sizeof(char) * (n + 1));
+    **wptr = _malloc(sizeof(char) * (n + 1));
     memcpy(**wptr, str, n);
     (**wptr)[n] = 0;
     (*wptr)++;
@@ -278,7 +273,7 @@ char *alloc_strcatf(char *string, size_t *currLen, size_t *capacity, const char 
     }
 
     if (string == NULL || *capacity == 0) {
-        string = (char *) malloc(sizeof(char) * 128);
+        string = _malloc(sizeof(char) * 128);
         *capacity = 128;
     }
 
@@ -296,20 +291,14 @@ char *alloc_strcatf(char *string, size_t *currLen, size_t *capacity, const char 
             break;
         } else if ((size_t) n >= (*capacity - *currLen)) {
             /* if vsnprintf returns larger than allowed buffer, need more space
-             * allocating eagerly to reduce cost for successive strcatf 
+             * allocating eagerly to reduce cost for successive strcatf
              * operations */
             size_t newCapacity = *capacity * 2 + 1;
-            char *tmp = NULL;
             if (newCapacity < (size_t) (n + 1)) {
                 newCapacity = (size_t) (n + 1);
             }
-            
-            tmp = (char *) realloc(string, sizeof(char) * newCapacity);
-            if (tmp == NULL) {
-                status = 2;
-                break;
-            }
-            string = tmp;
+
+            string = _realloc(string, sizeof(char) * newCapacity);
             *capacity = newCapacity;
         } else {
             /* success */
@@ -345,7 +334,7 @@ char *alloc_strgenf(const char *format, ...) {
         return NULL;
     }
 
-    string = (char *) malloc(sizeof(char) * 128);
+    string = _malloc(sizeof(char) * 128);
     capacity = 128;
 
     while (1) {
@@ -361,15 +350,10 @@ char *alloc_strgenf(const char *format, ...) {
             break;
         } else if (n >= capacity) {
             /* if vsnprintf returns larger than allowed buffer, need more space
-             * allocating eagerly to reduce cost for successive strcatf 
+             * allocating eagerly to reduce cost for successive strcatf
              * operations */
             size_t newCapacity = n + 1;
-            char *tmp = (char *) realloc(string, sizeof(char) * newCapacity);
-            if (tmp == NULL) {
-                status = 2;
-                break;
-            }
-            string = tmp;
+            string = _realloc(string, sizeof(char) * newCapacity);
             capacity = newCapacity;
         } else {
             /* success */
@@ -389,7 +373,7 @@ char *alloc_strgenf(const char *format, ...) {
 
 /**
  * userInputPathFilter screens out certain characters from user-provided strings
-   
+
  * Parameters:
  *      input - the user provided string
  *      allowSlash - flag to allow a '/' in the string (1 for yes, 0 for no)
@@ -406,7 +390,7 @@ char *userInputPathFilter(const char *input, int allowSlash) {
     if (input == NULL) return NULL;
 
     len = strlen(input) + 1;
-    ret = (char *) malloc(sizeof(char) * len);
+    ret = _malloc(sizeof(char) * len);
     if (ret == NULL) return NULL;
 
     rptr = input;
@@ -428,7 +412,7 @@ char *cleanPath(const char *path) {
     if (!path) return NULL;
     ssize_t len = strlen(path) + 1;
 
-    char *ret = (char *) malloc(sizeof(char) * len);
+    char *ret = _malloc(sizeof(char) * len);
     memset(ret, 0, sizeof(char) * len);
 
     char *wPtr = ret;
@@ -472,63 +456,156 @@ int pathcmp(const char *a, const char *b) {
     return ret;
 }
 
-/**
- * Creates the specified directory as the bash command "mkdir -p", i.e. there is no error
- * if the directory exists and makes parent directories as needed.
- */
-int mkdir_p(const char* path, mode_t mode) {
-    if (strlen(path) >= PATH_MAX) {
-        fprintf(stderr, "cannot mkdir %s. Specified path is too long\n", path);
+int is_json_array(const char *value) {
+    if (value[0] == '[' && value[1] == 'u' && value[2] == '\'') {
         return 1;
+    } else {
+        return 0;
+    }
+}
+
+/**
+ * split_json_array - utility function to parse a JSON array and split it
+ * into an array of strings.  It will allocate the array but destroys the
+ * source string.
+ *
+ * The values in the array should be comma-separated quoted strings.
+ */
+char **split_json_array(const char *value) {
+    const char *ptr = NULL;
+    int count = 0;
+    int in = 0;
+    char **array = NULL;
+    int i;
+    int vlen = strlen(value);
+    const char *start;
+    int length;
+
+    if (!is_json_array(value)) {
+        return NULL;
     }
 
-    char path_copy[PATH_MAX];
-    strncpy(path_copy, path, PATH_MAX);
-
-    char* begin = path_copy;
-    char* pos = begin;
-
-    if (*begin == 0 || *begin != '/') {
-        fprintf(stderr, "mkdir_p: specified a non valid absulute path\n");
-    }
-
-    // iterate through each subfolder and create them as needed
-    while(1) {
-        ++pos;
-        if (*pos == '/' || *pos == '\0') {
-            int is_last_subfolder = (*pos == '\0');
-            *pos = '\0';
-
-            if (!is_existing_file(begin)) {
-                if (mkdir(begin, mode) != 0) {
-                    fprintf(stderr, "cannot mkdir %s\n", begin);
-                    return 1;
-                }
-            }
-
-            if(is_last_subfolder) {
-                break;
-            }
-            else {
-                *pos = '/';
-            }
+    ptr = value;
+    in = 0;
+    count = 0;
+    ptr++; /* Get past the [ */
+    for (i = 2; i < vlen; i++, ptr++) {
+        if (*ptr != '\'') {
+            continue;
+        }
+        if (in) {
+            count++;
+            in = 0;
+        } else {
+            in = 1;
         }
     }
-    return 0;
+
+    /* Confirm we aren't in the middle of a string */
+    if (in) {
+        fprintf(stderr, "Malformed JSON\n");
+        return NULL;
+    }
+
+    /* Confirm that the last character was a ] */
+    if (*ptr != ']') {
+        fprintf(stderr, "Malformed JSON\n");
+        return NULL;
+    }
+    count++;
+
+    array = (char **) _malloc(sizeof(char *) * count);
+    ptr = value;
+    count = 0;
+    in = 0;
+    ptr++; /* Get past the [ */
+    length = 0;
+    for (i = 2; i < vlen; i++, ptr++) {
+        if (*ptr != '\''){
+            length++;
+            continue;
+        }
+        if (in) {
+            in = 0;
+            /* Terminate the string */
+            array[count] = _strndup(start, length);
+            count++;
+        } else {
+            in = 1;
+            start = ptr;
+            /* Get past the quote */
+            start++;
+            length = 0;
+        }
+    }
+    /* Terminate the char array */
+    array[count] = NULL;
+    i = 0;
+    ptr = array[0];
+    while (array[i] != NULL) {
+        i++;
+    }
+    return array;
 }
 
-/**
- * Returns 1 if the specified file exists (could be either a file or a directory), otherwise 0.
+/*
+ * count return the number of elements including the
+ * NULL termination.
  */
-int is_existing_file(const char* path) {
-    struct stat sb;
-    return stat(path, &sb) == 0;
+int _count_args(char **args) {
+    int i = 0;
+    if (args == NULL) {
+        return 0;
+    }
+    while (args[i] != NULL) {
+        i++;
+    }
+    i++;
+    return i;
 }
 
-/**
- * Returns 1 if the specified directory exists, otherwise 0.
+/*
+ * This function merges two character arrays together.
+ * It allocates the new array but reuses the strings
+ * from the source arrays.
+ * Aborts on errors.
  */
-int is_existing_directory(const char* path) {
-    struct stat sb;
-    return stat(path, &sb) == 0 && S_ISDIR(sb.st_mode);
+char **merge_args(char **args1, char **args2) {
+    int nArgs = 0;
+    int s_index, d_index;
+    char **newargs;
+    nArgs = _count_args(args1) + _count_args(args2) - 1;
+    newargs = (char **) _malloc(sizeof(char *) * nArgs);
+    d_index = 0;
+    s_index = 0;
+    while(args1[s_index] != NULL) {
+        newargs[d_index] = args1[s_index];
+        s_index++;
+        d_index++;
+    }
+    s_index = 0;
+    while(args2[s_index] != NULL) {
+        newargs[d_index] = args2[s_index];
+        s_index++;
+        d_index++;
+    }
+    newargs[d_index] = NULL;
+    return  newargs;
+}
+
+/*
+ * Convert a simple character string into a
+ * character array with one entry.
+ * Aborts on errors.
+ */
+char **make_char_array(const char *value) {
+    char **arr;
+    arr = (char **) _malloc(sizeof(char *) * 2);
+    arr[0] = _strdup(value);
+    if (!arr[0]) {
+        fprintf(stderr, "Allocation error.");
+        abort();
+    }
+    arr[1] = NULL;
+    return arr;
 }

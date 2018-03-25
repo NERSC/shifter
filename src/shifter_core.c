@@ -52,12 +52,12 @@
 #include "ImageData.h"
 #include "UdiRootConfig.h"
 #include "shifter_core.h"
+#include "shifter_mem.h"
 #include "utility.h"
 #include "VolumeMap.h"
 #include "MountList.h"
 #include "config.h"
 #include "PathList.h"
-#include "gpu_support.h"
 
 #ifndef BINDMOUNT_OVERWRITE_UNMOUNT_RETRY
 #define BINDMOUNT_OVERWRITE_UNMOUNT_RETRY 3
@@ -70,6 +70,7 @@
 int _shifterCore_bindMount(UdiRootConfig *confg, MountList *mounts,
         const char *from, const char *to, size_t flags, int overwrite);
 int _shifterCore_copyFile(const char *cpPath, const char *source, const char *dest, int keepLink, uid_t owner, gid_t group, mode_t mode);
+int _shifterCore_copyUdiImage(UdiRootConfig *config);
 
 /*! Bind subtree of static image into UDI rootfs */
 /*!
@@ -89,10 +90,10 @@ int bindImageIntoUDI(
         UdiRootConfig *udiConfig,
         int copyFlag
 ) {
-    char udiRoot[PATH_MAX];
-    char imgRoot[PATH_MAX];
-    char mntBuffer[PATH_MAX];
-    char srcBuffer[PATH_MAX];
+    char *udiRoot = _malloc(sizeof(char) * PATH_MAX);
+    char *imgRoot = _malloc(sizeof(char) * PATH_MAX);
+    char *mntBuffer = _malloc(sizeof(char) * PATH_MAX);
+    char *srcBuffer = _malloc(sizeof(char) * PATH_MAX);
     DIR *subtree = NULL;
     struct dirent *dirEntry = NULL;
     struct stat statData;
@@ -105,6 +106,10 @@ int bindImageIntoUDI(
     if (relpath == NULL || strlen(relpath) == 0 || imageData == NULL ||
             udiConfig == NULL)
     {
+        free(udiRoot);
+        free(imgRoot);
+        free(mntBuffer);
+        free(srcBuffer);
         return 1;
     }
 
@@ -121,6 +126,10 @@ int bindImageIntoUDI(
 
     if (parse_MountList(&mountCache) != 0) {
         fprintf(stderr, "FAILED to read existing mounts.\n");
+        free(udiRoot);
+        free(imgRoot);
+        free(mntBuffer);
+        free(srcBuffer);
         return 1;
     }
     setSort_MountList(&mountCache, MOUNT_SORT_FORWARD);
@@ -196,8 +205,8 @@ int bindImageIntoUDI(
 
         /* if target is a symlink, copy it */
         if (S_ISLNK(statData.st_mode)) {
-            char *args[] = { strdup(udiConfig->cpPath), strdup("-P"),
-                strdup(srcBuffer), strdup(mntBuffer), NULL
+            char *args[] = { _strdup(udiConfig->cpPath), _strdup("-P"),
+                _strdup(srcBuffer), _strdup(mntBuffer), NULL
             };
             char **argsPtr = NULL;
             int ret = forkAndExecv(args);
@@ -215,8 +224,8 @@ int bindImageIntoUDI(
         }
         if (S_ISREG(statData.st_mode)) {
             if (statData.st_size < FILE_SIZE_LIMIT) {
-                char *args[] = { strdup(udiConfig->cpPath), strdup("-p"),
-                    strdup(srcBuffer), strdup(mntBuffer), NULL
+                char *args[] = { _strdup(udiConfig->cpPath), _strdup("-p"),
+                    _strdup(srcBuffer), _strdup(mntBuffer), NULL
                 };
                 char **argsPtr = NULL;
                 int ret = forkAndExecv(args);
@@ -245,8 +254,8 @@ int bindImageIntoUDI(
                 MKDIR(mntBuffer, 0755);
                 BINDMOUNT(&mountCache, srcBuffer, mntBuffer, 0, 0);
             } else {
-                char *args[] = { strdup(udiConfig->cpPath), strdup("-rp"),
-                    strdup(srcBuffer), strdup(mntBuffer), NULL
+                char *args[] = { _strdup(udiConfig->cpPath), _strdup("-rp"),
+                    _strdup(srcBuffer), _strdup(mntBuffer), NULL
                 };
                 char **argsPtr = NULL;
                 int ret = forkAndExecv(args);
@@ -275,6 +284,10 @@ int bindImageIntoUDI(
 #undef BINDMOUNT
 
     free_MountList(&mountCache, 0);
+    free(udiRoot);
+    free(imgRoot);
+    free(mntBuffer);
+    free(srcBuffer);
     return 0;
 
 _bindImgUDI_unclean:
@@ -287,6 +300,10 @@ _bindImgUDI_unclean:
         closedir(subtree);
         subtree = NULL;
     }
+    free(udiRoot);
+    free(imgRoot);
+    free(mntBuffer);
+    free(srcBuffer);
     return rc;
 }
 
@@ -346,12 +363,12 @@ int _shifterCore_copyFile(const char *cpPath, const char *source,
         }
     }
 
-    cmdArgs[cmdArgs_idx++] = strdup(cpPath);
+    cmdArgs[cmdArgs_idx++] = _strdup(cpPath);
     if (isLink == 1 && keepLink == 1) {
-        cmdArgs[cmdArgs_idx++] = strdup("-P");
+        cmdArgs[cmdArgs_idx++] = _strdup("-P");
     }
-    cmdArgs[cmdArgs_idx++] = strdup(source);
-    cmdArgs[cmdArgs_idx++] = strdup(dest);
+    cmdArgs[cmdArgs_idx++] = _strdup(source);
+    cmdArgs[cmdArgs_idx++] = _strdup(dest);
     cmdArgs[cmdArgs_idx++] = NULL;
 
     /* perform the copy (and try a second time just in case the source file changes during copy) */
@@ -391,6 +408,121 @@ _copyFile_unclean:
     return 1;
 }
 
+/*! Copy udiImage content */
+/*!
+ * Recursively copy the udiImage content including active modules to
+ * opt/udiImage within the container
+ * \param config UdiRootConfig configuration object
+ * \return 0 for success, nonzero for any error
+ */
+int _shifterCore_copyUdiImage(UdiRootConfig *udiConfig) {
+    int rc = 0;
+    char **srcPaths = NULL;
+    char **destPaths = NULL;
+    char **pptr = NULL;
+    size_t n_src = 0;
+    size_t n_dest = 0;
+    int idx = 0;
+    struct stat statData;
+
+#define _MKDIR(dir, perm) if (mkdir(dir, perm) != 0) { \
+    fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", dir); \
+    perror("   --- REASON: "); \
+    rc = 1; \
+    goto _fail; \
+}
+
+    if (udiConfig->optUdiImage != NULL) {
+        char *src = alloc_strgenf("%s/", udiConfig->optUdiImage);
+        char *dest = alloc_strgenf("%s/opt/udiImage/", udiConfig->udiMountPoint);
+        srcPaths = _malloc(sizeof(char *) * 2);
+        destPaths = _malloc(sizeof(char *) * 2);
+        srcPaths[0] = src;
+        srcPaths[1] = NULL;
+        destPaths[0] = dest;
+        destPaths[1] = NULL;
+        n_src = 1;
+        n_dest = 1;
+    }
+    for (idx = 0; idx < udiConfig->n_active_modules; idx++) {
+        char *src = NULL;
+        char *dest = NULL;
+        if (udiConfig->active_modules[idx]->copyPath == NULL)
+            continue;
+        src = alloc_strgenf("%s/", udiConfig->active_modules[idx]->copyPath);
+        dest = alloc_strgenf("%s/opt/udiImage/modules/%s/", udiConfig->udiMountPoint, udiConfig->active_modules[idx]->name);
+        srcPaths = _realloc(srcPaths, sizeof(char *) * (n_src + 2));
+        destPaths = _realloc(destPaths, sizeof(char *) * (n_dest + 2));
+
+        srcPaths[n_src++] = src;
+        srcPaths[n_src] = NULL;
+        destPaths[n_dest++] = dest;
+        destPaths[n_dest] = NULL;
+    }
+
+    for (idx = 0; idx < n_src; idx++) {
+        char *src = srcPaths[idx];
+        char *dest = destPaths[idx];
+        size_t srclen = strlen(src);
+        size_t destlen = strlen(dest);
+        if (srclen == 0 || srclen > PATH_MAX || destlen == 0 || destlen > PATH_MAX) {
+            fprintf(stderr, "FAILED: copy path has invalid length!\n");
+            goto _fail;
+        }
+        if (stat(src, &statData) != 0) {
+            fprintf(stderr, "FAILED to stat udiImage source directory: %s\n", src);
+            goto _fail;
+        }
+        if (stat(dest, &statData) != 0) {
+            _MKDIR(dest, 0755);
+        }
+
+        char *args[] = {_strdup(udiConfig->cpPath), _strdup("-rp"),
+                        _strdup(src), _strdup(dest), NULL};
+        rc = forkAndExecv(args);
+        for (pptr = args; pptr && *pptr; pptr++)
+            free(*pptr);
+        if (rc != 0) {
+            fprintf(stderr, "FAILED to copy %s to %s.\n", src, dest);
+            goto _fail;
+        }
+    }
+
+    char *udiimage_path = alloc_strgenf("%s/opt/udiImage", udiConfig->udiMountPoint);
+    char *chmodArgs[] = {_strdup(udiConfig->chmodPath), _strdup("-R"),
+        _strdup("a+rX"), _strdup(udiimage_path), NULL
+    };
+    rc = forkAndExecv(chmodArgs);
+    for (pptr = chmodArgs; pptr && *pptr; pptr++)
+        free(*pptr);
+    if (rc != 0) {
+        fprintf(stderr, "FAILED to fix permissions on %s.\n", udiimage_path);
+        goto _fail;
+    }
+
+    for (pptr = srcPaths; pptr && *pptr; pptr++)
+        free(*pptr);
+    for (pptr = destPaths; pptr && *pptr; pptr++)
+        free(*pptr);
+    if (srcPaths)
+        free(srcPaths);
+    if (destPaths)
+        free(destPaths);
+    return 0;
+
+#undef _MKDIR
+_fail:
+    for (pptr = srcPaths; pptr && *pptr; pptr++)
+        free(*pptr);
+    for (pptr = destPaths; pptr && *pptr; pptr++)
+        free(*pptr);
+    if (srcPaths)
+        free(srcPaths);
+    if (destPaths)
+        free(destPaths);
+    return 1;
+}
+
 /*! Setup all required files/paths for site mods to the image */
 /*!
   Setup all required files/paths for site mods to the image.  This should be
@@ -410,11 +542,15 @@ int prepareSiteModifications(const char *username,
                              UdiRootConfig *udiConfig)
 {
     /* construct path to "live" copy of the image. */
-    char udiRoot[PATH_MAX];
-    char mntBuffer[PATH_MAX];
-    char srcBuffer[PATH_MAX];
+    char *udiRoot = _malloc(sizeof(char) * PATH_MAX);
+    char *mntBuffer = _malloc(sizeof(char) * PATH_MAX);
+    char *srcBuffer = _malloc(sizeof(char) * PATH_MAX);
+    char *source = _malloc(sizeof(char) * PATH_MAX);
+    char *dest = _malloc(sizeof(char) * PATH_MAX);
+    char *path = _malloc(sizeof(char) * PATH_MAX);
     const char **fnamePtr = NULL;
     int ret = 0;
+    int idx = 0;
     struct stat statData;
     dev_t udiMountDev = 0;
     MountList mountCache;
@@ -480,7 +616,7 @@ int prepareSiteModifications(const char *username,
     /* run site-defined pre-mount procedure */
     if (udiConfig->sitePreMountHook && strlen(udiConfig->sitePreMountHook) > 0) {
         char *args[] = {
-            strdup("/bin/sh"), strdup(udiConfig->sitePreMountHook), NULL
+            _strdup("/bin/sh"), _strdup(udiConfig->sitePreMountHook), NULL
         };
         char **argsPtr = NULL;
         ret = forkAndExecv(args);
@@ -503,7 +639,7 @@ int prepareSiteModifications(const char *username,
     /* run site-defined post-mount procedure */
     if (udiConfig->sitePostMountHook && strlen(udiConfig->sitePostMountHook) > 0) {
         char *args[] = {
-            strdup("/bin/sh"), strdup(udiConfig->sitePostMountHook), NULL
+            _strdup("/bin/sh"), _strdup(udiConfig->sitePostMountHook), NULL
         };
         char **argsPtr = NULL;
         ret = forkAndExecv(args);
@@ -517,10 +653,34 @@ int prepareSiteModifications(const char *username,
         }
     }
 
+    /* do active modules site-defined mount activities */
+    for (idx = 0; idx < udiConfig->n_active_modules; idx++) {
+        if (udiConfig->active_modules[idx]->siteFs) {
+            if (setupVolumeMapMounts(&mountCache, udiConfig->active_modules[idx]->siteFs, 0, udiMountDev, udiConfig) != 0) {
+                fprintf(stderr, "FAILED to mount siteFs volumes for active modules.\n");
+                goto _prepSiteMod_unclean;
+            }
+        }
+        /* perform module roothook, if defined */
+        if (udiConfig->active_modules[idx]->roothook) {
+            char *args[] = {
+                _strdup("/bin/sh"), _strdup(udiConfig->active_modules[idx]->roothook), NULL
+            };
+            char **argsPtr = NULL;
+            ret = forkAndExecv(args);
+            for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
+                free(*argsPtr);
+            }
+            if (ret != 0) {
+                fprintf(stderr, "%s module roothook failed. Exiting.\n", udiConfig->active_modules[idx]->name);
+                ret = 1;
+                goto _prepSiteMod_unclean;
+            }
+        }
+    }
+
     /* copy needed local files */
     for (fnamePtr = copyLocalEtcFiles; *fnamePtr != NULL; fnamePtr++) {
-        char source[PATH_MAX];
-        char dest[PATH_MAX];
         snprintf(source, PATH_MAX, "/etc/%s", *fnamePtr);
         snprintf(dest, PATH_MAX, "%s/etc/%s", udiRoot, *fnamePtr);
         source[PATH_MAX - 1] = 0;
@@ -533,7 +693,6 @@ int prepareSiteModifications(const char *username,
 
     /* validate that the mandatorySiteEtcFiles do not exist yet */
     for (fnamePtr = mandatorySiteEtcFiles; *fnamePtr != NULL; fnamePtr++) {
-        char path[PATH_MAX];
         snprintf(path, PATH_MAX, "%s/etc/%s", udiRoot, *fnamePtr);
         if (stat(path, &statData) == 0) {
             fprintf(stderr, "%s already exists! ALERT!\n", path);
@@ -669,9 +828,12 @@ _fail_copy_etcPath:
     fclose(fp);
     fp = NULL;
 
+    /* add symlink for /proc/mounts at /etc/mtab */
+    snprintf(srcBuffer, PATH_MAX, "%s/etc/mtab", udiRoot);
+    symlink("/proc/mounts", srcBuffer);
+
     /* validate that the mandatorySiteEtcFiles now exist */
     for (fnamePtr = mandatorySiteEtcFiles; *fnamePtr != NULL; fnamePtr++) {
-        char path[PATH_MAX];
         snprintf(path, PATH_MAX, "%s/etc/%s", udiRoot, *fnamePtr);
         if (stat(path, &statData) != 0) {
             fprintf(stderr, "%s does not exist! ALERT!\n", path);
@@ -691,76 +853,32 @@ _fail_copy_etcPath:
     {
         char *mvArgs[5];
         char **argsPtr = NULL;
-        char fromGroupFile[PATH_MAX];
-        char toGroupFile[PATH_MAX];
-        snprintf(fromGroupFile, PATH_MAX, "%s/etc/group", udiRoot);
-        snprintf(toGroupFile, PATH_MAX, "%s/etc/group.orig", udiRoot);
-        fromGroupFile[PATH_MAX - 1] = 0;
-        toGroupFile[PATH_MAX - 1] = 0;
-        mvArgs[0] = strdup(udiConfig->mvPath);
-        mvArgs[1] = strdup(fromGroupFile);
-        mvArgs[2] = strdup(toGroupFile);
+        snprintf(source, PATH_MAX, "%s/etc/group", udiRoot);
+        snprintf(dest, PATH_MAX, "%s/etc/group.orig", udiRoot);
+        source[PATH_MAX - 1] = 0;
+        dest[PATH_MAX - 1] = 0;
+        mvArgs[0] = _strdup(udiConfig->mvPath);
+        mvArgs[1] = _strdup(source);
+        mvArgs[2] = _strdup(dest);
         mvArgs[3] = NULL;
         ret = forkAndExecv(mvArgs);
         for (argsPtr = mvArgs; *argsPtr != NULL; argsPtr++) {
             free(*argsPtr);
         }
         if (ret != 0) {
-            fprintf(stderr, "Failed to rename %s to %s\n", fromGroupFile, toGroupFile);
+            fprintf(stderr, "Failed to rename %s to %s\n", source, dest);
             goto _prepSiteMod_unclean;
         }
 
-        if (filterEtcGroup(fromGroupFile, toGroupFile, username, udiConfig->maxGroupCount) != 0) {
-            fprintf(stderr, "Failed to filter group file %s\n", fromGroupFile);
+        if (filterEtcGroup(source, dest, username, udiConfig->maxGroupCount) != 0) {
+            fprintf(stderr, "Failed to filter group file %s\n", source);
             goto _prepSiteMod_unclean;
         }
     }
 
-    /* recursively copy /opt/udiImage (to allow modifications) */
-    if (udiConfig->optUdiImage != NULL) {
-        char finalPath[PATH_MAX];
-        snprintf(srcBuffer, PATH_MAX, "%s/", udiConfig->optUdiImage);
-        srcBuffer[PATH_MAX-1] = 0;
-        if (stat(srcBuffer, &statData) != 0) {
-            fprintf(stderr, "FAILED to stat udiImage source directory: %s\n", srcBuffer);
-            goto _prepSiteMod_unclean;
-        }
-        snprintf(mntBuffer, PATH_MAX, "%s/opt", udiRoot);
-        mntBuffer[PATH_MAX-1] = 0;
-        snprintf(finalPath, PATH_MAX, "%s/udiImage", mntBuffer);
-        finalPath[PATH_MAX-1] = 0;
-
-        if (stat(mntBuffer, &statData) != 0) {
-            fprintf(stderr, "FAILED to stat udiImage target directory: %s\n", mntBuffer);
-            goto _prepSiteMod_unclean;
-        } else {
-            char *args[] = {strdup(udiConfig->cpPath), strdup("-rp"),
-                strdup(srcBuffer), strdup(mntBuffer), NULL
-            };
-            char *chmodArgs[] = {strdup(udiConfig->chmodPath), strdup("-R"),
-                strdup("a+rX"), strdup(finalPath), NULL
-            };
-            ret = forkAndExecv(args);
-            if (ret == 0) {
-                ret = forkAndExecv(chmodArgs);
-                if (ret != 0) {
-                    fprintf(stderr, "FAILED to fix permissions on %s.\n", mntBuffer);
-                }
-            } else {
-                fprintf(stderr, "FAILED to copy %s to %s.\n", srcBuffer, mntBuffer);
-            }
-            if (args[0]) free(args[0]);
-            if (args[1]) free(args[1]);
-            if (args[2]) free(args[2]);
-            if (args[3]) free(args[3]);
-            if (chmodArgs[0]) free(chmodArgs[0]);
-            if (chmodArgs[1]) free(chmodArgs[1]);
-            if (chmodArgs[2]) free(chmodArgs[2]);
-            if (chmodArgs[3]) free(chmodArgs[3]);
-            if (ret != 0) {
-                goto _prepSiteMod_unclean;
-            }
-        }
+    if (_shifterCore_copyUdiImage(udiConfig) != 0) {
+        fprintf(stderr, "FAILED to setup udiImage local content.\n");
+        goto _prepSiteMod_unclean;
     }
 
     /* setup hostlist for current allocation
@@ -801,9 +919,21 @@ _fail_copy_etcPath:
 #undef _BINDMOUNT
 
     free_MountList(&mountCache, 0);
+    free(srcBuffer);
+    free(mntBuffer);
+    free(udiRoot);
+    free(source);
+    free(dest);
+    free(path);
     return 0;
 _prepSiteMod_unclean:
     free_MountList(&mountCache, 0);
+    free(srcBuffer);
+    free(mntBuffer);
+    free(udiRoot);
+    free(source);
+    free(dest);
+    free(path);
     destructUDI(udiConfig, 0);
     if (ret == 0) {
         return 1;
@@ -832,16 +962,12 @@ int writeHostFile(const char *minNodeSpec, UdiRootConfig *udiConfig) {
     char *eptr = NULL;
     char *limit = NULL;
     FILE *fp = NULL;
-    char filename[PATH_MAX];
+    char *filename = _malloc(sizeof(char) * PATH_MAX);
     int idx = 0;
 
     if (minNodeSpec == NULL || udiConfig == NULL) return 1;
 
-    minNode = strdup(minNodeSpec);
-    if (minNode == NULL) {
-        goto _writeHostFile_error;
-    }
-
+    minNode = _strdup(minNodeSpec);
     limit = minNode + strlen(minNode);
 
     snprintf(filename, PATH_MAX, "%s/var/hostsfile", udiConfig->udiMountPoint);
@@ -886,11 +1012,13 @@ int writeHostFile(const char *minNodeSpec, UdiRootConfig *udiConfig) {
     }
     fclose(fp);
     fp = NULL;
+    free(filename);
     free(minNode);
     minNode = NULL;
     return 0;
 
 _writeHostFile_error:
+    free(filename);
     if (minNode != NULL) {
         free(minNode);
     }
@@ -906,7 +1034,7 @@ int mountImageVFS(ImageData *imageData,
                   const char *minNodeSpec,
                   UdiRootConfig *udiConfig) {
     struct stat statData;
-    char udiRoot[PATH_MAX];
+    char *udiRoot = _malloc(sizeof(char) * PATH_MAX);
     char *sshPath = NULL;
     dev_t destRootDev = 0;
     dev_t srcRootDev = 0;
@@ -985,11 +1113,7 @@ int mountImageVFS(ImageData *imageData,
 
     /* authorize destRootDev, srcRootDev, and tmpDev  as the only allowed
      * volume mount targets */
-    udiConfig->bindMountAllowedDevices = malloc(3 * sizeof(dev_t));
-    if (udiConfig->bindMountAllowedDevices == NULL) {
-        fprintf(stderr, "FAILED to allocate memory\n");
-        goto _mountImgVfs_unclean;
-    }
+    udiConfig->bindMountAllowedDevices = _malloc(3 * sizeof(dev_t));
     udiConfig->bindMountAllowedDevices[0] = destRootDev;
     udiConfig->bindMountAllowedDevices[1] = srcRootDev;
     udiConfig->bindMountAllowedDevices[2] = tmpDev;
@@ -1018,45 +1142,18 @@ int mountImageVFS(ImageData *imageData,
     /* copy image /etc into place */
     BIND_IMAGE_INTO_UDI("/etc", imageData, udiConfig, 1);
 
-    if(udiConfig->siteResources!=NULL &&
-        create_site_resources_folder(udiConfig) != 0) {
-        goto _mountImgVfs_unclean;
-    }
-
-    if(execute_hook_to_activate_gpu_support(verbose, udiConfig) != 0)
-    {
-        fprintf(stderr, "activate_gpu_support hook failed\n");
-        goto _mountImgVfs_unclean;
-    }
 #undef BIND_IMAGE_INTO_UDI
 #undef _MKDIR
 
+    free(udiRoot);
     return 0;
 
 _mountImgVfs_unclean:
     if (sshPath != NULL) {
         free(sshPath);
     }
+    free(udiRoot);
     return 1;
-}
-
-int create_site_resources_folder(const UdiRootConfig* udiConfig) {
-    char* site_resources_path = alloc_strgenf("%s%s", udiConfig->udiMountPoint, udiConfig->siteResources);
-    if(is_existing_file(site_resources_path)) {
-        fprintf(stderr, "Cannot create the site-resources directory %s in the container."
-                        " A file with the same path already exists in the container image."
-                        " Hint: remove the clashing file in the container or contact the"
-                        " system administrator to change the Shifter's site-resources path.", udiConfig->siteResources);
-        free(site_resources_path);
-        return 1;
-    }
-    if(mkdir_p(site_resources_path, 0755) != 0) {
-        fprintf(stderr, "cannot mkdir %s\n", site_resources_path);
-        free(site_resources_path);
-        return 1;
-    }
-    free(site_resources_path);
-    return 0;
 }
 
 /** makeUdiMountPrivate
@@ -1070,19 +1167,22 @@ int create_site_resources_folder(const UdiRootConfig* udiConfig) {
  *  containers.
  */
 int makeUdiMountPrivate(UdiRootConfig *udiConfig) {
-    char buffer[PATH_MAX];
+    char *buffer = _malloc(sizeof(char) * PATH_MAX);
     snprintf(buffer, PATH_MAX, "%s", udiConfig->udiMountPoint);
     if (mount(NULL, buffer, NULL, MS_PRIVATE|MS_REC, NULL) != 0) {
         perror("Failed to remount non-shared.");
+        free(buffer);
         return 1;
     }
+    free(buffer);
     return 0;
 }
 
 int remountUdiRootReadonly(UdiRootConfig *udiConfig) {
-    char udiRoot[PATH_MAX];
+    char *udiRoot = _malloc(sizeof(char) * PATH_MAX);
 
     if (udiConfig == NULL || udiConfig->udiMountPoint == NULL) {
+        free(udiRoot);
         return 1;
     }
     snprintf(udiRoot, PATH_MAX, "%s", udiConfig->udiMountPoint);
@@ -1092,23 +1192,25 @@ int remountUdiRootReadonly(UdiRootConfig *udiConfig) {
         perror("   --- REASON: ");
         goto _remountUdiRootReadonly_unclean;
     }
+    free(udiRoot);
     return 0;
 
 _remountUdiRootReadonly_unclean:
+    free(udiRoot);
     return 1;
 }
 
 int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig) {
-    char loopMountPath[PATH_MAX];
-    char imagePath[PATH_MAX];
+    char *loopMountPath = _malloc(sizeof(char) * PATH_MAX);
+    char *imagePath = _malloc(sizeof(char) * PATH_MAX);
     if (imageData == NULL || udiConfig == NULL) {
-        return 1;
+        goto _mountImageLoop_unclean;
     }
     if (imageData->useLoopMount == 0) {
-        return 0;
+        goto _finish_normal;
     }
     if (udiConfig->loopMountPoint == NULL || strlen(udiConfig->loopMountPoint) == 0) {
-        return 1;
+        goto _mountImageLoop_unclean;
     }
     if (mkdir(udiConfig->loopMountPoint, 0755) != 0) {
         if (errno != EEXIST) {
@@ -1125,8 +1227,13 @@ int mountImageLoop(ImageData *imageData, UdiRootConfig *udiConfig) {
         fprintf(stderr, "FAILED to loop mount image: %s\n", imagePath);
         goto _mountImageLoop_unclean;
     }
+_finish_normal:
+    free(loopMountPath);
+    free(imagePath);
     return 0;
 _mountImageLoop_unclean:
+    free(loopMountPath);
+    free(imagePath);
     return 1;
 }
 
@@ -1149,16 +1256,11 @@ static int _sortFsTypeForward(const void *ta, const void *tb) {
  */
 char **getSupportedFilesystems() {
     char buffer[4096];
-    char **ret = (char **) malloc(sizeof(char *) * 10);
+    char **ret = (char **) _malloc(sizeof(char *) * 10);
     char **writePtr = NULL;
     size_t listExtent = 10;
     size_t listLen = 0;
     FILE *fp = NULL;
-
-    if (ret == NULL) { // || buffer == NULL) {
-        /* ran out of memory */
-        return NULL;
-    }
 
     fp = fopen("/proc/filesystems", "r");
     if (fp == NULL) {
@@ -1176,15 +1278,12 @@ char **getSupportedFilesystems() {
             ptr = shifter_trim(ptr);
             if (strlen(ptr) == 0) continue;
             if (listLen == listExtent - 2) {
-                char **tmp = (char **) realloc(ret, sizeof(char *) * (listExtent + 10));
-                if (tmp == NULL) {
-                    goto error;
-                }
+                char **tmp = (char **) _realloc(ret, sizeof(char *) * (listExtent + 10));
                 writePtr = tmp + (writePtr - ret);
                 ret = tmp;
                 listExtent += 10;
             }
-            *writePtr = strdup(ptr);
+            *writePtr = _strdup(ptr);
             writePtr++;
             *writePtr = NULL;
             listLen++;
@@ -1195,12 +1294,6 @@ char **getSupportedFilesystems() {
     fclose(fp);
     fp = NULL;
     return ret;
-error:
-    if (fp != NULL) {
-        fclose(fp);
-        fp = NULL;
-    }
-    return NULL;
 }
 
 int supportsFilesystem(char *const * fsTypes, const char *fsType) {
@@ -1218,7 +1311,7 @@ int supportsFilesystem(char *const * fsTypes, const char *fsType) {
 }
 
 int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat format, UdiRootConfig *udiConfig, int readOnly) {
-    char mountExec[PATH_MAX];
+    char *mountExec = _malloc(sizeof(char) * PATH_MAX);
     struct stat statData;
     int ready = 0;
     int useAutoclear = 0;
@@ -1281,17 +1374,17 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
     }
     if (ready) {
         char *args[] = {
-            strdup(mountExec),
-            strdup("-n"),
-            strdup("-o"),
+            _strdup(mountExec),
+            _strdup("-n"),
+            _strdup("-o"),
             alloc_strgenf("loop,nosuid,nodev%s%s",
                     (readOnly ? ",ro" : ""),
                     (useAutoclear ? ",autoclear" : "")
             ),
-            strdup("-t"),
-            strdup(imgType),
-            strdup(imagePath),
-            strdup(loopMountPath),
+            _strdup("-t"),
+            _strdup(imgType),
+            _strdup(imagePath),
+            _strdup(loopMountPath),
             NULL
         };
         char **argsPtr = NULL;
@@ -1322,6 +1415,7 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
         fstypes = NULL;
     }
 #undef LOADKMOD
+    free(mountExec);
     return 0;
 _loopMount_unclean:
 
@@ -1333,11 +1427,12 @@ _loopMount_unclean:
         free(fstypes);
         fstypes = NULL;
     }
+    free(mountExec);
     return 1;
 }
 
 int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig) {
-    char udiRoot[PATH_MAX];
+    char *udiRoot = _malloc(sizeof(char) * PATH_MAX);
     MountList mountCache;
     struct stat statData;
     int ret = 0;
@@ -1349,6 +1444,7 @@ int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig) {
 
     if (stat(udiRoot, &statData) != 0) {
         fprintf(stderr, "FAILED to stat udiRoot %s\n", udiRoot);
+        free(udiRoot);
         return 1;
     }
     udiMountDev = statData.st_dev;
@@ -1356,11 +1452,13 @@ int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig) {
     /* get list of current mounts for this namespace */
     if (parse_MountList(&mountCache) != 0) {
         fprintf(stderr, "FAILED to get list of current mount points\n");
+        free(udiRoot);
         return 1;
     }
 
     ret = setupVolumeMapMounts(&mountCache, map, 1, udiMountDev, udiConfig);
     free_MountList(&mountCache, 0);
+    free(udiRoot);
     return ret;
 }
 
@@ -1441,11 +1539,11 @@ int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *b
         fprintf(stderr, "Must define ddPath in udiRoot configuration to use this feature\n");
         return 1;
     }
-    args[0] = strdup(udiConfig->ddPath);
-    args[1] = strdup("if=/dev/zero");
+    args[0] = _strdup(udiConfig->ddPath);
+    args[1] = _strdup("if=/dev/zero");
     args[2] = alloc_strgenf("of=%s", buffer);
-    args[3] = strdup("bs=1");
-    args[4] = strdup("count=0");
+    args[3] = _strdup("bs=1");
+    args[4] = _strdup("count=0");
     args[5] = alloc_strgenf("seek=%lu", cache->cacheSize);
     args[6] = NULL;
     for (arg = args; arg - args < 6; arg++) {
@@ -1473,9 +1571,9 @@ int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *b
             fprintf(stderr, "Must define mkfsXfsPath in udiRoot configuration to use this feature\n");
             exit(1);
         }
-        args = (char **) malloc(sizeof(char *) * 4);
-        args[0] = strdup(udiConfig->mkfsXfsPath);
-        args[1] = strdup("-d");
+        args = (char **) _malloc(sizeof(char *) * 4);
+        args[0] = _strdup(udiConfig->mkfsXfsPath);
+        args[1] = _strdup("-d");
         args[2] = alloc_strgenf("name=%s,file=1,size=%lu", buffer, cache->cacheSize);
         args[3] = NULL;
         ret = forkAndExecvSilent(args);
@@ -1508,15 +1606,19 @@ int setupVolumeMapMounts(
     size_t mapIdx = 0;
     size_t udiMountLen = 0;
 
-    char from_buffer[PATH_MAX];
-    char to_buffer[PATH_MAX];
+    char *from_buffer = _malloc(sizeof(char) * PATH_MAX);
+    char *to_buffer = _malloc(sizeof(char) * PATH_MAX);
     struct stat statData;
 
     if (udiConfig == NULL) {
+        free(from_buffer);
+        free(to_buffer);
         return 1;
     }
 
     if (map == NULL || map->n == 0) {
+        free(from_buffer);
+        free(to_buffer);
         return 0;
     }
 
@@ -1611,11 +1713,7 @@ int setupVolumeMapMounts(
                     fprintf(stderr, "FAILED to getgroups.\n");
                     goto _fail_check_fromvol;
                 } else if (norig_auxgids > 0) {
-                    orig_auxgids = (gid_t *) malloc(sizeof(gid_t) * norig_auxgids);
-                    if (orig_auxgids == NULL) {
-                        fprintf(stderr, "FAILED to allocate memory for groups\n");
-                        goto _fail_check_fromvol;
-                    }
+                    orig_auxgids = (gid_t *) _malloc(sizeof(gid_t) * norig_auxgids);
                     norig_auxgids = getgroups(norig_auxgids, orig_auxgids);
                     if (norig_auxgids <= 0) {
                         fprintf(stderr, "FAILED to getgroups().\n");
@@ -1833,7 +1931,12 @@ _pass_check_fromvol:
                     break;
                 }
             }
-            if (volMountDevOk == 0){
+            /* Allow mounts if the user owns the destionation directory. */
+            int toDirOwnedByUser = 0;
+            if (statData.st_uid == geteuid()) {
+                toDirOwnedByUser = 1;
+            }
+            if (volMountDevOk == 0 && toDirOwnedByUser == 0) {
                 fprintf(stderr, "Mount request path %s not on an approved "
                         "device for volume mounts.\n", to_real);
                 goto _handleVolMountError;
@@ -1901,6 +2004,8 @@ _handleVolMountError:
     }
 
 #undef _BINDMOUNT
+    free(from_buffer);
+    free(to_buffer);
     return 0;
 
 _setupVolumeMapMounts_unclean:
@@ -1913,6 +2018,8 @@ _setupVolumeMapMounts_unclean:
     if (to_real != NULL) {
         free(to_real);
     }
+    free(from_buffer);
+    free(to_buffer);
     return 1;
 }
 
@@ -1939,7 +2046,7 @@ char *generateShifterConfigString(const char *user, ImageData *image, VolumeMap 
 }
 
 int saveShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMap, UdiRootConfig *udiConfig) {
-    char saveFilename[PATH_MAX];
+    char *saveFilename = _malloc(sizeof(char) * PATH_MAX);
     FILE *fp = NULL;
     char *configString = generateShifterConfigString(user, image, volumeMap);
 
@@ -1959,17 +2066,18 @@ int saveShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMap, 
 
     free(configString);
     configString = NULL;
-
+    free(saveFilename);
     return 0;
 _saveShifterConfig_error:
     if (configString != NULL) {
         free(configString);
     }
+    free(saveFilename);
     return 1;
 }
 
 int compareShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMap, UdiRootConfig *udiConfig) {
-    char configFilename[PATH_MAX];
+    char *configFilename = _malloc(sizeof(char) * PATH_MAX);
     FILE *fp = NULL;
     char *configString = generateShifterConfigString(user, image, volumeMap);
     char *buffer = NULL;
@@ -1981,7 +2089,7 @@ int compareShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMa
         goto _compareShifterConfig_error;
     }
     len = strlen(configString);
-    buffer = (char *) malloc(sizeof(char) * len);
+    buffer = (char *) _malloc(sizeof(char) * len);
 
     snprintf(configFilename, PATH_MAX, "%s/var/shifterConfig.json",
             udiConfig->udiMountPoint);
@@ -2006,7 +2114,7 @@ int compareShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMa
 
     free(buffer);
     buffer = NULL;
-
+    free(configFilename);
     return cmpVal;
 _compareShifterConfig_error:
     if (configString != NULL) {
@@ -2015,14 +2123,20 @@ _compareShifterConfig_error:
     if (buffer != NULL) {
         free(buffer);
     }
+    free(configFilename);
     return -1;
 }
 
 int setupImageSsh(char *sshPubKey, char *username, uid_t uid, gid_t gid, UdiRootConfig *udiConfig) {
     struct stat statData;
-    char udiImage[PATH_MAX];
-    char sshdConfigPath[PATH_MAX];
-    char sshdConfigPathNew[PATH_MAX];
+    char *udiImage = _malloc(sizeof(char) * PATH_MAX);
+    char *sshdConfigPath = _malloc(sizeof(char) * PATH_MAX);
+    char *sshdConfigPathNew = _malloc(sizeof(char) * PATH_MAX);
+    char *from = _malloc(sizeof(char) * PATH_MAX);
+    char *to = _malloc(sizeof(char) * PATH_MAX);
+    char *buffer = _malloc(sizeof(char) * PATH_MAX);
+    char *keygenExec = _malloc(sizeof(char) * PATH_MAX);
+    char *keyFileName = _malloc(sizeof(char) * PATH_MAX);
     const char *keyType[5] = {"dsa", "ecdsa", "rsa","ed25519", NULL};
     const char **keyPtr = NULL;
     char *lineBuf = NULL;
@@ -2069,8 +2183,6 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, gid_t gid, UdiRoot
 
     /* generate ssh host keys */
     for (keyPtr = keyType; *keyPtr != NULL; keyPtr++) {
-        char keygenExec[PATH_MAX];
-        char keyFileName[PATH_MAX];
         char *args[8];
         char **argPtr = NULL;
         int ret = 0;
@@ -2078,13 +2190,13 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, gid_t gid, UdiRoot
         snprintf(keygenExec, PATH_MAX, "%s/bin/ssh-keygen", udiImage);
         keygenExec[PATH_MAX-1] = 0;
         snprintf(keyFileName, PATH_MAX, "%s/etc/ssh_host_%s_key", udiImage, *keyPtr);
-        args[0] = strdup(keygenExec);
-        args[1] = strdup("-t");
-        args[2] = strdup(*keyPtr);
-        args[3] = strdup("-f");
-        args[4] = strdup(keyFileName);
-        args[5] = strdup("-N");
-        args[6] = strdup("");
+        args[0] = _strdup(keygenExec);
+        args[1] = _strdup("-t");
+        args[2] = _strdup(*keyPtr);
+        args[3] = _strdup("-f");
+        args[4] = _strdup(keyFileName);
+        args[5] = _strdup("-N");
+        args[6] = _strdup("");
         args[7] = NULL;
         for (argPtr = args; argPtr - args < 7; argPtr++) {
             if (argPtr == NULL || *argPtr == NULL) {
@@ -2149,9 +2261,9 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, gid_t gid, UdiRoot
         fprintf(stderr, "FAILED to find new sshd_config file, cannot setup sshd\n");
         goto _setupImageSsh_unclean;
     } else {
-        char *moveCmd[] = { strdup(udiConfig->mvPath),
-            strdup(sshdConfigPathNew),
-            strdup(sshdConfigPath),
+        char *moveCmd[] = { _strdup(udiConfig->mvPath),
+            _strdup(sshdConfigPathNew),
+            _strdup(sshdConfigPath),
             NULL
         };
         char **argsPtr = NULL;
@@ -2176,7 +2288,6 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, gid_t gid, UdiRoot
     }
 
     if (sshPubKey != NULL && strlen(sshPubKey) > 0) {
-        char buffer[PATH_MAX];
         snprintf(buffer, PATH_MAX, "%s/etc/user_auth_keys", udiImage);
         buffer[PATH_MAX - 1] = 0;
         outputFile = fopen(buffer, "w");
@@ -2200,9 +2311,6 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, gid_t gid, UdiRoot
     }
 
     {
-        char from[PATH_MAX];
-        char to[PATH_MAX];
-
         snprintf(from, PATH_MAX, "%s/bin/ssh", udiImage);
         snprintf(to, PATH_MAX, "%s/usr/bin/ssh", udiConfig->udiMountPoint);
         from[PATH_MAX-1] = 0;
@@ -2226,6 +2334,14 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, gid_t gid, UdiRoot
         /* rely on var/empty created earlier in the setup process */
     }
 #undef _BINDMOUNT
+    free(udiImage);
+    free(sshdConfigPath);
+    free(sshdConfigPathNew);
+    free(from);
+    free(to);
+    free(buffer);
+    free(keygenExec);
+    free(keyFileName);
     return 0;
 _setupImageSsh_unclean:
     if (inputFile != NULL) {
@@ -2236,6 +2352,14 @@ _setupImageSsh_unclean:
         fclose(outputFile);
         outputFile = NULL;
     }
+    free(udiImage);
+    free(sshdConfigPath);
+    free(sshdConfigPathNew);
+    free(from);
+    free(to);
+    free(buffer);
+    free(keygenExec);
+    free(keyFileName);
     return 1;
 }
 
@@ -2261,11 +2385,7 @@ gid_t *shifter_getgrouplist(const char *user, gid_t group, int *ngroups) {
         }
 
         /* allocate and initialize memory to be populated by getgrouplist */
-        ret_groups = (gid_t *) malloc(sizeof(gid_t) * (nret_groups + 1));
-        if (ret_groups == NULL) {
-            fprintf(stderr, "FAILED to reallocate memory for group list\n");
-            goto _getgrlist_err;
-        }
+        ret_groups = (gid_t *) _malloc(sizeof(gid_t) * (nret_groups + 1));
         memset(ret_groups, 0, sizeof(gid_t) * (nret_groups + 1));
 
         ret = getgrouplist(user, group, ret_groups, &nret_groups);
@@ -2281,11 +2401,7 @@ gid_t *shifter_getgrouplist(const char *user, gid_t group, int *ngroups) {
             free(ret_groups);
             ret_groups = NULL;
         }
-        ret_groups = (gid_t *) malloc(sizeof(gid_t) * 2);
-        if (ret_groups == NULL) {
-            fprintf(stderr, "FAILED to allocate memory for default group list\n");
-            goto _getgrlist_err;
-        }
+        ret_groups = (gid_t *) _malloc(sizeof(gid_t) * 2);
         ret_groups[0] = group;
         ret_groups[1] = 0;
         nret_groups = 1;
@@ -2320,7 +2436,7 @@ _getgrlist_err:
   * chroots into image and runs the secured sshd
   */
 int startSshd(const char *user, UdiRootConfig *udiConfig) {
-    char chrootPath[PATH_MAX];
+    char *chrootPath = _malloc(sizeof(char) * PATH_MAX);
     pid_t pid = 0;
 
     snprintf(chrootPath, PATH_MAX, "%s", udiConfig->udiMountPoint);
@@ -2398,19 +2514,9 @@ int startSshd(const char *user, UdiRootConfig *udiConfig) {
             }
 #endif
         }
-        char **sshdArgs = (char **) malloc(sizeof(char *) * 2);
-        if (sshdArgs == NULL) {
-            fprintf(stderr, "FAILED to exec sshd!\n");
-            exit(1);
-        }
-
-        sshdArgs[0] = strdup("/opt/udiImage/sbin/sshd");
+        char **sshdArgs = (char **) _malloc(sizeof(char *) * 2);
+        sshdArgs[0] = _strdup("/opt/udiImage/sbin/sshd");
         sshdArgs[1] = NULL;
-
-        if (sshdArgs[0] == NULL) {
-            fprintf(stderr, "FAILED to exec sshd!\n");
-            exit(1);
-        }
         execv(sshdArgs[0], sshdArgs);
         fprintf(stderr, "FAILED to exec sshd!\n");
 
@@ -2430,10 +2536,13 @@ int startSshd(const char *user, UdiRootConfig *udiConfig) {
         } else {
             status = 1;
         }
+        free(chrootPath);
         return status;
     }
+    free(chrootPath);
     return 0;
 _startSshd_unclean:
+    free(chrootPath);
     return 1;
 }
 
@@ -2611,7 +2720,7 @@ _bindMount_unclean:
  * -1: error
  */
 int isSharedMount(const char *mountPoint) {
-    char filename[PATH_MAX];
+    char *filename = _malloc(sizeof(char) * PATH_MAX);
     char *lineBuffer = NULL;
     size_t lineBuffer_size = 0;
     FILE *fp = NULL;
@@ -2655,7 +2764,7 @@ int isSharedMount(const char *mountPoint) {
     if (lineBuffer != NULL) {
         free(lineBuffer);
     }
-
+    free(filename);
     return rc;
 _err_valid_args:
     if (lineBuffer != NULL) {
@@ -2666,6 +2775,7 @@ _err_valid_args:
         fclose(fp);
         fp = NULL;
     }
+    free(filename);
     return -1;
 }
 
@@ -2727,21 +2837,23 @@ int isKernelModuleLoaded(const char *name) {
  * \param udiConfig UDI configuration structure
  */
 int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig) {
-    char kmodPath[PATH_MAX];
+    char *kmodPath = _malloc(sizeof(char) * PATH_MAX);
     struct stat statData;
     int ret = 0;
 
     if (name == NULL || strlen(name) == 0 || path == NULL || strlen(path) == 0 || udiConfig == NULL) {
+        free(kmodPath);
         return -1;
     }
 
     if (isKernelModuleLoaded(name)) {
+        free(kmodPath);
         return 0;
     } else if (udiConfig->autoLoadKernelModule) {
         /* try to load kernel module from system cache */
         char *args[] = {
-            strdup(udiConfig->modprobePath),
-            strdup(name),
+            _strdup(udiConfig->modprobePath),
+            _strdup(name),
             NULL
         };
         char **argPtr = NULL;
@@ -2750,6 +2862,7 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
             free(*argPtr);
         }
         if (isKernelModuleLoaded(name)) {
+            free(kmodPath);
             return 0;
         }
     }
@@ -2758,6 +2871,7 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
             || strlen(udiConfig->kmodPath) == 0
             || !udiConfig->autoLoadKernelModule)
     {
+        free(kmodPath);
         return -1;
     }
 
@@ -2767,8 +2881,8 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
 
     if (stat(kmodPath, &statData) == 0) {
         char *insmodArgs[] = {
-            strdup(udiConfig->insmodPath),
-            strdup(kmodPath),
+            _strdup(udiConfig->insmodPath),
+            _strdup(kmodPath),
             NULL
         };
         char **argPtr = NULL;
@@ -2787,9 +2901,11 @@ int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfi
         fprintf(stderr, "FAILED to find kernel modules %s (%s)\n", name, kmodPath);
         goto _loadKrnlMod_unclean;
     }
+    free(kmodPath);
     if (isKernelModuleLoaded(name)) return 0;
     return 1;
 _loadKrnlMod_unclean:
+    free(kmodPath);
     return ret;
 }
 
@@ -2805,15 +2921,17 @@ _loadKrnlMod_unclean:
  */
 struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config) {
     FILE *input = NULL;
-    char buffer[PATH_MAX];
+    char *buffer = _malloc(sizeof(char) * PATH_MAX);
     struct passwd *pw = NULL;
     int found = 0;
 
     if (config == NULL) {
+        free(buffer);
         return NULL;
     }
 
     if (config->allowLibcPwdCalls == 1) {
+        free(buffer);
         return getpwuid(tgtuid);
     }
 
@@ -2833,23 +2951,27 @@ struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config) {
     fclose(input);
     input = NULL;
 
+    free(buffer);
     if (found) return pw;
     return NULL;
 
 _shifter_getpwuid_unclean:
+    free(buffer);
     return NULL;
 }
 
 struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config) {
     FILE *input = NULL;
-    char buffer[PATH_MAX];
+    char *buffer = _malloc(sizeof(char) * PATH_MAX);
     struct passwd *pw = NULL;
     int found = 0;
 
     if (config == NULL) {
+        free(buffer);
         return NULL;
     }
     if (config->allowLibcPwdCalls == 1) {
+        free(buffer);
         return getpwnam(tgtnam);
     }
 
@@ -2869,10 +2991,12 @@ struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config) {
     fclose(input);
     input = NULL;
 
+    free(buffer);
     if (found) return pw;
     return NULL;
 
 _shifter_getpwnam_unclean:
+    free(buffer);
     return NULL;
 }
 
@@ -2929,7 +3053,7 @@ int filterEtcGroup(const char *group_dest_fname, const char *group_source_fname,
              token = strtok_r(NULL, ":,", &svptr)) {
 
             switch (counter) {
-                case 0: group_name = strdup(token);
+                case 0: group_name = _strdup(token);
                         if (strcmp(group_name, username) == 0) {
                             foundUsername = 1;
                         }
@@ -3057,8 +3181,8 @@ int killSshd(void) {
  *     (1 for yes, 0 for no)
  */
 int destructUDI(UdiRootConfig *udiConfig, int killSsh) {
-    char udiRoot[PATH_MAX];
-    char loopMount[PATH_MAX];
+    char *udiRoot = _malloc(sizeof(char) * PATH_MAX);
+    char *loopMount = _malloc(sizeof(char) * PATH_MAX);
     MountList mounts;
     size_t idx = 0;
     int rc = 1; /* assume failure */
@@ -3097,6 +3221,8 @@ int destructUDI(UdiRootConfig *udiConfig, int killSsh) {
         break;
     }
     free_MountList(&mounts, 0);
+    free(udiRoot);
+    free(loopMount);
     return rc;
 }
 
@@ -3181,7 +3307,7 @@ _validateUnmounted_error:
     return -1;
 }
 
-static char **_shifter_findenv(char ***env, char *var, size_t n, size_t *nElement) {
+static char **_shifter_findenv(char ***env, const char *var, size_t n, size_t *nElement) {
     char **ptr = NULL;
     char **ret = NULL;
     if (env == NULL || *env == NULL || var == NULL || n == 0) {
@@ -3201,7 +3327,7 @@ static char **_shifter_findenv(char ***env, char *var, size_t n, size_t *nElemen
     return ret;
 }
 
-static int _shifter_unsetenv(char ***env, char *var) {
+static int _shifter_unsetenv(char ***env, const char *var) {
     size_t namelen = 0;
     size_t envsize = 0;
     char **pptr = NULL;
@@ -3226,19 +3352,7 @@ static int _shifter_unsetenv(char ***env, char *var) {
     return 0;
 }
 
-static void _shifter_create_new_env_variable(char ***env, char *var)
-{
-    char** ptr;
-    char** new_env = shifter_copyenv(*env, 1);
-    for(ptr=new_env; *ptr!=NULL; ++ptr)
-    {}
-    *ptr = strdup(var);
-    ++ptr;
-    *ptr = NULL;
-    *env = new_env;
-}
-
-static int _shifter_putenv(char ***env, char *var, int mode) {
+static int _shifter_putenv(char ***env, const char *var, int mode) {
     size_t namelen = 0;
     size_t envsize = 0;
     char *ptr = NULL;
@@ -3252,12 +3366,7 @@ static int _shifter_putenv(char ***env, char *var, int mode) {
     }
     namelen = ptr - var;
     pptr = _shifter_findenv(env, var, namelen, &envsize);
-    if (pptr == NULL)
-    {
-        _shifter_create_new_env_variable(env, var);
-    }
-    else
-    {
+    if (pptr != NULL) {
         char *value = strchr(*pptr, '=');
         if (value != NULL) {
             value++;
@@ -3267,13 +3376,13 @@ static int _shifter_putenv(char ***env, char *var, int mode) {
         }
         if (mode == 0) {
             /* replace */
-            *pptr = strdup(var);
+            *pptr = _strdup(var);
             return 0;
         } else if (mode == 1) {
             /* prepend */
             char *newptr = NULL;
             if (value == NULL) {
-                *pptr = strdup(var);
+                *pptr = _strdup(var);
                 return 0;
             }
 
@@ -3285,7 +3394,7 @@ static int _shifter_putenv(char ***env, char *var, int mode) {
             char *newptr = NULL;
 
             if (value == NULL) {
-                *pptr = strdup(var);
+                *pptr = _strdup(var);
                 return 0;
             }
             newptr = alloc_strgenf("%s:%s", *pptr, (var + namelen + 1));
@@ -3295,56 +3404,52 @@ static int _shifter_putenv(char ***env, char *var, int mode) {
             return 1;
         }
     }
-    char **tmp = realloc(*env, sizeof(char *) * (envsize + 2));
-    if (tmp != NULL) {
-        *env = tmp;
-    } else {
-        return 1;
-    }
-    tmp[envsize] = strdup(var);
-    tmp[envsize+1] = NULL;
+    *env = _realloc(*env, sizeof(char *) * (envsize + 2));
+    (*env)[envsize] = _strdup(var);
+    (*env)[envsize+1] = NULL;
     return 0;
 }
 
-char **shifter_copyenv(char **source_environ, int reserve) {
+char **shifter_copyenv(void) {
     char **outenv = NULL;
     char **ptr = NULL;
     char **wptr = NULL;
 
-    if (source_environ == NULL) {
+    if (environ == NULL) {
         return NULL;
     }
 
-    for (ptr = source_environ; *ptr != NULL; ++ptr) {
+    for (ptr = environ; *ptr != NULL; ++ptr) {
     }
-    outenv = (char **) malloc(sizeof(char*) * ((ptr - source_environ) + reserve + 1));
-    ptr = source_environ;
+    outenv = (char **) _malloc(sizeof(char*) * ((ptr - environ) + 1));
+    ptr = environ;
     wptr = outenv;
     for ( ; *ptr != NULL; ptr++) {
-        *wptr++ = strdup(*ptr);
+        *wptr++ = _strdup(*ptr);
     }
     *wptr = NULL;
     return outenv;
 }
 
-int shifter_putenv(char ***env, char *var) {
+int shifter_putenv(char ***env, const char *var) {
     return _shifter_putenv(env, var, 0);
 }
 
-int shifter_appendenv(char ***env, char *var) {
+int shifter_appendenv(char ***env, const char *var) {
     return _shifter_putenv(env, var, 2);
 }
 
-int shifter_prependenv(char ***env, char *var) {
+int shifter_prependenv(char ***env, const char *var) {
     return _shifter_putenv(env, var, 1);
 }
 
-int shifter_unsetenv(char ***env, char *var) {
+int shifter_unsetenv(char ***env, const char *var) {
     return _shifter_unsetenv(env, var);
 }
 
 int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
     char **envPtr = NULL;
+    int idx = 0;
     if (env == NULL || *env == NULL || image == NULL || udiConfig == NULL) {
         return 1;
     }
@@ -3363,128 +3468,69 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
     for (envPtr = udiConfig->siteEnvUnset; envPtr && *envPtr; envPtr++) {
         shifter_unsetenv(env, *envPtr);
     }
+    for (idx = 0; idx < udiConfig->n_active_modules; idx++) {
+        for (envPtr = udiConfig->active_modules[idx]->siteEnv; envPtr && *envPtr; envPtr++) {
+            shifter_putenv(env, *envPtr);
+        }
+        for (envPtr = udiConfig->active_modules[idx]->siteEnvAppend; envPtr && *envPtr; envPtr++) {
+            shifter_appendenv(env, *envPtr);
+        }
+        for (envPtr = udiConfig->active_modules[idx]->siteEnvPrepend; envPtr && *envPtr; envPtr++) {
+            shifter_prependenv(env, *envPtr);
+        }
+        for (envPtr = udiConfig->active_modules[idx]->siteEnvUnset; envPtr && *envPtr; envPtr++) {
+            shifter_unsetenv(env, *envPtr);
+        }
+    }
     return 0;
 }
 
-/*! Recursively searches the container's siteResources folder.
- * All subfolders that contain a shared library are prepended to the container's
- * LD_LIBRARY_PATH environment variable.
- * All subfolders that contain an executable file are prepended to the container's
- * PATH environment variable.
+/*
+ * Create the args to mimic Docker's behaviour.
  */
-int shifter_setupenv_site_resources(char ***env, UdiRootConfig *udiConfig)
+char **calculate_args(int useEntry, char **clArgs, char *clEntry,
+                      ImageData *imageData)
 {
-    if (udiConfig->siteResources != NULL)
-    {
-        if(shifter_setupenv_site_resources_rec(env, udiConfig->siteResources) != 0)
-        {
-            fprintf(stderr, "Failed to add the site-resources directories to the container's environment\n");
-            return 1;
-        }
-    }
-    return 0;
-}
-
-int shifter_setupenv_site_resources_rec(char ***env, const char* current_folder)
-{
-    int return_value = 0;
-    int is_current_folder_prepended_to_path = 0;
-    int is_current_folder_prepended_to_ld_library_path = 0;
-
-    DIR* dir = opendir(current_folder);
-    if(dir == NULL)
-    {
-        fprintf(stderr, "FAILED to opendir %s\n", current_folder);
-        perror(" --- REASON");
-        return 1;
+    char **cmdArgs = clArgs;
+    if ((clArgs == NULL || clArgs[0] == NULL) &&
+            imageData->cmd != NULL && clEntry == NULL) {
+        cmdArgs = imageData->cmd;
     }
 
-    //for each file/folder in current_folder
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != NULL)
-    {
-        // skip special files
-        if( strcmp(".", entry->d_name)==0
-            || strcmp("..", entry->d_name)==0)
-            continue;
+    /* check if entrypoint is defined and desired */
+    if (useEntry) {
+        char **entry = NULL;
 
-        char entry_full_path[PATH_MAX];
-        snprintf(entry_full_path, PATH_MAX, "%s/%s", current_folder, entry->d_name);
-
-        struct stat stat_result;
-        if (stat(entry_full_path, &stat_result) != 0)
-        {
-            fprintf(stderr, "failed to stat %s\n", entry_full_path);
-            perror(" --- REASON");
-            return_value = 1;
-            break;
-        }
-
-        // entry is folder => resursively search it
-        if((stat_result.st_mode & S_IFMT) == S_IFDIR)
-        {
-            if(shifter_setupenv_site_resources_rec(env, entry_full_path) != 0)
-            {
-                return_value = 1;
-                break;
+        if (clEntry != NULL) {
+            entry = make_char_array(clEntry);
+            if (entry == NULL) {
+                fprintf(stderr, "Failed to allocate memory for entry\n");
+                exit(1);
             }
+        } else if (imageData->entryPoint != NULL && imageData->entryPoint[0]) {
+            entry = imageData->entryPoint;
+        } else {
+            fprintf(stderr, "Image does not have a defined entrypoint.\n");
+            return NULL;
         }
-        // entry is executable program => add current folder to PATH
-        else if(!is_current_folder_prepended_to_path
-                && !is_shared_library(entry->d_name)
-                && (stat_result.st_mode & S_IXOTH))
-        {
-            char* env_variable = alloc_strgenf("PATH=%s", current_folder);
-            if(shifter_prependenv(env, env_variable) != 0)
-            {
-                fprintf(stderr, "Failed to prepend environment variable %s\n", env_variable);
-                free(env_variable);
-                return_value = 1;
-                break;
-            }
-            free(env_variable);
-            is_current_folder_prepended_to_path = 1;
+
+        if (entry != NULL && cmdArgs != NULL) {
+            return merge_args(entry, cmdArgs);
+        } else if (entry != NULL) {
+            return entry;
         }
-        // entry is library => add current folder to LD_LIBRARY_PATH
-        else if(!is_current_folder_prepended_to_ld_library_path
-                && is_shared_library(entry->d_name))
-        {
-            char *env_variable = alloc_strgenf("LD_LIBRARY_PATH=%s", current_folder);
-            if(shifter_prependenv(env, env_variable) != 0)
-            {
-                fprintf(stderr, "Failed to prepend environment variable %s\n", env_variable);
-                free(env_variable);
-                return_value = 1;
-                break;
-            }
-            free(env_variable);
-            is_current_folder_prepended_to_ld_library_path = 1;
+    } else if (clArgs == NULL) {
+        cmdArgs = malloc(sizeof(char *) * 2);
+
+        if (getenv("SHELL") != NULL) {
+            cmdArgs[0] = _strdup(getenv("SHELL"));
+        } else {
+            /* use /bin/sh */
+            cmdArgs[0] = _strdup("/bin/sh");
         }
+        cmdArgs[1] = NULL;
     }
-    closedir(dir);
-    return return_value;
-}
-
-int is_shared_library(char* file_name)
-{
-    char* pos = strstr(file_name, ".so");
-
-    if(pos == NULL)
-    {
-        return 0;
-    }
-
-    pos += 3;
-    while(*pos != '\0')
-    {
-        if(*pos!='.' && !isdigit(*pos))
-        {
-            return 0;
-        }
-        ++pos;
-    }
-
-    return 1;
+    return cmdArgs;
 }
 
 int _shifter_get_max_capability(unsigned long *_maxCap) {
@@ -3575,6 +3621,7 @@ int shifter_set_capability_boundingset_null() {
 char *shifter_realpath(const char *src_path, UdiRootConfig *config) {
     struct stat statData;
     char *currPath = NULL;
+    char *buffer = _malloc(sizeof(char) * PATH_MAX);
     PathList *udiRootBasePath = NULL;
     PathList *searchPath = NULL;
     PathComponent *pathPtr = NULL;
@@ -3622,13 +3669,12 @@ char *shifter_realpath(const char *src_path, UdiRootConfig *config) {
             goto _realpath_err;
         }
         if (S_ISLNK(statData.st_mode)) {
-            char lnkPath[PATH_MAX];
-            ssize_t nbytes = readlink(currPath, lnkPath, sizeof(lnkPath));
+            ssize_t nbytes = readlink(currPath, buffer, PATH_MAX);
             if (nbytes < 0 || nbytes >= PATH_MAX) {
                 goto _realpath_err;
             }
-            lnkPath[nbytes] = '\0';
-            pathPtr = pathList_symlinkSubstitute(searchPath, pathPtr, lnkPath);
+            buffer[nbytes] = '\0';
+            pathPtr = pathList_symlinkSubstitute(searchPath, pathPtr, buffer);
             if (pathPtr == NULL) {
                 fprintf(stderr, "FAILED to substitute symlink\n");
                 goto _realpath_err;
@@ -3642,6 +3688,7 @@ char *shifter_realpath(const char *src_path, UdiRootConfig *config) {
     currPath = pathList_string(searchPath);
     pathList_free(searchPath);
     pathList_free(udiRootBasePath);
+    free(buffer);
     return currPath;
 
 _realpath_err:
@@ -3656,5 +3703,6 @@ _realpath_err:
     if (currPath != NULL) {
         free(currPath);
     }
+    free(buffer);
     return NULL;
 }

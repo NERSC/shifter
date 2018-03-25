@@ -8,8 +8,8 @@ TEST_LDFLAGS = $(CPPUTEST_LDFLAGS)
 
 dist_noinst_DATA = test_udiRoot.conf.in etc chroot1 chroot2 chroot3 etc_small data_config1.conf data_config2.conf data_config3.conf data_config4.conf setup_test_chroot.sh shifter_sleep_test
 noinst_DATA = test_udiRoot.conf chroot1/nss chroot2/nss chroot3/nss
-check_PROGRAMS = test_utility test_VolumeMap test_UdiRootConfig test_MountList test_shifter_core test_shifter_core_AsRoot test_shifter_core_AsRootDangerous test_ImageData test_shifter test_PathList test_gpu_support
-TESTS = test_utility test_VolumeMap test_UdiRootConfig test_MountList test_shifter_core test_ImageData test_shifter test_PathList test_gpu_support
+check_PROGRAMS = test_utility test_VolumeMap test_UdiRootConfig test_MountList test_shifter_core test_shifter_core_AsRoot test_shifter_core_AsRootDangerous test_ImageData test_shifter test_PathList
+TESTS = test_utility test_VolumeMap test_UdiRootConfig test_MountList test_shifter_core test_ImageData test_shifter test_PathList
 
 test_udiRoot.conf: test_udiRoot.conf.in
 	cat $(srcdir)/test_udiRoot.conf.in | sed "s|@@@PREFIX@@@|./|g" | sed "s|@@@CONFIG_DIR@@@|./|g" | sed "s|@@@ROOTFSTYPE@@@|$(ROOTFS_TYPE)|g"  > test_udiRoot.conf
@@ -30,6 +30,7 @@ chroot3/nss:
 
 test_utility_SOURCES = \
     test_utility.cpp \
+    $(top_srcdir)/src/shifter_mem.c \
     $(top_srcdir)/src/utility.c
 test_utility_CXXFLAGS = $(TEST_CFLAGS)
 test_utility_CFLAGS = $(TEST_CFLAGS)
@@ -38,6 +39,7 @@ test_utility_LDFLAGS = $(TEST_LDFLAGS)
 test_VolumeMap_SOURCES = \
     test_VolumeMap.cpp \
     $(top_srcdir)/src/VolumeMap.c \
+    $(top_srcdir)/src/shifter_mem.c \
     $(top_srcdir)/src/utility.c
 test_VolumeMap_CXXFLAGS = $(TEST_CFLAGS)
 test_VolumeMap_CFLAGS = $(TEST_CFLAGS)
@@ -47,11 +49,11 @@ test_UdiRootConfig_SOURCES = \
     test_UdiRootConfig.cpp \
     $(top_srcdir)/src/UdiRootConfig.c \
     $(top_srcdir)/src/utility.c \
-	$(top_srcdir)/src/VolumeMap.c \
+    $(top_srcdir)/src/VolumeMap.c \
     $(top_srcdir)/src/PathList.c \
     $(top_srcdir)/src/MountList.c \
-	$(top_srcdir)/src/shifter_core.c \
-	$(top_srcdir)/src/gpu_support.c
+    $(top_srcdir)/src/shifter_mem.c \
+    $(top_srcdir)/src/shifter_core.c
 
 test_UdiRootConfig_CXXFLAGS = $(TEST_CFLAGS)
 test_UdiRootConfig_CFLAGS = $(TEST_CFLAGS)
@@ -60,14 +62,14 @@ test_UdiRootConfig_LDFLAGS = $(TEST_LDFLAGS)
 test_shifter_SOURCES = \
     test_shifter.cpp \
     $(top_srcdir)/src/shifter.c \
+    $(top_srcdir)/src/shifter_mem.c \
     $(top_srcdir)/src/shifter_core.c \
     $(top_srcdir)/src/UdiRootConfig.c \
     $(top_srcdir)/src/utility.c \
     $(top_srcdir)/src/ImageData.c \
     $(top_srcdir)/src/VolumeMap.c \
     $(top_srcdir)/src/PathList.c \
-    $(top_srcdir)/src/MountList.c \
-    $(top_srcdir)/src/gpu_support.c
+    $(top_srcdir)/src/MountList.c
 test_shifter_CXXFLAGS = $(TEST_CFLAGS) -D_TESTHARNESS_SHIFTER
 test_shifter_CFLAGS = $(TEST_CFLAGS) -D_TESTHARNESS_SHIFTER
 test_shifter_LDFLAGS = $(TEST_LDFLAGS)
@@ -78,6 +80,7 @@ test_shifterimg_SOURCES = \
     $(top_srcdir)/src/UdiRootConfig.c \
     $(top_srcdir)/src/VolumeMap.c \
     $(top_srcdir)/src/ImageData.c \
+    $(top_srcdir)/src/shifter_mem.c \
     $(top_srcdir)/src/utility.c
 test_shifterimg_LDFLAGS = $(TEST_LDFLAGS)
 test_shifterimg_LDFLAGS = $(MUNGE_LDFLAGS) $(JSON_LDFLAGS) $(LIBCURL) $(MUNGE_LDFLAGS) $(TEST_LDFLAGS)
@@ -87,33 +90,22 @@ test_shifterimg_CXXFLAGS = $(AM_CPPFLAGS) $(MUNGE_CPPFLAGS) $(JSON_CPPFLAGS) $(L
 test_ImageData_SOURCES = \
     test_ImageData.cpp \
     $(top_srcdir)/src/ImageData.c \
+    $(top_srcdir)/src/shifter_mem.c \
     $(top_srcdir)/src/utility.c
 test_ImageData_CXXFLAGS = $(TEST_CFLAGS)
 test_ImageData_CFLAGS = $(TEST_CFLAGS)
 test_ImageData_LDFLAGS = $(TEST_LDFLAGS)
 
-test_gpu_support_SOURCES = \
-    test_gpu_support.cpp \
-    $(top_srcdir)/src/gpu_support.c \
-    $(top_srcdir)/src/utility.c \
-    $(top_srcdir)/src/shifter_core.c \
-    $(top_srcdir)/src/VolumeMap.c \
-    $(top_srcdir)/src/MountList.c \
-    $(top_srcdir)/src/PathList.c
-test_gpu_support_CXXFLAGS = $(TEST_CFLAGS)
-test_gpu_support_CFLAGS = $(TEST_CFLAGS)
-test_gpu_support_LDFLAGS = $(TEST_LDFLAGS)
-
 test_shifter_core_SOURCES = \
     test_shifter_core.cpp \
     $(top_srcdir)/src/shifter_core.c \
+    $(top_srcdir)/src/shifter_mem.c \
     $(top_srcdir)/src/utility.c \
     $(top_srcdir)/src/UdiRootConfig.c \
     $(top_srcdir)/src/VolumeMap.c \
     $(top_srcdir)/src/MountList.c \
     $(top_srcdir)/src/PathList.c \
-    $(top_srcdir)/src/ImageData.c \
-    $(top_srcdir)/src/gpu_support.c
+    $(top_srcdir)/src/ImageData.c
 test_shifter_core_CXXFLAGS = $(TEST_CFLAGS) -DNOTROOT
 test_shifter_core_CFLAGS = $(TEST_CFLAGS)
 test_shifter_core_LDFLAGS = $(TEST_LDFLAGS)
@@ -131,6 +123,7 @@ test_shifter_core_AsRootDangerous_LDFLAGS = $(TEST_LDFLAGS)
 test_MountList_SOURCES = \
     test_MountList.cpp \
     $(top_srcdir)/src/MountList.c \
+    $(top_srcdir)/src/shifter_mem.c \
     $(top_srcdir)/src/utility.c
 test_MountList_CXXFLAGS = $(TEST_CFLAGS)
 test_MountList_CFLAGS = $(TEST_CFLAGS)
@@ -138,6 +131,7 @@ test_MountList_LDFLAGS = $(TEST_LDFLAGS)
 
 test_PathList_SOURCES = \
     test_PathList.cpp \
+    $(top_srcdir)/src/shifter_mem.c \
     $(top_srcdir)/src/PathList.c
 test_PathList_CXXFLAGS = $(TEST_CFLAGS)
 test_PathList_CFLAGS = $(TEST_CFLAGS)
@@ -147,7 +141,6 @@ test_PathList_LDFLAGS = $(TEST_LDFLAGS)
 
 clean-local: clean-local-check
 clean-local-check:
-	-rm -rf chroot1 chroot2 chroot3
 	-rm -rf *.gcda
 	-rm -rf *.gcno
 	-rm -f test_udiRoot.conf 
