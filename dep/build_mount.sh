@@ -14,7 +14,7 @@ if [[ -n "$DEPTAR_DIR" && -e "$DEPTAR_DIR/util-linux-2.26.2.tar.gz" ]]; then
 fi
 
 if [[ ! -e "util-linux-2.26.2.tar.gz" ]]; then
-    curl -k -o "util-linux-2.26.2.tar.gz" "https://www.kernel.org/pub/linux/utils/util-linux/v2.26/util-linux-2.26.2.tar.gz"
+    curl -L -k -o "util-linux-2.26.2.tar.gz" "https://www.kernel.org/pub/linux/utils/util-linux/v2.26/util-linux-2.26.2.tar.gz"
 fi
 
 cd "${builddir}"

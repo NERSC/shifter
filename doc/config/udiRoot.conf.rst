@@ -252,13 +252,6 @@ imageGateway
 Space seperated URLs for your imagegw.  Used by shifterimg and SLURM batch
 integration to communicate with the imagegw.
 
-siteResources (required)
-------------------------
-Absolute path to where site-specific resources will be bind-mounted inside the
-container to enable features like native MPI or GPU support.
-This configuration only affects the container. The specified path will be automatically
-created inside the container. The specified path doesn't need to exist on the host.
-
 batchType (optional)
 --------------------
 Used by batch integration code to pick useful settings.  May be deprecated

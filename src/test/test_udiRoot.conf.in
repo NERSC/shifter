@@ -31,4 +31,24 @@ siteEnv=SHIFTER_RUNTIME=1 \
 siteEnvAppend=PATH=/opt/udiImage/bin\
               MANPATH=/opt/udiImage/share/man
 siteEnvPrepend=PKG_CONFIG_PATH=/this/is/fake
-siteResources=/opt/shifter/site-resources
+
+defaultModules = mpich
+
+module_mpich_userhook = /path/to/userhook
+module_mpich_roothook = /path/to/roothook
+module_mpich_siteEnvPrepend = LD_LIBRARY_PATH=/opt/udiImage/mpich/lib64 \
+                              PATH=/opt/udiImage/mpich/bin
+module_mpich_siteEnvAppend = PATH=/opt/udiImage/mpich/sbin
+module_mpich_siteEnv = SHIFTER_MODULE_MPICH=1
+module_mpich_siteEnvUnset = FAKE_MPI_VARIABLE
+module_mpich_siteFs = /mpich/a:/mpicha
+module_mpich_copyPath = /path/to/localized/mpich/stuff
+module_mpich_conflict = openmpi
+
+module_openmpi_userhook = /path/to/openmpi_userhook
+module_openmpi_siteEnvPrepend = LD_LIBRARY_PATH=/opt/udiImage/openmpi/lib64 \
+                              PATH=/opt/udiImage/openmpi/bin
+module_openmpi_siteEnvAppend = PATH=/opt/udiImage/openmpi/sbin
+module_openmpi_siteEnv = SHIFTER_MODULE_OPENMPI=1
+module_openmpi_siteEnvUnset = FAKE_MPI_VARIABLE
+module_openmpi_conflict = mpich

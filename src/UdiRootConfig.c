@@ -46,6 +46,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdbool.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -53,6 +54,7 @@
 
 #include "UdiRootConfig.h"
 #include "utility.h"
+#include "shifter_mem.h"
 
 #define SITEFS_ALLOC_BLOCK 16
 #define SERVER_ALLOC_BLOCK 3
@@ -60,6 +62,156 @@
 
 static int _assign(const char *key, const char *value, void *tUdiRootConfig);
 static int _validateConfigFile(const char *);
+
+void free_ShifterModule(ShifterModule *module, int free_struct) {
+    char **ptr = NULL;
+
+    if (module == NULL) return;
+    if (module->name != NULL) {
+        free(module->name);
+        module->name = NULL;
+    }
+    if (module->userhook != NULL) {
+        free(module->userhook);
+        module->userhook = NULL;
+    }
+    if (module->siteEnv != NULL) {
+        for (ptr = module->siteEnv; ptr && *ptr; ptr++) {
+            free(*ptr);
+        }
+        free(module->siteEnv);
+        module->siteEnv = NULL;
+    }
+    if (module->siteEnvPrepend != NULL) {
+        for (ptr = module->siteEnvPrepend; ptr && *ptr; ptr++) {
+            free(*ptr);
+        }
+        free(module->siteEnvPrepend);
+        module->siteEnvPrepend = NULL;
+    }
+    if (module->siteEnvAppend != NULL) {
+        for (ptr = module->siteEnvAppend; ptr && *ptr; ptr++) {
+            free(*ptr);
+        }
+        free(module->siteEnvAppend);
+        module->siteEnvAppend = NULL;
+    }
+    if (module->siteEnvUnset != NULL) {
+        for (ptr = module->siteEnvUnset; ptr && *ptr; ptr++) {
+            free(*ptr);
+        }
+        free(module->siteEnvUnset);
+        module->siteEnvUnset = NULL;
+    }
+    if (module->siteFs != NULL) {
+        free_VolumeMap(module->siteFs, 1);
+        module->siteFs = NULL;
+    }
+    if (module->copyPath != NULL) {
+        free(module->copyPath);
+        module->copyPath = NULL;
+    }
+    if (module->conflict_str != NULL) {
+        for (ptr = module->conflict_str; ptr && *ptr; ptr++) {
+            free(*ptr);
+        }
+        free(module->conflict_str);
+        module->conflict_str = NULL;
+    }
+    if (free_struct) {
+        free(module);
+    }
+}
+
+/* this function _requires_ that _all_ of the modules shifter will use for
+ * this invocataion are already parsed, since it is storing pointers into
+ * the array of modules */
+int parse_selected_ShifterModule(const char *selected, UdiRootConfig *config) {
+    char *selected_tmp = NULL;
+    char *search = NULL;
+    char *svPtr = NULL;
+    char *ptr = NULL;
+    int rc = 0;
+
+    if (!selected || !config) {
+        return -1;
+    }
+    config->selectedModulesStr = _strdup(selected);
+    selected_tmp = _strdup(selected);
+    search = shifter_trim(selected_tmp);
+
+    /* even if there are default modules active, disable them, user override */
+    if (config->active_modules) {
+        free(config->active_modules);
+        config->active_modules = NULL;
+    }
+    config->n_active_modules = 0;
+
+    /* if user specified none, then end */
+    if (strcasecmp(search, "none") == 0) {
+        rc = 0;
+        goto finish;
+    }
+
+    while ((ptr = strtok_r(search, ",", &svPtr)) != NULL) {
+        int idx = 0;
+        int jdx = 0;
+        int kdx = 0;
+        bool found = false;
+        search = NULL;
+
+        for (idx = 0; idx < config->n_modules; idx++) {
+            if (strcmp(ptr, config->modules[idx].name) == 0) {
+                if (config->modules[idx].enabled == 0) {
+                    fprintf(stderr, "WARNING: module %s is not enabled for use.\n", config->modules[idx].name);
+                    continue;
+                }
+                for (jdx = 0; jdx < config->modules[idx].n_conflict; jdx++) {
+                    for (kdx = 0; kdx < config->n_active_modules; kdx++) {
+                        if (config->active_modules[kdx] == config->modules[idx].conflict[jdx]) {
+                            fprintf(stderr, "ERROR: cannot load conflicting modules %s and %s\n", config->modules[idx].name, config->active_modules[kdx]->name);
+                            rc = -1;
+                            goto finish;
+                        }
+                    }
+                }
+                for (jdx = 0; jdx < config->n_active_modules; jdx++) {
+                    for (kdx = 0; kdx < config->active_modules[jdx]->n_conflict; kdx++) {
+                        if (config->active_modules[jdx]->conflict[kdx] == &config->modules[idx]) {
+                            fprintf(stderr, "ERROR: cannot load conflicting modules %s and %s\n", config->modules[idx].name, config->active_modules[jdx]->name);
+                            rc = -1;
+                            goto finish;
+                        }
+                    }
+                }
+
+                config->active_modules =
+                    _realloc(config->active_modules,
+                             sizeof(ShifterModule *) *
+                             (config->n_active_modules + 2)
+                    );
+
+                config->active_modules[config->n_active_modules] =
+                    &config->modules[idx];
+
+                config->n_active_modules++;
+                config->active_modules[config->n_active_modules] = NULL;
+                found = true;
+            }
+        }
+        if (!found) {
+            fprintf(stderr, "Unknown shifter module: %s\n", ptr);
+            rc = -1;
+            goto finish;
+        }
+    }
+    rc = 0;
+
+finish:
+    if (selected_tmp)
+        free(selected_tmp);
+    return rc;
+}
 
 int parse_UdiRootConfig(const char *configFile, UdiRootConfig *config, int validateFlags) {
     int ret = 0;
@@ -73,11 +225,52 @@ int parse_UdiRootConfig(const char *configFile, UdiRootConfig *config, int valid
         return UDIROOT_VAL_PARSE;
     }
 
+    if (ShifterModule_postprocessing(config) != 0) {
+        return UDIROOT_VAL_PARSE;
+    }
+
     ret = validate_UdiRootConfig(config, validateFlags);
     return ret;
 }
 
+int ShifterModule_postprocessing(UdiRootConfig *config) {
+    int i = 0;
+    int j = 0;
+    char **ptr = NULL;
+    for (i = 0; i < config->n_modules; i++) {
+        int found_n_conflicts = 0;
+        int found = 0;
+        if (config->modules[i].n_conflict > 0) {
+            size_t alloc_size = sizeof(ShifterModule *) *
+                                (config->modules[i].n_conflict + 1);
+            config->modules[i].conflict = _malloc(alloc_size);
+            memset(config->modules[i].conflict, 0, alloc_size);
+        }
+        for (ptr = config->modules[i].conflict_str; ptr && *ptr; ptr++) {
+            for (j = 0; j < config->n_modules; j++) {
+                if (strcmp(*ptr, config->modules[j].name) == 0) {
+                    config->modules[i].conflict[found_n_conflicts] =
+                            &(config->modules[j]);
+                    found_n_conflicts++;
+                    found++;
+                    break;
+                }
+            }
+        }
+        if (!found) {
+            fprintf(stderr, "FAILED to find matching conflict \"%s\" for module %s\n",
+                    *ptr, config->modules[i].name);
+            return 1;
+        }
+    }
+    if (config->defaultModulesStr) {
+        return parse_selected_ShifterModule(config->defaultModulesStr, config);
+    }
+    return 0;
+}
+
 void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
+    int iidx = 0;
     if (config == NULL) return;
 
     if (config->udiMountPoint != NULL) {
@@ -173,10 +366,6 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         free(config->rootfsType);
         config->rootfsType = NULL;
     }
-    if (config->siteResources != NULL) {
-        free(config->siteResources);
-        config->siteResources = NULL;
-    }
     if (config->siteFs != NULL) {
         free_VolumeMap(config->siteFs, 1);
         config->siteFs = NULL;
@@ -197,6 +386,21 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
     if (config->jobIdentifier != NULL) {
         free(config->jobIdentifier);
         config->jobIdentifier = NULL;
+    }
+    for (iidx = 0; iidx < config->n_modules; iidx++) {
+        free_ShifterModule(&(config->modules[iidx]), 0);
+    }
+    if (config->modules) {
+        free(config->modules);
+        config->modules = NULL;
+    }
+    if (config->defaultModulesStr) {
+        free(config->defaultModulesStr);
+        config->defaultModulesStr = NULL;
+    }
+    if (config->selectedModulesStr) {
+        free(config->selectedModulesStr);
+        config->selectedModulesStr = NULL;
     }
 
     char **arrays[] = {
@@ -224,6 +428,7 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
 
 size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
     size_t idx = 0;
+    int iidx = 0;
     size_t written = 0;
 
     if (config == NULL || fp == NULL) return 0;
@@ -296,8 +501,6 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->ddPath != NULL ? config->ddPath : ""));
     written += fprintf(fp, "mkfsXfsPath = %s\n",
         (config->mkfsXfsPath != NULL ? config->mkfsXfsPath : ""));
-    written += fprintf(fp, "siteResources = %s\n",
-        (config->siteResources != NULL ? config->siteResources : ""));
     written += fprintf(fp, "Image Gateway Servers = %lu servers\n", config->gwUrl_size);
     for (idx = 0; idx < config->gwUrl_size; idx++) {
         char *gwUrl = config->gwUrl[idx];
@@ -307,6 +510,10 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         written += fprintf(fp, "Site FS Bind-mounts = %lu fs\n", config->siteFs->n);
         written += fprint_VolumeMap(fp, config->siteFs);
     }
+    for (iidx = 0; iidx < config->n_modules; iidx++) {
+        written += fprint_ShifterModule(fp, &(config->modules[iidx]));
+    }
+    written += fprintf(fp, "defaultModules: %s\n", config->defaultModulesStr);
     written += fprintf(fp, "\nRUNTIME Options:\n");
     written += fprintf(fp, "username: %s\n",
         (config->username != NULL ? config->username : ""));
@@ -318,6 +525,7 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         (config->nodeIdentifier != NULL ? config->nodeIdentifier : ""));
     written += fprintf(fp, "jobIdentifier: %s\n",
         (config->jobIdentifier != NULL ? config->jobIdentifier : ""));
+    written += fprintf(fp, "selectedModules: %s\n", config->selectedModulesStr);
     written += fprintf(fp, "***** END UdiRootConfig *****\n");
     return written;
 }
@@ -407,10 +615,6 @@ int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
                 VAL_ERROR("Specified \"mkfsXfsPath\" is not executable.", UDIROOT_VAL_FILEVAL);
             }
         }
-        if (config->siteResources != NULL && config->siteResources[0] != '/') {
-            // note: we will find out later, through "mkdir", whether it is a valid path name or not
-            VAL_ERROR("Specified \"siteResources\" is not an absolute path.", UDIROOT_VAL_FILEVAL);
-        }
     }
     return 0;
 }
@@ -418,23 +622,23 @@ int validate_UdiRootConfig(UdiRootConfig *config, int validateFlags) {
 static int _assign(const char *key, const char *value, void *t_config) {
     UdiRootConfig *config = (UdiRootConfig *)t_config;
     if (strcmp(key, "udiMount") == 0) {
-        config->udiMountPoint = strdup(value);
+        config->udiMountPoint = _strdup(value);
         if (config->udiMountPoint == NULL) return 1;
     } else if (strcmp(key, "loopMount") == 0) {
-        config->loopMountPoint = strdup(value);
+        config->loopMountPoint = _strdup(value);
         if (config->loopMountPoint == NULL) return 1;
     } else if (strcmp(key, "imagePath") == 0) {
-        config->imageBasePath = strdup(value);
+        config->imageBasePath = _strdup(value);
         if (config->imageBasePath == NULL) return 1;
     } else if (strcmp(key, "udiRootPath") == 0) {
-        config->udiRootPath = strdup(value);
+        config->udiRootPath = _strdup(value);
         if (config->udiRootPath == NULL) return 1;
     } else if (strcmp(key, "perNodeCachePath") == 0) {
-        config->perNodeCachePath = strdup(value);
+        config->perNodeCachePath = _strdup(value);
     } else if (strcmp(key, "perNodeCacheSizeLimit") == 0) {
         config->perNodeCacheSizeLimit = parseBytes(value);
     } else if (strcmp(key, "perNodeCacheAllowedFsType") == 0) {
-        char *valueDup = strdup(value);
+        char *valueDup = _strdup(value);
         char *search = valueDup;
         char *svPtr = NULL;
         char *ptr = NULL;
@@ -451,16 +655,16 @@ static int _assign(const char *key, const char *value, void *t_config) {
         }
         free(valueDup);
     } else if (strcmp(key, "sitePreMountHook") == 0) {
-        config->sitePreMountHook = strdup(value);
+        config->sitePreMountHook = _strdup(value);
         if (config->sitePreMountHook == NULL) return 1;
     } else if (strcmp(key, "sitePostMountHook") == 0) {
-        config->sitePostMountHook = strdup(value);
+        config->sitePostMountHook = _strdup(value);
         if (config->sitePostMountHook == NULL) return 1;
     } else if (strcmp(key, "optUdiImage") == 0) {
-        config->optUdiImage = strdup(value);
+        config->optUdiImage = _strdup(value);
         if (config->optUdiImage == NULL) return 1;
     } else if (strcmp(key, "etcPath") == 0) {
-        config->etcPath = strdup(value);
+        config->etcPath = _strdup(value);
         if (config->etcPath == NULL) return 1;
     } else if (strcmp(key, "allowLocalChroot") == 0) {
         config->allowLocalChroot = strtol(value, NULL, 10) != 0;
@@ -485,21 +689,21 @@ static int _assign(const char *key, const char *value, void *t_config) {
     } else if (strcmp(key, "maxGroupCount") == 0) {
         config->maxGroupCount = strtoul(value, NULL, 10);
     } else if (strcmp(key, "modprobePath") == 0) {
-        config->modprobePath = strdup(value);
+        config->modprobePath = _strdup(value);
     } else if (strcmp(key, "insmodPath") == 0) {
-        config->insmodPath = strdup(value);
+        config->insmodPath = _strdup(value);
     } else if (strcmp(key, "cpPath") == 0) {
-        config->cpPath = strdup(value);
+        config->cpPath = _strdup(value);
     } else if (strcmp(key, "mvPath") == 0) {
-        config->mvPath = strdup(value);
+        config->mvPath = _strdup(value);
     } else if (strcmp(key, "chmodPath") == 0) {
-        config->chmodPath = strdup(value);
+        config->chmodPath = _strdup(value);
     } else if (strcmp(key, "ddPath") == 0) {
-        config->ddPath = strdup(value);
+        config->ddPath = _strdup(value);
     } else if (strcmp(key, "mkfsXfsPath") == 0) {
-        config->mkfsXfsPath = strdup(value);
+        config->mkfsXfsPath = _strdup(value);
     } else if (strcmp(key, "rootfsType") == 0) {
-        config->rootfsType = strdup(value);
+        config->rootfsType = _strdup(value);
     } else if (strcmp(key, "gatewayTimeout") == 0) {
         config->gatewayTimeout = strtoul(value, NULL, 10);
     } else if (strcmp(key, "kmodBasePath") == 0) {
@@ -509,15 +713,15 @@ static int _assign(const char *key, const char *value, void *t_config) {
             fprintf(stderr, "FAILED to get uname data!\n");
             return 1;
         }
-        config->kmodBasePath = strdup(value);
+        config->kmodBasePath = _strdup(value);
         if (config->kmodBasePath == NULL) return 1;
         config->kmodPath = alloc_strgenf("%s/%s", config->kmodBasePath, uts.release);
     } else if (strcmp(key, "kmodCacheFile") == 0) {
-        config->kmodCacheFile = strdup(value);
+        config->kmodCacheFile = _strdup(value);
         if (config->kmodCacheFile == NULL) return 1;
     } else if (strcmp(key, "siteFs") == 0) {
         if (config->siteFs == NULL) {
-            config->siteFs = (VolumeMap *) malloc(sizeof(VolumeMap));
+            config->siteFs = (VolumeMap *) _malloc(sizeof(VolumeMap));
             memset(config->siteFs, 0, sizeof(VolumeMap));
         }
         if (parseVolumeMapSiteFs(value, config->siteFs) != 0) {
@@ -525,7 +729,7 @@ static int _assign(const char *key, const char *value, void *t_config) {
             return 1;
         }
     } else if (strcmp(key, "siteEnv") == 0) {
-        char *valueDup = strdup(value);
+        char *valueDup = _strdup(value);
         char *search = valueDup;
         char *svPtr = NULL;
         char *ptr = NULL;
@@ -537,7 +741,7 @@ static int _assign(const char *key, const char *value, void *t_config) {
         }
         free(valueDup);
     } else if (strcmp(key, "siteEnvAppend") == 0) {
-        char *valueDup = strdup(value);
+        char *valueDup = _strdup(value);
         char *search = valueDup;
         char *svPtr = NULL;
         char *ptr = NULL;
@@ -549,7 +753,7 @@ static int _assign(const char *key, const char *value, void *t_config) {
         }
         free(valueDup);
     } else if (strcmp(key, "siteEnvPrepend") == 0) {
-        char *valueDup = strdup(value);
+        char *valueDup = _strdup(value);
         char *search = valueDup;
         char *svPtr = NULL;
         char *ptr = NULL;
@@ -561,7 +765,7 @@ static int _assign(const char *key, const char *value, void *t_config) {
         }
         free(valueDup);
     } else if (strcmp(key, "siteEnvUnset") == 0) {
-        char *valueDup = strdup(value);
+        char *valueDup = _strdup(value);
         char *search = valueDup;
         char *svPtr = NULL;
         char *ptr = NULL;
@@ -573,7 +777,7 @@ static int _assign(const char *key, const char *value, void *t_config) {
         }
         free(valueDup);
     } else if (strcmp(key, "imageGateway") == 0) {
-        char *valueDup = strdup(value);
+        char *valueDup = _strdup(value);
         char *search = valueDup;
         int ret = 0;
         char *svPtr = NULL;
@@ -587,21 +791,194 @@ static int _assign(const char *key, const char *value, void *t_config) {
         free(valueDup);
         return ret;
     } else if (strcmp(key, "batchType") == 0) {
-        config->batchType = strdup(value);
+        config->batchType = _strdup(value);
         if (config->batchType == NULL) return 1;
     } else if (strcmp(key, "system") == 0) {
-        config->system = strdup(value);
+        config->system = _strdup(value);
         if (config->system == NULL) return 1;
     } else if (strcmp(key, "defaultImageType") == 0) {
-        config->defaultImageType = strdup(value);
-    } else if (strcmp(key, "siteResources") == 0) {
-        config->siteResources = strdup(value);
+        config->defaultImageType = _strdup(value);
     } else if (strcmp(key, "nodeContextPrefix") == 0) {
         /* do nothing, this key is defunct */
+    } else if (strncmp(key, "module_", 7) == 0) {
+        parse_ShifterModule_key(config, key, value);
+    } else if (strcmp(key, "defaultModules") == 0) {
+        config->defaultModulesStr = _strdup(value);
     } else {
         printf("Couldn't understand key: %s\n", key);
         return 2;
     }
+    return 0;
+}
+
+int parse_ShifterModule_key(UdiRootConfig *config, const char *key,
+    const char *value)
+{
+    char *tmpkey = _strdup(key);
+    char *tmpvalue = NULL;
+    char *name = NULL;
+    char *subkey = NULL;
+    int keycounter = 0;
+    char *search = NULL;
+    char *svPtr = NULL;
+    char *ptr = NULL;
+    ShifterModule *module = NULL;
+    int rc = 0;
+    int idx = 0;
+    if (config == NULL || key == NULL || value == NULL) {
+        rc = 1;
+        goto cleanup;
+    }
+
+    /* parse the key */
+    search = tmpkey;
+    svPtr = NULL;
+    while ((ptr = strtok_r(search, "_", &svPtr)) != NULL) {
+        if (keycounter == 0 && strcmp(ptr, "module") != 0) {
+            fprintf(stderr, "FAILED to parse ShifterModule key %s\n", key);
+            rc = 1;
+            goto cleanup;
+        } else if (keycounter == 1) {
+            name = ptr;
+        } else if (keycounter == 2) {
+            subkey = ptr;
+        }
+        search = NULL; /* needed for strtok */
+        keycounter++;
+    }
+    if (name == NULL || subkey == NULL) {
+        fprintf(stderr, "FAILED to parse ShifterModule key %s\n", key);
+        rc = 1;
+        goto cleanup;
+    }
+
+    /* find the module or allocate a new one if it does not exist*/
+    module = NULL;
+    for (idx = 0; idx < config->n_modules; idx++) {
+        if (strcmp(name, config->modules[idx].name) == 0) {
+            module = &(config->modules[idx]);
+        }
+    }
+    if (module == NULL) {
+        size_t alloc_size = sizeof(ShifterModule) * (config->n_modules + 1);
+        config->modules = _realloc(config->modules, alloc_size);
+        memset(&(config->modules[config->n_modules]), 0, sizeof(ShifterModule));
+        module = &(config->modules[config->n_modules]);
+        config->n_modules += 1;
+        module->name = _strdup(name);
+
+        /* default module to enabled */
+        module->enabled = 1;
+    }
+    if (module == NULL) {
+        fprintf(stderr, "%s\n", "FAILED to construct empty shifter module");
+        rc = 1;
+        goto cleanup;
+    }
+
+    /* populate module based on subkey and value */
+    if (strcmp(subkey, "userhook") == 0) {
+        module->userhook = _strdup(value);
+    } else if (strcmp(subkey, "roothook") == 0) {
+        module->roothook = _strdup(value);
+    } else if (strcmp(subkey, "siteEnv") == 0 ||
+                strcmp(subkey, "siteEnvPrepend") == 0 ||
+                strcmp(subkey, "siteEnvAppend") == 0 ||
+                strcmp(subkey, "siteEnvUnset") == 0 ||
+                strcmp(subkey, "conflict") == 0)
+    {
+        tmpvalue = _strdup(value);
+        search = tmpvalue;
+        svPtr = NULL;
+        char **ptrarray = NULL;
+        char **end_ptrarray = NULL;
+        size_t count = 0;
+        size_t capacity = 0;
+        while ((ptr = strtok_r(search, " ", &svPtr)) != NULL) {
+            end_ptrarray = ptrarray + count;
+            strncpy_StringArray(ptr, strlen(ptr), &end_ptrarray, &ptrarray,
+                                &capacity, SITEFS_ALLOC_BLOCK);
+            count++;
+            search = NULL;
+        }
+
+        if (strcmp(subkey, "siteEnv") == 0) {
+            module->siteEnv = ptrarray;
+            module->n_siteEnv = count;
+        } else if (strcmp(subkey, "siteEnvPrepend") == 0) {
+            module->siteEnvPrepend = ptrarray;
+            module->n_siteEnvPrepend = count;
+        } else if (strcmp(subkey, "siteEnvAppend") == 0) {
+            module->siteEnvAppend = ptrarray;
+            module->n_siteEnvAppend = count;
+        } else if (strcmp(subkey, "siteEnvUnset") == 0) {
+            module->siteEnvUnset = ptrarray;
+            module->n_siteEnvUnset = count;
+        } else if (strcmp(subkey, "conflict") == 0) {
+            module->conflict_str = ptrarray;
+            module->n_conflict = count;
+        }
+    } else if (strcmp(subkey, "siteFs") == 0) {
+        if (module->siteFs == NULL) {
+            module->siteFs = (VolumeMap *) _malloc(sizeof(VolumeMap));
+            memset(module->siteFs, 0, sizeof(VolumeMap));
+        }
+        if (parseVolumeMapSiteFs(value, module->siteFs) != 0) {
+            fprintf(stderr, "FAILED to parse module siteFs volumeMap\n");
+            rc = 1;
+            goto cleanup;
+        }
+    } else if (strcmp(subkey, "copyPath") == 0) {
+        module->copyPath = _strdup(value);
+    } else if (strcmp(subkey, "enabled") == 0) {
+        module->enabled = strtol(value, NULL, 10) != 0;
+    }
+
+cleanup:
+    if (tmpkey != NULL)
+        free(tmpkey);
+    if (tmpvalue != NULL)
+        free(tmpvalue);
+    return rc;
+}
+
+size_t fprint_ShifterModule(FILE *fp, ShifterModule *module) {
+    size_t written = 0;
+    char **ptr = NULL;
+
+    if (fp == NULL || module == NULL)
+        return 0;
+
+    written += fprintf(fp, "Shifter Module: %s\n", module->name);
+    written += fprintf(fp, "====================================\n");
+    written += fprintf(fp, "userhook: %s\n", module->userhook);
+    written += fprintf(fp, "roothook: %s\n", module->roothook);
+    written += fprintf(fp, "siteEnv:\n");
+    for (ptr = module->siteEnv; ptr && *ptr; ptr++) {
+        written += fprintf(fp, "        %s\n", *ptr);
+    }
+    written += fprintf(fp, "siteEnvPrepend:\n");
+    for (ptr = module->siteEnvPrepend; ptr && *ptr; ptr++) {
+        written += fprintf(fp, "        %s\n", *ptr);
+    }
+    written += fprintf(fp, "siteEnvAppend:\n");
+    for (ptr = module->siteEnvAppend; ptr && *ptr; ptr++) {
+        written += fprintf(fp, "        %s\n", *ptr);
+    }
+    written += fprintf(fp, "siteEnvUnset:\n");
+    for (ptr = module->siteEnvUnset; ptr && *ptr; ptr++) {
+        written += fprintf(fp, "        %s\n", *ptr);
+    }
+    written += fprintf(fp, "conflict:\n");
+    for (ptr = module->conflict_str; ptr && *ptr; ptr++) {
+        written += fprintf(fp, "        %s\n", *ptr);
+    }
+    written += fprintf(fp, "VolumeMap: ");
+    written += fprint_VolumeMap(fp, module->siteFs);
+    written += fprintf(fp, "\n");
+    written += fprintf(fp, "copyPath: %s\n", module->copyPath);
+    written += fprintf(fp, "enabled: %d\n", module->enabled);
+    written += fprintf(fp, "====================================\n\n");
     return 0;
 }
 

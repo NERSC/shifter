@@ -16,6 +16,7 @@ SHIFTER_SO_SOURCES = \
     $(top_srcdir)/src/UdiRootConfig.c \
     $(top_srcdir)/src/utility.c \
     $(top_srcdir)/src/shifter_core.c \
+    $(top_srcdir)/src/shifter_mem.c \
     $(top_srcdir)/src/PathList.c \
     $(top_srcdir)/src/ImageData.c \
     $(top_srcdir)/src/VolumeMap.c

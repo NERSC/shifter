@@ -21,6 +21,8 @@ SHIFTER_SOURCES = \
     utility.c \
     shifter_core.h \
     shifter_core.c \
+    shifter_mem.h \
+    shifter_mem.c \
     ImageData.h \
     ImageData.c \
     VolumeMap.h \
@@ -38,6 +40,8 @@ SETUPROOT_SOURCES = \
     utility.c \
     shifter_core.h \
     shifter_core.c \
+    shifter_mem.h \
+    shifter_mem.c \
     ImageData.h \
     ImageData.c \
     VolumeMap.h \
@@ -55,6 +59,8 @@ UNSETUPROOT_SOURCES = \
     utility.c \
     shifter_core.h \
     shifter_core.c \
+    shifter_mem.h \
+    shifter_mem.c \
     ImageData.h \
     ImageData.c \
     VolumeMap.h \
@@ -75,7 +81,10 @@ SHIFTERIMG_SOURCES = \
     UdiRootConfig.c \
     VolumeMap.h \
     VolumeMap.c \
+    shifter_core.h \
     shifter_core.c \
+    shifter_mem.h \
+    shifter_mem.c \
     MountList.c \
     PathList.c
 

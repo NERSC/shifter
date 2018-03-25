@@ -6,11 +6,6 @@ Version 16.08 to 17.04
 Configurations should be backwards compatible.  There are new optional parameters
 that have been added.
 
-**udiRoot.conf**
-
-   * New optional parameter (siteResources).  This has the location of libraries
-     that should automatically be bind mounted into the container.
-
 **imagemanager.json**
 
    * New optional parameter (Metrics). True/False parameter to enable basic

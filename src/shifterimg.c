@@ -42,6 +42,7 @@
 #include <sys/stat.h>
 
 #include "shifterimg.h"
+#include "shifter_mem.h"
 #include "utility.h"
 #include "UdiRootConfig.h"
 #include "ImageData.h"
@@ -146,7 +147,7 @@ int getttycred(const char *system, char **username, char **password) {
         if (len > 0 && len < 1024 && buffer[len-1] == '\n') {
             buffer[len-1] = 0;
         }
-        *username = strdup(buffer);
+        *username = _strdup(buffer);
         mod++;
     }
 
@@ -174,7 +175,7 @@ int getttycred(const char *system, char **username, char **password) {
         if (pwdlen > 0 && pwdlen < 1024 && buffer[pwdlen-1] == '\n') {
             buffer[pwdlen-1] = 0;
         }
-        *password = strdup(buffer);
+        *password = _strdup(buffer);
         mod++;
     }
     fprintf(write_fp, "\n");
@@ -204,7 +205,7 @@ int doLogin(struct options *options, UdiRootConfig *udiConfig) {
     char *path = NULL;
 
     if (options->location == NULL) {
-        options->location = strdup("default");
+        options->location = _strdup("default");
     }
 
     int ret = getttycred(options->location, &username, &password);
@@ -243,16 +244,11 @@ int doLogin(struct options *options, UdiRootConfig *udiConfig) {
         /* append to end of list */
         size_t count = 0;
         if (lcptr) count = lcptr - options->loginCredentials;
-        LoginCredential **tmp = (LoginCredential **) realloc(options->loginCredentials, sizeof(LoginCredential *) * (count+2));
-        if (tmp == NULL) {
-            fprintf(stderr, "FAILED to allocate memory to expand credential list\n");
-            goto _error;
-        }
-        options->loginCredentials = tmp;
+        options->loginCredentials = (LoginCredential **) _realloc(options->loginCredentials, sizeof(LoginCredential *) * (count+2));
         lcptr = options->loginCredentials + count;
-        *lcptr = (LoginCredential *) malloc(sizeof(LoginCredential));
-        (*lcptr)->system = strdup(udiConfig->system);
-        (*lcptr)->location = strdup(options->location);
+        *lcptr = (LoginCredential *) _malloc(sizeof(LoginCredential));
+        (*lcptr)->system = _strdup(udiConfig->system);
+        (*lcptr)->location = _strdup(options->location);
         (*lcptr)->cred = munge_cred;
 
         /* NULL-terminate the list */
@@ -371,7 +367,7 @@ int jsonParseString(json_object *json_data, char **value) {
         return 1;
     }
 
-    *value = strdup(json_object_get_string(json_data));
+    *value = _strdup(json_object_get_string(json_data));
     return 0;
 }
 
@@ -420,11 +416,7 @@ int jsonParseStringArray(json_object *json_data, char ***values) {
 
         size_t count = ptr - ret;
         if (count >= capacity) {
-            char **tmp = (char **) realloc(ret, sizeof(char *) * (count + 11));
-            if (tmp == NULL) {
-                break;
-            }
-            ret = tmp;
+            ret = (char **) _realloc(ret, sizeof(char *) * (count + 11));
             ptr = ret + count;
             capacity = count + 10;
         }
@@ -440,7 +432,7 @@ ImageGwImageRec *parseImageJson(json_object *json_data) {
         return NULL;
     }
 
-    ImageGwImageRec *image = (ImageGwImageRec *) malloc(sizeof(ImageGwImageRec));
+    ImageGwImageRec *image = (ImageGwImageRec *) _malloc(sizeof(ImageGwImageRec));
     json_object_iter jIt;
     memset(image, 0, sizeof(ImageGwImageRec));
 
@@ -490,7 +482,7 @@ ImageGwImageRec *parseImageJson(json_object *json_data) {
                 image->tag = arrVal;
                 arrVal = NULL;
             } else if (strcasecmp(jIt.key, "tag") == 0 && strVal != NULL) {
-                image->tag = (char **) malloc(sizeof(char *) * 2);
+                image->tag = (char **) _malloc(sizeof(char *) * 2);
                 image->tag[0] = strVal;
                 image->tag[1] = NULL;
                 strVal = NULL;
@@ -543,13 +535,8 @@ ImageGwImageRec **parseImagesResponse(ImageGwState *imageGw) {
                 ImageGwImageRec *image = parseImageJson(val);
                 if (image != NULL) {
                     while (images_count >= images_capacity) {
-                        ImageGwImageRec **tmp = (ImageGwImageRec **) realloc(images, sizeof(ImageGwImageRec *) * (images_capacity + 11));
-                        if (tmp != NULL) {
-                            images = tmp;
-                            images_capacity += 10;
-                        } else {
-                            /* ERROR */
-                        }
+                        images = (ImageGwImageRec **) _realloc(images, sizeof(ImageGwImageRec *) * (images_capacity + 11));
+                        images_capacity += 10;
                     }
                     images_count++;
                     images[images_count - 1] = image;
@@ -618,7 +605,7 @@ char *json_escape_string(const char *input) {
     }
 
     /* worst case is everything is escaped, so double input len */
-    output = (char *) malloc(sizeof(char) * (strlen(input) * 2 + 1));
+    output = (char *) _malloc(sizeof(char) * (strlen(input) * 2 + 1));
     if (output == NULL) return NULL;
     for (rptr = input, wptr = output; rptr && *rptr; rptr++, wptr++) {
         switch (*rptr) {
@@ -762,7 +749,7 @@ char *_prepare_pull_payload(struct options *config) {
     if (allowed_uids == NULL && allowed_gids == NULL) {
         return NULL;
     }
-    ret = strdup("{");
+    ret = _strdup("{");
     len = 1;
     size = 1;
     if (allowed_uids != NULL) {
@@ -815,7 +802,7 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
     char *cred = NULL;
     struct curl_slist *headers = NULL;
     char *authstr = NULL;
-    ImageGwState *imageGw = (ImageGwState *) malloc(sizeof(ImageGwState));
+    ImageGwState *imageGw = (ImageGwState *) _malloc(sizeof(ImageGwState));
     memset(imageGw, 0, sizeof(ImageGwState));
 
     curl = curl_easy_init();
@@ -848,7 +835,7 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
     if (config->mode == MODE_PULL || config->mode == MODE_PULL_NONBLOCK) {
         payload = _prepare_pull_payload(config);
         if (payload == NULL) {
-            payload = strdup("");
+            payload = _strdup("");
         }
         curl_easy_setopt(curl, CURLOPT_POST, 1);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload);
@@ -873,7 +860,7 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
       free(payload);
     }
     if (err) {
-        if (err == 7) { // 7 means Failed to connect to host.
+        if (err == 7) { /* 7 means Failed to connect to host. */
           printf("ERROR: failed to contact the image gateway.\n");
         } else {
           printf("err %d\n", err);
@@ -966,13 +953,13 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
                         }
                         goto _fail_valid_args;
                     }
-                    ImageGwImageRec *limages = (ImageGwImageRec *) malloc(sizeof(ImageGwImageRec) * count);
+                    ImageGwImageRec *limages = (ImageGwImageRec *) _malloc(sizeof(ImageGwImageRec) * count);
                     for (ptr = images; ptr != NULL && *ptr != NULL; ptr++) {
                         ImageGwImageRec *image = *ptr;
                         char **tagPtr = image->tag;
                         while (tagPtr && *tagPtr) {
                             memcpy(&(limages[lidx]), image, sizeof(ImageGwImageRec));
-                            limages[lidx].tag = (char **) malloc(sizeof(char *) * 1);
+                            limages[lidx].tag = (char **) _malloc(sizeof(char *) * 1);
                             limages[lidx].tag[0] = *tagPtr;
                             lidx++;
                             tagPtr++;
@@ -1035,28 +1022,23 @@ int _assignLoginCredential(const char *key, const char *value, void *_data) {
         for ( ; lcptr && *lcptr; lcptr++) {
             count++;
         }
-        lcptr = (LoginCredential **) realloc(config->loginCredentials, sizeof(LoginCredential *) * (count + 2));
-        if (lcptr == NULL) {
-            goto _error;
-        }
-        system = (char *) malloc(sizeof(char)*((ptr - key) + 1));
+        lcptr = (LoginCredential **) _realloc(config->loginCredentials, sizeof(LoginCredential *) * (count + 2));
+        system = (char *) _malloc(sizeof(char)*((ptr - key) + 1));
         strncpy(system, key, (ptr - key));
         system[ptr - key] = 0;
         ptr++;
-        location = strdup(ptr);
+        location = _strdup(ptr);
 
         config->loginCredentials = lcptr;
         lcptr = config->loginCredentials + count;
-        *lcptr = (LoginCredential *) malloc(sizeof(LoginCredential));
+        *lcptr = (LoginCredential *) _malloc(sizeof(LoginCredential));
         (*lcptr)->system = system;
         (*lcptr)->location = location;
-        (*lcptr)->cred = strdup(value);
+        (*lcptr)->cred = _strdup(value);
         lcptr++;
         *lcptr = NULL;
     }
     return 0;
-_error:
-    return 1;
 }
 
 int _lookup_user_id(const char *str) {
@@ -1079,7 +1061,7 @@ void _add_allowed(enum AclCredential aclType, struct options *config, const char
     char *start = NULL;
     char *end = NULL;
     char *ptr = NULL;
-    char *tmp = strdup(arg);
+    char *tmp = _strdup(arg);
 
     int **ids = NULL;
     size_t *ids_sz = NULL;
@@ -1118,12 +1100,7 @@ void _add_allowed(enum AclCredential aclType, struct options *config, const char
         }
         if (idval > 0) {
             if (*ids_len + 1 >= *ids_sz) {
-                int *tmp = (int *) realloc(*ids, sizeof(int) * (*ids_len + 10));
-                if (tmp == NULL) {
-                    fprintf(stderr, "FAILED to allocate memory for acl list, aborting.\n");
-                    abort();
-                }
-                *ids = tmp;
+                *ids = (int *) _realloc(*ids, sizeof(int) * (*ids_len + 10));
                 *ids_sz = *ids_len + 10;
             }
             (*ids)[*ids_len] = idval;
@@ -1207,7 +1184,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         char *tag = NULL;
 
         if (config->mode == MODE_LOGIN) {
-            config->location = strdup(argv[optind]);
+            config->location = _strdup(argv[optind]);
         } else {
             if (parse_ImageDescriptor(argv[optind], &type, &tag, udiConfig) != 0) {
                 fprintf(stderr, "FAILED to parse image descriptor. Try specifying "
@@ -1217,15 +1194,15 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
             }
 
             config->type = curl_easy_escape(curl, type, strlen(type));
-            config->rawtype = type; /* TODO: does this need to be strdup'd? */
+            config->rawtype = type; /* TODO: does this need to be _strdup'd? */
             config->tag = curl_easy_escape(curl, tag, strlen(tag));
-            config->rawtag = strdup(tag);
+            config->rawtag = _strdup(tag);
         }
 
         curl_easy_cleanup(curl);
     }
     if (config->location == NULL) {
-        config->location = strdup("default");
+        config->location = _strdup("default");
     }
 
     /* read any credentials that exist */
@@ -1269,10 +1246,10 @@ int main(int argc, char **argv) {
 
     /* get local copy of gateway urls */
     size_t nGateways = udiConfig.gwUrl_size;
-    char **gateways = (char **) malloc(sizeof(char *) * nGateways);
+    char **gateways = (char **) _malloc(sizeof(char *) * nGateways);
     size_t idx = 0;
     for (idx = 0 ; idx < nGateways; idx++) {
-        gateways[idx] = strdup(udiConfig.gwUrl[idx]);
+        gateways[idx] = _strdup(udiConfig.gwUrl[idx]);
     }
 
     /* seed our shuffle */
