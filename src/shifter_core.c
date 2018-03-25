@@ -604,6 +604,7 @@ int prepareSiteModifications(const char *username,
     _MKDIR("etc/udiImage", 0755);
     _MKDIR("opt", 0755);
     _MKDIR("opt/udiImage", 0755);
+    _MKDIR("opt/udiImage/modules", 0755);
     _MKDIR("var", 0755);
     _MKDIR("var/spool", 0755);
     _MKDIR("var/run", 0755);

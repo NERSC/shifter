@@ -257,7 +257,7 @@ int ShifterModule_postprocessing(UdiRootConfig *config) {
                 }
             }
         }
-        if (!found) {
+        if (!found && config->modules[i].n_conflict) {
             fprintf(stderr, "FAILED to find matching conflict \"%s\" for module %s\n",
                     *ptr, config->modules[i].name);
             return 1;
@@ -866,6 +866,8 @@ int parse_ShifterModule_key(UdiRootConfig *config, const char *key,
         module = &(config->modules[config->n_modules]);
         config->n_modules += 1;
         module->name = _strdup(name);
+        module->n_conflict = 0;
+        module->conflict_str = NULL;
 
         /* default module to enabled */
         module->enabled = 1;
