@@ -119,6 +119,7 @@ int main(int argc, char **argv) {
     /* declare needed variables */
     char wd[PATH_MAX];
     char udiRoot[PATH_MAX];
+    char **run_args = NULL;
     uid_t actualUid = 0;
     uid_t actualGid = 0;
     uid_t eUid = 0;
@@ -167,22 +168,11 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    /* check if entrypoint is defined and desired */
-    if (opts.useEntryPoint == 1) {
-        char *entry = NULL;
-
-        if (opts.entrypoint != NULL) {
-            entry = opts.entrypoint;
-        } else if (imageData.entryPoint != NULL) {
-            entry = imageData.entryPoint;
-        } else {
-            fprintf(stderr, "Image does not have a defined entrypoint.\n");
-            exit(1);
-        }
-
-        if (entry != NULL) {
-            opts.args[0] = strdup(entry);
-        }
+    run_args = calculate_args(opts.useEntryPoint, opts.args, opts.entrypoint,
+                              &imageData);
+    if (run_args == NULL || run_args == NULL ) {
+      fprintf(stderr, "Error calculating run arguements\n");
+      exit(1);
     }
     if (imageData.workdir != NULL && opts.workdir == NULL) {
         opts.workdir = strdup(imageData.workdir);
@@ -316,7 +306,7 @@ int main(int argc, char **argv) {
     signal(SIGTERM, sigtermHndlr);
 
     /* attempt to execute user-requested exectuable */
-    execvpe(opts.args[0], opts.args, environ_copy);
+    execvpe(run_args[0], run_args, environ_copy);
 
     /* doh! how did we get here? return the error */
     fprintf(stderr, "%s: %s: %s\n", argv[0], opts.args[0], strerror(errno));
@@ -383,9 +373,11 @@ int local_prependenv(char ***environ, const char *prepvar) {
 }
 #endif
 
+
 int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *udiConfig) {
     int opt = 0;
     int volOptCount = 0;
+    int rc;
     static struct option long_options[] = {
         {"help", 0, 0, 'h'},
         {"volume", 1, 0, 'V'},
@@ -403,7 +395,11 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     /* set some defaults */
     config->tgtUid = getuid();
     config->tgtGid = getgid();
-    seteuid(config->tgtUid);
+    rc = seteuid(config->tgtUid);
+    if (rc != 0) {
+        fprintf(stderr, "ERROR: seteuid failed\n");
+        exit(1);
+    }
 
     /* ensure that getopt processing stops at first non-option */
     setenv("POSIXLY_CORRECT", "1", 1);
@@ -513,15 +509,10 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     }
 
     int remaining = argc - optind;
-    if (config->useEntryPoint == 1) {
-        char **argsPtr = NULL;
-        config->args = (char **) malloc(sizeof(char *) * (remaining + 2));
-        argsPtr = config->args;
-        *argsPtr++ = (char *) 0x1; /* leave space for entry point */
-        for ( ; optind < argc; optind++) {
-            *argsPtr++ = strdup(argv[optind]);
-        }
-        *argsPtr = NULL;
+
+    if (config->useEntryPoint && remaining == 0) {
+        config->args = (char **) malloc(sizeof(char *) );
+        config->args[0] = NULL;
     } else if (remaining > 0) {
         /* interpret all remaining arguments as the intended command */
         char **argsPtr = NULL;
@@ -530,18 +521,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
             *argsPtr++ = strdup(argv[optind]);
         }
         *argsPtr = NULL;
-    } else if (getenv("SHELL") != NULL) {
-        /* use the current shell */
-        config->args = (char **) malloc(sizeof(char *) * 2);
-        config->args[0] = strdup(getenv("SHELL"));
-        config->args[1] = NULL;
-    } else {
-        /* use /bin/sh */
-        config->args = (char **) malloc(sizeof(char*) * 2);
-        config->args[0] = strdup("/bin/sh");
-        config->args[1] = NULL;
     }
-
     /* validate and organize any user-requested bind-mounts */
     if (config->rawVolumes != NULL) {
         if (parseVolumeMap(config->rawVolumes, &(config->volumeMap)) != 0) {
@@ -559,7 +539,11 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
 
     udiConfig->target_uid = config->tgtUid;
     udiConfig->target_gid = config->tgtGid;
-    seteuid(0);
+    rc = seteuid(0);
+    if (rc != 0) {
+      fprintf(stderr, "ERROR: seteuid failed\n");
+      exit(1);
+    }
     return 0;
 }
 
