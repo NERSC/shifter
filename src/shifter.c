@@ -309,7 +309,7 @@ int main(int argc, char **argv) {
     execvpe(run_args[0], run_args, environ_copy);
 
     /* doh! how did we get here? return the error */
-    fprintf(stderr, "%s: %s: %s\n", argv[0], opts.args[0], strerror(errno));
+    fprintf(stderr, "%s: %s: %s\n", argv[0], run_args[0], strerror(errno));
 
     return 127;
 }
