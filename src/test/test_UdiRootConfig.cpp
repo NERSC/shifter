@@ -95,6 +95,10 @@ TEST(UdiRootConfigTestGroup, ParseUdiRootConfig_basic) {
     CHECK(config.modules[1].conflict_str[1] == NULL);
     CHECK(config.modules[1].conflict[0] == &(config.modules[0]));
     CHECK(config.modules[1].conflict[1] == NULL);
+    CHECK(config.defaultModulesStr != NULL);
+    CHECK(strcmp(config.defaultModulesStr, "mpich") == 0);
+    CHECK(config.n_active_modules == 1);
+    CHECK(config.active_modules[0] == &config.modules[0]);
     free_UdiRootConfig(&config, 0);
 }
 

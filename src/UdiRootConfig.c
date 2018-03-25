@@ -866,6 +866,9 @@ int parse_ShifterModule_key(UdiRootConfig *config, const char *key,
         module = &(config->modules[config->n_modules]);
         config->n_modules += 1;
         module->name = _strdup(name);
+
+        /* default module to enabled */
+        module->enabled = 1;
     }
     if (module == NULL) {
         fprintf(stderr, "%s\n", "FAILED to construct empty shifter module");
@@ -927,6 +930,8 @@ int parse_ShifterModule_key(UdiRootConfig *config, const char *key,
         }
     } else if (strcmp(subkey, "copyPath") == 0) {
         module->copyPath = _strdup(value);
+    } else if (strcmp(subkey, "enabled") == 0) {
+        module->enabled = strtol(value, NULL, 10) != 0;
     }
 
 cleanup:
