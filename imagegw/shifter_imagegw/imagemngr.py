@@ -202,7 +202,10 @@ class ImageMngr(object):
             self.logger.warn("Group lookup failed")
             return []
         stdout, stderr = proc.communicate()
-        return stdout.split()
+        groups = []
+        for group in stdout.split():
+            groups.append(int(group))
+        return groups
 
     def _checkread(self, session, rec):
         """
