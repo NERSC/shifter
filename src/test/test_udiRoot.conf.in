@@ -32,6 +32,8 @@ siteEnvAppend=PATH=/opt/udiImage/bin\
               MANPATH=/opt/udiImage/share/man
 siteEnvPrepend=PKG_CONFIG_PATH=/this/is/fake
 
+defaultModules = mpich
+
 module_mpich_userhook = /path/to/userhook
 module_mpich_roothook = /path/to/roothook
 module_mpich_siteEnvPrepend = LD_LIBRARY_PATH=/opt/udiImage/mpich/lib64 \
