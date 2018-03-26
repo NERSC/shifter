@@ -465,6 +465,9 @@ int _shifterCore_copyUdiImage(UdiRootConfig *udiConfig) {
         char *dest = destPaths[idx];
         size_t srclen = strlen(src);
         size_t destlen = strlen(dest);
+        DIR *srcDir = NULL;
+        struct dirent *entry = NULL;
+
         if (srclen == 0 || srclen > PATH_MAX || destlen == 0 || destlen > PATH_MAX) {
             fprintf(stderr, "FAILED: copy path has invalid length!\n");
             goto _fail;
@@ -477,14 +480,20 @@ int _shifterCore_copyUdiImage(UdiRootConfig *udiConfig) {
             _MKDIR(dest, 0755);
         }
 
-        char *args[] = {_strdup(udiConfig->cpPath), _strdup("-rp"),
-                        _strdup(src), _strdup(dest), NULL};
-        rc = forkAndExecv(args);
-        for (pptr = args; pptr && *pptr; pptr++)
-            free(*pptr);
-        if (rc != 0) {
-            fprintf(stderr, "FAILED to copy %s to %s.\n", src, dest);
-            goto _fail;
+        srcDir = opendir(src);
+        while ((entry = readdir(srcDir)) != NULL) {
+            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+                continue;
+            char *src_path = alloc_strgenf("%s/%s", src, entry->d_name);
+            char *args[] = {_strdup(udiConfig->cpPath), _strdup("-rp"),
+                            _strdup(src_path), _strdup(dest), NULL};
+            rc = forkAndExecv(args);
+            for (pptr = args; pptr && *pptr; pptr++)
+                free(*pptr);
+            if (rc != 0) {
+                fprintf(stderr, "FAILED to copy %s to %s.\n", src_path, dest);
+                goto _fail;
+            }
         }
     }
 
