@@ -61,8 +61,6 @@ int setupVolumeMapMounts(MountList *mountCache, VolumeMap *map,
         int userRequested, dev_t createTo, UdiRootConfig *udiConfig);
 
 int userMountFilter(char *udiRoot, char *filtered_from, char *filtered_to, char *flags);
-int isKernelModuleLoaded(const char *name);
-int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig);
 int mountImageVFS(ImageData *imageData,
                   const char *username,
                   int verbose,

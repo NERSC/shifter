@@ -2769,52 +2769,6 @@ _err_valid_args:
     return -1;
 }
 
-/*! Check if a kernel module is loaded
- *
- * \param name name of kernel module
- *
- * Returns 1 if loaded
- * Returns 0 if not
- * Returns -1 upon error
- */
-int isKernelModuleLoaded(const char *name) {
-    FILE *fp = NULL;
-    char *lineBuffer = NULL;
-    size_t lineSize = 0;
-    ssize_t nread = 0;
-    int loaded = 0;
-    if (name == NULL || strlen(name) == 0) {
-        return -1;
-    }
-
-    fp = fopen("/proc/modules", "r");
-    if (fp == NULL) {
-        return 1;
-    }
-    while (!feof(fp) && !ferror(fp)) {
-        char *ptr = NULL;
-        char *svptr = NULL;
-        nread = getline(&lineBuffer, &lineSize, fp);
-        if (nread == 0 || feof(fp) || ferror(fp) || lineBuffer == NULL) {
-            break;
-        }
-        ptr = strtok_r(lineBuffer, " ", &svptr);
-        if (ptr == NULL) {
-            continue;
-        }
-        if (strcmp(name, ptr) == 0) {
-            loaded = 1;
-            break;
-        }
-    }
-    fclose(fp);
-    if (lineBuffer != NULL) {
-        free(lineBuffer);
-        lineBuffer = NULL;
-    }
-    return loaded;
-}
-
 /** shifter_getpwuid
  *  Lookup user information based on information in shifter passwd cache.
  *  This is useful to avoid making remote getpwuid() calls on Cray systems
