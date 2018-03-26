@@ -679,6 +679,10 @@ int prepareSiteModifications(const char *username,
         }
     }
 
+    /* add symlink for /proc/mounts at /etc/mtab */
+    snprintf(srcBuffer, PATH_MAX, "%s/etc/mtab", udiRoot);
+    symlink("/proc/mounts", srcBuffer);
+
     /* copy needed local files */
     for (fnamePtr = copyLocalEtcFiles; *fnamePtr != NULL; fnamePtr++) {
         snprintf(source, PATH_MAX, "/etc/%s", *fnamePtr);
@@ -827,10 +831,6 @@ _fail_copy_etcPath:
     }
     fclose(fp);
     fp = NULL;
-
-    /* add symlink for /proc/mounts at /etc/mtab */
-    snprintf(srcBuffer, PATH_MAX, "%s/etc/mtab", udiRoot);
-    symlink("/proc/mounts", srcBuffer);
 
     /* validate that the mandatorySiteEtcFiles now exist */
     for (fnamePtr = mandatorySiteEtcFiles; *fnamePtr != NULL; fnamePtr++) {
