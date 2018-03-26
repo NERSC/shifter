@@ -690,7 +690,10 @@ int prepareSiteModifications(const char *username,
 
     /* add symlink for /proc/mounts at /etc/mtab */
     snprintf(srcBuffer, PATH_MAX, "%s/etc/mtab", udiRoot);
-    symlink("/proc/mounts", srcBuffer);
+    if (symlink("/proc/mounts", srcBuffer) != 0) {
+        fprintf(stderr, "FAILED to create /etc/mtab link\n");
+        goto _prepSiteMod_unclean;
+    }
 
     /* copy needed local files */
     for (fnamePtr = copyLocalEtcFiles; *fnamePtr != NULL; fnamePtr++) {
