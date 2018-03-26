@@ -474,8 +474,6 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
             config->populateEtcDynamically);
     written += fprintf(fp, "optionalSshdAsRoot = %d\n",
             config->optionalSshdAsRoot);
-    written += fprintf(fp, "autoLoadKernelModule = %d\n",
-        config->autoLoadKernelModule);
     written += fprintf(fp, "mountPropagationStyle = %s\n",
         (config->mountPropagationStyle == VOLMAP_FLAG_SLAVE ?
          "slave" : "private"));
@@ -675,7 +673,7 @@ static int _assign(const char *key, const char *value, void *t_config) {
     } else if (strcmp(key, "populateEtcDynamically") == 0) {
         config->populateEtcDynamically = strtol(value, NULL, 10) != 0;
     } else if (strcmp(key, "autoLoadKernelModule") == 0) {
-        config->autoLoadKernelModule = strtol(value, NULL, 10);
+        fprintf(stderr, "IGNORING parameter autoLoadKernelModule, deprecated.\n");
     } else if (strcmp(key, "mountPropagationStyle") == 0) {
         if (strcmp(value, "private") == 0) {
             config->mountPropagationStyle = VOLMAP_FLAG_PRIVATE;

@@ -126,7 +126,6 @@ typedef struct _UdiRootConfig {
     int allowLocalChroot;
     int allowLibcPwdCalls;
     int populateEtcDynamically;
-    int autoLoadKernelModule;
     int mountUdiRootWritable;
     int optionalSshdAsRoot;
     size_t maxGroupCount;

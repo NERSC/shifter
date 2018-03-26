@@ -1329,13 +1329,8 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
     int useAutoclear = 0;
     const char *imgType = NULL;
     char **fstypes = getSupportedFilesystems();
-#define LOADKMOD(name, path) if (loadKernelModule(name, path, udiConfig) != 0) { \
-    fprintf(stderr, "FAILED to load %s kernel module.\n", name); \
-    goto _loopMount_unclean; \
-}
 
     snprintf(mountExec, PATH_MAX, "%s/mount", LIBEXECDIR);
-
     if (stat(mountExec, &statData) != 0) {
         fprintf(stderr, "udiRoot mount executable missing: %s\n", mountExec);
         goto _loopMount_unclean;
@@ -1345,37 +1340,21 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
     }
 
     if (stat("/dev/loop0", &statData) != 0) {
-        LOADKMOD("loop", "drivers/block/loop.ko");
+        fprintf(stderr, "ERROR: no apparent support for loop devices!");
+        goto _loopMount_unclean;
     }
-    if (format == FORMAT_EXT4) {
-        if (supportsFilesystem(fstypes, "ext4") != 0) {
-            LOADKMOD("mbcache", "fs/mbcache.ko");
-            LOADKMOD("jbd2", "fs/jbd2/jbd2.ko");
-            LOADKMOD("ext4", "fs/ext4/ext4.ko");
-        }
-        useAutoclear = 1;
-        ready = 1;
-        imgType = "ext4";
-    } else if (format == FORMAT_SQUASHFS) {
+    if (format == FORMAT_SQUASHFS) {
         if (supportsFilesystem(fstypes, "squashfs") != 0) {
-            LOADKMOD("squashfs", "fs/squashfs/squashfs.ko");
+            fprintf(stderr, "ERROR: no apparent support for squashfs!");
+            goto _loopMount_unclean;
         }
         useAutoclear = 1;
         ready = 1;
         imgType = "squashfs";
-    } else if (format == FORMAT_CRAMFS) {
-        if (supportsFilesystem(fstypes, "cramfs") != 0) {
-            LOADKMOD("cramfs", "fs/cramfs/cramfs.ko");
-        }
-        useAutoclear = 1;
-        ready = 1;
-        imgType = "cramfs";
     } else if (format == FORMAT_XFS) {
-        if (supportsFilesystem(fstypes, "cramfs") != 0) {
-            if (loadKernelModule("xfs", "fs/xfs/xfs.ko", udiConfig) != 0) {
-                LOADKMOD("exportfs", "fs/exportfs/exportfs.ko");
-                LOADKMOD("xfs", "fs/xfs/xfs.ko");
-            }
+        if (supportsFilesystem(fstypes, "xfs") != 0) {
+            fprintf(stderr, "ERROR: no apparent support for xfs!");
+            goto _loopMount_unclean;
         }
         useAutoclear = 0;
         ready = 1;
@@ -1426,7 +1405,6 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
         free(fstypes);
         fstypes = NULL;
     }
-#undef LOADKMOD
     free(mountExec);
     return 0;
 _loopMount_unclean:
@@ -2835,90 +2813,6 @@ int isKernelModuleLoaded(const char *name) {
         lineBuffer = NULL;
     }
     return loaded;
-}
-
-/*! Loads a kernel module if required */
-/*!
- * Checks to see if the specified kernel module is already loaded, if so, does
- * nothing.  Otherwise, will try to load the module using modprobe (i.e., from
- * the system /lib paths.  Finally, will attempt to load the from the shifter-
- * specific store installed with Shifter
- *
- * \param name name of kernel module
- * \param path path to kernel module within shifter structure
- * \param udiConfig UDI configuration structure
- */
-int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig) {
-    char *kmodPath = _malloc(sizeof(char) * PATH_MAX);
-    struct stat statData;
-    int ret = 0;
-
-    if (name == NULL || strlen(name) == 0 || path == NULL || strlen(path) == 0 || udiConfig == NULL) {
-        free(kmodPath);
-        return -1;
-    }
-
-    if (isKernelModuleLoaded(name)) {
-        free(kmodPath);
-        return 0;
-    } else if (udiConfig->autoLoadKernelModule) {
-        /* try to load kernel module from system cache */
-        char *args[] = {
-            _strdup(udiConfig->modprobePath),
-            _strdup(name),
-            NULL
-        };
-        char **argPtr = NULL;
-        ret = forkAndExecvSilent(args);
-        for (argPtr = args; argPtr && *argPtr; argPtr++) {
-            free(*argPtr);
-        }
-        if (isKernelModuleLoaded(name)) {
-            free(kmodPath);
-            return 0;
-        }
-    }
-
-    if (udiConfig->kmodPath == NULL
-            || strlen(udiConfig->kmodPath) == 0
-            || !udiConfig->autoLoadKernelModule)
-    {
-        free(kmodPath);
-        return -1;
-    }
-
-    /* construct path to kernel modulefile */
-    snprintf(kmodPath, PATH_MAX, "%s/%s", udiConfig->kmodPath, path);
-    kmodPath[PATH_MAX-1] = 0;
-
-    if (stat(kmodPath, &statData) == 0) {
-        char *insmodArgs[] = {
-            _strdup(udiConfig->insmodPath),
-            _strdup(kmodPath),
-            NULL
-        };
-        char **argPtr = NULL;
-
-        /* run insmod and clean up */
-        ret = forkAndExecvSilent(insmodArgs);
-        for (argPtr = insmodArgs; *argPtr != NULL; argPtr++) {
-            free(*argPtr);
-        }
-
-        if (ret != 0) {
-            fprintf(stderr, "FAILED to load kernel module %s (%s); insmod exit status: %d\n", name, kmodPath, ret);
-            goto _loadKrnlMod_unclean;
-        }
-    } else {
-        fprintf(stderr, "FAILED to find kernel modules %s (%s)\n", name, kmodPath);
-        goto _loadKrnlMod_unclean;
-    }
-    free(kmodPath);
-    if (isKernelModuleLoaded(name)) return 0;
-    return 1;
-_loadKrnlMod_unclean:
-    free(kmodPath);
-    return ret;
 }
 
 /** shifter_getpwuid
