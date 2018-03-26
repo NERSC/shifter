@@ -613,6 +613,7 @@ int prepareSiteModifications(const char *username,
     _MKDIR("etc/udiImage", 0755);
     _MKDIR("opt", 0755);
     _MKDIR("opt/udiImage", 0755);
+    _MKDIR("opt/udiImage/modules", 0755);
     _MKDIR("var", 0755);
     _MKDIR("var/spool", 0755);
     _MKDIR("var/run", 0755);
@@ -2013,24 +2014,40 @@ _setupVolumeMapMounts_unclean:
     return 1;
 }
 
-char *generateShifterConfigString(const char *user, ImageData *image, VolumeMap *volumeMap) {
+char *generateShifterConfigString(const char *user, ImageData *image,
+                                  VolumeMap *volumeMap, UdiRootConfig *config)
+{
     char *str = NULL;
     char *volMapSig = NULL;
+    char *modules = NULL;
+    size_t modules_len = 0;
+    size_t modules_sz = 0;
+    int idx = 0;
     if (image == NULL || volumeMap == NULL) return NULL;
 
     volMapSig = getVolMapSignature(volumeMap);
+    for (idx = 0; idx < config->n_active_modules; idx++) {
+        modules = alloc_strcatf(modules, &modules_len, &modules_sz, "%s%s,",
+                                modules == NULL ? "" : modules,
+                                config->active_modules[idx]->name);
+    }
 
     str = alloc_strgenf(
             "{\"identifier\":\"%s\","
             "\"user\":\"%s\","
-            "\"volMap\":\"%s\"}",
+            "\"volMap\":\"%s\","
+            "\"modules\":\"%s\"}",
             image->identifier,
             user,
-            (volMapSig == NULL ? "" : volMapSig)
+            (volMapSig == NULL ? "" : volMapSig),
+            (modules == NULL ? "" : modules)
     );
 
     if (volMapSig != NULL) {
         free(volMapSig);
+    }
+    if (modules != NULL) {
+        free(modules);
     }
     return str;
 }
@@ -2038,7 +2055,7 @@ char *generateShifterConfigString(const char *user, ImageData *image, VolumeMap 
 int saveShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMap, UdiRootConfig *udiConfig) {
     char *saveFilename = _malloc(sizeof(char) * PATH_MAX);
     FILE *fp = NULL;
-    char *configString = generateShifterConfigString(user, image, volumeMap);
+    char *configString = generateShifterConfigString(user, image, volumeMap, udiConfig);
 
     if (configString == NULL) {
         goto _saveShifterConfig_error;
@@ -2069,7 +2086,7 @@ _saveShifterConfig_error:
 int compareShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMap, UdiRootConfig *udiConfig) {
     char *configFilename = _malloc(sizeof(char) * PATH_MAX);
     FILE *fp = NULL;
-    char *configString = generateShifterConfigString(user, image, volumeMap);
+    char *configString = generateShifterConfigString(user, image, volumeMap, udiConfig);
     char *buffer = NULL;
     size_t len = 0;
     size_t nread = 0;

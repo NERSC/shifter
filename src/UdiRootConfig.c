@@ -258,8 +258,8 @@ int ShifterModule_postprocessing(UdiRootConfig *config) {
             }
         }
         if (!found) {
-            fprintf(stderr, "FAILED to find matching conflict \"%s\" for module %s\n",
-                    *ptr, config->modules[i].name);
+            fprintf(stderr, "FAILED to find matching conflict for module %s\n",
+                    config->modules[i].name);
             return 1;
         }
     }

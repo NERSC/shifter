@@ -888,6 +888,19 @@ TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
     free_MountList(&mounts, 0);
 }
 
+TEST(ShifterCoreTestGroup, _test_shifterconfig_str) {
+    ImageData image;
+    VolumeMap vmap;
+    UdiRootConfig config;
+    image.identifier = "testImage";
+    memset(&vmap, 0, sizeof(VolumeMap));
+    memset(&config, 0, sizeof(UdiRootConfig));
+
+    char *sig = generateShifterConfigString("dmj", &image, &vmap, &config);
+    CHECK(sig != NULL);
+    CHECK(strcmp(sig, "{\"identifier\":\"testImage\",\"user\":\"dmj\",\"volMap\":\"\",\"modules\":\"\"}") == 0);
+}
+
 #ifdef NOTROOT
 IGNORE_TEST(ShifterCoreTestGroup, _bindMount_basic) {
 #else
