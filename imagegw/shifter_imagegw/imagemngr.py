@@ -30,6 +30,7 @@ import json
 import sys
 import os
 import logging
+from subprocess import Popen, PIPE
 from time import time, sleep
 from pymongo import MongoClient
 import pymongo.errors
@@ -194,6 +195,18 @@ class ImageMngr(object):
         """Check if system is a valid platform."""
         return bool(system in self.systems)
 
+    def _get_groups(self, uid, gid):
+        """Look up auxilary groups. """
+        proc = Popen(['id', '-G', '%d' % (uid)], stdout=PIPE, stderr=PIPE)
+        if proc is None:
+            self.logger.warn("Group lookup failed")
+            return []
+        stdout, stderr = proc.communicate()
+        groups = []
+        for group in stdout.split():
+            groups.append(int(group))
+        return groups
+
     def _checkread(self, session, rec):
         """
         Checks if the user has read permissions to the image.
@@ -216,10 +229,14 @@ class ImageMngr(object):
         gid = session['gid']
         self.logger.debug('uid=%s iUACL=%s' % (uid, str(iUACL)))
         self.logger.debug('sessions = ' + str(session))
+        groups = self._get_groups(uid, gid)
         if iUACL is not None and uid in iUACL:
             return True
         if iGACL is not None and gid in iGACL:
             return True
+        for group in groups:
+            if iGACL is not None and group in iGACL:
+                return True
         return False
 
     def _resetexpire(self, ident):
