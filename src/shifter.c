@@ -551,7 +551,7 @@ static void _usage(int status) {
     printf("\n"
         "Usage:\n"
         "shifter [-h|--help] [-v|--verbose] [--image=<imageType>:<imageTag>]\n"
-        "    [--entry] [-V|--volume=/path/to/bind:/mnt/in/image[:<flags>][,...][;...]]\n"
+        "    [--entry] [-V|--volume=/path/to/bind:/mnt/in/image[:<flags>][,...]][;...]\n"
         "    [-- /command/to/exec/in/shifter [args...]]\n"
         );
     printf("\n");
