@@ -136,6 +136,10 @@ int parse_selected_ShifterModule(const char *selected, UdiRootConfig *config) {
     if (!selected || !config) {
         return -1;
     }
+    if (config->selectedModulesStr) {
+        free(config->selectedModulesStr);
+        config->selectedModulesStr = NULL;
+    }
     config->selectedModulesStr = _strdup(selected);
     selected_tmp = _strdup(selected);
     search = shifter_trim(selected_tmp);
@@ -160,7 +164,7 @@ int parse_selected_ShifterModule(const char *selected, UdiRootConfig *config) {
         bool found = false;
         search = NULL;
 
-        for (idx = 0; idx < config->n_modules; idx++) {
+        for (idx = 0; idx < config->n_modules && !found; idx++) {
             if (strcmp(ptr, config->modules[idx].name) == 0) {
                 if (config->modules[idx].enabled == 0) {
                     fprintf(stderr, "WARNING: module %s is not enabled for use.\n", config->modules[idx].name);

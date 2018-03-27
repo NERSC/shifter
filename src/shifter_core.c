@@ -2027,8 +2027,7 @@ char *generateShifterConfigString(const char *user, ImageData *image,
 
     volMapSig = getVolMapSignature(volumeMap);
     for (idx = 0; idx < config->n_active_modules; idx++) {
-        modules = alloc_strcatf(modules, &modules_len, &modules_sz, "%s%s,",
-                                modules == NULL ? "" : modules,
+        modules = alloc_strcatf(modules, &modules_len, &modules_sz, "%s,",
                                 config->active_modules[idx]->name);
     }
 
