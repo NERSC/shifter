@@ -239,28 +239,35 @@ int ShifterModule_postprocessing(UdiRootConfig *config) {
     char **ptr = NULL;
     for (i = 0; i < config->n_modules; i++) {
         int found_n_conflicts = 0;
-        int found = 0;
-        if (config->modules[i].n_conflict > 0) {
-            size_t alloc_size = sizeof(ShifterModule *) *
-                                (config->modules[i].n_conflict + 1);
-            config->modules[i].conflict = _malloc(alloc_size);
-            memset(config->modules[i].conflict, 0, alloc_size);
-            for (ptr = config->modules[i].conflict_str; ptr && *ptr; ptr++) {
-                 for (j = 0; j < config->n_modules; j++) {
-                    if (strcmp(*ptr, config->modules[j].name) == 0) {
-                        config->modules[i].conflict[found_n_conflicts] =
-                                &(config->modules[j]);
-                        found_n_conflicts++;
-                        found++;
-                        break;
-                    }
+        size_t alloc_size = 0;
+        if (config->modules[i].n_conflict == 0) {
+            continue;
+        }
+        alloc_size = sizeof(ShifterModule *) *
+                           (config->modules[i].n_conflict + 1);
+        config->modules[i].conflict = _malloc(alloc_size);
+        memset(config->modules[i].conflict, 0, alloc_size);
+        for (ptr = config->modules[i].conflict_str; ptr && *ptr; ptr++) {
+            int found = 0;
+            for (j = 0; j < config->n_modules; j++) {
+                if (strcmp(*ptr, config->modules[j].name) == 0) {
+                    config->modules[i].conflict[found_n_conflicts] =
+                            &(config->modules[j]);
+                    found_n_conflicts++;
+                    found++;
+                    break;
                 }
             }
             if (!found) {
-                fprintf(stderr, "FAILED to find matching conflict for module %s\n",
-                        config->modules[i].name);
+                fprintf(stderr, "FAILED to find %s conflict for module %s\n",
+                        *ptr, config->modules[i].name);
                 return 1;
             }
+        }
+        if (found_n_conflicts != config->modules[i].n_conflict) {
+            fprintf(stderr, "FAILED To find all conflicts for module %s\n",
+                    config->modules[i].name);
+            return 1;
         }
     }
     if (config->defaultModulesStr) {
