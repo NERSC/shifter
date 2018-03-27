@@ -465,6 +465,9 @@ int _shifterCore_copyUdiImage(UdiRootConfig *udiConfig) {
         char *dest = destPaths[idx];
         size_t srclen = strlen(src);
         size_t destlen = strlen(dest);
+        DIR *srcDir = NULL;
+        struct dirent *entry = NULL;
+
         if (srclen == 0 || srclen > PATH_MAX || destlen == 0 || destlen > PATH_MAX) {
             fprintf(stderr, "FAILED: copy path has invalid length!\n");
             goto _fail;
@@ -477,14 +480,20 @@ int _shifterCore_copyUdiImage(UdiRootConfig *udiConfig) {
             _MKDIR(dest, 0755);
         }
 
-        char *args[] = {_strdup(udiConfig->cpPath), _strdup("-rp"),
-                        _strdup(src), _strdup(dest), NULL};
-        rc = forkAndExecv(args);
-        for (pptr = args; pptr && *pptr; pptr++)
-            free(*pptr);
-        if (rc != 0) {
-            fprintf(stderr, "FAILED to copy %s to %s.\n", src, dest);
-            goto _fail;
+        srcDir = opendir(src);
+        while ((entry = readdir(srcDir)) != NULL) {
+            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+                continue;
+            char *src_path = alloc_strgenf("%s/%s", src, entry->d_name);
+            char *args[] = {_strdup(udiConfig->cpPath), _strdup("-rp"),
+                            _strdup(src_path), _strdup(dest), NULL};
+            rc = forkAndExecv(args);
+            for (pptr = args; pptr && *pptr; pptr++)
+                free(*pptr);
+            if (rc != 0) {
+                fprintf(stderr, "FAILED to copy %s to %s.\n", src_path, dest);
+                goto _fail;
+            }
         }
     }
 
@@ -604,6 +613,7 @@ int prepareSiteModifications(const char *username,
     _MKDIR("etc/udiImage", 0755);
     _MKDIR("opt", 0755);
     _MKDIR("opt/udiImage", 0755);
+    _MKDIR("opt/udiImage/modules", 0755);
     _MKDIR("var", 0755);
     _MKDIR("var/spool", 0755);
     _MKDIR("var/run", 0755);
@@ -677,6 +687,13 @@ int prepareSiteModifications(const char *username,
                 goto _prepSiteMod_unclean;
             }
         }
+    }
+
+    /* add symlink for /proc/mounts at /etc/mtab */
+    snprintf(srcBuffer, PATH_MAX, "%s/etc/mtab", udiRoot);
+    if (symlink("/proc/mounts", srcBuffer) != 0) {
+        fprintf(stderr, "FAILED to create /etc/mtab link\n");
+        goto _prepSiteMod_unclean;
     }
 
     /* copy needed local files */
@@ -827,10 +844,6 @@ _fail_copy_etcPath:
     }
     fclose(fp);
     fp = NULL;
-
-    /* add symlink for /proc/mounts at /etc/mtab */
-    snprintf(srcBuffer, PATH_MAX, "%s/etc/mtab", udiRoot);
-    symlink("/proc/mounts", srcBuffer);
 
     /* validate that the mandatorySiteEtcFiles now exist */
     for (fnamePtr = mandatorySiteEtcFiles; *fnamePtr != NULL; fnamePtr++) {
@@ -1317,13 +1330,8 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
     int useAutoclear = 0;
     const char *imgType = NULL;
     char **fstypes = getSupportedFilesystems();
-#define LOADKMOD(name, path) if (loadKernelModule(name, path, udiConfig) != 0) { \
-    fprintf(stderr, "FAILED to load %s kernel module.\n", name); \
-    goto _loopMount_unclean; \
-}
 
     snprintf(mountExec, PATH_MAX, "%s/mount", LIBEXECDIR);
-
     if (stat(mountExec, &statData) != 0) {
         fprintf(stderr, "udiRoot mount executable missing: %s\n", mountExec);
         goto _loopMount_unclean;
@@ -1333,37 +1341,21 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
     }
 
     if (stat("/dev/loop0", &statData) != 0) {
-        LOADKMOD("loop", "drivers/block/loop.ko");
+        fprintf(stderr, "ERROR: no apparent support for loop devices!");
+        goto _loopMount_unclean;
     }
-    if (format == FORMAT_EXT4) {
-        if (supportsFilesystem(fstypes, "ext4") != 0) {
-            LOADKMOD("mbcache", "fs/mbcache.ko");
-            LOADKMOD("jbd2", "fs/jbd2/jbd2.ko");
-            LOADKMOD("ext4", "fs/ext4/ext4.ko");
-        }
-        useAutoclear = 1;
-        ready = 1;
-        imgType = "ext4";
-    } else if (format == FORMAT_SQUASHFS) {
+    if (format == FORMAT_SQUASHFS) {
         if (supportsFilesystem(fstypes, "squashfs") != 0) {
-            LOADKMOD("squashfs", "fs/squashfs/squashfs.ko");
+            fprintf(stderr, "ERROR: no apparent support for squashfs!");
+            goto _loopMount_unclean;
         }
         useAutoclear = 1;
         ready = 1;
         imgType = "squashfs";
-    } else if (format == FORMAT_CRAMFS) {
-        if (supportsFilesystem(fstypes, "cramfs") != 0) {
-            LOADKMOD("cramfs", "fs/cramfs/cramfs.ko");
-        }
-        useAutoclear = 1;
-        ready = 1;
-        imgType = "cramfs";
     } else if (format == FORMAT_XFS) {
-        if (supportsFilesystem(fstypes, "cramfs") != 0) {
-            if (loadKernelModule("xfs", "fs/xfs/xfs.ko", udiConfig) != 0) {
-                LOADKMOD("exportfs", "fs/exportfs/exportfs.ko");
-                LOADKMOD("xfs", "fs/xfs/xfs.ko");
-            }
+        if (supportsFilesystem(fstypes, "xfs") != 0) {
+            fprintf(stderr, "ERROR: no apparent support for xfs!");
+            goto _loopMount_unclean;
         }
         useAutoclear = 0;
         ready = 1;
@@ -1414,7 +1406,6 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
         free(fstypes);
         fstypes = NULL;
     }
-#undef LOADKMOD
     free(mountExec);
     return 0;
 _loopMount_unclean:
@@ -2023,24 +2014,39 @@ _setupVolumeMapMounts_unclean:
     return 1;
 }
 
-char *generateShifterConfigString(const char *user, ImageData *image, VolumeMap *volumeMap) {
+char *generateShifterConfigString(const char *user, ImageData *image,
+                                  VolumeMap *volumeMap, UdiRootConfig *config)
+{
     char *str = NULL;
     char *volMapSig = NULL;
+    char *modules = NULL;
+    size_t modules_len = 0;
+    size_t modules_sz = 0;
+    int idx = 0;
     if (image == NULL || volumeMap == NULL) return NULL;
 
     volMapSig = getVolMapSignature(volumeMap);
+    for (idx = 0; idx < config->n_active_modules; idx++) {
+        modules = alloc_strcatf(modules, &modules_len, &modules_sz, "%s,",
+                                config->active_modules[idx]->name);
+    }
 
     str = alloc_strgenf(
             "{\"identifier\":\"%s\","
             "\"user\":\"%s\","
-            "\"volMap\":\"%s\"}",
+            "\"volMap\":\"%s\","
+            "\"modules\":\"%s\"}",
             image->identifier,
             user,
-            (volMapSig == NULL ? "" : volMapSig)
+            (volMapSig == NULL ? "" : volMapSig),
+            (modules == NULL ? "" : modules)
     );
 
     if (volMapSig != NULL) {
         free(volMapSig);
+    }
+    if (modules != NULL) {
+        free(modules);
     }
     return str;
 }
@@ -2048,7 +2054,7 @@ char *generateShifterConfigString(const char *user, ImageData *image, VolumeMap 
 int saveShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMap, UdiRootConfig *udiConfig) {
     char *saveFilename = _malloc(sizeof(char) * PATH_MAX);
     FILE *fp = NULL;
-    char *configString = generateShifterConfigString(user, image, volumeMap);
+    char *configString = generateShifterConfigString(user, image, volumeMap, udiConfig);
 
     if (configString == NULL) {
         goto _saveShifterConfig_error;
@@ -2079,7 +2085,7 @@ _saveShifterConfig_error:
 int compareShifterConfig(const char *user, ImageData *image, VolumeMap *volumeMap, UdiRootConfig *udiConfig) {
     char *configFilename = _malloc(sizeof(char) * PATH_MAX);
     FILE *fp = NULL;
-    char *configString = generateShifterConfigString(user, image, volumeMap);
+    char *configString = generateShifterConfigString(user, image, volumeMap, udiConfig);
     char *buffer = NULL;
     size_t len = 0;
     size_t nread = 0;
@@ -2777,136 +2783,6 @@ _err_valid_args:
     }
     free(filename);
     return -1;
-}
-
-/*! Check if a kernel module is loaded
- *
- * \param name name of kernel module
- *
- * Returns 1 if loaded
- * Returns 0 if not
- * Returns -1 upon error
- */
-int isKernelModuleLoaded(const char *name) {
-    FILE *fp = NULL;
-    char *lineBuffer = NULL;
-    size_t lineSize = 0;
-    ssize_t nread = 0;
-    int loaded = 0;
-    if (name == NULL || strlen(name) == 0) {
-        return -1;
-    }
-
-    fp = fopen("/proc/modules", "r");
-    if (fp == NULL) {
-        return 1;
-    }
-    while (!feof(fp) && !ferror(fp)) {
-        char *ptr = NULL;
-        char *svptr = NULL;
-        nread = getline(&lineBuffer, &lineSize, fp);
-        if (nread == 0 || feof(fp) || ferror(fp) || lineBuffer == NULL) {
-            break;
-        }
-        ptr = strtok_r(lineBuffer, " ", &svptr);
-        if (ptr == NULL) {
-            continue;
-        }
-        if (strcmp(name, ptr) == 0) {
-            loaded = 1;
-            break;
-        }
-    }
-    fclose(fp);
-    if (lineBuffer != NULL) {
-        free(lineBuffer);
-        lineBuffer = NULL;
-    }
-    return loaded;
-}
-
-/*! Loads a kernel module if required */
-/*!
- * Checks to see if the specified kernel module is already loaded, if so, does
- * nothing.  Otherwise, will try to load the module using modprobe (i.e., from
- * the system /lib paths.  Finally, will attempt to load the from the shifter-
- * specific store installed with Shifter
- *
- * \param name name of kernel module
- * \param path path to kernel module within shifter structure
- * \param udiConfig UDI configuration structure
- */
-int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig) {
-    char *kmodPath = _malloc(sizeof(char) * PATH_MAX);
-    struct stat statData;
-    int ret = 0;
-
-    if (name == NULL || strlen(name) == 0 || path == NULL || strlen(path) == 0 || udiConfig == NULL) {
-        free(kmodPath);
-        return -1;
-    }
-
-    if (isKernelModuleLoaded(name)) {
-        free(kmodPath);
-        return 0;
-    } else if (udiConfig->autoLoadKernelModule) {
-        /* try to load kernel module from system cache */
-        char *args[] = {
-            _strdup(udiConfig->modprobePath),
-            _strdup(name),
-            NULL
-        };
-        char **argPtr = NULL;
-        ret = forkAndExecvSilent(args);
-        for (argPtr = args; argPtr && *argPtr; argPtr++) {
-            free(*argPtr);
-        }
-        if (isKernelModuleLoaded(name)) {
-            free(kmodPath);
-            return 0;
-        }
-    }
-
-    if (udiConfig->kmodPath == NULL
-            || strlen(udiConfig->kmodPath) == 0
-            || !udiConfig->autoLoadKernelModule)
-    {
-        free(kmodPath);
-        return -1;
-    }
-
-    /* construct path to kernel modulefile */
-    snprintf(kmodPath, PATH_MAX, "%s/%s", udiConfig->kmodPath, path);
-    kmodPath[PATH_MAX-1] = 0;
-
-    if (stat(kmodPath, &statData) == 0) {
-        char *insmodArgs[] = {
-            _strdup(udiConfig->insmodPath),
-            _strdup(kmodPath),
-            NULL
-        };
-        char **argPtr = NULL;
-
-        /* run insmod and clean up */
-        ret = forkAndExecvSilent(insmodArgs);
-        for (argPtr = insmodArgs; *argPtr != NULL; argPtr++) {
-            free(*argPtr);
-        }
-
-        if (ret != 0) {
-            fprintf(stderr, "FAILED to load kernel module %s (%s); insmod exit status: %d\n", name, kmodPath, ret);
-            goto _loadKrnlMod_unclean;
-        }
-    } else {
-        fprintf(stderr, "FAILED to find kernel modules %s (%s)\n", name, kmodPath);
-        goto _loadKrnlMod_unclean;
-    }
-    free(kmodPath);
-    if (isKernelModuleLoaded(name)) return 0;
-    return 1;
-_loadKrnlMod_unclean:
-    free(kmodPath);
-    return ret;
 }
 
 /** shifter_getpwuid

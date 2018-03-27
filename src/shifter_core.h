@@ -61,8 +61,6 @@ int setupVolumeMapMounts(MountList *mountCache, VolumeMap *map,
         int userRequested, dev_t createTo, UdiRootConfig *udiConfig);
 
 int userMountFilter(char *udiRoot, char *filtered_from, char *filtered_to, char *flags);
-int isKernelModuleLoaded(const char *name);
-int loadKernelModule(const char *name, const char *path, UdiRootConfig *udiConfig);
 int mountImageVFS(ImageData *imageData,
                   const char *username,
                   int verbose,
@@ -82,7 +80,7 @@ int forkAndExecvSilent(char *const *argvs);
 pid_t findSshd(void);
 int killSshd(void);
 char **parseMounts(size_t *n_mounts);
-char *generateShifterConfigString(const char *, ImageData *, VolumeMap *);
+char *generateShifterConfigString(const char *, ImageData *, VolumeMap *, UdiRootConfig *);
 int saveShifterConfig(const char *, ImageData *, VolumeMap *, UdiRootConfig *);
 int compareShifterConfig(const char *, ImageData*, VolumeMap *, UdiRootConfig *);
 int unmountTree(MountList *mounts, const char *base);

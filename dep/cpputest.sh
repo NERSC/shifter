@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-CPPUTEST_VERSION=3.7dev
+CPPUTEST_VERSION=3.8
 
 baseDir=$(pwd)
 mkdir -p cpputest
@@ -11,7 +11,7 @@ if [[ ! -e "cpputest-${CPPUTEST_VERSION}.tar.gz" && -n "$DEPTAR_DIR" && -e "$DEP
     cp "$DEPTAR_DIR/cpputest-${CPPUTEST_VERSION}.tar.gz" .
 fi
 if [[ ! -e "cpputest-${CPPUTEST_VERSION}.tar.gz" ]]; then
-    curl -L -o "cpputest-${CPPUTEST_VERSION}.tar.gz" "https://github.com/cpputest/cpputest.github.io/blob/master/releases/cpputest-${CPPUTEST_VERSION}.tar.gz?raw=true"
+    curl -L -k -o "cpputest-${CPPUTEST_VERSION}.tar.gz" "https://github.com/cpputest/cpputest/releases/download/v${CPPUTEST_VERSION}/cpputest-${CPPUTEST_VERSION}.tar.gz"
 fi
 
 mkdir -p cpputest_src

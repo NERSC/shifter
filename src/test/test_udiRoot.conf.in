@@ -10,7 +10,6 @@ chmodPath=/bin/chmod
 ddPath=/bin/dd
 rootfsType=@@@ROOTFSTYPE@@@
 allowLocalChroot=1
-autoLoadKernelModule=1
 udiRootPath=@@@PREFIX@@@
 sitePreMountHook=@@@CONFIG_DIR@@@/premount.sh
 sitePostMountHook=@@@CONFIG_DIR@@@/postmount.sh

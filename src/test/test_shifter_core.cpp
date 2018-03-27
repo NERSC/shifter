@@ -839,8 +839,14 @@ TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
     ImageData *image = NULL;
     MountList mounts;
     int rc = 0;
+    string rootdir = string(tmpDir) + string("/udiroot");
+    string udiimagedir = string(tmpDir) + string("/udiimage");
+    tmpDirs.push_back(rootdir);
+    tmpDirs.push_back(udiimagedir);
+    mkdir(rootdir.c_str(), 0755);
+    mkdir(udiimagedir.c_str(), 0755);
     memset(&mounts, 0, sizeof(MountList));
-    CHECK(setupLocalRootVFSConfig(&config, &image, tmpDir, cwd) == 0);
+    CHECK(setupLocalRootVFSConfig(&config, &image, rootdir.c_str(), cwd) == 0);
     config->allowLocalChroot = 0;
 
     fprint_ImageData(stderr, image);
@@ -848,7 +854,7 @@ TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
     rc = mountImageVFS(image, "dmj", 0, NULL, config);
     CHECK(rc == 1);
     CHECK(parse_MountList(&mounts) == 0);
-    CHECK(find_MountList(&mounts, tmpDir) == NULL);
+    CHECK(find_MountList(&mounts, rootdir.c_str()) == NULL);
 
     rc = unmountTree(&mounts, config->udiMountPoint);
     CHECK(rc == 0);
@@ -859,11 +865,40 @@ TEST(ShifterCoreTestGroup, validateLocalTypeIsConfigurable) {
     rc = mountImageVFS(image, "dmj", 0, NULL, config);
     CHECK(rc == 0);
     CHECK(parse_MountList(&mounts) == 0);
-    CHECK(find_MountList(&mounts, tmpDir) != NULL);
+    CHECK(find_MountList(&mounts, rootdir.c_str()) != NULL);
     rc = unmountTree(&mounts, config->udiMountPoint);
+
+    config->optUdiImage = strdup(udiimagedir.c_str());
+    string file1 = udiimagedir + "/file1";
+    FILE *fp = fopen(file1.c_str(), "w");
+    fprintf(fp, "asdf\n");
+    fclose(fp);
+
+    tmpFiles.push_back(file1);
+    rc = mountImageVFS(image, "dmj", 0, NULL, config);
+    CHECK(rc == 0);
+    string copyfile1 = rootdir + "/opt/udiImage/file1";
+    struct stat statdata;
+    CHECK(stat(copyfile1.c_str(), &statdata) == 0);
+    rc = unmountTree(&mounts, config->udiMountPoint);
+    CHECK(rc == 0);
+
     free_UdiRootConfig(config, 1);
     free_ImageData(image, 1);
     free_MountList(&mounts, 0);
+}
+
+TEST(ShifterCoreTestGroup, _test_shifterconfig_str) {
+    ImageData image;
+    VolumeMap vmap;
+    UdiRootConfig config;
+    image.identifier = "testImage";
+    memset(&vmap, 0, sizeof(VolumeMap));
+    memset(&config, 0, sizeof(UdiRootConfig));
+
+    char *sig = generateShifterConfigString("dmj", &image, &vmap, &config);
+    CHECK(sig != NULL);
+    CHECK(strcmp(sig, "{\"identifier\":\"testImage\",\"user\":\"dmj\",\"volMap\":\"\",\"modules\":\"\"}") == 0);
 }
 
 #ifdef NOTROOT

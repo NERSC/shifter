@@ -115,7 +115,10 @@ TEST(UdiRootConfigTestGroup, ParseUdiRootConfig_display) {
     CHECK(nwrite > 0);
     fclose(output);
     FILE *input = fopen("ParseUdiRootConfig_display.out", "r");
-    while (fread(buffer, 1, 4096, input) > 0) {
+    size_t nbytes = 0;
+    while ((nbytes = fread(buffer, 1, 4096, input)) > 0) {
+        if (nbytes == 4096) abort();
+        buffer[nbytes] = '\0';
         fprintf(stderr, "%s", buffer);
     }
     fprintf(stderr, "\n");
