@@ -35,9 +35,15 @@ int wrap_opt_module(int val, const char *optarg, int remote);
 struct spank_option spank_option_array[] = {
     { "image", "image", "shifter image to use", 1, 0,
       (spank_opt_cb_f) wrap_opt_image},
+    { "shifter.image", "shifter.image", "shifter image to use", 1, 0,
+      (spank_opt_cb_f) wrap_opt_image},
     { "volume", "volume", "shifter image bindings", 1, 0,
       (spank_opt_cb_f) wrap_opt_volume },
-    { "shifter_module", "shifter_module", "shifter module selection", 1, 0,
+    { "shifter.volume", "shifter.volume", "shifter image bindings", 1, 0,
+      (spank_opt_cb_f) wrap_opt_volume },
+    { "module", "module", "shifter module selection", 1, 0,
+      (spank_opt_cb_f) wrap_opt_module },
+    { "shifter.module", "shifter.module", "shifter module selection", 1, 0,
       (spank_opt_cb_f) wrap_opt_module },
     { "ccm", "ccm", "ccm emulation mode", 0, 0,
       (spank_opt_cb_f) wrap_opt_ccm},
@@ -77,6 +83,14 @@ int slurm_spank_init(spank_t sp, int argc, char **argv) {
             if (strcmp(spank_option_array[idx].name, "ccm") == 0
                 && !(ssconfig->ccmEnabled)) {
 
+                continue;
+            }
+            if (strncmp(spank_option_array[idx].name, "shifter", 7) == 0
+                && !(ssconfig->useLongOptions)) {
+                continue;
+            }
+            if (strncmp(spank_option_array[idx].name, "shifter", 7) != 0
+                && ssconfig->useLongOptions) {
                 continue;
             }
             int lrc = spank_option_register(sp, &(spank_option_array[idx]));
