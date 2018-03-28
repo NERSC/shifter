@@ -107,16 +107,11 @@ etcPath=@SHIFTER_ETC_FILESDIR@
 # effectively done with shifter --image=local:/ within the SLURM integration.
 
 
-#autoLoadKernelModule (0 or 1)
+#autoLoadKernelModule (0 or 1) -- DEPRECATED
 #
-# Flag to determine if kernel modules can be automatically loaded by shifter if 
-# required. This is typically limited to loop, squashfs, ext4 (and its dependencies)
-#
-# Recommend 0 if you already load loop, squashfs, and ext4 as part of node bootup 
-# process.
-#
-# Recommend 1 if you want to let shifter load them for you.
-
+# Make sure your nodes load all of the kernel modules for loop, squashfs, and xfs
+# with boot.  Inclusion of this deprecated parameter will result in warnings to
+# all shifter invocations.
 
 #mountUdiRootWritable (required)
 #

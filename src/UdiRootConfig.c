@@ -136,6 +136,10 @@ int parse_selected_ShifterModule(const char *selected, UdiRootConfig *config) {
     if (!selected || !config) {
         return -1;
     }
+    if (config->selectedModulesStr) {
+        free(config->selectedModulesStr);
+        config->selectedModulesStr = NULL;
+    }
     config->selectedModulesStr = _strdup(selected);
     selected_tmp = _strdup(selected);
     search = shifter_trim(selected_tmp);
@@ -160,7 +164,7 @@ int parse_selected_ShifterModule(const char *selected, UdiRootConfig *config) {
         bool found = false;
         search = NULL;
 
-        for (idx = 0; idx < config->n_modules; idx++) {
+        for (idx = 0; idx < config->n_modules && !found; idx++) {
             if (strcmp(ptr, config->modules[idx].name) == 0) {
                 if (config->modules[idx].enabled == 0) {
                     fprintf(stderr, "WARNING: module %s is not enabled for use.\n", config->modules[idx].name);
@@ -239,14 +243,16 @@ int ShifterModule_postprocessing(UdiRootConfig *config) {
     char **ptr = NULL;
     for (i = 0; i < config->n_modules; i++) {
         int found_n_conflicts = 0;
-        int found = 0;
-        if (config->modules[i].n_conflict > 0) {
-            size_t alloc_size = sizeof(ShifterModule *) *
-                                (config->modules[i].n_conflict + 1);
-            config->modules[i].conflict = _malloc(alloc_size);
-            memset(config->modules[i].conflict, 0, alloc_size);
+        size_t alloc_size = 0;
+        if (config->modules[i].n_conflict == 0) {
+            continue;
         }
+        alloc_size = sizeof(ShifterModule *) *
+                           (config->modules[i].n_conflict + 1);
+        config->modules[i].conflict = _malloc(alloc_size);
+        memset(config->modules[i].conflict, 0, alloc_size);
         for (ptr = config->modules[i].conflict_str; ptr && *ptr; ptr++) {
+            int found = 0;
             for (j = 0; j < config->n_modules; j++) {
                 if (strcmp(*ptr, config->modules[j].name) == 0) {
                     config->modules[i].conflict[found_n_conflicts] =
@@ -256,10 +262,15 @@ int ShifterModule_postprocessing(UdiRootConfig *config) {
                     break;
                 }
             }
+            if (!found) {
+                fprintf(stderr, "FAILED to find %s conflict for module %s\n",
+                        *ptr, config->modules[i].name);
+                return 1;
+            }
         }
-        if (!found) {
-            fprintf(stderr, "FAILED to find matching conflict \"%s\" for module %s\n",
-                    *ptr, config->modules[i].name);
+        if (found_n_conflicts != config->modules[i].n_conflict) {
+            fprintf(stderr, "FAILED To find all conflicts for module %s\n",
+                    config->modules[i].name);
             return 1;
         }
     }
@@ -474,8 +485,6 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
             config->populateEtcDynamically);
     written += fprintf(fp, "optionalSshdAsRoot = %d\n",
             config->optionalSshdAsRoot);
-    written += fprintf(fp, "autoLoadKernelModule = %d\n",
-        config->autoLoadKernelModule);
     written += fprintf(fp, "mountPropagationStyle = %s\n",
         (config->mountPropagationStyle == VOLMAP_FLAG_SLAVE ?
          "slave" : "private"));
@@ -675,7 +684,7 @@ static int _assign(const char *key, const char *value, void *t_config) {
     } else if (strcmp(key, "populateEtcDynamically") == 0) {
         config->populateEtcDynamically = strtol(value, NULL, 10) != 0;
     } else if (strcmp(key, "autoLoadKernelModule") == 0) {
-        config->autoLoadKernelModule = strtol(value, NULL, 10);
+        fprintf(stderr, "IGNORING parameter autoLoadKernelModule, deprecated.\n");
     } else if (strcmp(key, "mountPropagationStyle") == 0) {
         if (strcmp(value, "private") == 0) {
             config->mountPropagationStyle = VOLMAP_FLAG_PRIVATE;
