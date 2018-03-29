@@ -46,7 +46,7 @@ Shifter, please install the "shifter-runtime" package.
 Summary:  Runtime component(s) for NERSC Shifter (formerly udiRoot)
 Group:    System Environment/Base
 %if 0%{?suse_version}
-BuildRequires: munge, libcurl-devel, libjson-c-devel, pam-devel, libcap-devel, python
+BuildRequires: munge, libcurl-devel, libjson-c-devel, pam-devel, libcap-devel
 %else
 BuildRequires: munge-devel, gcc, gcc-c++
 BuildRequires: libtool autoconf automake
