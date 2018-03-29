@@ -54,6 +54,7 @@ BuildRequires: libcurl libcurl-devel
 BuildRequires: json-c json-c-devel
 BuildRequires: pam-devel
 BuildRequires: libcap-devel
+Requires: xfsprogs
 %endif
 
 %description runtime
@@ -79,10 +80,10 @@ Summary: Image Manager/Gateway for Shifter
 %endif
 %if 0%{?rhel}
 Requires(pre): shadow-utils
-Requires: squashfs-tools python-flask python-pymongo python-gunicorn munge
+Requires: squashfs-tools python python-flask python-pymongo python-gunicorn munge
 %endif
 %if 0%{?suse_version} > 0
-Requires: squashfs python-flask python-pymongo python-gunicorn munge
+Requires: squashfs python python-flask python-pymongo python-gunicorn munge
 %endif
 
 %description imagegw
