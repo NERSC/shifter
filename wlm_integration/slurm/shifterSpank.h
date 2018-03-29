@@ -41,6 +41,7 @@ typedef struct {
                                       during job setup */
     int ccmEnabled;               /*! flag if the ccm option should be offered */
     int sshdEnabled;              /*! flag if the sshd is enabled */
+    int useLongOptions;           /*! flag to use long options */
 
     /* config options from user */
     char *image;                  /*! user requested image identifier */

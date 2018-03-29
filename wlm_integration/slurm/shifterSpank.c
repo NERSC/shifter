@@ -119,6 +119,8 @@ shifterSpank_config *shifterSpank_init(
         } else if (strncasecmp("enable_ccm=", argv[idx], 11) == 0) {
             char *ptr = argv[idx] + 11;
             ssconfig->ccmEnabled = (int) strtol(ptr, NULL, 10);
+        } else if (strcasecmp("long_options", argv[idx]) == 0) {
+            ssconfig->useLongOptions = 1;
         } else if (strncasecmp("enable_sshd=", argv[idx], 12) == 0) {
             char *ptr = argv[idx] + 12;
             ssconfig->sshdEnabled = (int) strtol(ptr, NULL, 10);
