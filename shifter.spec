@@ -54,7 +54,7 @@ BuildRequires: libcurl libcurl-devel
 BuildRequires: json-c json-c-devel
 BuildRequires: pam-devel
 BuildRequires: libcap-devel
-BuildRequires: python
+Requires: xfsprogs
 %endif
 
 %description runtime
@@ -80,7 +80,7 @@ Requires(pre): shadow-utils
 %{systemd_requires}
 %endif
 %if 0%{?rhel}
-Requires: squashfs-tools python-pip python-flask python-pymongo python-gunicorn munge
+Requires: squashfs-tools python python-pip python-flask python-pymongo python-gunicorn munge
 %endif
 
 %description imagegw
@@ -103,7 +103,6 @@ use with Shifter.
 %package slurm
 Summary:  SLURM Spank Module for Shifter
 BuildRequires: slurm-devel
-BuildRequires: xfsprogs
 
 %description slurm
 Shifter enables container images for HPC. In a nutshell, Shifter
