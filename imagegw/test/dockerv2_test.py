@@ -75,6 +75,22 @@ class Dockerv2TestCase(unittest.TestCase):
             data = f.read()
             assert(data == 'blah\n')
 
+    def test_unicode(self):
+        cache = tempfile.mkdtemp()
+        expand = tempfile.mkdtemp()
+        self.cleanpaths.append(cache)
+        self.cleanpaths.append(expand)
+
+        resp = dockerv2.pull_image(self.options, 'scanon/unicode',
+                                   'latest', cachedir=cache,
+                                   expanddir=expand.encode('ascii'))
+
+        assert os.path.exists(resp['expandedpath'])
+        bfile = os.path.join(resp['expandedpath'], u'\ua000')
+        self.assertIn('workdir', resp)
+        assert os.path.exists(resp['expandedpath'])
+        assert os.path.exists(bfile)
+
     def test_chgtype(self):
         cache = tempfile.mkdtemp()
         expand = tempfile.mkdtemp()

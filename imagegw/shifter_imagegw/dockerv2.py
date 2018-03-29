@@ -600,6 +600,9 @@ class DockerV2Handle(object):
         layer_paths = []
         tar_file_refs = []
         layer = base_layer
+        # Convert this base_path to unicode otherwise things will break
+        # later.
+        base_path = base_path.encode('utf-8')
         while layer is not None:
             if layer['fsLayer']['blobSum'] in self.excludeBlobSums:
                 layer = layer['child']
