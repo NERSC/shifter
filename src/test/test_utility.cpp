@@ -458,9 +458,9 @@ TEST(UtilityTestGroup, count_args) {
     args[1] = strdup("b");
     args[2] = NULL;
     args[3] = NULL;
-    CHECK(_count_args(args) == 3);
+    CHECK(_count_args(args) == 2);
     args[2] = strdup("c");
-    CHECK(_count_args(args) == 4);
+    CHECK(_count_args(args) == 3);
     free(args[0]);
     free(args[1]);
     free(args[2]);
