@@ -823,7 +823,7 @@ static int _assign(const char *key, const char *value, void *t_config) {
 int parse_ShifterModule_key(UdiRootConfig *config, const char *key,
     const char *value)
 {
-    char *tmpkey = _strdup(key);
+    char *tmpkey = NULL;
     char *tmpvalue = NULL;
     char *name = NULL;
     char *subkey = NULL;
@@ -838,6 +838,7 @@ int parse_ShifterModule_key(UdiRootConfig *config, const char *key,
         rc = 1;
         goto cleanup;
     }
+    tmpkey = _strdup(key);
 
     /* parse the key */
     search = tmpkey;
@@ -939,10 +940,14 @@ int parse_ShifterModule_key(UdiRootConfig *config, const char *key,
     }
 
 cleanup:
-    if (tmpkey != NULL)
+    if (tmpkey != NULL) {
         free(tmpkey);
-    if (tmpvalue != NULL)
+        tmpkey = NULL;
+    }
+    if (tmpvalue != NULL) {
         free(tmpvalue);
+        tmpvalue = NULL;
+    }
     return rc;
 }
 
