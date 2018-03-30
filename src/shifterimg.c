@@ -1079,8 +1079,9 @@ void _add_allowed(enum AclCredential aclType, struct options *config, const char
         ids_sz = &(config->allowed_gids_sz);
         ids_len = &(config->allowed_gids_len);
     } else {
-        printf("whatttt!?!");
-        return;
+        fprintf(stderr, "ERROR: attempting to add invalid type %d to credential list.\n",
+                aclType);
+        goto _finish;
     }
 
     start = tmp;
@@ -1108,6 +1109,7 @@ void _add_allowed(enum AclCredential aclType, struct options *config, const char
         }
         start = ptr + 1;
     }
+_finish:
     free(tmp);
     tmp = NULL;
 }
