@@ -418,7 +418,7 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
     return 0;
 }
 
-uid_t * _convert_to_list(const char *text){
+uid_t *_convert_to_list(const char *text) {
     uid_t *ids = NULL;
     size_t id_capacity = 0;
     size_t id_count = 0;
@@ -445,7 +445,9 @@ uid_t * _convert_to_list(const char *text){
     }
 
     /* terminate with a -1 */
-    ids[id_count] = -1;
+    if (ids != NULL) {
+        ids[id_count] = -1;
+    }
     free(buffer);
     return ids;
 }
