@@ -123,9 +123,11 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    if (parse_selected_ShifterModule(config.modules, &udiConfig) != 0) {
-        fprintf(stderr, "Invalid shifter module selection: %s\n", config.modules);
-        exit(1);
+    if (config.modules) {
+        if (parse_selected_ShifterModule(config.modules, &udiConfig) != 0) {
+            fprintf(stderr, "Invalid shifter module selection: %s\n", config.modules);
+            exit(1);
+        }
     }
 
     if (config.verbose) {

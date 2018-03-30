@@ -423,14 +423,6 @@ int _shifterCore_copyUdiImage(UdiRootConfig *udiConfig) {
     size_t n_src = 0;
     size_t n_dest = 0;
     int idx = 0;
-    struct stat statData;
-
-#define _MKDIR(dir, perm) if (mkdir(dir, perm) != 0) { \
-    fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", dir); \
-    perror("   --- REASON: "); \
-    rc = 1; \
-    goto _fail; \
-}
 
     if (udiConfig->optUdiImage != NULL) {
         char *src = alloc_strgenf("%s/", udiConfig->optUdiImage);
@@ -472,15 +464,19 @@ int _shifterCore_copyUdiImage(UdiRootConfig *udiConfig) {
             fprintf(stderr, "FAILED: copy path has invalid length!\n");
             goto _fail;
         }
-        if (stat(src, &statData) != 0) {
-            fprintf(stderr, "FAILED to stat udiImage source directory: %s\n", src);
-            goto _fail;
-        }
-        if (stat(dest, &statData) != 0) {
-            _MKDIR(dest, 0755);
+        errno = 0;
+        if (mkdir(dest, 0755) != 0) {
+            if (errno != EEXIST) {
+                fprintf(stderr, "FAILED to mkdir %s: %s. Exiting.\n", dest, strerror(errno));
+                goto _fail;
+            }
         }
 
         srcDir = opendir(src);
+        if (srcDir == NULL) {
+            fprintf(stderr, "FAILED to opendir %s: %s. Exiting.\n", src, strerror(errno));
+            goto _fail;
+        }
         while ((entry = readdir(srcDir)) != NULL) {
             if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
                 continue;
@@ -492,9 +488,15 @@ int _shifterCore_copyUdiImage(UdiRootConfig *udiConfig) {
                 free(*pptr);
             if (rc != 0) {
                 fprintf(stderr, "FAILED to copy %s to %s.\n", src_path, dest);
+                free(src_path);
+                src_path = NULL;
+                closedir(srcDir);
                 goto _fail;
             }
+            free(src_path);
+            src_path = NULL;
         }
+        closedir(srcDir);
     }
 
     char *udiimage_path = alloc_strgenf("%s/opt/udiImage", udiConfig->udiMountPoint);
@@ -506,8 +508,12 @@ int _shifterCore_copyUdiImage(UdiRootConfig *udiConfig) {
         free(*pptr);
     if (rc != 0) {
         fprintf(stderr, "FAILED to fix permissions on %s.\n", udiimage_path);
+        free(udiimage_path);
+        udiimage_path = NULL;
         goto _fail;
     }
+    free(udiimage_path);
+    udiimage_path = NULL;
 
     for (pptr = srcPaths; pptr && *pptr; pptr++)
         free(*pptr);
@@ -519,7 +525,6 @@ int _shifterCore_copyUdiImage(UdiRootConfig *udiConfig) {
         free(destPaths);
     return 0;
 
-#undef _MKDIR
 _fail:
     for (pptr = srcPaths; pptr && *pptr; pptr++)
         free(*pptr);
@@ -578,7 +583,8 @@ int prepareSiteModifications(const char *username,
     /* get udiMount device id */
     if (stat(udiRoot, &statData) != 0) {
         fprintf(stderr, "FAILED to stat udiRoot %s.\n", udiRoot);
-        return 1;
+        ret = 1;
+        goto _prepSiteMod_unclean;
     }
     udiMountDev = statData.st_dev;
 
@@ -586,13 +592,15 @@ int prepareSiteModifications(const char *username,
        working directory */
     if (chdir(udiRoot) != 0) {
         fprintf(stderr, "FAILED to chdir to %s. Exiting.\n", udiRoot);
-        return 1;
+        ret = 1;
+        goto _prepSiteMod_unclean;
     }
 
     /* get list of current mounts for this namespace */
     if (parse_MountList(&mountCache) != 0) {
         fprintf(stderr, "FAILED to get list of current mount points\n");
-        return 1;
+        ret = 1;
+        goto _prepSiteMod_unclean;
     }
 
     /* create all the directories needed for initial setup */
@@ -866,6 +874,8 @@ _fail_copy_etcPath:
     {
         char *mvArgs[5];
         char **argsPtr = NULL;
+        char *new_source = NULL;
+        char *new_dest = NULL;
         snprintf(source, PATH_MAX, "%s/etc/group", udiRoot);
         snprintf(dest, PATH_MAX, "%s/etc/group.orig", udiRoot);
         source[PATH_MAX - 1] = 0;
@@ -883,7 +893,15 @@ _fail_copy_etcPath:
             goto _prepSiteMod_unclean;
         }
 
-        if (filterEtcGroup(source, dest, username, udiConfig->maxGroupCount) != 0) {
+        /* swapping source and dest because filtering the group file will write
+         * out the final copy in the final location
+         *   about mv'd /etc/group (source) -> /etc/group.orig (dest)
+         *   filter reads /etc/group.orig (new_source) and
+         *          writes /etc/group (new_dest)
+         */
+        new_source = dest;
+        new_dest = source;
+        if (filterEtcGroup(new_dest, new_source, username, udiConfig->maxGroupCount) != 0) {
             fprintf(stderr, "Failed to filter group file %s\n", source);
             goto _prepSiteMod_unclean;
         }
@@ -975,10 +993,11 @@ int writeHostFile(const char *minNodeSpec, UdiRootConfig *udiConfig) {
     char *eptr = NULL;
     char *limit = NULL;
     FILE *fp = NULL;
-    char *filename = _malloc(sizeof(char) * PATH_MAX);
+    char *filename = NULL;
     int idx = 0;
 
     if (minNodeSpec == NULL || udiConfig == NULL) return 1;
+    filename = _malloc(sizeof(char) * PATH_MAX);
 
     minNode = _strdup(minNodeSpec);
     limit = minNode + strlen(minNode);
@@ -1026,15 +1045,16 @@ int writeHostFile(const char *minNodeSpec, UdiRootConfig *udiConfig) {
     fclose(fp);
     fp = NULL;
     free(filename);
+    filename = NULL;
     free(minNode);
     minNode = NULL;
     return 0;
 
 _writeHostFile_error:
     free(filename);
-    if (minNode != NULL) {
-        free(minNode);
-    }
+    filename = NULL;
+    free(minNode);
+    minNode = NULL;
     if (fp != NULL) {
         fclose(fp);
     }
@@ -3367,10 +3387,17 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
 char **calculate_args(int useEntry, char **clArgs, char *clEntry,
                       ImageData *imageData)
 {
-    char **cmdArgs = clArgs;
-    if ((clArgs == NULL || clArgs[0] == NULL) &&
-            imageData->cmd != NULL && clEntry == NULL) {
-        cmdArgs = imageData->cmd;
+    char **cmdArgs = NULL;
+
+    if (clArgs && clArgs[0]) {
+        cmdArgs = dup_string_array(clArgs);
+    }
+
+    if ((!clArgs || !clArgs[0]) && imageData->cmd && !clEntry) {
+        if (cmdArgs) {
+            free_string_array(cmdArgs);
+        }
+        cmdArgs = dup_string_array(imageData->cmd);
     }
 
     /* check if entrypoint is defined and desired */
@@ -3378,35 +3405,41 @@ char **calculate_args(int useEntry, char **clArgs, char *clEntry,
         char **entry = NULL;
 
         if (clEntry != NULL) {
-            entry = make_char_array(clEntry);
-            if (entry == NULL) {
-                fprintf(stderr, "Failed to allocate memory for entry\n");
-                exit(1);
-            }
-        } else if (imageData->entryPoint != NULL && imageData->entryPoint[0]) {
-            entry = imageData->entryPoint;
+            entry = make_string_array(clEntry);
+        } else if (imageData->entryPoint && imageData->entryPoint[0]) {
+            entry = dup_string_array(imageData->entryPoint);
         } else {
             fprintf(stderr, "Image does not have a defined entrypoint.\n");
-            return NULL;
+            goto _fail;
         }
 
-        if (entry != NULL && cmdArgs != NULL) {
-            return merge_args(entry, cmdArgs);
-        } else if (entry != NULL) {
-            return entry;
+        if (entry && cmdArgs) {
+            char **merged = merge_args(entry, cmdArgs);
+            free_string_array(entry);
+            entry = merged;
+        }
+        if (entry) {
+            if (cmdArgs) {
+                free_string_array(cmdArgs);
+            }
+            cmdArgs = entry;
         }
     } else if (clArgs == NULL) {
-        cmdArgs = malloc(sizeof(char *) * 2);
-
+        cmdArgs = _malloc(sizeof(char *) * 2);
         if (getenv("SHELL") != NULL) {
             cmdArgs[0] = _strdup(getenv("SHELL"));
         } else {
-            /* use /bin/sh */
             cmdArgs[0] = _strdup("/bin/sh");
         }
         cmdArgs[1] = NULL;
     }
     return cmdArgs;
+_fail:
+    if (cmdArgs) {
+        free_string_array(cmdArgs);
+        cmdArgs = NULL;
+    }
+    return NULL;
 }
 
 int _shifter_get_max_capability(unsigned long *_maxCap) {

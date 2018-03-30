@@ -458,9 +458,9 @@ TEST(UtilityTestGroup, count_args) {
     args[1] = strdup("b");
     args[2] = NULL;
     args[3] = NULL;
-    CHECK(_count_args(args) == 3);
+    CHECK(_count_args(args) == 2);
     args[2] = strdup("c");
-    CHECK(_count_args(args) == 4);
+    CHECK(_count_args(args) == 3);
     free(args[0]);
     free(args[1]);
     free(args[2]);
@@ -488,10 +488,10 @@ TEST(UtilityTestGroup, merge_args) {
     free(merged);
 }
 
-TEST(UtilityTestGroup, make_char_array_basic) {
+TEST(UtilityTestGroup, make_string_array_basic) {
     const char *v="astring";
     char **arr;
-    arr = make_char_array(v);
+    arr = make_string_array(v);
     CHECK(strcmp(arr[0],"astring") == 0);
     CHECK(arr[1] == NULL);
     free_args(arr);

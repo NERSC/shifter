@@ -383,6 +383,10 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                  */
                 break;
             case 'm':
+                if (optarg == NULL) { /* coverity false positive */
+                    fprintf(stderr, "Missing an argument!\n");
+                    _usage(1);
+                }
                 if (config->selectedModulesStr) {
                     free(config->selectedModulesStr);
                 }

@@ -274,7 +274,12 @@ int shifterSpank_process_option_module(
     if (optarg != NULL && strlen(optarg) > 0) {
         if (ssconfig->modules)
             free(ssconfig->modules);
-        ssconfig->modules = _strdup(optarg);
+        if (parse_selected_ShifterModule(optarg, ssconfig->udiConfig) == 0) {
+            ssconfig->modules = _strdup(optarg);
+        } else {
+            _log(LOG_ERROR, "Failed to parse or invalid module(s) requested: %s\n", optarg);
+            exit(1);
+        }
         return SUCCESS;
     }
     _log(LOG_ERROR, "Invalid shifter module options - if specified, must not be zero length");
@@ -872,7 +877,6 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     char *username = NULL;
     char *uid_str = NULL;
     char *sshPubKey = NULL;
-    char *modules = NULL;
     size_t tasksPerNode = 0;
     pid_t pid = 0;
 
@@ -940,7 +944,7 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
         if (ssconfig->volume != NULL) {
             free(ssconfig->volume);
         }
-        ssconfig->volume = strdup(ptr);
+        ssconfig->volume = _strdup(ptr);
     }
     ptr = getenv("SHIFTER_VOLUME");
     if (ptr != NULL) {
@@ -948,6 +952,24 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
             free(ssconfig->volume);
         }
         ssconfig->volume = _strdup(ptr);
+    }
+    ptr = getenv("SPANK_SHIFTER_MODULE");
+    if (ptr != NULL) {
+        if (ssconfig->modules != NULL) {
+            free(ssconfig->modules);
+        }
+        if (parse_selected_ShifterModule(ptr, ssconfig->udiConfig) == 0) {
+            ssconfig->modules = _strdup(ptr);
+        }
+    }
+    ptr = getenv("SHIFTER_MODULE");
+    if (ptr != NULL) {
+        if (ssconfig->modules != NULL) {
+            free(ssconfig->modules);
+        }
+        if (parse_selected_ShifterModule(ptr, ssconfig->udiConfig) == 0) {
+            ssconfig->modules = _strdup(ptr);
+        }
     }
     _log(LOG_DEBUG, "shifter prolog, id after looking at env: %s:%s", ssconfig->imageType, ssconfig->image);
 
@@ -970,7 +992,6 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     rc = read_data_from_job(ssconfig, &job, &nodelist, &tasksPerNode, &shared);
     if (rc != SUCCESS) {
         PROLOG_ERROR("FAILED to get job information.", ERROR);
-	goto _prolog_exit_unclean;
     }
 
     /* this prolog should not be used for shared-node jobs */
@@ -982,14 +1003,14 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     /* try to recover ssh public key */
     ptr = getenv("SPANK_SHIFTER_SSH_PUBKEY");
     if (ptr != NULL && ssconfig->sshdEnabled) {
-        ptr = strdup(ptr);
+        ptr = _strdup(ptr);
         sshPubKey = shifter_trim(ptr);
-        sshPubKey = strdup(sshPubKey);
+        sshPubKey = _strdup(sshPubKey);
         free(ptr);
     }
     ptr = getenv("SHIFTER_SSH_PUBKEY");
-    if (ptr != NULL && ssconfig->sshdEnabled) {
-        ptr = strdup(ptr);
+    if (sshPubKey == NULL && ptr != NULL && ssconfig->sshdEnabled) {
+        ptr = _strdup(ptr);
         sshPubKey = shifter_trim(ptr);
         sshPubKey = _strdup(sshPubKey);
         free(ptr);
@@ -1047,6 +1068,16 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
      */
     if (ssconfig->volume != NULL && strlen(ssconfig->volume) > 0) {
         char *ptr = ssconfig->volume;
+        VolumeMap *vmap = (VolumeMap *) _malloc(sizeof(VolumeMap));
+        memset(vmap, 0, sizeof(VolumeMap));
+
+        /* validate input */
+        if (parseVolumeMap(ssconfig->volume, vmap) != 0) {
+            free_VolumeMap(vmap, 1);
+            PROLOG_ERROR("Failed to parse or invalid/disallowed volume map request", ERROR);
+        }
+        free_VolumeMap(vmap, 1);
+
         for ( ; ; ) {
             char *limit = strchr(ptr, ';');
             volArgs = (char **) _realloc(volArgs, sizeof(char *) * (n_volArgs + 2));
@@ -1094,6 +1125,10 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     for (idx = 0; idx < n_volArgs; idx++) {
         strncpy_StringArray("-v", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
         strncpy_StringArray(volArgs[idx], strlen(volArgs[idx]), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+    }
+    if (ssconfig->modules != NULL) {
+        strncpy_StringArray("-m", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+        strncpy_StringArray(ssconfig->modules, strlen(ssconfig->modules), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
     strncpy_StringArray(ssconfig->imageType, strlen(ssconfig->imageType), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     strncpy_StringArray(ssconfig->image, strlen(ssconfig->image), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);

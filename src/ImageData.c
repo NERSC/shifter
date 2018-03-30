@@ -248,16 +248,15 @@ void free_ImageData(ImageData *image, int freeStruct) {
             free(*envPtr);
         }
         free(image->env);
+        image->env = NULL;
     }
     if (image->filename != NULL) {
         free(image->filename);
+        image->filename = NULL;
     }
     if (image->entryPoint != NULL) {
-        char **epPtr = NULL;
-        for (epPtr = image->env ; *epPtr != NULL; epPtr++) {
-            free(*epPtr);
-        }
         free(image->entryPoint);
+        image->entryPoint = NULL;
     }
     if (image->volume != NULL) {
         char **volPtr = NULL;
@@ -265,15 +264,19 @@ void free_ImageData(ImageData *image, int freeStruct) {
             free(*volPtr);
         }
         free(image->volume);
+        image->volume = NULL;
     }
     if (image->identifier != NULL) {
         free(image->identifier);
+        image->identifier = NULL;
     }
     if (image->tag != NULL) {
         free(image->tag);
+        image->tag = NULL;
     }
     if (image->type != NULL) {
         free(image->type);
+        image->type = NULL;
     }
     if (freeStruct == 1) {
         free(image);
@@ -377,7 +380,7 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
             image->entryPoint = split_json_array(tmp);
             free(tmp);
         } else {
-            image->entryPoint = make_char_array(value);
+            image->entryPoint = make_string_array(value);
         }
         if (image->entryPoint == NULL) {
             return 1;
@@ -389,7 +392,7 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
             image->cmd = split_json_array(tmp);
             free(tmp);
         } else {
-            image->cmd = make_char_array(value);
+            image->cmd = make_string_array(value);
         }
         if (image->cmd == NULL) {
             return 1;
@@ -415,7 +418,7 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
     return 0;
 }
 
-uid_t * _convert_to_list(const char *text){
+uid_t *_convert_to_list(const char *text) {
     uid_t *ids = NULL;
     size_t id_capacity = 0;
     size_t id_count = 0;
@@ -442,7 +445,9 @@ uid_t * _convert_to_list(const char *text){
     }
 
     /* terminate with a -1 */
-    ids[id_count] = -1;
+    if (ids != NULL) {
+        ids[id_count] = -1;
+    }
     free(buffer);
     return ids;
 }
