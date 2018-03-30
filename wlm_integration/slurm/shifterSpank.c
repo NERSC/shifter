@@ -872,7 +872,6 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     char *username = NULL;
     char *uid_str = NULL;
     char *sshPubKey = NULL;
-    char *modules = NULL;
     size_t tasksPerNode = 0;
     pid_t pid = 0;
 
@@ -970,7 +969,6 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     rc = read_data_from_job(ssconfig, &job, &nodelist, &tasksPerNode, &shared);
     if (rc != SUCCESS) {
         PROLOG_ERROR("FAILED to get job information.", ERROR);
-	goto _prolog_exit_unclean;
     }
 
     /* this prolog should not be used for shared-node jobs */
@@ -982,14 +980,14 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     /* try to recover ssh public key */
     ptr = getenv("SPANK_SHIFTER_SSH_PUBKEY");
     if (ptr != NULL && ssconfig->sshdEnabled) {
-        ptr = strdup(ptr);
+        ptr = _strdup(ptr);
         sshPubKey = shifter_trim(ptr);
         sshPubKey = strdup(sshPubKey);
         free(ptr);
     }
     ptr = getenv("SHIFTER_SSH_PUBKEY");
-    if (ptr != NULL && ssconfig->sshdEnabled) {
-        ptr = strdup(ptr);
+    if (sshPubKey == NULL && ptr != NULL && ssconfig->sshdEnabled) {
+        ptr = _strdup(ptr);
         sshPubKey = shifter_trim(ptr);
         sshPubKey = _strdup(sshPubKey);
         free(ptr);
