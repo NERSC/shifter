@@ -500,8 +500,12 @@ int _shifterCore_copyUdiImage(UdiRootConfig *udiConfig) {
         free(*pptr);
     if (rc != 0) {
         fprintf(stderr, "FAILED to fix permissions on %s.\n", udiimage_path);
+        free(udiimage_path);
+        udiimage_path = NULL;
         goto _fail;
     }
+    free(udiimage_path);
+    udiimage_path = NULL;
 
     for (pptr = srcPaths; pptr && *pptr; pptr++)
         free(*pptr);
