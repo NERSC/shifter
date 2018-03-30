@@ -487,6 +487,8 @@ int _shifterCore_copyUdiImage(UdiRootConfig *udiConfig) {
             rc = forkAndExecv(args);
             for (pptr = args; pptr && *pptr; pptr++)
                 free(*pptr);
+            free(src_path);
+            src_path = NULL;
             if (rc != 0) {
                 fprintf(stderr, "FAILED to copy %s to %s.\n", src_path, dest);
                 goto _fail;
