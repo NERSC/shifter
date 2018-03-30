@@ -473,6 +473,10 @@ int _shifterCore_copyUdiImage(UdiRootConfig *udiConfig) {
         }
 
         srcDir = opendir(src);
+        if (srcDir == NULL) {
+            fprintf(stderr, "FAILED to opendir %s: %s. Exiting.\n", src, strerror(errno));
+            goto _fail;
+        }
         while ((entry = readdir(srcDir)) != NULL) {
             if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
                 continue;
@@ -482,13 +486,16 @@ int _shifterCore_copyUdiImage(UdiRootConfig *udiConfig) {
             rc = forkAndExecv(args);
             for (pptr = args; pptr && *pptr; pptr++)
                 free(*pptr);
-            free(src_path);
-            src_path = NULL;
             if (rc != 0) {
                 fprintf(stderr, "FAILED to copy %s to %s.\n", src_path, dest);
+                free(src_path);
+                src_path = NULL;
                 goto _fail;
             }
+            free(src_path);
+            src_path = NULL;
         }
+        closedir(srcDir);
     }
 
     char *udiimage_path = alloc_strgenf("%s/opt/udiImage", udiConfig->udiMountPoint);
