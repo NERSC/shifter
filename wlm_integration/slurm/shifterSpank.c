@@ -274,7 +274,7 @@ int shifterSpank_process_option_module(
     if (optarg != NULL && strlen(optarg) > 0) {
         if (ssconfig->modules)
             free(ssconfig->modules);
-        if (parse_selected_ShifterModule(ptr, ssconfig->udiConfig) == 0) {
+        if (parse_selected_ShifterModule(optarg, ssconfig->udiConfig) == 0) {
             ssconfig->modules = _strdup(optarg);
         } else {
             _log(LOG_ERROR, "Failed to parse or invalid module(s) requested: %s\n", optarg);
