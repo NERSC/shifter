@@ -546,7 +546,7 @@ int _parseVolumeMap(
 
         ptr = eptr + 1;
         volMap->n += 1;
-        if (tmp != NULL) free(tmp);
+        free(tmp);
         tmp = NULL;
 
         for (tk_ptr = tokens; tk_ptr && *tk_ptr; tk_ptr++) {
