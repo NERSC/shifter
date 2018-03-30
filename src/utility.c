@@ -552,12 +552,12 @@ char **split_json_array(const char *value) {
  * count return the number of elements including the
  * NULL termination.
  */
-int _count_args(char **args) {
-    int i = 0;
+size_t _count_args(char **args) {
+    size_t i = 0;
     if (args == NULL) {
         return 0;
     }
-    while (args[i] != NULL) {
+    while (args[i] != NULL && i < 1000) {
         i++;
     }
     i++;
@@ -571,20 +571,25 @@ int _count_args(char **args) {
  * Aborts on errors.
  */
 char **merge_args(char **args1, char **args2) {
-    int nArgs = 0;
+    size_t nArgs = 0;
     int s_index, d_index;
     char **newargs;
-    nArgs = _count_args(args1) + _count_args(args2) - 1;
+    nArgs = _count_args(args1) + _count_args(args2) + 1;
+    if (nArgs == 1) {
+        return NULL;
+    }
     newargs = (char **) _malloc(sizeof(char *) * nArgs);
+    memset(newargs, 0, sizeof(char *) * nArgs);
+
     d_index = 0;
     s_index = 0;
-    while(args1[s_index] != NULL) {
+    while (args1 && args1[s_index]) {
         newargs[d_index] = args1[s_index];
         s_index++;
         d_index++;
     }
     s_index = 0;
-    while(args2[s_index] != NULL) {
+    while (args2 && args2[s_index]) {
         newargs[d_index] = args2[s_index];
         s_index++;
         d_index++;
