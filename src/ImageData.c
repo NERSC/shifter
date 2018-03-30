@@ -248,16 +248,15 @@ void free_ImageData(ImageData *image, int freeStruct) {
             free(*envPtr);
         }
         free(image->env);
+        image->env = NULL;
     }
     if (image->filename != NULL) {
         free(image->filename);
+        image->filename = NULL;
     }
     if (image->entryPoint != NULL) {
-        char **epPtr = NULL;
-        for (epPtr = image->env ; *epPtr != NULL; epPtr++) {
-            free(*epPtr);
-        }
         free(image->entryPoint);
+        image->entryPoint = NULL;
     }
     if (image->volume != NULL) {
         char **volPtr = NULL;
@@ -265,15 +264,19 @@ void free_ImageData(ImageData *image, int freeStruct) {
             free(*volPtr);
         }
         free(image->volume);
+        image->volume = NULL;
     }
     if (image->identifier != NULL) {
         free(image->identifier);
+        image->identifier = NULL;
     }
     if (image->tag != NULL) {
         free(image->tag);
+        image->tag = NULL;
     }
     if (image->type != NULL) {
         free(image->type);
+        image->type = NULL;
     }
     if (freeStruct == 1) {
         free(image);
