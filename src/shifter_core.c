@@ -1036,12 +1036,14 @@ int writeHostFile(const char *minNodeSpec, UdiRootConfig *udiConfig) {
     fclose(fp);
     fp = NULL;
     free(filename);
+    filename = NULL;
     free(minNode);
     minNode = NULL;
     return 0;
 
 _writeHostFile_error:
     free(filename);
+    filename = NULL;
     if (minNode != NULL) {
         free(minNode);
     }
