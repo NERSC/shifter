@@ -189,6 +189,22 @@ class ImageWorkerTestCase(unittest.TestCase):
                                                self.updater)
         self.assertTrue(resp)
 
+    def test_pull_docker_unicode(self):
+        request = {
+            'system': self.system,
+            'itype': self.itype,
+            'tag': 'index.docker.io/scanon/unicode:latest'
+        }
+        status = self.imageworker.pull_image(request, self.updater)
+        self.assertTrue(status)
+        self.assertIn('meta', request)
+        meta = request['meta']
+        self.assertIn('id', meta)
+        self.assertTrue(os.path.exists(request['expandedpath']))
+        tfile = os.path.join(request['expandedpath'], u'\ua000')
+        self.assertTrue(os.path.exists(tfile))
+        return
+
     def test_pull_image(self):
         request = self.request
         resp = self.imageworker.pull_image(request, self.updater)

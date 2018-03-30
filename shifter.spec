@@ -54,6 +54,7 @@ BuildRequires: libcurl libcurl-devel
 BuildRequires: json-c json-c-devel
 BuildRequires: pam-devel
 BuildRequires: libcap-devel
+Requires: xfsprogs
 %endif
 
 %description runtime
@@ -74,12 +75,15 @@ Shifter.
 
 %package imagegw
 Summary: Image Manager/Gateway for Shifter
-Requires(pre): shadow-utils
 %if 0%{!?_without_systemd:1}
 %{systemd_requires}
 %endif
 %if 0%{?rhel}
-Requires: squashfs-tools python-pip python-flask python-pymongo python-gunicorn munge
+Requires(pre): shadow-utils
+Requires: squashfs-tools python python-flask python-pymongo python-gunicorn munge
+%endif
+%if 0%{?suse_version} > 0
+Requires: squashfs python python-flask python-pymongo python-gunicorn munge
 %endif
 
 %description imagegw
@@ -155,7 +159,7 @@ MAKEFLAGS=%{?_smp_mflags} %{__make}
 %install
 %make_install
 # Yes, this is a bit of hack.
-install -o root -m 755 imagegw/shifter_imagegw/fasthash.py %{buildroot}/%{_bindir}/fasthash
+install -m 755 imagegw/shifter_imagegw/fasthash.py %{buildroot}/%{_bindir}/fasthash
 
 # Create directory for ImageGW API logs
 %{__mkdir_p} $RPM_BUILD_ROOT%{_localstatedir}/log/%{name}_imagegw

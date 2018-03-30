@@ -1,6 +1,21 @@
 Updating Shifter
 ================
 
+Version 17.04 to 18.03
+----------------------
+Release 18.03 dropped the dependency on celery.  This removes the need to run
+Redis and simplifies the overall installation.  Deployments that had relied
+on this to run in a distributed mode where the workers ran on a different set
+of nodes from the API server will need a deployment change.  It is recommended
+to run the API service on the node used for the worker.  Broker configuration
+parameter is no longer and there is no longer a need to launch separate celery
+workers.  The API service will launch a number of local threads to process pull
+and remove requests.  The number of threads can be controlled with the
+"WorkerThreads" parameter in imagemanager.json.  In local mode, the API service
+must have direct acccess to the shared file system.  In remote mode, the API
+service will copy the completed images via scp which requires RSA keys to
+be configured.
+
 Version 16.08 to 17.04
 ----------------------
 Configurations should be backwards compatible.  There are new optional parameters
@@ -16,7 +31,7 @@ previous versions of the shifter runtime.  Set an environment variable called
 DISABLE_ACL_METADATA to a value in order to enable backwards compatibility.
 Note that this means some access checks in the runtime will not be enforced
 and a determined user could use this to access a private image they should
-not have access to.  So this option should only be used as a temporary 
+not have access to.  So this option should only be used as a temporary
 bridge and sites should inform the users of the potential risks.
 
 Version 15.12.0 to 16.08.1
