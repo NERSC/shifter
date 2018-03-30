@@ -1108,6 +1108,8 @@ void _add_allowed(enum AclCredential aclType, struct options *config, const char
         }
         start = ptr + 1;
     }
+    free(tmp);
+    tmp = NULL;
 }
 
 int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *udiConfig) {
