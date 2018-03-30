@@ -346,9 +346,9 @@ $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu imagegw/shifter_imagegw/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign imagegw/shifter_imagegw/Makefile'; \
 	$(am__cd) $(top_srcdir) && \
-	  $(AUTOMAKE) --gnu imagegw/shifter_imagegw/Makefile
+	  $(AUTOMAKE) --foreign imagegw/shifter_imagegw/Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
 	  *config.status*) \

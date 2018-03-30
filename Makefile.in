@@ -203,8 +203,9 @@ am__DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/config.h.in \
 	$(top_srcdir)/auxdir/config.sub \
 	$(top_srcdir)/auxdir/install-sh $(top_srcdir)/auxdir/ltmain.sh \
 	$(top_srcdir)/auxdir/missing AUTHORS NEWS auxdir/compile \
-	auxdir/config.guess auxdir/config.sub auxdir/install-sh \
-	auxdir/ltmain.sh auxdir/missing auxdir/py-compile
+	auxdir/config.guess auxdir/config.sub auxdir/depcomp \
+	auxdir/install-sh auxdir/ltmain.sh auxdir/missing \
+	auxdir/py-compile
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 distdir = $(PACKAGE)-$(VERSION)
 top_distdir = $(distdir)
