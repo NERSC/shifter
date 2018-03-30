@@ -603,14 +603,40 @@ char **merge_args(char **args1, char **args2) {
  * character array with one entry.
  * Aborts on errors.
  */
-char **make_char_array(const char *value) {
+char **make_string_array(const char *value) {
     char **arr;
     arr = (char **) _malloc(sizeof(char *) * 2);
     arr[0] = _strdup(value);
-    if (!arr[0]) {
-        fprintf(stderr, "Allocation error.");
-        abort();
-    }
     arr[1] = NULL;
     return arr;
+}
+
+char **dup_string_array(char **arr) {
+    char **ret = NULL;
+    char **ptr = NULL;
+    size_t sz = 0;
+    size_t idx = 0;
+
+    for (ptr = arr; ptr && *ptr && sz < 10000; ptr++) {
+        sz++;
+    }
+    if (sz == 10000) {
+        fprintf(stderr, "ERROR: unwilling to duplicate large string array, abort()\n");
+        abort();
+    }
+    ret = _malloc(sizeof(char *) * (sz + 1));
+    memset(ret, 0, sizeof(char *) * (sz + 1));
+    for (idx = 0; idx < sz; idx++) {
+        ret[idx] = _strdup(arr[idx]);
+    }
+    ret[sz] = NULL;
+    return ret;
+}
+
+void free_string_array(char **arr) {
+    char **ptr = NULL;
+    for (ptr = arr; ptr && *ptr; ptr++) {
+        free(*ptr);
+    }
+    free(arr);
 }

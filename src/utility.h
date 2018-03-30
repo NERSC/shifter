@@ -67,7 +67,9 @@ int is_json_array(const char *value);
 char **split_json_array(const char *value);
 size_t _count_args(char **args);
 char **merge_args(char **args1, char **args2);
-char **make_char_array(const char *value);
+char **make_string_array(const char *value);
+char **dup_string_array(char **);
+void free_string_array(char **);
 
 #ifdef __cplusplus
 }

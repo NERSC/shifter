@@ -3387,10 +3387,17 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
 char **calculate_args(int useEntry, char **clArgs, char *clEntry,
                       ImageData *imageData)
 {
-    char **cmdArgs = clArgs;
-    if ((clArgs == NULL || clArgs[0] == NULL) &&
-            imageData->cmd != NULL && clEntry == NULL) {
-        cmdArgs = imageData->cmd;
+    char **cmdArgs = NULL;
+
+    if (clArgs && clArgs[0]) {
+        cmdArgs = dup_string_array(clArgs);
+    }
+
+    if ((!clArgs || !clArgs[0]) && imageData->cmd && !clEntry) {
+        if (cmdArgs) {
+            free_string_array(cmdArgs);
+        }
+        cmdArgs = dup_string_array(imageData->cmd);
     }
 
     /* check if entrypoint is defined and desired */
@@ -3398,35 +3405,41 @@ char **calculate_args(int useEntry, char **clArgs, char *clEntry,
         char **entry = NULL;
 
         if (clEntry != NULL) {
-            entry = make_char_array(clEntry);
-            if (entry == NULL) {
-                fprintf(stderr, "Failed to allocate memory for entry\n");
-                exit(1);
-            }
+            entry = make_string_array(clEntry);
         } else if (imageData->entryPoint != NULL && imageData->entryPoint[0]) {
-            entry = imageData->entryPoint;
+            entry = dup_string_array(imageData->entryPoint);
         } else {
             fprintf(stderr, "Image does not have a defined entrypoint.\n");
-            return NULL;
+            goto _fail;
         }
 
-        if (entry != NULL && cmdArgs != NULL) {
-            return merge_args(entry, cmdArgs);
-        } else if (entry != NULL) {
-            return entry;
+        if (entry && cmdArgs) {
+            char **merged = merge_args(entry, cmdArgs);
+            free_string_array(entry);
+            entry = merged;
+        }
+        if (entry) {
+            if (cmdArgs) {
+                free_string_array(cmdArgs);
+            }
+            cmdArgs = entry;
         }
     } else if (clArgs == NULL) {
-        cmdArgs = malloc(sizeof(char *) * 2);
-
+        cmdArgs = _malloc(sizeof(char *) * 2);
         if (getenv("SHELL") != NULL) {
             cmdArgs[0] = _strdup(getenv("SHELL"));
         } else {
-            /* use /bin/sh */
             cmdArgs[0] = _strdup("/bin/sh");
         }
         cmdArgs[1] = NULL;
     }
     return cmdArgs;
+_fail:
+    if (cmdArgs) {
+        free_string_array(cmdArgs);
+        cmdArgs = NULL;
+    }
+    return NULL;
 }
 
 int _shifter_get_max_capability(unsigned long *_maxCap) {

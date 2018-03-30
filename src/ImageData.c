@@ -380,7 +380,7 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
             image->entryPoint = split_json_array(tmp);
             free(tmp);
         } else {
-            image->entryPoint = make_char_array(value);
+            image->entryPoint = make_string_array(value);
         }
         if (image->entryPoint == NULL) {
             return 1;
@@ -392,7 +392,7 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
             image->cmd = split_json_array(tmp);
             free(tmp);
         } else {
-            image->cmd = make_char_array(value);
+            image->cmd = make_string_array(value);
         }
         if (image->cmd == NULL) {
             return 1;
