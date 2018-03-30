@@ -879,11 +879,6 @@ int parse_ShifterModule_key(UdiRootConfig *config, const char *key,
         /* default module to enabled */
         module->enabled = 1;
     }
-    if (module == NULL) {
-        fprintf(stderr, "%s\n", "FAILED to construct empty shifter module");
-        rc = 1;
-        goto cleanup;
-    }
 
     /* populate module based on subkey and value */
     if (strcmp(subkey, "userhook") == 0) {
