@@ -169,13 +169,16 @@ TEST(ShifterCoreTestGroup, check_find_process_by_cmdline) {
 
 void print_args(char **args) {
   char **ptr=args;
+  int idx = 0;
+  printf("PRINT ARGS\n");
   if (args==NULL) {
     printf("null args\n");
     return;
   }
   while (*ptr!=NULL) {
-    printf("%s\n", *ptr);
+    printf("arg %d: %s\n", idx, *ptr);
     ptr++;
+    idx++;
   }
   printf("\n");
 }

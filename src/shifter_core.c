@@ -3406,7 +3406,7 @@ char **calculate_args(int useEntry, char **clArgs, char *clEntry,
 
         if (clEntry != NULL) {
             entry = make_string_array(clEntry);
-        } else if (imageData->entryPoint != NULL && imageData->entryPoint[0]) {
+        } else if (imageData->entryPoint && imageData->entryPoint[0]) {
             entry = dup_string_array(imageData->entryPoint);
         } else {
             fprintf(stderr, "Image does not have a defined entrypoint.\n");

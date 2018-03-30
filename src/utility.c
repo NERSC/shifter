@@ -584,13 +584,13 @@ char **merge_args(char **args1, char **args2) {
     d_index = 0;
     s_index = 0;
     while (args1 && args1[s_index]) {
-        newargs[d_index] = args1[s_index];
+        newargs[d_index] = _strdup(args1[s_index]);
         s_index++;
         d_index++;
     }
     s_index = 0;
     while (args2 && args2[s_index]) {
-        newargs[d_index] = args2[s_index];
+        newargs[d_index] = _strdup(args2[s_index]);
         s_index++;
         d_index++;
     }
