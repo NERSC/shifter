@@ -574,7 +574,8 @@ int prepareSiteModifications(const char *username,
     /* get udiMount device id */
     if (stat(udiRoot, &statData) != 0) {
         fprintf(stderr, "FAILED to stat udiRoot %s.\n", udiRoot);
-        return 1;
+        ret = 1;
+        goto _prepSiteMod_unclean;
     }
     udiMountDev = statData.st_dev;
 
@@ -582,13 +583,15 @@ int prepareSiteModifications(const char *username,
        working directory */
     if (chdir(udiRoot) != 0) {
         fprintf(stderr, "FAILED to chdir to %s. Exiting.\n", udiRoot);
-        return 1;
+        ret = 1;
+        goto _prepSiteMod_unclean;
     }
 
     /* get list of current mounts for this namespace */
     if (parse_MountList(&mountCache) != 0) {
         fprintf(stderr, "FAILED to get list of current mount points\n");
-        return 1;
+        ret = 1;
+        goto _prepSiteMod_unclean;
     }
 
     /* create all the directories needed for initial setup */
