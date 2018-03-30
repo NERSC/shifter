@@ -425,13 +425,6 @@ int _shifterCore_copyUdiImage(UdiRootConfig *udiConfig) {
     int idx = 0;
     struct stat statData;
 
-#define _MKDIR(dir, perm) if (mkdir(dir, perm) != 0) { \
-    fprintf(stderr, "FAILED to mkdir %s. Exiting.\n", dir); \
-    perror("   --- REASON: "); \
-    rc = 1; \
-    goto _fail; \
-}
-
     if (udiConfig->optUdiImage != NULL) {
         char *src = alloc_strgenf("%s/", udiConfig->optUdiImage);
         char *dest = alloc_strgenf("%s/opt/udiImage/", udiConfig->udiMountPoint);
@@ -476,8 +469,12 @@ int _shifterCore_copyUdiImage(UdiRootConfig *udiConfig) {
             fprintf(stderr, "FAILED to stat udiImage source directory: %s\n", src);
             goto _fail;
         }
-        if (stat(dest, &statData) != 0) {
-            _MKDIR(dest, 0755);
+        errno = 0;
+        if (mkdir(dest, 0755) != 0) {
+            if (errno != EEXIST) {
+                fprintf(stderr, "FAILED to mkdir %s: %s. Exiting.\n", dest, strerror(errno));
+                goto _fail;
+            }
         }
 
         srcDir = opendir(src);
@@ -519,7 +516,6 @@ int _shifterCore_copyUdiImage(UdiRootConfig *udiConfig) {
         free(destPaths);
     return 0;
 
-#undef _MKDIR
 _fail:
     for (pptr = srcPaths; pptr && *pptr; pptr++)
         free(*pptr);
