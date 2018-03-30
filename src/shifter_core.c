@@ -423,7 +423,6 @@ int _shifterCore_copyUdiImage(UdiRootConfig *udiConfig) {
     size_t n_src = 0;
     size_t n_dest = 0;
     int idx = 0;
-    struct stat statData;
 
     if (udiConfig->optUdiImage != NULL) {
         char *src = alloc_strgenf("%s/", udiConfig->optUdiImage);
@@ -463,10 +462,6 @@ int _shifterCore_copyUdiImage(UdiRootConfig *udiConfig) {
 
         if (srclen == 0 || srclen > PATH_MAX || destlen == 0 || destlen > PATH_MAX) {
             fprintf(stderr, "FAILED: copy path has invalid length!\n");
-            goto _fail;
-        }
-        if (stat(src, &statData) != 0) {
-            fprintf(stderr, "FAILED to stat udiImage source directory: %s\n", src);
             goto _fail;
         }
         errno = 0;
@@ -986,10 +981,11 @@ int writeHostFile(const char *minNodeSpec, UdiRootConfig *udiConfig) {
     char *eptr = NULL;
     char *limit = NULL;
     FILE *fp = NULL;
-    char *filename = _malloc(sizeof(char) * PATH_MAX);
+    char *filename = NULL;
     int idx = 0;
 
     if (minNodeSpec == NULL || udiConfig == NULL) return 1;
+    filename = _malloc(sizeof(char) * PATH_MAX);
 
     minNode = _strdup(minNodeSpec);
     limit = minNode + strlen(minNode);
