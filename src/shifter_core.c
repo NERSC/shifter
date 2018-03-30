@@ -866,6 +866,8 @@ _fail_copy_etcPath:
     {
         char *mvArgs[5];
         char **argsPtr = NULL;
+        char *new_source = NULL;
+        char *new_dest = NULL;
         snprintf(source, PATH_MAX, "%s/etc/group", udiRoot);
         snprintf(dest, PATH_MAX, "%s/etc/group.orig", udiRoot);
         source[PATH_MAX - 1] = 0;
@@ -883,7 +885,15 @@ _fail_copy_etcPath:
             goto _prepSiteMod_unclean;
         }
 
-        if (filterEtcGroup(source, dest, username, udiConfig->maxGroupCount) != 0) {
+        /* swapping source and dest because filtering the group file will write
+         * out the final copy in the final location
+         *   about mv'd /etc/group (source) -> /etc/group.orig (dest)
+         *   filter reads /etc/group.orig (new_source) and
+         *          writes /etc/group (new_dest)
+         */
+        new_source = dest;
+        new_dest = source;
+        if (filterEtcGroup(new_dest, new_source, username, udiConfig->maxGroupCount) != 0) {
             fprintf(stderr, "Failed to filter group file %s\n", source);
             goto _prepSiteMod_unclean;
         }
