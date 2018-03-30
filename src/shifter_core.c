@@ -490,6 +490,7 @@ int _shifterCore_copyUdiImage(UdiRootConfig *udiConfig) {
                 fprintf(stderr, "FAILED to copy %s to %s.\n", src_path, dest);
                 free(src_path);
                 src_path = NULL;
+                closedir(srcDir);
                 goto _fail;
             }
             free(src_path);
