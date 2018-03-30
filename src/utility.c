@@ -560,7 +560,6 @@ size_t _count_args(char **args) {
     while (args[i] != NULL && i < 1000) {
         i++;
     }
-    i++;
     return i;
 }
 
