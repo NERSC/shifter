@@ -3417,6 +3417,9 @@ char **calculate_args(int useEntry, char **clArgs, char *clEntry,
             cmdArgs = entry;
         }
     } else if (clArgs == NULL) {
+        if (cmdArgs) {
+            free_string_array(cmdArgs);
+        }
         cmdArgs = _malloc(sizeof(char *) * 2);
         if (getenv("SHELL") != NULL) {
             cmdArgs[0] = _strdup(getenv("SHELL"));
