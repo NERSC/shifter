@@ -262,6 +262,12 @@ parameter.
 The siteEnv* parameters are evaluated after all modules have been evaluated
 when performing environmental setup.
 
+defaultModules
+--------------
+comma-separated list of modules that should be loaded by default for every
+container invocation.  The user can override this and provide their own list
+of modules that are appropriate for their need.
+
 module_<name>_siteEnv
 ---------------------
 Like siteEnv, allows the site to define the value an environment variable
