@@ -68,11 +68,10 @@ The sshd is no longer started by default by the SLURM integration.  Add
 CCM mode is no longer enabled by default in the SLURM integration. Add
 "enable_ccm=1" to plugstack.conf if you want it.
 
-If the sshd is configured to run via the WLM, the sshd now runs as the user by
-default.  If you have an existing udiImage directory that you want to keep
+If the sshd is configured to run via the WLM, the sshd runs as the user.
+If you have an existing udiImage directory that you want to keep
 using, be sure to update the port in sshd_config and ssh_config to use port
-1204 (or some other port that makes sense for your site).  To have setupRoot
-start the sshd as root set "optionalSshdAsRoot=1" in udiRoot.conf
+1204 (or some other port that makes sense for your site).
 
 Image Manager API
 =================

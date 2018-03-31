@@ -2167,8 +2167,8 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, gid_t gid, UdiRoot
     const char **keyPtr = NULL;
     char *lineBuf = NULL;
     size_t lineBuf_size = 0;
-    uid_t ownerUid = 0;
-    gid_t ownerGid = 0;
+    uid_t ownerUid = uid;
+    gid_t ownerGid = gid;
 
     FILE *inputFile = NULL;
     FILE *outputFile = NULL;
@@ -2176,12 +2176,7 @@ int setupImageSsh(char *sshPubKey, char *username, uid_t uid, gid_t gid, UdiRoot
     MountList mountCache;
     memset(&mountCache, 0, sizeof(MountList));
 
-    if (udiConfig->optionalSshdAsRoot == 0) {
-        ownerUid = uid;
-        ownerGid = gid;
-    }
-
-    if (udiConfig->optionalSshdAsRoot == 0 && (ownerUid == 0 || ownerGid == 0)) {
+    if (ownerUid == 0 || ownerGid == 0) {
         fprintf(stderr, "FAILED to identify proper uid to run sshd\n");
         goto _setupImageSsh_unclean;
     }
@@ -2472,8 +2467,7 @@ int startSshd(const char *user, UdiRootConfig *udiConfig) {
         fprintf(stderr, "FAILED to chdir to %s while attempted to start sshd\n", chrootPath);
         goto _startSshd_unclean;
     }
-    if (udiConfig->optionalSshdAsRoot == 0 && (udiConfig->target_uid == 0 ||
-                udiConfig->target_gid == 0)) {
+    if (udiConfig->target_uid == 0 || udiConfig->target_gid == 0) {
         fprintf(stderr, "FAILED to start sshd, will not start as root\n");
         goto _startSshd_unclean;
     }
@@ -2485,14 +2479,11 @@ int startSshd(const char *user, UdiRootConfig *udiConfig) {
     }
     if (pid == 0) {
         /* get grouplist in the external environment */
-        gid_t *gidList = NULL;
         int nGroups = 0;
-        if (udiConfig->optionalSshdAsRoot == 0) {
-            gidList = shifter_getgrouplist(user, udiConfig->target_gid, &nGroups);
-            if (gidList == NULL) {
-                fprintf(stderr, "FAILED to correctly get grouplist for sshd\n");
-                exit(1);
-            }
+        gid_t *gidList = shifter_getgrouplist(user, udiConfig->target_gid, &nGroups);
+        if (gidList == NULL) {
+            fprintf(stderr, "FAILED to correctly get grouplist for sshd\n");
+            exit(1);
         }
 
         if (chdir(chrootPath) != 0) {
@@ -2507,39 +2498,37 @@ int startSshd(const char *user, UdiRootConfig *udiConfig) {
             fprintf(stderr, "FAILED to chdir following chroot\n");
             exit(1);
         }
-        if (udiConfig->optionalSshdAsRoot == 0) {
-            if (gidList == NULL) {
-                fprintf(stderr, "FAILED to get groupllist for sshd, exiting!\n");
-                exit(1);
-            }
-            if (shifter_set_capability_boundingset_null() != 0) {
-                fprintf(stderr, "FAILED to restrict future capabilities\n");
-                exit(1);
-            }
-            if (setgroups(nGroups, gidList) != 0) {
-                fprintf(stderr, "FAILED to setgroups(): %s\n", strerror(errno));
-                exit(1);
-            }
-            if (setresgid(udiConfig->target_gid, udiConfig->target_gid,
-                        udiConfig->target_gid) != 0) {
-                fprintf(stderr, "FAILED to setresgid(): %s\n", strerror(errno));
-                exit(1);
-            }
-            if (setresuid(udiConfig->target_uid, udiConfig->target_uid,
-                        udiConfig->target_uid) != 0) {
-                fprintf(stderr, "FAILED to setresuid(): %s\n", strerror(errno));
-                exit(1);
-            }
-#if HAVE_DECL_PR_SET_NO_NEW_PRIVS == 1
-            /* ensure this process and its heirs cannot gain privilege */
-            /* see https://www.kernel.org/doc/Documentation/prctl/no_new_privs.txt */
-            if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) {
-                fprintf(stderr, "Failed to fully drop privileges: %s",
-                        strerror(errno));
-                exit(1);
-            }
-#endif
+        if (gidList == NULL) {
+            fprintf(stderr, "FAILED to get groupllist for sshd, exiting!\n");
+            exit(1);
         }
+        if (shifter_set_capability_boundingset_null() != 0) {
+            fprintf(stderr, "FAILED to restrict future capabilities\n");
+            exit(1);
+        }
+        if (setgroups(nGroups, gidList) != 0) {
+            fprintf(stderr, "FAILED to setgroups(): %s\n", strerror(errno));
+            exit(1);
+        }
+        if (setresgid(udiConfig->target_gid, udiConfig->target_gid,
+                      udiConfig->target_gid) != 0) {
+            fprintf(stderr, "FAILED to setresgid(): %s\n", strerror(errno));
+            exit(1);
+        }
+        if (setresuid(udiConfig->target_uid, udiConfig->target_uid,
+                      udiConfig->target_uid) != 0) {
+            fprintf(stderr, "FAILED to setresuid(): %s\n", strerror(errno));
+            exit(1);
+        }
+#if HAVE_DECL_PR_SET_NO_NEW_PRIVS == 1
+        /* ensure this process and its heirs cannot gain privilege */
+        /* see https://www.kernel.org/doc/Documentation/prctl/no_new_privs.txt */
+        if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) {
+            fprintf(stderr, "Failed to fully drop privileges: %s",
+                    strerror(errno));
+            exit(1);
+        }
+#endif
         char **sshdArgs = (char **) _malloc(sizeof(char *) * 2);
         sshdArgs[0] = _strdup("/opt/udiImage/sbin/sshd");
         sshdArgs[1] = NULL;

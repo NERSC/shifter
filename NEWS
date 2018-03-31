@@ -15,6 +15,7 @@
 * Memory management improvements
 * Remove kernel module loading support
 * Remove support for all base filesystems except squashfs
+* Dropped support for systems with legacy pt_chown pty allocation (i.e., sshd can only run as user now)
 * Other bug fixes
 
 16.08.5
