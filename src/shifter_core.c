@@ -679,22 +679,6 @@ int prepareSiteModifications(const char *username,
                 goto _prepSiteMod_unclean;
             }
         }
-        /* perform module roothook, if defined */
-        if (udiConfig->active_modules[idx]->roothook) {
-            char *args[] = {
-                _strdup("/bin/sh"), _strdup(udiConfig->active_modules[idx]->roothook), NULL
-            };
-            char **argsPtr = NULL;
-            ret = forkAndExecv(args);
-            for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
-                free(*argsPtr);
-            }
-            if (ret != 0) {
-                fprintf(stderr, "%s module roothook failed. Exiting.\n", udiConfig->active_modules[idx]->name);
-                ret = 1;
-                goto _prepSiteMod_unclean;
-            }
-        }
     }
 
     /* add symlink for /proc/mounts at /etc/mtab */
@@ -918,6 +902,25 @@ _fail_copy_etcPath:
         if (writeHostFile(minNodeSpec, udiConfig) != 0) {
             fprintf(stderr, "FAILED to write out hostsfile\n");
             goto _prepSiteMod_unclean;
+        }
+    }
+
+    /* run active-module roothooks */
+    for (idx = 0; idx < udiConfig->n_active_modules; idx++) {
+        if (udiConfig->active_modules[idx]->roothook) {
+            char *args[] = {
+                _strdup("/bin/sh"), _strdup(udiConfig->active_modules[idx]->roothook), NULL
+            };
+            char **argsPtr = NULL;
+            ret = forkAndExecv(args);
+            for (argsPtr = args; *argsPtr != NULL; argsPtr++) {
+                free(*argsPtr);
+            }
+            if (ret != 0) {
+                fprintf(stderr, "%s module roothook failed. Exiting.\n", udiConfig->active_modules[idx]->name);
+                ret = 1;
+                goto _prepSiteMod_unclean;
+            }
         }
     }
 
