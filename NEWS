@@ -1,18 +1,22 @@
-18.03.beta1
+18.03.0
 =========
 * Support for Private Repos and user supplied ACLs on private images
-* GPU Support (courtesy of CSCS)
 * Improved handling of entrypoint, command, and working directory to be more
   compliant with docker.
+* Shifter module support to allow user-selectable, site-definable content to
+  modify container setup.
 * Basic metrics on image usage (number of lookups)
 * API to view the current work queue and status
 * Minor fixes for RPM builds
 * Improved image unpacking for some edge cases
 * Dropped celery dependency to simplify installation
+* Reduced help output in most error conditions (it was rather verbose)
+* Memory management improvements
 * Other bug fixes
 
 16.08.5
 ==========
+* Update slurm integration for slurm 17.11 spank modifications
 * Update slurm integration to update for Slurm CVE-2017-15566
 * Properly exit in slurm integration when dlopen() for libslurm.so fails
 
