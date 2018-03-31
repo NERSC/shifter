@@ -20,7 +20,7 @@ For updates and community support, please subscribe to the email list at https:/
 
 # Release Cycle
 
-Shifter should be considered to be pre-release. Milestone tags will be labelled like YYYY.MM.vv (i.e. 2015.12.00) where vv is a minor release incremented with each snapshot generated.  We plan to release new major versions biannually with point releases as required.
+Shifter has had two major releases (16.08 and 18.03) and several minor release within those over the past few years. Milestone tags will be labelled like YYYY.MM.vv (i.e. 2015.12.00) where vv is a minor release incremented with each snapshot generated.  We plan to release new major versions biannually with point releases as required.
 
 # Contributing
 
