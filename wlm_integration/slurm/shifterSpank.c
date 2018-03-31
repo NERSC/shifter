@@ -272,8 +272,10 @@ int shifterSpank_process_option_module(
     shifterSpank_config *ssconfig, int val, const char *optarg, int remote)
 {
     if (optarg != NULL && strlen(optarg) > 0) {
-        if (ssconfig->modules)
+        if (ssconfig->modules) {
             free(ssconfig->modules);
+            ssconfig->modules = NULL;
+        }
         if (parse_selected_ShifterModule(optarg, ssconfig->udiConfig) == 0) {
             ssconfig->modules = _strdup(optarg);
         } else {
@@ -957,6 +959,7 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     if (ptr != NULL) {
         if (ssconfig->modules != NULL) {
             free(ssconfig->modules);
+            ssconfig->modules = NULL;
         }
         if (parse_selected_ShifterModule(ptr, ssconfig->udiConfig) == 0) {
             ssconfig->modules = _strdup(ptr);
@@ -966,6 +969,7 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     if (ptr != NULL) {
         if (ssconfig->modules != NULL) {
             free(ssconfig->modules);
+            ssconfig->modules = NULL;
         }
         if (parse_selected_ShifterModule(ptr, ssconfig->udiConfig) == 0) {
             ssconfig->modules = _strdup(ptr);
