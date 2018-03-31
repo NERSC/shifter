@@ -222,7 +222,7 @@ if __name__ == "__main__":
 
 
     copyTgtPath = sys.argv[1]
-    destTgtPath = '/opt/udiImage/cray/lib64'
+    destTgtPath = '/opt/udiImage/modules/mpich/lib64'
 
     ## only consider current cray/system modules
     fix_module_path()
