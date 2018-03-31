@@ -1,11 +1,11 @@
-Shifter Integration with SLURM
+Shifter Integration with Slurm
 ==============================
 
-Shifter offers tight integration with SLURM by way of the SPANK plugin system.
-SLURM 15.08.2 or better is recommended for basic functionality, and 16.05.3 or
+Shifter offers tight integration with Slurm by way of the SPANK plugin system.
+Slurm 15.08.2 or better is recommended for basic functionality, and 16.05.3 or
 better with the extern step integration.
 
-Enabling SLURM integration has the following benefits:
+Enabling Slurm integration has the following benefits:
 
 * simple user interface for specifying images and volume maps
 * scalable startup of parallel applications
@@ -13,11 +13,11 @@ Enabling SLURM integration has the following benefits:
   workflows (processes attached to custom memory cgroup or extern step job
   container)
 * optional Cray-CCM-emulation mode to enable ssh support in the CLE 5.2 DSL
-  environment under "native" SLURM
+  environment under "native" Slurm
 * optional extern step post-prolog image configuration (useful for tie-breaking
   parallel prolog operations)
 
-Integration with SLURM causes the :code:`setupRoot` executable to be run in a
+Integration with Slurm causes the :code:`setupRoot` executable to be run in a
 per-node prolog at job allocation time.  Conversely, at job-end a per-node epilog
 runs the :code:`unsetupRoot` executable to deconstruct the UDI environment. setupRoot
 generates a container image environment in the same Linux namespace as the
@@ -35,7 +35,7 @@ values, a new shifter instance will be instantiated.  This enables
 the capability of running multiple containers within a single job, at the cost
 of increased startup time and perhaps a small amount of overhead.
 
-Integration with SLURM also increases scalability, as well as consistency, by
+Integration with Slurm also increases scalability, as well as consistency, by
 caching the specific identity of the image to be used at job submission time.
 This increases scalability by transmitting the image ID to all nodes, thus
 limiting interactions between shifter and the shifter image gateway to when
@@ -45,9 +45,9 @@ increases job consistency by ensuring that the version of an image that was on
 the system at the time the job was submitted will be used when then job is
 allocated an run, even if newer versions are pulled later.
 
-Configuring SLURM Integration
+Configuring Slurm Integration
 -----------------------------
-1. Build shifter with SLURM support :code:`./configure --with-slurm=/slurm/prefix`
+1. Build shifter with Slurm support :code:`./configure --with-slurm=/slurm/prefix`
    or :code:`rpmbuild -tb shifter-$VERSION.tar.gz --define "with_slurm /slurm/prefix"`
 2. Locate shifter_slurm.so, will be in the shifter prefix/lib/shifter/
    (or within lib64) directory.
@@ -58,14 +58,14 @@ Configuring SLURM Integration
    nodes at job start (allocation) time.  The :code:`contain` flag is used to setup
    the "extern" step job container.
 
-Shifter/SLURM configuration options
+Shifter/Slurm configuration options
 -----------------------------------
 Additional configuration options can be added in plugstack.conf after the
 shifter_slurm.so path.  These options will control the behavior of the plugin.
 
 * *shifter_config* - by default the configured location for udiRoot.conf wil be
   used, however, if there is a specific version that should be used by the 
-  SLURM plugin, adding :code:`shifter_config=/path/to/custom/udiRoot.conf` will
+  Slurm plugin, adding :code:`shifter_config=/path/to/custom/udiRoot.conf` will
   achieve that.
 * *extern_setup* - optionally specify a script/executable to run in the setup
   of the extern step, which occurs after the prolog runs.  This can be used to
@@ -82,7 +82,7 @@ shifter_slurm.so path.  These options will control the behavior of the plugin.
 * *memory_cgroup* - Path to where the memory cgroup is mounted. This is
   a recommended setting in all cases. The plugin will create a new cgroup
   tree under the memory cgroup called "shifter", and within that will follow
-  the SLURM standard (uid_<uid>/job_<jobid>).  e.g.,
+  the Slurm standard (uid_<uid>/job_<jobid>).  e.g.,
   :code:`memory_cgroup=/sys/fs/cgroup/memory`
 * *enable_ccm* - Enable the CCM emulation mode for Cray systems.  Requires
   enable_sshd as well. e.g., :code:`enable_ccm=1`
@@ -91,7 +91,7 @@ shifter_slurm.so path.  These options will control the behavior of the plugin.
   enabled it is run as the user within the container. See the shifter sshd
   documentation for more information.
 
-Using Shifter with SLURM
+Using Shifter with Slurm
 ------------------------
 Basic Job Submission and Usage
 ++++++++++++++++++++++++++++++
@@ -193,7 +193,7 @@ The CCM (:code:`--ccm`) capability is a special use-case of shifter to automatic
 start and allow the user access to the sshd that shifter can start.  This mode
 is distinct because it can automatically put the user script/session into the
 shifter environment prior to task start.  This is typically avoided to prevent
-SLURM from operating with privilege in the user defined environment.  However,
+Slurm from operating with privilege in the user defined environment.  However,
 it is permissible in the unique case of CCM, because CCM targets _only_ the
 already existing external environment, not a user-specified one.  I.e., CCM
 mode makes a shifter container out of the /dsl environment, starts an sshd in 
@@ -229,9 +229,9 @@ Why not do it?:
 
 3. We did try to force slurm into :code:`/opt/slurm` of the container to allow srun
    and job submission to work within the container environment, but owing to
-   the way SLURM interacts with so many of the local system libraries via
+   the way Slurm interacts with so many of the local system libraries via
    dynamic linking, there were too many edge cases where direct interaction
-   with SLURM from within a generic UDI was not working quite right.  Also
+   with Slurm from within a generic UDI was not working quite right.  Also
    there may be some security concerns with such an approach.
 
 
