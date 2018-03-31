@@ -293,6 +293,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         {"volume", 1, 0, 'V'},
         {"verbose", 0, 0, 'v'},
         {"image", 1, 0, 'i'},
+        {"entry", 2, 0, 0},
         {"entrypoint", 2, 0, 0},
         {"workdir", 1, 0, 'w'},
         {"module", 1, 0, 'm'},
@@ -319,7 +320,8 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         switch (opt) {
             case 0:
                 {
-                    if (strcmp(long_options[longopt_index].name, "entrypoint") == 0) {
+                    if (strcmp(long_options[longopt_index].name, "entrypoint") == 0 ||
+                        strcmp(long_options[longopt_index].name, "entry") == 0) {
                         config->useEntryPoint = 1;
                         if (optarg != NULL) {
                             config->entrypoint = _strdup(optarg);
@@ -369,7 +371,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
 
                         fprintf(stderr, "Incorrect format for image "
                                 "identifier: need \"image_type:image_desc\", "
-                                "e.g., docker:ubuntu:14.04\n");
+                                "e.g., docker:ubuntu:17.10\n");
                         _usage(1);
                         break;
                     }
@@ -555,31 +557,33 @@ static void _usage(int status) {
     printf("\n"
         "Usage:\n"
         "shifter [-h|--help] [-v|--verbose] [--image=<imageType>:<imageTag>]\n"
-        "    [--entry] [--workdir]  \n"
-        "    [-V|--volume=/path/to/bind:/mnt/in/image[:<flags>][,...]][;...]\n"
+        "    [--entrypoint[=command]] [--workdir]  \n"
+        "    [-V|--volume=/path/to/bind:/mnt/in/image[:<flags>[,...]][;...]]\n"
+        "    [-m|--module=<modulename>[,...]]\n"
         "    [-- /command/to/exec/in/shifter [args...]]\n"
         );
     printf("\n");
-    printf(
+    if (status == 0) {
+        printf(
 "Image Selection:  Images can be selected in any of three ways, explicit\n"
 "specification as an argument, e.g.:\n"
-"    shifter --image=docker:ubuntu/15.04\n"
+"    shifter --image=docker:ubuntu/17.10\n"
 "Or an image can be specified in the environment by passing either:\n"
-"    export SHIFTER=docker:ubuntu/15.04\n"
+"    export SHIFTER=docker:ubuntu/17.10\n"
 "                    or\n"
 "    export SHIFTER_IMAGETYPE=docker\n"
-"    export SHIFTER_IMAGE=ubuntu/15.04\n"
+"    export SHIFTER_IMAGE=ubuntu/17.10\n"
 "Or if an image is already loaded in the global namespace owned by the\n"
 "running user, and none of the above options are set, then the image loaded\n"
 "in the global namespace will be used.\n"
 "\n"
 "Command Selection: If a command is supplied on the command line Shifter will\n"
-"attempt to exec that command within the image.  Otherwise, if \"--entry\" is\n"
-"specified and an entry point is defined for the image, then the entrypoint\n"
+"attempt to exec that command within the image.  Otherwise, if \"--entrypoint\"\n"
+"is specified and an entry point is defined for the image, then the entrypoint\n"
 "will be executed.  This includes handling of any command options specified\n"
-"in the image as well.  If commands are specified in the command-line, these\n"
-"will override the commands specified in the image.  Finally if nothing else\n"
-"is specified $SHELL or /bin/sh will be attempted.\n"
+"in the image as well.  If a command is specified as an option to \"--entrypoint\"\n"
+"on the command-line, it will override the commands specified in the image.\n"
+"Finally if nothing else is specified $SHELL or /bin/sh will be attempted.\n"
 "\n"
 "If \"--workdir\" is specified, the working directory will change to the specified\n"
 "directory.  If no directory is specified, the working directory specified in\n"
@@ -591,6 +595,15 @@ static void _usage(int status) {
 "however, any environment variables defined in the container desription,\n"
 "e.g., Docker ENV-defined variables, will be sourced and override those.\n"
 "\n"
+"Shifter Module Support:  Site-defineable \"modules\" can be specified to\n"
+"enable optional capabilities locally configured.  Specifying --module=none\n"
+"will turn off any default modules that may have been configured.  Modules can\n"
+"be used to provide environmental variable overrides, inject specific content\n"
+"or mount points into the container environments, or run particular callback\n"
+"hooks during container instantiation to verify the module is compatible with\n"
+"a particular container.  Modules are executed in the order specified on the\n"
+"command line, or in the defaultModules setting in udiRoot.conf.\n"
+"\n"
 "Volume Mapping:  You can request any path available in the current\n"
 "environment to be mapped to some other path within the container.\n"
 "e.g.,\n"
@@ -601,7 +614,8 @@ static void _usage(int status) {
 "under /dev, /etc, /opt/udiImage, /proc, or /var; or overwrite any bind-\n"
 "requested by the system configuration.\n"
 "\n"
-        );
+            );
+    }
     exit(status);
 }
 
