@@ -332,18 +332,6 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         free(config->etcPath);
         config->etcPath = NULL;
     }
-    if (config->kmodBasePath != NULL) {
-        free(config->kmodBasePath);
-        config->kmodBasePath = NULL;
-    }
-    if (config->kmodPath != NULL) {
-        free(config->kmodPath);
-        config->kmodPath = NULL;
-    }
-    if (config->kmodCacheFile != NULL) {
-        free(config->kmodCacheFile);
-        config->kmodCacheFile = NULL;
-    }
     if (config->modprobePath != NULL) {
         free(config->modprobePath);
         config->modprobePath = NULL;
@@ -486,12 +474,6 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
     written += fprintf(fp, "mountPropagationStyle = %s\n",
         (config->mountPropagationStyle == VOLMAP_FLAG_SLAVE ?
          "slave" : "private"));
-    written += fprintf(fp, "kmodBasePath = %s\n",
-        (config->kmodBasePath != NULL ? config->kmodBasePath : ""));
-    written += fprintf(fp, "kmodPath = %s\n",
-        (config->kmodPath != NULL ? config->kmodPath : ""));
-    written += fprintf(fp, "kmodCacheFile = %s\n",
-        (config->kmodCacheFile != NULL ? config->kmodCacheFile : ""));
     written += fprintf(fp, "rootfsType = %s\n",
         (config->rootfsType != NULL ? config->rootfsType : ""));
     written += fprintf(fp, "modprobePath = %s\n",
@@ -714,18 +696,9 @@ static int _assign(const char *key, const char *value, void *t_config) {
     } else if (strcmp(key, "gatewayTimeout") == 0) {
         config->gatewayTimeout = strtoul(value, NULL, 10);
     } else if (strcmp(key, "kmodBasePath") == 0) {
-        struct utsname uts;
-        memset(&uts, 0, sizeof(struct utsname));
-        if (uname(&uts) != 0) {
-            fprintf(stderr, "FAILED to get uname data!\n");
-            return 1;
-        }
-        config->kmodBasePath = _strdup(value);
-        if (config->kmodBasePath == NULL) return 1;
-        config->kmodPath = alloc_strgenf("%s/%s", config->kmodBasePath, uts.release);
+        fprintf(stderr, "IGNORING parameter kmodBasePath, deprecated.\n");
     } else if (strcmp(key, "kmodCacheFile") == 0) {
-        config->kmodCacheFile = _strdup(value);
-        if (config->kmodCacheFile == NULL) return 1;
+        fprintf(stderr, "IGNORING parameter kmodCacheFile, deprecated.\n");
     } else if (strcmp(key, "siteFs") == 0) {
         if (config->siteFs == NULL) {
             config->siteFs = (VolumeMap *) _malloc(sizeof(VolumeMap));

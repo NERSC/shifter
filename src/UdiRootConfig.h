@@ -108,9 +108,6 @@ typedef struct _UdiRootConfig {
     char *sitePostMountHook;
     char *optUdiImage;
     char *etcPath;
-    char *kmodBasePath;
-    char *kmodPath;
-    char *kmodCacheFile;
     char *rootfsType;
     char **gwUrl;
     VolumeMap *siteFs;
