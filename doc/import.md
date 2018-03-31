@@ -1,6 +1,6 @@
 # Importing Images (beta)
 
-While Shifter is primarily design to run images built using Docker, it also
+While Shifter is primarily designed to run images built using Docker, it also
 supports directly importing pre-prepared images.  Since some sites may not
 wish to support this or limit its usage, it requires extra configuration.
 

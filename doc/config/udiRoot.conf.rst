@@ -262,11 +262,3 @@ system (required)
 Name of your system, e.g., edison or cori.  This name must match a configured
 system in the imagegw.  This is primarily used by shifterimg to self-identify
 which system it is representing.
-
-optionalSshdAsRoot
-------------------
-If the optional sshd is executed, it is, by default executed as the user.
-Setting optionalSshdAsRoot to a non-zero value will cause the sshd to be
-executed with root privilege.  This can be useful on some environments where
-root privilege is required to allocate ptys.  Most modern systems will not
-require this option enabled.

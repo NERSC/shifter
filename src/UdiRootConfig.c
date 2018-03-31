@@ -483,8 +483,6 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
             config->allowLibcPwdCalls);
     written += fprintf(fp, "populateEtcDynamically = %d\n",
             config->populateEtcDynamically);
-    written += fprintf(fp, "optionalSshdAsRoot = %d\n",
-            config->optionalSshdAsRoot);
     written += fprintf(fp, "mountPropagationStyle = %s\n",
         (config->mountPropagationStyle == VOLMAP_FLAG_SLAVE ?
          "slave" : "private"));
@@ -680,7 +678,7 @@ static int _assign(const char *key, const char *value, void *t_config) {
     } else if (strcmp(key, "allowLibcPwdCalls") == 0) {
         config->allowLibcPwdCalls = strtol(value, NULL, 10) != 0;
     } else if (strcmp(key, "optionalSshdAsRoot") == 0) {
-        config->optionalSshdAsRoot = strtol(value, NULL, 10) != 0;
+        fprintf(stderr, "IGNORING parameter optionalSshdAsRoot, deprecated.\n");
     } else if (strcmp(key, "populateEtcDynamically") == 0) {
         config->populateEtcDynamically = strtol(value, NULL, 10) != 0;
     } else if (strcmp(key, "autoLoadKernelModule") == 0) {
