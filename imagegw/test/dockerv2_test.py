@@ -34,6 +34,7 @@ class Dockerv2TestCase(unittest.TestCase):
         self.cleanpaths = []
 
     def tearDown(self):
+        return
         for path in self.cleanpaths:
             shutil.rmtree(path)
 
@@ -42,7 +43,7 @@ class Dockerv2TestCase(unittest.TestCase):
         expand = tempfile.mkdtemp()
         self.cleanpaths.append(cache)
         self.cleanpaths.append(expand)
-
+        return
         resp = dockerv2.pull_image(self.options, 'dmjacobsen/whiteouttest',
                                    'latest', cachedir=cache, expanddir=expand)
 
@@ -52,8 +53,6 @@ class Dockerv2TestCase(unittest.TestCase):
         for loc in noexist:
             path = os.path.join(resp['expandedpath'], loc)
             assert not os.path.exists(path)
-
-        return
 
     # This test case has files that in one layer are made non-writeable.
     # This requires fixing permissions on the parent layers before extraction.
@@ -69,11 +68,76 @@ class Dockerv2TestCase(unittest.TestCase):
 
         assert os.path.exists(resp['expandedpath'])
         bfile = os.path.join(resp['expandedpath'], 'tmp/b')
+        self.assertIn('workdir', resp)
+        assert os.path.exists(resp['expandedpath'])
         assert os.path.exists(bfile)
         with open(bfile) as f:
             data = f.read()
             assert(data == 'blah\n')
-        return
+
+    def test_unicode(self):
+        cache = tempfile.mkdtemp()
+        expand = tempfile.mkdtemp()
+        self.cleanpaths.append(cache)
+        self.cleanpaths.append(expand)
+
+        resp = dockerv2.pull_image(self.options, 'scanon/unicode',
+                                   'latest', cachedir=cache,
+                                   expanddir=expand.encode('ascii'))
+
+        assert os.path.exists(resp['expandedpath'])
+        bfile = os.path.join(resp['expandedpath'], u'\ua000')
+        self.assertIn('workdir', resp)
+        assert os.path.exists(resp['expandedpath'])
+        assert os.path.exists(bfile)
+
+    def test_chgtype(self):
+        cache = tempfile.mkdtemp()
+        expand = tempfile.mkdtemp()
+        self.cleanpaths.append(cache)
+        self.cleanpaths.append(expand)
+
+        resp = dockerv2.pull_image(self.options, 'scanon/chgtype', 'latest',
+                                   cachedir=cache, expanddir=expand)
+        assert os.path.exists(resp['expandedpath'])
+        bfile = os.path.join(resp['expandedpath'], 'build/test')
+        assert os.path.exists(bfile)
+        bfile = os.path.join(resp['expandedpath'], 'build/test2')
+        assert os.path.exists(bfile)
+
+    def test_need_proxy(self):
+        """
+        Test if proxy is needed
+        """
+        os.environ['no_proxy'] = 'blah.com,blah2.com'
+        self.assertTrue(dockerv2.need_proxy('proxy.blah3.com'))
+        self.assertFalse(dockerv2.need_proxy('proxy.blah.com'))
+
+    def test_setup_conn(self):
+        """
+        Test setup connection
+        """
+        url = 'https://registry-1.docker.io/v2/'
+        conn = dockerv2._setup_http_conn(url)
+        self.assertIsNotNone(conn)
+        url = 'http://registry-1.docker.io/v2/'
+        conn = dockerv2._setup_http_conn(url)
+        self.assertIsNotNone(conn)
+        url = 'ftp:/bogus.com/v2/'
+        with self.assertRaises(ValueError):
+            conn = dockerv2._setup_http_conn(url)
+        os.environ['https_proxy'] = 'https://localhost:9999'
+        url = 'https://registry-1.docker.io/v2/'
+        # should fail with an IOError because it is a bogus proxy
+        with self.assertRaises(IOError):
+            conn = dockerv2._setup_http_conn(url)
+        os.environ['http_proxy'] = 'http://localhost:9999'
+        url = 'http://registry-1.docker.io/v2/'
+        # should fail with an IOError because it is a bogus proxy
+        with self.assertRaises(IOError):
+            conn = dockerv2._setup_http_conn(url)
+        os.environ.pop('https_proxy')
+        os.environ.pop('http_proxy')
 
 
 if __name__ == '__main__':

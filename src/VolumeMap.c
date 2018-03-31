@@ -1,7 +1,7 @@
 /* Shifter, Copyright (c) 2015, The Regents of the University of California,
 ## through Lawrence Berkeley National Laboratory (subject to receipt of any
 ## required approvals from the U.S. Dept. of Energy).  All rights reserved.
-## 
+##
 ## Redistribution and use in source and binary forms, with or without
 ## modification, are permitted provided that the following conditions are met:
 ##  1. Redistributions of source code must retain the above copyright notice,
@@ -13,7 +13,7 @@
 ##     National Laboratory, U.S. Dept. of Energy nor the names of its
 ##     contributors may be used to endorse or promote products derived from this
 ##     software without specific prior written permission.
-## 
+##
 ## THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 ## AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 ## IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -25,7 +25,7 @@
 ## CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ## ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 ## POSSIBILITY OF SUCH DAMAGE.
-##  
+##
 ## You are under no obligation whatsoever to provide any bug fixes, patches, or
 ## upgrades to the features, functionality or performance of the source code
 ## ("Enhancements") to anyone; however, if you choose to make your Enhancements
@@ -40,7 +40,7 @@
 
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
-#endif 
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -49,6 +49,7 @@
 #include "VolumeMap.h"
 #include "utility.h"
 #include "shifter_core.h"
+#include "shifter_mem.h"
 
 
 static int _cmpFlags(const void *va, const void *vb);
@@ -122,7 +123,7 @@ const char *_findEndVolumeMapString(const char *basePtr) {
 char **_tokenizeVolumeMapInput(char *input) {
     if (input == NULL) return NULL;
 
-    char **tokens = (char **) malloc(sizeof(char *) * 4);
+    char **tokens = _malloc(sizeof(char *) * 4);
     char **tk_ptr = NULL;
     char **tk_end = tokens + 3;
     char *ptr = NULL;
@@ -144,7 +145,7 @@ char **_tokenizeVolumeMapInput(char *input) {
 
             /* extract the token */
             *ptr = 0;
-            *tk_ptr = strdup(sptr);
+            *tk_ptr = _strdup(sptr);
 
             /* advance to the next token */
             sptr = ptr + 1;
@@ -152,11 +153,7 @@ char **_tokenizeVolumeMapInput(char *input) {
 
             /* allocate and move memory if need be */
             if (tk_ptr >= tk_end) {
-                char **tmp = (char **) realloc(tokens, sizeof(char *) * ((tk_ptr - tokens) + 4));
-                if (tmp == NULL) {
-                    fprintf(stderr, "FAILED to allocate memory\n");
-                    goto __tokenizeVolumeMapInput_unclean_exit;
-                }
+                char **tmp = _realloc(tokens, sizeof(char *) * ((tk_ptr - tokens) + 4));
                 tk_ptr = tmp + (tk_ptr - tokens);
                 tokens = tmp;
                 tk_end = tk_ptr + 3;
@@ -234,10 +231,9 @@ int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
        ptr is either pointing to the end of the string (equal to limit) or
        is pointing to the character before the first key in a comma
        delimited list of key/value pairs */
-    flagName = strdup(sptr);
+    flagName = _strdup(sptr);
     sptr = ptr + 1;
     while (sptr < limit) {
-        char **tmp_kvArray = NULL;
         char *vptr = strchr(sptr, '=');
         ptr = strchr(sptr, ',');
         if (ptr == NULL) ptr = limit;
@@ -245,12 +241,7 @@ int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
         if (vptr != NULL) {
             *vptr++ = 0;
         }
-        tmp_kvArray = (char **) realloc(kvArray, sizeof(char *) * (kvCount + 2));
-        if (tmp_kvArray == NULL) {
-            fprintf(stderr, "Unknown flag: couldn't parse flag name\n");
-            goto __parseFlags_exit_unclean;
-        }
-        kvArray = tmp_kvArray;
+        kvArray = (char **) _realloc(kvArray, sizeof(char *) * (kvCount + 2));
         kvArray[kvCount++] = sptr;
         kvArray[kvCount++] = vptr;
         sptr = ptr + 1;
@@ -276,14 +267,14 @@ int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
     } else if (strcasecmp(flagName, "perNodeCache") == 0) {
         size_t kvIdx = 0;
         flag.type = VOLMAP_FLAG_PERNODECACHE;
-        cache = (VolMapPerNodeCacheConfig *) malloc(sizeof(VolMapPerNodeCacheConfig));
+        cache = _malloc(sizeof(VolMapPerNodeCacheConfig));
         memset(cache, 0, sizeof(VolMapPerNodeCacheConfig));
 
         /* TODO move these configs into udiRoot.conf */
         cache->cacheSize = 0;
         cache->blockSize = 1024 * 1024; /* default 1MB */
-        cache->fstype = strdup("xfs");
-        cache->method = strdup("loop");
+        cache->fstype = _strdup("xfs");
+        cache->method = _strdup("loop");
         flag.value = cache;
 
         for (kvIdx = 0; kvIdx < kvCount; kvIdx += 2) {
@@ -307,7 +298,7 @@ int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
                 }
                 if (value != NULL) {
                     if (strcasecmp(value, "xfs") == 0) {
-                        cache->fstype = strdup("xfs");
+                        cache->fstype = _strdup("xfs");
                     }
                 }
                 if (cache->fstype == NULL) {
@@ -327,7 +318,7 @@ int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
                 }
                 if (value != NULL) {
                     if (strcasecmp(value, "loop") == 0) {
-                        cache->method = strdup("loop");
+                        cache->method = _strdup("loop");
                     }
                 }
                 if (cache->method == NULL) {
@@ -359,12 +350,7 @@ int _parseFlag(char *flagStr, VolumeMapFlag **flags, size_t *flagCapacity) {
     }
 
     if (flagIdx >= *flagCapacity) {
-        VolumeMapFlag *tmp = (VolumeMapFlag *) realloc(*flags, sizeof(VolumeMapFlag) * (*flagCapacity + 2));
-        if (tmp == NULL) {
-            fprintf(stderr, "Failed to allocate memory!\n");
-            goto __parseFlags_exit_unclean;
-        }
-        *flags = tmp;
+        *flags = (VolumeMapFlag *) _realloc(*flags, sizeof(VolumeMapFlag) * (*flagCapacity + 2));
         *flagCapacity += 1;
     }
     memcpy(&((*flags)[flagIdx++]), &flag, sizeof(VolumeMapFlag));
@@ -438,13 +424,9 @@ int _parseVolumeMap(
         }
 
         /* make copy for parsing */
-        tmp = (char *) malloc(sizeof(char) * (eptr - ptr + 1));
-        if (tmp == NULL) {
-            fprintf(stderr, "Failed to allocate memory for tmp string\n");
-            goto _parseVolumeMap_unclean;
-        }
+        tmp = _malloc(sizeof(char) * (eptr - ptr + 1));
         strncpy(tmp, ptr, eptr - ptr);
-        tmp[eptr - ptr] = 0;
+        tmp[eptr - ptr] = '\0';
 
         char *volMapStr = tmp;
         if (*volMapStr == '"' && *(volMapStr + (eptr - ptr) - 1) == '"') {
@@ -475,11 +457,11 @@ int _parseVolumeMap(
             }
         }
 
-        /* if we only got a from and to is not required 
+        /* if we only got a from and to is not required
            assume we are binding a path from outside the container
            and to can be set to from */
         if (from && ntokens == 1 && !requireTo) {
-            to = strdup(from);
+            to = _strdup(from);
         }
 
         /* ensure the user is asking for a legal mapping */
@@ -492,7 +474,7 @@ int _parseVolumeMap(
         }
 
         if (to == NULL || from == NULL) {
-            fprintf(stderr, "INVALID format for volume map %.*s\n", 
+            fprintf(stderr, "INVALID format for volume map %.*s\n",
                 (int) (eptr - ptr),
                 ptr
             );
@@ -506,7 +488,7 @@ int _parseVolumeMap(
 
         /* generate a new "raw" string from the filtered values */
         rawLen = 2 + strlen(from) + strlen(to);
-        raw = (char *) malloc(sizeof(char) * rawLen);
+        raw = _malloc(sizeof(char) * rawLen);
         rawCapacity = sizeof(char) * rawLen;
         rawLen = snprintf(raw, rawLen, "%s:%s", from, to);
 
@@ -543,17 +525,12 @@ int _parseVolumeMap(
         if (ret != 0) goto _parseVolumeMap_unclean;
 
         if (volMap->n >= volMap->flagsCapacity) {
-            VolumeMapFlag **tmp = (VolumeMapFlag **) realloc(volMap->flags, sizeof(VolumeMapFlag *) * (volMap->flagsCapacity + VOLUME_ALLOC_BLOCK + 1));
-            if (tmp == NULL) {
-                fprintf(stderr, "Failed to allocate memory!\n");
-                goto _parseVolumeMap_unclean;
-            }
-            volMap->flags = tmp;
+            volMap->flags = (VolumeMapFlag **) _realloc(volMap->flags, sizeof(VolumeMapFlag *) * (volMap->flagsCapacity + VOLUME_ALLOC_BLOCK + 1));
             flagPtr = volMap->flags + volMap->n;
             volMap->flagsCapacity += VOLUME_ALLOC_BLOCK;
             memset(flagPtr, 0, sizeof(VolumeMapFlag *) * (volMap->flagsCapacity - volMap->n));
         }
-        
+
         *flagPtr = flags;
         flagPtr++;
         *flagPtr = NULL;
@@ -569,7 +546,7 @@ int _parseVolumeMap(
 
         ptr = eptr + 1;
         volMap->n += 1;
-        if (tmp != NULL) free(tmp);
+        free(tmp);
         tmp = NULL;
 
         for (tk_ptr = tokens; tk_ptr && *tk_ptr; tk_ptr++) {
@@ -608,7 +585,7 @@ int _validateVolumeMap(
         const char *from,
         const char *to,
         VolumeMapFlag *flags,
-        const char **toStartsWithDisallowed, 
+        const char **toStartsWithDisallowed,
         const char **toExactDisallowed,
         const char **fromStartsWithDisallowed,
         const char **fromExactDisallowed,
@@ -758,7 +735,7 @@ char *getVolMapSignature(VolumeMap *volMap) {
     for (ptr = volMap->raw; *ptr != NULL; ptr++) {
         len += strlen(*ptr);
     }
-    ret = (char *) malloc(sizeof(char) * (len + volMap->n));
+    ret = _malloc(sizeof(char) * (len + volMap->n));
 
     /* construct summary sig string */
     wptr = ret;

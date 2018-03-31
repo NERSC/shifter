@@ -60,7 +60,8 @@ typedef struct _ImageData {
     ImageFormat format;     /*!< image format  */
     char *filename;         /*!< path to image */
     char **env;             /*!< array of environment variables */
-    char *entryPoint;       /*!< default command used */
+    char **entryPoint;       /*!< default entrypoint used */
+    char **cmd;             /*!< default command used */
     char *workdir;          /*!< working dir of entrypoint */
     char **volume;          /*!< array of volume mounts */
     int useLoopMount;       /*!< flag if image requires loop mount */
@@ -117,18 +118,30 @@ size_t fprint_ImageData(FILE *, ImageData *);
 int parse_ImageDescriptor(char *userinput, char **imageType, char **imageTag, UdiRootConfig *);
 
 /**
-  * imageDesc_filterString screens out disallowed characters from user input
-  *
-  * Allowed characters are [A-Za-z0-9_:.+-]
-  * Depending on image type '/' is sometimes allowed
-  *
-  * Any other characters are simply screened out (removed and skipped over)
-  *
-  * \param target the user-input to filter
-  * \param type if not-NULL can adjust the allowed characters based on avlue
-  * \returns newly allocated filtered string
-  */
+ * imageDesc_filterString screens out disallowed characters from user input
+ *
+ * Allowed characters are [A-Za-z0-9_:.+-]
+ * Depending on image type '/' is sometimes allowed
+ *
+ * Any other characters are simply screened out (removed and skipped over)
+ *
+ * \param target the user-input to filter
+ * \param type if not-NULL can adjust the allowed characters based on avlue
+ * \returns newly allocated filtered string
+ */
 char *imageDesc_filterString(const char *target, const char *type);
+
+/**
+ * check_image_permissions checks if an image can be used by a user
+ *
+ * \param uid the numeric user id of the user
+ * \param gid the numeric group id of the user
+ * \param aux_gids array of auxiliary gids the user has access to
+ * \param naux_gids number of elements in aux_gids
+ * \param imageData image meta-data
+ */
+int check_image_permissions(uid_t uid, gid_t gid, gid_t *aux_gids,
+                            int naux_gids, ImageData *imageData);
 
 #ifdef __cplusplus
 }

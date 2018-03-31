@@ -41,11 +41,13 @@ typedef struct {
                                       during job setup */
     int ccmEnabled;               /*! flag if the ccm option should be offered */
     int sshdEnabled;              /*! flag if the sshd is enabled */
+    int useLongOptions;           /*! flag to use long options */
 
     /* config options from user */
     char *image;                  /*! user requested image identifier */
     char *imageType;              /*! image type */
     char *volume;                 /*! volume remap options */
+    char *modules;                /*! shifter module selection */
     int ccmMode;                  /*! flag if this is ccm mode */
 
     /* derived configurations */
@@ -131,6 +133,9 @@ int shifterSpank_process_option_image(
     shifterSpank_config *ssconfig, int val, const char *optarg, int remote);
 
 int shifterSpank_process_option_volume(
+    shifterSpank_config *ssconfig, int val, const char *optarg, int remote);
+
+int shifterSpank_process_option_module(
     shifterSpank_config *ssconfig, int val, const char *optarg, int remote);
 
 int shifterSpank_task_init_privileged(shifterSpank_config *ssconfig);

@@ -64,47 +64,12 @@ Nitty Gritty Details
 --------------------
 TODO: Not started yet.
 
-Run sshd as user or root?
--------------------------
-Why does shifter give the administrator flexibility in this regard?  Isn't it
-a bad idea to run processes as root within the container?  Well, yes; you 
-probably really would like to avoid running the sshd as root if possible. There
-are some situations that necessitate it, and depending on your situation, it
-will be a choice you'll need to consider.
-
-The reason original verions of shifter ran the sshd as root was because older
-libc versions/builds used a setuid root :code:`pt_chown` binary to allow pty
-allocation.  Since shifter disables all setuid access within the container
-environment, this is an unworkable solution.
-
-So, if you find that you can't use the user-privilege sshd because ptys cannot
-be allocated, you may need to run the sshd as root.
-
-If, however, :code:`/dev/pty` is mounted with appropriate privileges, this will
-not be required, and a user-privilege sshd will be able to properly allocate
-ptys.  This is the preferred solution.
-
-If you find that you are amongst those that need to run the sshd as root, the
-shifter sshd is built with some attributes to at least mitigate your risk:
-
-1. it is statically linked (won't rely on any dynamically loaded libraries from
-   the container environment.
-2. it is statically linked against libmusl and libressl.  libmusl in particular
-   is important as this should shield the sshd against most interactions with
-   the container libc
-3. the Shifter sshd is linked against libmusl as a libc replacement, not glibc.
-   One of the features of libmusl is that it does not use nsswitch.conf, nor
-   dlopen libnss modules.  The only files read or accessed by the sshd, in our
-   testing are files imported from the external environment (not the container)
-4. the sshd is not linked against PAM, so no pam modules in the user
-   environment will be considered
-
 Can I use the user sshd in Cray CLE5.2UP03 or UP04?
 +++++++++++++++++++++++++++++++++++++++++++++++++++
 Yes, however the default environment does not (or did not) support it
 out-of-the-box.  You'll need a few things:
 
-1. shifter 16.08.1 or newer
+1. shifter 16.08.3 or newer
 2. 5.2UP04 or 5.2UP03 fully patched for the glibc issues earlier in 2016
 3. A modified compute node /init
 

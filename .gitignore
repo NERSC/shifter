@@ -6,16 +6,16 @@ test.json
 munge.test
 munge.expired
 munge.replay
-depcomp
-install-sh
-libtool.m4
-missing
-Makefile.in
 tags
 *.o
 *.lo
 *.la
 *~
+depcomp
+install-sh
+libtool.m4
+missing
+Makefile.in
 Makefile
 src/unsetupRoot
 src/setupRoot
@@ -26,7 +26,6 @@ src/shifterimg
 *.log
 *.deps
 *.libs
-autom4te.cache/
 auxdir/config.guess
 auxdir/config.sub
 auxdir/ltmain.sh
@@ -42,6 +41,7 @@ config.status
 configure
 libtool
 stamp-h1
+autom4te.cache/
 test_ImageData
 test_MountList
 test_UdiRootConfig
@@ -57,8 +57,6 @@ test_utility
 imagegw/shifter_imagegw/__init__.py
 udiRoot.conf.example
 shifter*.tar.*z*
-auxdir/compile
-auxdir/test-driver
 dep/build/
 dep/build_mount/
 dep/cpputest/

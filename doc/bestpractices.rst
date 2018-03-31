@@ -15,12 +15,7 @@ Recommended Practices for System Administrators
 0. Avoid running privileged processes, as much as possible, in the User
    Defined Image environments.  This is because the user-defined image is
    prepared externally, and may or may not contain security vulnerabilities
-   fixed or otherwise not present in your environment.  Shifter does optionally
-   include an sshd which is also *not* recommended to be run as root, however,
-   on some legacy systems it may be necessary. Therefore, we have attempted to
-   secure the sshd by statically linking it against libmusl (an embedded libc
-   alternative), and libressl, to minimize to number and types of interactions
-   it might have with the user defined environment.
+   fixed or otherwise not present in your environment.
 
 1. Avoid race conditions in shifter startup by pre-creating udiMount and
    loopMount (paths defined in udiRoot.conf).  If, /var/udiMount, if that is

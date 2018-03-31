@@ -48,11 +48,11 @@
 
 #include "UdiRootConfig.h"
 #include "shifter_core.h"
+#include "shifter_mem.h"
 #include "ImageData.h"
 #include "utility.h"
 #include "VolumeMap.h"
 #include "config.h"
-#include "gpu_support.h"
 
 #define VOLUME_ALLOC_BLOCK 10
 
@@ -72,13 +72,13 @@ struct options {
     gid_t tgtGid;
     char *username;
     char *workdir;
+    char *selectedModulesStr;
     char **args;
     char **env;
     VolumeMap volumeMap;
     int verbose;
     int useEntryPoint;
 };
-
 
 static void _usage(int);
 int parse_options(int argc, char **argv, struct options *opts, UdiRootConfig *);
@@ -89,25 +89,7 @@ int isImageLoaded(ImageData *, struct options *, UdiRootConfig *);
 int loadImage(ImageData *, struct options *, UdiRootConfig *);
 int adoptPATH(char **environ);
 
-int check_permissions(uid_t actualUid, gid_t actualGid, ImageData imageData) {
-    uid_t *tuid;
-    gid_t *tgid;
-
-    if (imageData.uids==NULL && imageData.gids==NULL) {
-        return 1;
-    }
-
-    for (tuid=imageData.uids;tuid!=NULL && *tuid!=-1;tuid++){
-        if (*tuid==actualUid) return 1;
-    }
-    for (tgid=imageData.gids;tgid!=NULL && *tgid!=-1;tgid++){
-        if (*tgid==actualGid) return 1;
-    }
-    return 0;
-}
-
 #ifndef _TESTHARNESS_SHIFTER
-extern char** environ;
 
 int main(int argc, char **argv) {
     sighandler_t sighupHndlr = signal(SIGHUP, SIG_IGN);
@@ -116,126 +98,85 @@ int main(int argc, char **argv) {
     sighandler_t sigtermHndlr = signal(SIGTERM, SIG_IGN);
 
     /* save a copy of the environment for the exec */
-    char **environ_copy = shifter_copyenv(environ, 0);
+    char **environ_copy = shifter_copyenv();
 
     /* declare needed variables */
-    char wd[PATH_MAX];
-    char udiRoot[PATH_MAX];
+    char *wd = _malloc(sizeof(char) * PATH_MAX);
+    char *udiRoot = _malloc(sizeof(char) * PATH_MAX);
+    char **run_args = NULL;
     uid_t actualUid = 0;
     uid_t actualGid = 0;
     uid_t eUid = 0;
     gid_t eGid = 0;
-    gid_t *gidList = NULL;
-    int nGroups = 0;
     int idx = 0;
-    struct options opts;
-    UdiRootConfig udiConfig;
-    ImageData imageData;
-    memset(&opts, 0, sizeof(struct options));
-    memset(&udiConfig, 0, sizeof(UdiRootConfig));
-    memset(&imageData, 0, sizeof(ImageData));
+    struct options *opts = _malloc(sizeof(struct options));
+    UdiRootConfig *udiConfig = _malloc(sizeof(UdiRootConfig));
+    ImageData *imageData = _malloc(sizeof(ImageData));
+    memset(opts, 0, sizeof(struct options));
+    memset(udiConfig, 0, sizeof(UdiRootConfig));
+    memset(imageData, 0, sizeof(ImageData));
 
-    if (parse_UdiRootConfig(CONFIG_FILE, &udiConfig, UDIROOT_VAL_ALL) != 0) {
+    if (parse_UdiRootConfig(CONFIG_FILE, udiConfig, UDIROOT_VAL_ALL) != 0) {
         fprintf(stderr, "FAILED to parse udiRoot configuration.\n");
         exit(1);
     }
-    if (parse_environment(&opts, &udiConfig) != 0) {
+    if (parse_environment(opts, udiConfig) != 0) {
         fprintf(stderr, "FAILED to parse environment\n");
         exit(1);
     }
-    /* parse config file and command line options */
-    if (parse_options(argc, argv, &opts, &udiConfig) != 0) {
-        fprintf(stderr, "FAILED to parse command line arguments.\n");
-        exit(1);
-    }
-    /* parse environment variables for GPU support */
-    if (parse_gpu_env(&udiConfig.gpu_config) != 0) {
-        fprintf(stderr, "FAILED to parse CUDA GPU environment variables.\n");
-        exit(1);
-    }
-
     /* destroy this environment */
     clearenv();
 
+    /* parse config file and command line options */
+    if (parse_options(argc, argv, opts, udiConfig) != 0) {
+        fprintf(stderr, "FAILED to parse command line arguments.\n");
+        exit(1);
+    }
+
     /* discover information about this image */
-    if (parse_ImageData(opts.imageType, opts.imageIdentifier, &udiConfig, &imageData) != 0) {
+    if (parse_ImageData(opts->imageType, opts->imageIdentifier, udiConfig, imageData) != 0) {
         fprintf(stderr, "FAILED to find requested image.\n");
         exit(1);
     }
-    /* figure out who we are and who we want to be */
-    eUid = geteuid();
-    eGid = getegid();
-    actualUid = getuid();
-    actualGid = getgid();
 
-    if (check_permissions(actualUid, actualGid, imageData) == 0){
-        fprintf(stderr,"FAILED permission denied to image\n");
+    run_args = calculate_args(opts->useEntryPoint, opts->args, opts->entrypoint,
+                              imageData);
+    if (run_args == NULL || run_args == NULL ) {
+        fprintf(stderr, "Error calculating run arguements\n");
         exit(1);
     }
-
-    /* check if entrypoint is defined and desired */
-    if (opts.useEntryPoint == 1) {
-        char *entry = NULL;
-
-        if (opts.entrypoint != NULL) {
-            entry = opts.entrypoint;
-        } else if (imageData.entryPoint != NULL) {
-            entry = imageData.entryPoint;
-        } else {
-            fprintf(stderr, "Image does not have a defined entrypoint.\n");
-            exit(1);
-        }
-
-        if (entry != NULL) {
-            opts.args[0] = strdup(entry);
-            if (imageData.workdir != NULL) {
-                opts.workdir = strdup(imageData.workdir);
-            }
-        }
+    if (imageData->workdir != NULL && opts->workdir == NULL) {
+        opts->workdir = _strdup(imageData->workdir);
     }
 
-    snprintf(udiRoot, PATH_MAX, "%s", udiConfig.udiMountPoint);
-    udiRoot[PATH_MAX-1] = 0;
+    snprintf(udiRoot, PATH_MAX, "%s", udiConfig->udiMountPoint);
+    udiRoot[PATH_MAX - 1] = 0;
 
     /* figure out who we are and who we want to be */
     eUid = geteuid();
     eGid = getegid();
     actualUid = getuid();
     actualGid = getgid();
-
-
-    nGroups = getgroups(0, NULL);
-    if (nGroups > 0) {
-        gidList = (gid_t *) malloc(sizeof(gid_t) * (nGroups + 1));
-        if (gidList == NULL) {
-            fprintf(stderr, "Failed to allocate memory for group list\n");
-            exit(1);
-        }
-        memset(gidList, 0, sizeof(gid_t) * (nGroups + 1));
-        if (getgroups(nGroups, gidList) == -1) {
-            fprintf(stderr, "Failed to get supplementary group list\n");
-            exit(1);
-        }
-        for (idx = 0; idx < nGroups; ++idx) {
-            if (gidList[idx] == 0) {
-                gidList[idx] = opts.tgtGid;
-            }
-        }
-    }
-    udiConfig.auxiliary_gids = gidList;
-    udiConfig.nauxiliary_gids = nGroups;
-
+    udiConfig->auxiliary_gids = shifter_getgrouplist(opts->username, opts->tgtGid, &(udiConfig->nauxiliary_gids));
 
     if (eUid != 0 && eGid != 0) {
         fprintf(stderr, "%s\n", "Not running with root privileges, will fail.");
         exit(1);
     }
-    if (opts.tgtUid == 0 || opts.tgtGid == 0 || opts.username == NULL) {
+    if (opts->tgtUid == 0 || opts->tgtGid == 0 || opts->username == NULL) {
         fprintf(stderr, "%s\n", "Failed to lookup username or attempted to run as root.\n");
         exit(1);
     }
-    if (opts.tgtUid != actualUid || opts.tgtGid != actualGid) {
+    if (opts->tgtUid != actualUid || opts->tgtGid != actualGid) {
         fprintf(stderr, "Failed to correctly identify uid/gid, exiting.\n");
+        exit(1);
+    }
+    if (!check_image_permissions(opts->tgtUid, opts->tgtGid,
+                                udiConfig->auxiliary_gids,
+                                udiConfig->nauxiliary_gids,
+                                imageData))
+    {
+        fprintf(stderr,"FAILED permission denied to image\n");
         exit(1);
     }
 
@@ -244,13 +185,13 @@ int main(int argc, char **argv) {
         perror("Failed to determine current working directory: ");
         exit(1);
     }
-    wd[PATH_MAX-1] = 0;
-    if (opts.workdir == NULL) {
-        opts.workdir = strdup(wd);
+    wd[PATH_MAX - 1] = 0;
+    if (opts->workdir == NULL) {
+        opts->workdir = _strdup(wd);
     }
 
-    if (isImageLoaded(&imageData, &opts, &udiConfig) == 0) {
-        if (loadImage(&imageData, &opts, &udiConfig) != 0) {
+    if (isImageLoaded(imageData, opts, udiConfig) == 0) {
+        if (loadImage(imageData, opts, udiConfig) != 0) {
             fprintf(stderr, "FAILED to setup image.\n");
             exit(1);
         }
@@ -269,28 +210,28 @@ int main(int argc, char **argv) {
     }
     if (chdir("/") != 0) {
         perror("Could not chdir to new root: ");
-        exit(1);
+        abort();
     }
 
     /* attempt to prevent this process and its heirs from ever gaining any
      * privilege by any means */
     if (shifter_set_capability_boundingset_null() != 0) {
         fprintf(stderr, "Failed to restrict future capabilities\n");
-        exit(1);
+        abort();
     }
 
     /* drop privileges */
-    if (setgroups(nGroups, gidList) != 0) {
+    if (setgroups(udiConfig->nauxiliary_gids, udiConfig->auxiliary_gids) != 0) {
         fprintf(stderr, "Failed to setgroups\n");
-        exit(1);
+        abort();
     }
-    if (setresgid(opts.tgtGid, opts.tgtGid, opts.tgtGid) != 0) {
-        fprintf(stderr, "Failed to setgid to %d\n", opts.tgtGid);
-        exit(1);
+    if (setresgid(opts->tgtGid, opts->tgtGid, opts->tgtGid) != 0) {
+        fprintf(stderr, "Failed to setgid to %d\n", opts->tgtGid);
+        abort();
     }
-    if (setresuid(opts.tgtUid, opts.tgtUid, opts.tgtUid) != 0) {
-        fprintf(stderr, "Failed to setuid to %d\n", opts.tgtUid);
-        exit(1);
+    if (setresuid(opts->tgtUid, opts->tgtUid, opts->tgtUid) != 0) {
+        fprintf(stderr, "Failed to setuid to %d\n", opts->tgtUid);
+        abort();
     }
 #if HAVE_DECL_PR_SET_NO_NEW_PRIVS == 1
     /* ensure this process and its heirs cannot gain privilege in recent kernels */
@@ -298,24 +239,31 @@ int main(int argc, char **argv) {
     if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) {
         fprintf(stderr, "Failed to fully drop privileges: %s",
                 strerror(errno));
-        exit(1);
+        abort();
     }
 #endif
 
     /* chdir (within chroot) to where we belong again */
-    if (chdir(opts.workdir) != 0) {
-        fprintf(stderr, "Failed to switch to working dir: %s, staying in /\n", opts.workdir);
+    if (chdir(opts->workdir) != 0) {
+        fprintf(stderr, "Failed to switch to working dir: %s, staying in /\n", opts->workdir);
     }
 
     /* set the environment variables */
-    if (shifter_setupenv(&environ_copy, &imageData, &udiConfig) != 0) {
+    if (shifter_setupenv(&environ_copy, imageData, udiConfig) != 0) {
         fprintf(stderr, "Failed to setup container environment variables\n");
     }
 
-    /* set the environment variables related to the site resources */
-    if (shifter_setupenv_site_resources(&environ_copy, &udiConfig) != 0) {
-        fprintf(stderr, "Failed to setup container's site-resources environment variables\n");
-        exit(1);
+    /* run any user hooks */
+    for (idx = 0; idx < udiConfig->n_active_modules; idx++) {
+        if (udiConfig->active_modules[idx]->userhook == NULL)
+            continue;
+
+        char *args[] = { "/bin/sh", udiConfig->active_modules[idx]->userhook, NULL };
+        int rc = forkAndExecv(args);
+        if (rc != 0) {
+            fprintf(stderr, "Failed to setup module %s\n", udiConfig->active_modules[idx]->name);
+            exit(1);
+        }
     }
 
     /* immediately set PATH to container PATH to get search right */
@@ -328,72 +276,14 @@ int main(int argc, char **argv) {
     signal(SIGTERM, sigtermHndlr);
 
     /* attempt to execute user-requested exectuable */
-    execvpe(opts.args[0], opts.args, environ_copy);
+    execvpe(run_args[0], run_args, environ_copy);
 
     /* doh! how did we get here? return the error */
-    fprintf(stderr, "%s: %s: %s\n", argv[0], opts.args[0], strerror(errno));
-
+    fprintf(stderr, "%s: %s: %s\n", argv[0], run_args[0], strerror(errno));
     return 127;
 }
-#endif
+#endif /* TESTHARNESS */
 
-#if 0
-/* local_putenv
- * Provides similar functionality to linux putenv, but on a targetted
- * environment.  Expects all strings to be in "var=value" format.
- * Expects environment to be unsorted (linear search). The environ
- * may be reallocated by this code if it needs to add to the environment.
- * newVar will not be changed.
- *
- * environ: pointer to pointer to NULL-terminated array of points to key/value
- *          strings
- * newVar: key/value string to replace, add to environment
- */
-int local_putenv(char ***environ, const char *newVar) {
-    const char *ptr = NULL;
-    size_t envSize = 0;
-    int nameSize = 0;
-    char **envPtr = NULL;
-
-    if (environ == NULL || newVar == NULL || *environ == NULL) return 1;
-    ptr = strchr(newVar, '=');
-    if (ptr == NULL) {
-        fprintf(stderr, "WARNING: cannot parse container environment variable: %s\n", newVar);
-        return 1;
-    }
-    nameSize = ptr - newVar;
-
-    for (envPtr = *environ; *envPtr != NULL; envPtr++) {
-        if (strncmp(*envPtr, newVar, nameSize) == 0) {
-            free(*envPtr);
-            *envPtr = strdup(newVar);
-            return 0;
-        }
-        envSize++;
-    }
-
-    /* did not find newVar in the environment, need to add it */
-    char **tmp = (char **) realloc(*environ, sizeof(char *) * (envSize + 2));
-    if (tmp == NULL) {
-        fprintf(stderr, "WARNING: failed to add %*s to the environment, out of memory.\n", nameSize, newVar);
-        return 1;
-    }
-    *environ = tmp;
-    (*environ)[envSize++] = strdup(newVar);
-    (*environ)[envSize++] = NULL;
-    return 0;
-}
-
-int local_appendenv(char ***environ, const char *appvar) {
-    if (environ == NULL || appvar == NULL || *environ == NULL) return 1;
-    return 0;
-}
-
-int local_prependenv(char ***environ, const char *prepvar) {
-    if (environ == NULL || prepvar == NULL || *environ == NULL) return 1;
-    return 0;
-}
-#endif
 
 int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *udiConfig) {
     int opt = 0;
@@ -403,7 +293,10 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         {"volume", 1, 0, 'V'},
         {"verbose", 0, 0, 'v'},
         {"image", 1, 0, 'i'},
+        {"entry", 2, 0, 0},
         {"entrypoint", 2, 0, 0},
+        {"workdir", 1, 0, 'w'},
+        {"module", 1, 0, 'm'},
         {"env", 0, 0, 'e'},
         {0, 0, 0, 0}
     };
@@ -414,7 +307,6 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     /* set some defaults */
     config->tgtUid = getuid();
     config->tgtGid = getgid();
-    seteuid(config->tgtUid);
 
     /* ensure that getopt processing stops at first non-option */
     setenv("POSIXLY_CORRECT", "1", 1);
@@ -422,18 +314,24 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     optind = 1;
     for ( ; ; ) {
         int longopt_index = 0;
-        opt = getopt_long(argc, argv, "hnvV:i:e:", long_options, &longopt_index);
+        opt = getopt_long(argc, argv, "hnvV:i:e:w:m:", long_options, &longopt_index);
         if (opt == -1) break;
 
         switch (opt) {
             case 0:
                 {
-                    if (strcmp(long_options[longopt_index].name, "entrypoint") == 0) {
+                    if (strcmp(long_options[longopt_index].name, "entrypoint") == 0 ||
+                        strcmp(long_options[longopt_index].name, "entry") == 0) {
                         config->useEntryPoint = 1;
                         if (optarg != NULL) {
-                            config->entrypoint = strdup(optarg);
+                            config->entrypoint = _strdup(optarg);
                         }
                     }
+                }
+                break;
+            case 'w':
+                if (optarg != NULL) {
+                    config->workdir = _strdup(optarg);
                 }
                 break;
             case 'v':
@@ -456,7 +354,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                     if (config->rawVolumes != NULL) {
                         raw_capacity = strlen(config->rawVolumes);
                     }
-                    config->rawVolumes = (char *) realloc(config->rawVolumes, sizeof(char) * (raw_capacity + new_capacity + 2));
+                    config->rawVolumes = (char *) _realloc(config->rawVolumes, sizeof(char) * (raw_capacity + new_capacity + 2));
                     char *ptr = config->rawVolumes + raw_capacity;
                     snprintf(ptr, new_capacity + 2, ";%s", optarg);
 
@@ -473,7 +371,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
 
                         fprintf(stderr, "Incorrect format for image "
                                 "identifier: need \"image_type:image_desc\", "
-                                "e.g., docker:ubuntu:14.04\n");
+                                "e.g., docker:ubuntu:17.10\n");
                         _usage(1);
                         break;
                     }
@@ -485,6 +383,16 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                 /* TODO - add support for explicitly overriding environment
                  * variables
                  */
+                break;
+            case 'm':
+                if (optarg == NULL) { /* coverity false positive */
+                    fprintf(stderr, "Missing an argument!\n");
+                    _usage(1);
+                }
+                if (config->selectedModulesStr) {
+                    free(config->selectedModulesStr);
+                }
+                config->selectedModulesStr = _strdup(optarg);
                 break;
             case 'h':
                 _usage(0);
@@ -503,7 +411,19 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         _usage(1);
     }
     if (config->imageIdentifier == NULL) {
-        config->imageIdentifier = lookup_ImageIdentifier(config->imageType, config->imageTag, config->verbose, udiConfig);
+        int curr_euid = geteuid();
+        if (seteuid(config->tgtUid) != 0) {
+            fprintf(stderr, "FAILED to change permissions to uid %d\n", config->tgtUid);
+            abort();
+        }
+        config->imageIdentifier = lookup_ImageIdentifier(config->imageType,
+                                      config->imageTag, config->verbose,
+                                      udiConfig);
+
+        if (seteuid(curr_euid) != 0) {
+            fprintf(stderr, "FAILED to change permissions back to uid %d\n", curr_euid);
+            abort();
+        }
     }
     if (config->imageIdentifier == NULL) {
         fprintf(stderr, "FAILED to lookup %s image %s\n", config->imageType, config->imageTag);
@@ -519,35 +439,18 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     }
 
     int remaining = argc - optind;
-    if (config->useEntryPoint == 1) {
-        char **argsPtr = NULL;
-        config->args = (char **) malloc(sizeof(char *) * (remaining + 2));
-        argsPtr = config->args;
-        *argsPtr++ = (char *) 0x1; /* leave space for entry point */
-        for ( ; optind < argc; optind++) {
-            *argsPtr++ = strdup(argv[optind]);
-        }
-        *argsPtr = NULL;
+    if (config->useEntryPoint && remaining == 0) {
+        config->args = (char **) _malloc(sizeof(char *) );
+        config->args[0] = NULL;
     } else if (remaining > 0) {
         /* interpret all remaining arguments as the intended command */
         char **argsPtr = NULL;
-        config->args = (char **) malloc(sizeof(char *) * (remaining + 1));
+        config->args = (char **) _malloc(sizeof(char *) * (remaining + 1));
         for (argsPtr = config->args; optind < argc; optind++) {
-            *argsPtr++ = strdup(argv[optind]);
+            *argsPtr++ = _strdup(argv[optind]);
         }
         *argsPtr = NULL;
-    } else if (getenv("SHELL") != NULL) {
-        /* use the current shell */
-        config->args = (char **) malloc(sizeof(char *) * 2);
-        config->args[0] = strdup(getenv("SHELL"));
-        config->args[1] = NULL;
-    } else {
-        /* use /bin/sh */
-        config->args = (char **) malloc(sizeof(char*) * 2);
-        config->args[0] = strdup("/bin/sh");
-        config->args[1] = NULL;
     }
-
     /* validate and organize any user-requested bind-mounts */
     if (config->rawVolumes != NULL) {
         if (parseVolumeMap(config->rawVolumes, &(config->volumeMap)) != 0) {
@@ -559,13 +462,20 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     if (config->username == NULL) {
         struct passwd *pwd = shifter_getpwuid(config->tgtUid, udiConfig);
         if (pwd != NULL) {
-            config->username = strdup(pwd->pw_name);
+            config->username = _strdup(pwd->pw_name);
+        }
+    }
+
+    if (config->selectedModulesStr != NULL) {
+        if (parse_selected_ShifterModule(config->selectedModulesStr, udiConfig) != 0) {
+            fprintf(stderr, "Invalid shifter module selection: %s\n",
+                    config->selectedModulesStr);
+            _usage(1);
         }
     }
 
     udiConfig->target_uid = config->tgtUid;
     udiConfig->target_gid = config->tgtGid;
-    seteuid(0);
     return 0;
 }
 
@@ -573,6 +483,7 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
     char *envPtr = NULL;
     char *type = NULL;
     char *tag = NULL;
+    char *module = NULL;
 
     /* read type and tag from the environment */
     if ((envPtr = getenv("SHIFTER_IMAGETYPE")) != NULL) {
@@ -584,6 +495,15 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
         tag = imageDesc_filterString(envPtr, type);
     } else if ((envPtr = getenv("SLURM_SPANK_SHIFTER_IMAGE")) != NULL) {
         tag = imageDesc_filterString(envPtr, type);
+    }
+    if ((envPtr = getenv("SHIFTER_MODULE")) != NULL) {
+        module = _strdup(envPtr);
+    } else if ((envPtr = getenv("SLURM_SPANK_SHIFTER_MODULE")) != NULL) {
+        module = _strdup(envPtr);
+    }
+
+    if (module) {
+        opts->selectedModulesStr = module;
     }
 
     /* validate type and tag */
@@ -603,9 +523,9 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
     }
 
     if ((envPtr = getenv("SHIFTER")) != NULL) {
-        opts->request = strdup(envPtr);
+        opts->request = _strdup(envPtr);
     } else if ((envPtr = getenv("SLURM_SPANK_SHIFTER")) != NULL) {
-        opts->request = strdup(envPtr);
+        opts->request = _strdup(envPtr);
     }
     if (opts->request != NULL) {
         /* if the the imageType and Tag weren't specified earlier, parse from here */
@@ -625,9 +545,9 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
         }
     }
     if ((envPtr = getenv("SHIFTER_VOLUME")) != NULL) {
-        opts->rawVolumes = strdup(envPtr);
+        opts->rawVolumes = _strdup(envPtr);
     } else if ((envPtr = getenv("SLURM_SPANK_SHIFTER_VOLUME")) != NULL) {
-        opts->rawVolumes = strdup(envPtr);
+        opts->rawVolumes = _strdup(envPtr);
     }
 
     return 0;
@@ -637,33 +557,52 @@ static void _usage(int status) {
     printf("\n"
         "Usage:\n"
         "shifter [-h|--help] [-v|--verbose] [--image=<imageType>:<imageTag>]\n"
-        "    [--entry] [-V|--volume=/path/to/bind:/mnt/in/image[:<flags>][,...]]\n"
+        "    [--entrypoint[=command]] [--workdir]  \n"
+        "    [-V|--volume=/path/to/bind:/mnt/in/image[:<flags>[,...]][;...]]\n"
+        "    [-m|--module=<modulename>[,...]]\n"
         "    [-- /command/to/exec/in/shifter [args...]]\n"
         );
     printf("\n");
-    printf(
+    if (status == 0) {
+        printf(
 "Image Selection:  Images can be selected in any of three ways, explicit\n"
 "specification as an argument, e.g.:\n"
-"    shifter --image=docker:ubuntu/15.04\n"
+"    shifter --image=docker:ubuntu/17.10\n"
 "Or an image can be specified in the environment by passing either:\n"
-"    export SHIFTER=docker:ubuntu/15.04\n"
+"    export SHIFTER=docker:ubuntu/17.10\n"
 "                    or\n"
 "    export SHIFTER_IMAGETYPE=docker\n"
-"    export SHIFTER_IMAGE=ubuntu/15.04\n"
+"    export SHIFTER_IMAGE=ubuntu/17.10\n"
 "Or if an image is already loaded in the global namespace owned by the\n"
 "running user, and none of the above options are set, then the image loaded\n"
 "in the global namespace will be used.\n"
 "\n"
 "Command Selection: If a command is supplied on the command line Shifter will\n"
-"attempt to exec that command within the image.  Otherwise, if \"--entry\" is\n"
-"specified and an entry point is defined for the image, then the entrypoint\n"
-"will be executed.  Finally if nothing else is specified /bin/sh will be\n"
-"attempted.\n"
+"attempt to exec that command within the image.  Otherwise, if \"--entrypoint\"\n"
+"is specified and an entry point is defined for the image, then the entrypoint\n"
+"will be executed.  This includes handling of any command options specified\n"
+"in the image as well.  If a command is specified as an option to \"--entrypoint\"\n"
+"on the command-line, it will override the commands specified in the image.\n"
+"Finally if nothing else is specified $SHELL or /bin/sh will be attempted.\n"
+"\n"
+"If \"--workdir\" is specified, the working directory will change to the specified\n"
+"directory.  If no directory is specified, the working directory specified in\n"
+"the image will be used.  The default behaviour is to use the current working\n"
+"directory\n"
 "\n"
 "Environmental Transfer: All the environment variables defined in the\n"
 "calling processes's environment will be transferred into the container,\n"
 "however, any environment variables defined in the container desription,\n"
 "e.g., Docker ENV-defined variables, will be sourced and override those.\n"
+"\n"
+"Shifter Module Support:  Site-defineable \"modules\" can be specified to\n"
+"enable optional capabilities locally configured.  Specifying --module=none\n"
+"will turn off any default modules that may have been configured.  Modules can\n"
+"be used to provide environmental variable overrides, inject specific content\n"
+"or mount points into the container environments, or run particular callback\n"
+"hooks during container instantiation to verify the module is compatible with\n"
+"a particular container.  Modules are executed in the order specified on the\n"
+"command line, or in the defaultModules setting in udiRoot.conf.\n"
 "\n"
 "Volume Mapping:  You can request any path available in the current\n"
 "environment to be mapped to some other path within the container.\n"
@@ -675,19 +614,8 @@ static void _usage(int status) {
 "under /dev, /etc, /opt/udiImage, /proc, or /var; or overwrite any bind-\n"
 "requested by the system configuration.\n"
 "\n"
-"GPU Support: To select one or more GPU devices to be made available inside\n"
-"the container, set the environment variable CUDA_VISIBLE_DEVICES.\n"
-"The value of CUDA_VISIBLE_DEVICES should be a comma separated list of GPU\n"
-"device IDs.\n"
-"e.g.,\n"
-"    export CUDA_VISIBLE_DEVICES=0,2\n"
-"When using the SLURM Workload Manager, CUDA_VISIBLE_DEVICES is always\n"
-"exported, and the user can control the selected GPU devices through\n"
-"the Generic Resource Scheduling, e.g.:\n"
-"    srun --gres=gpu:<NumGPUsPerNode>\n"
-"Thus, Shifter transparently supports GPUs selected by the SLURM GRES plugin.\n"
-"\n"
-        );
+            );
+    }
     exit(status);
 }
 

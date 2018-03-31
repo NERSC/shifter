@@ -8,7 +8,6 @@
     "ImageExpirationTimeout": "90:00:00:00",
     "MongoDBURI":"mongodb://localhost/",
     "MongoDB":"Shifter",
-    "Broker":"redis://localhost/",
     "CacheDirectory": "/images/cache/",
     "ExpandDirectory": "/images/expand/",
     "Locations": {

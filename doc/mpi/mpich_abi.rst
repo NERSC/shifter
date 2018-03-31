@@ -114,17 +114,25 @@ Note: in CLE5.2 this should be done on an internal login node; in CLE6 an
 internal or external login node should work. You'll need to install patchelf
 into your PATH prior to running (https://nixos.org/patchelf.html)
 
-Next copy /tmp/craylibs to your optUdiImage path (see udiRoot.conf) under
-cray/lib64, e.g., :code:`/usr/lib/shifter/udiImage/cray/lib64`
+Next copy /tmp/craylibs to your shifter module path (see Modules) under
+mpich/lib64, e.g., :code:`/usr/lib/shifter/modules/mpich/lib64`.
 
 Finally, a few modifications need to be made to udiRoot.conf:
 
-1. add "LD_LIBRARY_PATH=/opt/udiImage/cray/lib64" to siteEnvAppend
-2. add "/var/opt/cray/alps:/var/opt/cray/alps:rec" to siteFs
-3. if CLE6, add "/etc/opt/cray/wlm_detect:/etc/opt/cray/wlm_detect" to siteFs
+1. add "module_mpich_siteEnvPrepend = LD_LIBRARY_PATH=/opt/udiImage/modules/mpich/lib64"
+2. add "module_mpich_copyPath = /usr/lib/shifter/modules/mpich"
+3. add "/var/opt/cray/alps:/var/opt/cray/alps:rec" to siteFs
+4. if CLE6, add "/etc/opt/cray/wlm_detect:/etc/opt/cray/wlm_detect" to siteFs
+5. add "defaultModules = mpich" to load cray-mpich support by default in all containers
 
 Note, you may need to modify your sitePreMountHook script to create
 /var/opt/cray and /etc/opt/cray prior the mounts.
+
+Instead of setting up the module_mpich_copyPath, you could use siteFs to bind-mount
+the content into the container instead, which may have performance benefits in some
+environments, e.g. set module_mpich_siteFs = /usr/lib/shifter/modules/mpich:/shifter/mpich.
+In that case you'll need to adjust the module_mpich_siteEnvPrepend paths, and pre-create
+the /shifter directory using the sitePreMountHook.
 
 ------
 

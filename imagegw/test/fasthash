@@ -1,0 +1,4 @@
+#!/bin/sh
+
+D=$(dirname $0)
+python $D/../shifter_imagegw/fasthash.py $@

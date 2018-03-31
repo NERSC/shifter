@@ -170,23 +170,6 @@ gatewayTimeout (optional)
 Time in seconds to wait for the imagegw to respond before
 failing over to next (or failing).
 
-kmodBasePath
-------------
-Optional absolute path to where kernel modules are accessible --
-up-to-but-not-including the kernel version directory.  On many
-systems this will be /lib/modules, on Cray systems where kernel
-modules are built as part of the installation process, point to
-where you installed them (possibly under
-        /opt/shifter/udiRoot/default/kmod
-)
-
-This is not necessary if autoLoadKernelModule is 0, and is required
-if it is 1.
-
-kmodCacheFile (deprecated)
---------------------------
-Do not use.
-
 siteFs
 ------
 Space seperated list of paths to be automatically bind-mounted into
@@ -226,7 +209,8 @@ This can be used if your site patches in a path that you want to appear in
 the path.  Recommend that all binaries are compatible with all containers,
 i.e., are statically linked, to ensure they work.
 
-### siteEnvPrepend
+siteEnvPrepend
+--------------
 Space seperated list of environment variables to automatically prepend (or
 add) when a shifter container is setup.  This only makes sense for colon
 seperated environment variables, e.g., PATH.
@@ -252,13 +236,6 @@ imageGateway
 Space seperated URLs for your imagegw.  Used by shifterimg and SLURM batch
 integration to communicate with the imagegw.
 
-siteResources (required)
-------------------------
-Absolute path to where site-specific resources will be bind-mounted inside the
-container to enable features like native MPI or GPU support.
-This configuration only affects the container. The specified path will be automatically
-created inside the container. The specified path doesn't need to exist on the host.
-
 batchType (optional)
 --------------------
 Used by batch integration code to pick useful settings.  May be deprecated
@@ -270,10 +247,120 @@ Name of your system, e.g., edison or cori.  This name must match a configured
 system in the imagegw.  This is primarily used by shifterimg to self-identify
 which system it is representing.
 
-optionalSshdAsRoot
-------------------
-If the optional sshd is executed, it is, by default executed as the user.
-Setting optionalSshdAsRoot to a non-zero value will cause the sshd to be
-executed with root privilege.  This can be useful on some environments where
-root privilege is required to allocate ptys.  Most modern systems will not
-require this option enabled.
+Shifter Module Options in udiRoot.conf
+======================================
+
+For each module a site wants to configure, at least one of the `module_*`
+configuration parameters needs to include.  Only specify the options that
+are needed for your module.
+
+Note that modules will be loaded in the order the user specifies.  By
+specifying a custom set of modules, the user will disable whatever modules
+were specified by the administrator in the defaultModules configuration
+parameter.
+
+The siteEnv* parameters are evaluated after all modules have been evaluated
+when performing environmental setup.
+
+defaultModules
+--------------
+comma-separated list of modules that should be loaded by default for every
+container invocation.  The user can override this and provide their own list
+of modules that are appropriate for their need.
+
+module_<name>_siteEnv
+---------------------
+Like siteEnv, allows the site to define the value an environment variable
+should take when setting up the container environment, but only if the target
+module is activated.  This value will replace anything set up previously either
+in the external environment, user-specified option, or in the container
+definition.  The global siteEnv can override this.
+
+module_<name>_siteEnvPrepend
+----------------------------
+Space seperated list of environment variables to automatically append (or
+add) when a shifter container is setup.  This only makes sense for colon
+seperated environment variables, .e.g, PATH.
+
+Example::
+    module_<name>_siteEnvAppend=PATH=/opt/udiImage/modules/<name>/bin
+
+This can be used if your site patches in a path that you want to appear in
+the path.  Recommend that all binaries are compatible with all containers,
+i.e., are statically linked, to ensure they work.
+The global siteEnvPrepend is applied after this.
+
+module_<name>_siteEnvAppend
+---------------------------
+Space seperated list of environment variables to automatically append (or
+add) when a shifter container is setup.  This only makes sense for colon
+seperated environment variables, .e.g, PATH.
+
+Example::
+    module_<name>_siteEnvAppend=PATH=/opt/udiImage/modules/<name>/bin
+
+This can be used if your site patches in a path that you want to appear in
+the path.  Recommend that all binaries are compatible with all containers,
+i.e., are statically linked, to ensure they work.
+The global siteEnvAppend is applied after this.
+
+module_<name>_siteEnvUnset
+--------------------------
+Space separated list of environment variables to be unset when a shifter
+container is setup.  This only makes sense for bare environmental variable
+names.
+
+Example::
+    module_<name>_siteEnvUnset=MPICH_...
+
+module_<name>_conflict
+----------------------
+Space separated list of other modules that cannot be concurrently loaded
+with this module.  Attempt to specify multiple modules that conflict will
+result in shifter termination.
+
+module_<name>_siteFs
+--------------------
+Module-specific external paths to be bind mounted into the container.  This
+will allow additional external content, from the external OS or a shared
+filesystem to be included, optionally, as part of the module.  All the warnings
+and conditions applied to siteFs apply here as well.
+
+module_<name>_copyPath
+----------------------
+The directory in the external environment that is to be copied to
+/opt/udiImage/modules/<name>/
+
+This can include libraries, scripts or other content that needs to be accessed
+locally in the container.
+
+module_<name>_enabled
+---------------------
+By default a module is enabled.  Setting enabled = 0 will prevent any container
+from specifying or using it.  This parameter does not need to be specified in
+most cases.
+
+module_<name>_roothook
+----------------------
+Executes the configured script with /bin/sh as root, in the external environment
+following most of the site container customization, including siteFs setup,
+copyPath setup, and etc configuration, but before user content is introduced to
+the container (in the non-overlay version of shifter).  This can be used to
+perform some transformations of the container environment.  The current working
+directory of the executed script is the container environment (be careful to use
+relative paths from the CWD).  Non-zero exit status of the roothook terminates
+container construction.
+
+module_<name>_userhook
+----------------------
+Executes the configured script with /bin/sh as the user after container
+construction, but immediately before a process is launched in the container
+environment.  This may be useful to perform lightweight evaluations to
+determine if the module is compatible with the user's container.  Non-zero
+exit status of the userhook will terminate shifter execution before processes
+are launched into the container.  The userhook can write to stdout or stderr to
+communicate with the user.
+Note: the userhook is run after the container has already lost access to
+the external environment.  Recommend setting userhook to use a path in
+/opt/udiImage/modules/<name> if module_<name>_copyPath is used, or use a siteFs
+path.

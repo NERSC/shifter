@@ -35,6 +35,7 @@ See LICENSE for full text.
 
 #include "UdiRootConfig.h"
 #include "shifter_core.h"
+#include "shifter_mem.h"
 #include "utility.h"
 
 #include "shifterSpank.h"
@@ -59,7 +60,7 @@ static void _log(logLevel level, const char *format, ...) {
     va_end(ap);
 
     if (bytes > 1024) {
-        dbuffer = (char *) malloc(sizeof(char) * (bytes + 2));
+        dbuffer = (char *) _malloc(sizeof(char) * (bytes + 2));
         va_list ap;
         va_start(ap, format);
         vsnprintf(dbuffer, (bytes + 2), format, ap);
@@ -87,7 +88,7 @@ shifterSpank_config *shifterSpank_init(
     char buffer[PATH_MAX];
     shifterSpank_config *ssconfig = NULL;
 
-    ssconfig = (shifterSpank_config *) malloc(sizeof(shifterSpank_config));
+    ssconfig = (shifterSpank_config *) _malloc(sizeof(shifterSpank_config));
     if (ssconfig == NULL) {
         _log(LOG_ERROR, "FAILED to allocate memory for shifterSpank_config");
         return NULL;
@@ -101,12 +102,12 @@ shifterSpank_config *shifterSpank_init(
             char *ptr = argv[idx] + 15;
             snprintf(buffer, PATH_MAX, "%s", ptr);
             ptr = shifter_trim(buffer);
-            ssconfig->shifter_config = strdup(ptr);
+            ssconfig->shifter_config = _strdup(ptr);
         } else if (strncasecmp("extern_setup=", argv[idx], 13) == 0) {
             char *ptr = argv[idx] + 13;
             snprintf(buffer, PATH_MAX, "%s", ptr);
             ptr = shifter_trim(buffer);
-            ssconfig->extern_setup = strdup(ptr);
+            ssconfig->extern_setup = _strdup(ptr);
         } else if (strncasecmp("extern_cgroup=", argv[idx], 14) == 0) {
             char *ptr = argv[idx] + 14;
             ssconfig->extern_cgroup = (int) strtol(ptr, NULL, 10);
@@ -114,10 +115,12 @@ shifterSpank_config *shifterSpank_init(
             char *ptr = argv[idx] + 14;
             snprintf(buffer, PATH_MAX, "%s", ptr);
             ptr = shifter_trim(buffer);
-            ssconfig->memory_cgroup = strdup(ptr);
+            ssconfig->memory_cgroup = _strdup(ptr);
         } else if (strncasecmp("enable_ccm=", argv[idx], 11) == 0) {
             char *ptr = argv[idx] + 11;
             ssconfig->ccmEnabled = (int) strtol(ptr, NULL, 10);
+        } else if (strcasecmp("long_options", argv[idx]) == 0) {
+            ssconfig->useLongOptions = 1;
         } else if (strncasecmp("enable_sshd=", argv[idx], 12) == 0) {
             char *ptr = argv[idx] + 12;
             ssconfig->sshdEnabled = (int) strtol(ptr, NULL, 10);
@@ -125,14 +128,14 @@ shifterSpank_config *shifterSpank_init(
     }
 
     if (ssconfig->shifter_config == NULL) {
-        ssconfig->shifter_config = strdup(CONFIG_FILE);
+        ssconfig->shifter_config = _strdup(CONFIG_FILE);
     }
     if (ssconfig->shifter_config == NULL) {
         _log(LOG_ERROR, "shifterSlurm: failed to find config filename");
         goto error;
     }
 
-    ssconfig->udiConfig = malloc(sizeof(UdiRootConfig));
+    ssconfig->udiConfig = _malloc(sizeof(UdiRootConfig));
     if (ssconfig->udiConfig == NULL) {
         _log(LOG_ERROR, "FAILED to allocate memory to read "
             "udiRoot configuration\n");
@@ -204,8 +207,8 @@ int shifterSpank_process_option_ccm(
     if (ssconfig->ccmEnabled) {
         ssconfig->ccmMode = 1;
     }
-    if (ssconfig->image == NULL) ssconfig->image = strdup("/");
-    if (ssconfig->imageType == NULL) ssconfig->imageType = strdup("local");
+    if (ssconfig->image == NULL) ssconfig->image = _strdup("/");
+    if (ssconfig->imageType == NULL) ssconfig->imageType = _strdup("local");
     return SUCCESS;
 }
 
@@ -217,7 +220,7 @@ int shifterSpank_process_option_image(
     if (optarg != NULL && strlen(optarg) > 0) {
         char *type = NULL;
         char *tag = NULL;
-        tmp = strdup(optarg);
+        tmp = _strdup(optarg);
         if (parse_ImageDescriptor(tmp, &type, &tag, ssconfig->udiConfig) != 0) {
             _log(LOG_ERROR, "Invalid image input: could not determine image " 
                     "type: %s", optarg);
@@ -245,7 +248,7 @@ int shifterSpank_process_option_volume(
 {
     if (optarg != NULL && strlen(optarg) > 0) {
         /* validate input */
-        VolumeMap *vmap = (VolumeMap *) malloc(sizeof(VolumeMap));
+        VolumeMap *vmap = (VolumeMap *) _malloc(sizeof(VolumeMap));
         memset(vmap, 0, sizeof(VolumeMap));
 
         if (parseVolumeMap(optarg, vmap) != 0) {
@@ -255,16 +258,33 @@ int shifterSpank_process_option_volume(
         }
         free_VolumeMap(vmap, 1);
         if (ssconfig->volume != NULL) {
-            char *tmpvol = alloc_strgenf("%s;%s", ssconfig->volume, optarg);
             free(ssconfig->volume);
-            ssconfig->volume = tmpvol;
-        } else {
-            ssconfig->volume = strdup(optarg);
         }
+        ssconfig->volume = _strdup(optarg);
 
         return SUCCESS;
     }
     _log(LOG_ERROR, "Invalid image volume options - if specified, must not be zero length");
+    return ERROR;
+}
+
+int shifterSpank_process_option_module(
+    shifterSpank_config *ssconfig, int val, const char *optarg, int remote)
+{
+    if (optarg != NULL && strlen(optarg) > 0) {
+        if (ssconfig->modules) {
+            free(ssconfig->modules);
+            ssconfig->modules = NULL;
+        }
+        if (parse_selected_ShifterModule(optarg, ssconfig->udiConfig) == 0) {
+            ssconfig->modules = _strdup(optarg);
+        } else {
+            _log(LOG_ERROR, "Failed to parse or invalid module(s) requested: %s\n", optarg);
+            exit(1);
+        }
+        return SUCCESS;
+    }
+    _log(LOG_ERROR, "Invalid shifter module options - if specified, must not be zero length");
     return ERROR;
 }
 
@@ -650,7 +670,7 @@ void shifterSpank_init_allocator_setup(shifterSpank_config *ssconfig) {
         free(ssconfig->image);
         free(ssconfig->imageType);
         ssconfig->image = image_id;
-        ssconfig->imageType = strdup("id");
+        ssconfig->imageType = _strdup("id");
     }
     if (ssconfig->image == NULL || strlen(ssconfig->image) == 0) {
         return;
@@ -682,11 +702,9 @@ void shifterSpank_init_setup(shifterSpank_config *ssconfig) {
         wrap_spank_setenv(ssconfig, "SHIFTER_VOLUME", ssconfig->volume, 1);
         wrap_spank_job_control_setenv(ssconfig, "SHIFTER_VOLUME", ssconfig->volume, 1);
     }
-    if (getgid() != 0) {
-        char buffer[128];
-        snprintf(buffer, 128, "%d", getgid());
-        wrap_spank_setenv(ssconfig, "SHIFTER_GID", buffer, 1);
-        wrap_spank_job_control_setenv(ssconfig, "SHIFTER_GID", buffer, 1);
+    if (ssconfig->modules != NULL && strlen(ssconfig->modules) > 0) {
+        wrap_spank_setenv(ssconfig, "SHIFTER_MODULE", ssconfig->modules, 1);
+        wrap_spank_job_control_setenv(ssconfig, "SHIFTER_MODULE", ssconfig->modules, 1);
     }
     if (ssconfig->ccmMode != 0) {
         wrap_spank_setenv(ssconfig, "SHIFTER_CCM", "1", 1);
@@ -742,7 +760,7 @@ int read_data_from_job(shifterSpank_config *ssconfig, uint32_t *jobid, char **no
             - n_nodes  // ignore current commas
             + string_overhead_per_node * n_nodes // new overhead (including commas)
             + 1; // null byte
-        *nodelist = malloc(sizeof(char) * total_string_len);
+        *nodelist = _malloc(sizeof(char) * total_string_len);
 
         r_ptr = raw_host_string;
         w_ptr = *nodelist;
@@ -781,13 +799,9 @@ int cgroup_record_components(shifterSpank_config *ssconfig, const char *path, vo
 #if 0
     _log(LOG_DEBUG, "sz: %lu, diff: %lu, *comp_ptr=%lu, %s", sz, diff, *comp_ptr, path);
 #endif 
-    char **tmp = (char **) realloc(*comp_ptr, sizeof(char*) * sz);
-    if (tmp == NULL) {
-        return 1;
-    }
-    *comp_ptr = tmp;
+    *comp_ptr = (char **) _realloc(*comp_ptr, sizeof(char*) * sz);
     ptr = *comp_ptr + diff;
-    *ptr = strdup(path);
+    *ptr = _strdup(path);
     ptr++;
     *ptr = NULL;
     return 0;
@@ -812,7 +826,7 @@ char *setup_memory_cgroup(
     }
 
     char *components[] = {
-        strdup("shifter"),
+        _strdup("shifter"),
         alloc_strgenf("uid_%d", uid),
         alloc_strgenf("job_%u", job),
         NULL
@@ -890,8 +904,17 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
 #endif
 
     int set_type = 0;
-    ptr = getenv("SHIFTER_IMAGETYPE");
+    ptr = getenv("SPANK_SHIFTER_IMAGETYPE");
     if (ptr != NULL) {
+        char *tmp = imageDesc_filterString(ptr, NULL);
+        if (ssconfig->imageType != NULL) {
+            free(ssconfig->imageType);
+        }
+        ssconfig->imageType = tmp;
+        set_type = 1;
+    }
+    ptr = getenv("SHIFTER_IMAGETYPE");
+    if (!set_type && ptr != NULL) {
         char *tmp = imageDesc_filterString(ptr, NULL);
         if (ssconfig->imageType != NULL) {
             free(ssconfig->imageType);
@@ -901,6 +924,14 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     }
 
     _log(LOG_ERROR, "about to lookup image in prolog env");
+    ptr = getenv("SPANK_SHIFTER_IMAGE");
+    if (ptr != NULL) {
+        char *tmp = imageDesc_filterString(ptr, set_type ? ssconfig->imageType : NULL);
+        if (ssconfig->image != NULL) {
+            free(ssconfig->image);
+        }
+        ssconfig->image = tmp;
+    }
     ptr = getenv("SHIFTER_IMAGE");
     if (ptr != NULL) {
         char *tmp = imageDesc_filterString(ptr, set_type ? ssconfig->imageType : NULL);
@@ -910,12 +941,39 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
         ssconfig->image = tmp;
     }
 
+    ptr = getenv("SPANK_SHIFTER_VOLUME");
+    if (ptr != NULL) {
+        if (ssconfig->volume != NULL) {
+            free(ssconfig->volume);
+        }
+        ssconfig->volume = _strdup(ptr);
+    }
     ptr = getenv("SHIFTER_VOLUME");
     if (ptr != NULL) {
         if (ssconfig->volume != NULL) {
             free(ssconfig->volume);
         }
-        ssconfig->volume = strdup(ptr);
+        ssconfig->volume = _strdup(ptr);
+    }
+    ptr = getenv("SPANK_SHIFTER_MODULE");
+    if (ptr != NULL) {
+        if (ssconfig->modules != NULL) {
+            free(ssconfig->modules);
+            ssconfig->modules = NULL;
+        }
+        if (parse_selected_ShifterModule(ptr, ssconfig->udiConfig) == 0) {
+            ssconfig->modules = _strdup(ptr);
+        }
+    }
+    ptr = getenv("SHIFTER_MODULE");
+    if (ptr != NULL) {
+        if (ssconfig->modules != NULL) {
+            free(ssconfig->modules);
+            ssconfig->modules = NULL;
+        }
+        if (parse_selected_ShifterModule(ptr, ssconfig->udiConfig) == 0) {
+            ssconfig->modules = _strdup(ptr);
+        }
     }
     _log(LOG_DEBUG, "shifter prolog, id after looking at env: %s:%s", ssconfig->imageType, ssconfig->image);
 
@@ -947,11 +1005,18 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     }
 
     /* try to recover ssh public key */
-    sshPubKey = getenv("SHIFTER_SSH_PUBKEY");
-    if (sshPubKey != NULL && ssconfig->sshdEnabled) {
-        char *ptr = strdup(sshPubKey);
+    ptr = getenv("SPANK_SHIFTER_SSH_PUBKEY");
+    if (ptr != NULL && ssconfig->sshdEnabled) {
+        ptr = _strdup(ptr);
         sshPubKey = shifter_trim(ptr);
-        sshPubKey = strdup(sshPubKey);
+        sshPubKey = _strdup(sshPubKey);
+        free(ptr);
+    }
+    ptr = getenv("SHIFTER_SSH_PUBKEY");
+    if (sshPubKey == NULL && ptr != NULL && ssconfig->sshdEnabled) {
+        ptr = _strdup(ptr);
+        sshPubKey = shifter_trim(ptr);
+        sshPubKey = _strdup(sshPubKey);
         free(ptr);
     }
 
@@ -996,7 +1061,7 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
             break;
         }
         if (result != NULL) {
-            username = strdup(result->pw_name);
+            username = _strdup(result->pw_name);
             _log(LOG_DEBUG, "shifter prolog: got username from getpwuid_r: %s", username);
         }
     }
@@ -1007,15 +1072,21 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
      */
     if (ssconfig->volume != NULL && strlen(ssconfig->volume) > 0) {
         char *ptr = ssconfig->volume;
+        VolumeMap *vmap = (VolumeMap *) _malloc(sizeof(VolumeMap));
+        memset(vmap, 0, sizeof(VolumeMap));
+
+        /* validate input */
+        if (parseVolumeMap(ssconfig->volume, vmap) != 0) {
+            free_VolumeMap(vmap, 1);
+            PROLOG_ERROR("Failed to parse or invalid/disallowed volume map request", ERROR);
+        }
+        free_VolumeMap(vmap, 1);
+
         for ( ; ; ) {
             char *limit = strchr(ptr, ';');
-            char **tmp = (char **) realloc(volArgs, sizeof(char *) * (n_volArgs + 2));
-            if (tmp == NULL) {
-                PROLOG_ERROR("FAILED to allocate memory for volArgs!", ERROR);
-            }
-            volArgs = tmp;
+            volArgs = (char **) _realloc(volArgs, sizeof(char *) * (n_volArgs + 2));
             if (limit != NULL) *limit = 0;
-            volArgs[n_volArgs++] = strdup(ptr);
+            volArgs[n_volArgs++] = _strdup(ptr);
             volArgs[n_volArgs] = NULL;
 
 
@@ -1058,6 +1129,10 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     for (idx = 0; idx < n_volArgs; idx++) {
         strncpy_StringArray("-v", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
         strncpy_StringArray(volArgs[idx], strlen(volArgs[idx]), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+    }
+    if (ssconfig->modules != NULL) {
+        strncpy_StringArray("-m", 3, &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
+        strncpy_StringArray(ssconfig->modules, strlen(ssconfig->modules), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     }
     strncpy_StringArray(ssconfig->imageType, strlen(ssconfig->imageType), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
     strncpy_StringArray(ssconfig->image, strlen(ssconfig->image), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
@@ -1316,7 +1391,7 @@ int shifterSpank_task_init_privileged(shifterSpank_config *ssconfig) {
 
         n_existing_suppl_gids = getgroups(0, NULL);
         if (n_existing_suppl_gids > 0) {
-            existing_suppl_gids = (gid_t *) malloc(sizeof(gid_t) * n_existing_suppl_gids);
+            existing_suppl_gids = (gid_t *) _malloc(sizeof(gid_t) * n_existing_suppl_gids);
             if (existing_suppl_gids == NULL) {
                 TASKINITPRIV_ERROR("FAILED to allocate memory to store current suppl gids", ERROR);
             }

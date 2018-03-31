@@ -12,8 +12,8 @@
     "MongoDBURI":"mongodb://localhost/",
     "MongoDB":"ShifterTest",
     "Metrics":true,
-    "Broker":"redis://localhost/",
     "Authentication":"mock",
+    "ImportUsers":"all",
 
     "Locations": {
         "index.docker.io": {

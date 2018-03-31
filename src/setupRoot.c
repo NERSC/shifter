@@ -2,7 +2,7 @@
  *  @brief Prepare a shifter environment based on image in the filesystem.
  *
  *  The setupRoot program prepares a shifter environment, including performing
- *  site-required modifications and user-requested bind mounts.  This is 
+ *  site-required modifications and user-requested bind mounts.  This is
  *  intended to be run by a WLM prologue prior to batch script execution.
  *
  *  @author Douglas M. Jacobsen <dmjacobsen@lbl.gov>
@@ -11,7 +11,7 @@
 /* Shifter, Copyright (c) 2015, The Regents of the University of California,
  * through Lawrence Berkeley National Laboratory (subject to receipt of any
  * required approvals from the U.S. Dept. of Energy).  All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *  1. Redistributions of source code must retain the above copyright notice,
@@ -23,7 +23,7 @@
  *     National Laboratory, U.S. Dept. of Energy nor the names of its
  *     contributors may be used to endorse or promote products derived from this
  *     software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -35,7 +35,7 @@
  * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
- *  
+ *
  * You are under no obligation whatsoever to provide any bug fixes, patches, or
  * upgrades to the features, functionality or performance of the source code
  * ("Enhancements") to anyone; however, if you choose to make your Enhancements
@@ -66,6 +66,7 @@
 #include "ImageData.h"
 #include "UdiRootConfig.h"
 #include "shifter_core.h"
+#include "shifter_mem.h"
 #include "VolumeMap.h"
 
 #include "config.h"
@@ -77,6 +78,7 @@ typedef struct _SetupRootConfig {
     char *user;
     char *imageType;
     char *imageIdentifier;
+    char *modules;
     uid_t uid;
     gid_t gid;
     char *minNodeSpec;
@@ -95,7 +97,6 @@ int main(int argc, char **argv) {
     UdiRootConfig udiConfig;
     SetupRootConfig config;
     ImageData image;
-    struct gpu_support_config gpu_config = {};
 
     memset(&udiConfig, 0, sizeof(UdiRootConfig));
     memset(&config, 0, sizeof(SetupRootConfig));
@@ -112,6 +113,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "FAILED to parse udiRoot configuration. Exiting.\n");
         exit(1);
     }
+
     udiConfig.target_uid = config.uid;
     udiConfig.target_gid = config.gid;
     udiConfig.auxiliary_gids = shifter_getgrouplist(config.user, udiConfig.target_gid, &(udiConfig.nauxiliary_gids));
@@ -119,6 +121,13 @@ int main(int argc, char **argv) {
     if (udiConfig.auxiliary_gids == NULL || udiConfig.nauxiliary_gids == 0) {
         fprintf(stderr, "FAILED to lookup auxiliary gids. Exiting.\n");
         exit(1);
+    }
+
+    if (config.modules) {
+        if (parse_selected_ShifterModule(config.modules, &udiConfig) != 0) {
+            fprintf(stderr, "Invalid shifter module selection: %s\n", config.modules);
+            exit(1);
+        }
     }
 
     if (config.verbose) {
@@ -130,6 +139,15 @@ int main(int argc, char **argv) {
         fprintf(stderr, "FAILED to get image %s of type %s\n", config.imageIdentifier, config.imageType);
         exit(1);
     }
+    if (!check_image_permissions(config.uid, config.gid,
+                                udiConfig.auxiliary_gids,
+                                udiConfig.nauxiliary_gids,
+                                &image))
+    {
+        fprintf(stderr,"FAILED permission denied to image\n");
+        exit(1);
+    }
+
     if (config.verbose) {
         fprint_ImageData(stdout, &image);
     }
@@ -185,7 +203,7 @@ int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
     int opt = 0;
     optind = 1;
 
-    while ((opt = getopt(argc, argv, "v:s:u:U:G:N:V")) != -1) {
+    while ((opt = getopt(argc, argv, "v:s:u:U:G:N:m:V")) != -1) {
         switch (opt) {
             case 'V': config->verbose = 1; break;
             case 'v':
@@ -196,10 +214,10 @@ int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
 
                 break;
             case 's':
-                config->sshPubKey = strdup(optarg);
+                config->sshPubKey = _strdup(optarg);
                 break;
             case 'u':
-                config->user = strdup(optarg);
+                config->user = _strdup(optarg);
                 break;
             case 'U':
                 config->uid = strtoul(optarg, NULL, 10);
@@ -208,7 +226,10 @@ int parse_SetupRootConfig(int argc, char **argv, SetupRootConfig *config) {
                 config->gid = strtoul(optarg, NULL, 10);
                 break;
             case 'N':
-                config->minNodeSpec = strdup(optarg);
+                config->minNodeSpec = _strdup(optarg);
+                break;
+            case 'm':
+                config->modules = _strdup(optarg);
                 break;
             case '?':
                 fprintf(stderr, "Missing an argument!\n");
