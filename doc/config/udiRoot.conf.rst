@@ -170,23 +170,6 @@ gatewayTimeout (optional)
 Time in seconds to wait for the imagegw to respond before
 failing over to next (or failing).
 
-kmodBasePath
-------------
-Optional absolute path to where kernel modules are accessible --
-up-to-but-not-including the kernel version directory.  On many
-systems this will be /lib/modules, on Cray systems where kernel
-modules are built as part of the installation process, point to
-where you installed them (possibly under
-        /opt/shifter/udiRoot/default/kmod
-)
-
-This is not necessary if autoLoadKernelModule is 0, and is required
-if it is 1.
-
-kmodCacheFile (deprecated)
---------------------------
-Do not use.
-
 siteFs
 ------
 Space seperated list of paths to be automatically bind-mounted into
