@@ -12,6 +12,8 @@
 * Dropped celery dependency to simplify installation
 * Reduced help output in most error conditions (it was rather verbose)
 * Memory management improvements
+* Remove kernel module loading support
+* Remove support for all base filesystems except squashfs
 * Other bug fixes
 
 16.08.5
