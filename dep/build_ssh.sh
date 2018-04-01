@@ -51,7 +51,7 @@ fi
 mkdir -p musl
 tar xf "musl-${MUSL_VERSION}.tar.gz" -C musl --strip-components=1
 cd musl
-./configure "--prefix=${SPRT_PREFIX}" --enable-static --disable-shared
+./configure "--prefix=${SPRT_PREFIX}" --enable-static --disable-shared --enable-gcc-wrapper
 make
 make install
 cd "${builddir}"
