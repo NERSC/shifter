@@ -75,7 +75,9 @@ struct options {
     char *selectedModulesStr;
     char **args;
     char **env;
+    char *envfile;
     VolumeMap volumeMap;
+    int clearenv;
     int verbose;
     int useEntryPoint;
 };
@@ -248,9 +250,22 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to switch to working dir: %s, staying in /\n", opts->workdir);
     }
 
+    /* destroy the copied environment if the user asked us to */
+    /* note: clearenv does not allow the user to get out of site-specified or
+     *       container env */
+    if (opts->clearenv) {
+        if (environ_copy) {
+            free_string_array(environ_copy);
+            environ_copy = NULL;
+        }
+        environ_copy = malloc(sizeof(char *) * 1);
+        environ_copy[0] = NULL;
+    }
+
     /* set the environment variables */
-    if (shifter_setupenv(&environ_copy, imageData, udiConfig) != 0) {
+    if (shifter_setupenv(&environ_copy, imageData, opts->envfile, opts->env, udiConfig) != 0) {
         fprintf(stderr, "Failed to setup container environment variables\n");
+        exit(1);
     }
 
     /* run any user hooks */
@@ -297,7 +312,9 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         {"entrypoint", 2, 0, 0},
         {"workdir", 1, 0, 'w'},
         {"module", 1, 0, 'm'},
-        {"env", 0, 0, 'e'},
+        {"env", 1, 0, 'e'},
+        {"env-file", 1, 0, 0},
+        {"clearenv", 0, 0, 'E'},
         {0, 0, 0, 0}
     };
     if (config == NULL) {
@@ -314,19 +331,33 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     optind = 1;
     for ( ; ; ) {
         int longopt_index = 0;
-        opt = getopt_long(argc, argv, "hnvV:i:e:w:m:", long_options, &longopt_index);
+        opt = getopt_long(argc, argv, "hnvV:i:e:Ew:m:", long_options, &longopt_index);
         if (opt == -1) break;
 
         switch (opt) {
             case 0:
-                {
-                    if (strcmp(long_options[longopt_index].name, "entrypoint") == 0 ||
-                        strcmp(long_options[longopt_index].name, "entry") == 0) {
-                        config->useEntryPoint = 1;
-                        if (optarg != NULL) {
-                            config->entrypoint = _strdup(optarg);
-                        }
+                if (strcmp(long_options[longopt_index].name, "entrypoint") == 0 ||
+                    strcmp(long_options[longopt_index].name, "entry") == 0) {
+                    if (!optarg) {
+                        fprintf(stderr, "%s missing an argument\n", long_options[longopt_index].name);
+                        _usage(1);
                     }
+                    if (config->entrypoint) {
+                            free(config->entrypoint);
+                            config->entrypoint = NULL;
+                    }
+                    config->useEntryPoint = 1;
+                    config->entrypoint = _strdup(optarg);
+                } else if (strcmp(long_options[longopt_index].name, "env-file") == 0) {
+                    if (!optarg) {
+                        fprintf(stderr, "%s missing an argument\n", long_options[longopt_index].name);
+                        _usage(1);
+                    }
+                    if (config->envfile) {
+                        free(config->envfile);
+                        config->envfile = NULL;
+                    }
+                    config->envfile = _strdup(optarg);
                 }
                 break;
             case 'w':
@@ -380,9 +411,28 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                 }
                 break;
             case 'e':
-                /* TODO - add support for explicitly overriding environment
-                 * variables
-                 */
+                if (optarg) {
+                    size_t len = strlen(optarg);
+                    char *loc = strchr(optarg, '=');
+                    if (!loc || len == 0 || loc == optarg || loc == (optarg + len - 1)) {
+                        fprintf(stderr, "Improperly formatted environment variable: %s\n", optarg);
+                        exit(1);
+                    }
+                } else {
+                    fprintf(stderr, "Missing an argument!\n");
+                    _usage(1);
+                }
+                if (config->env == NULL) {
+                    config->env = malloc(sizeof(char *) * 1);
+                    config->env[0] = NULL;
+                }
+                if (shifter_putenv(&config->env, optarg) != 0) {
+                    fprintf(stderr, "FAILED to add %s to environment.\n", optarg);
+                    exit(1);
+                }
+                break;
+            case 'E':
+                config->clearenv = 1;
                 break;
             case 'm':
                 if (optarg == NULL) { /* coverity false positive */
