@@ -423,7 +423,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                     _usage(1);
                 }
                 if (config->env == NULL) {
-                    config->env = malloc(sizeof(char *) * 1);
+                    config->env = (char **) malloc(sizeof(char *) * 1);
                     config->env[0] = NULL;
                 }
                 if (shifter_putenv(&config->env, optarg) != 0) {
