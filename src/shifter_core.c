@@ -1997,7 +1997,7 @@ _pass_check_fromvol:
         } else {
             int allowOverwriteBind = 1;
 
-            if (_shifterCore_bindMount(udiConfig, mountCache, from_buffer, to_real, flagsInEffect, allowOverwriteBind) != 0) {
+            if (_shifterCore_bindMount(udiConfig, mountCache, from_real, to_real, flagsInEffect, allowOverwriteBind) != 0) {
                 fprintf(stderr, "BIND MOUNT FAILED from %s to %s\n", from_buffer, to_real);
                 goto _handleVolMountError;
             }
@@ -3151,7 +3151,21 @@ int unmountTree(MountList *mounts, const char *base) {
     setSort_MountList(mounts, MOUNT_SORT_REVERSE);
 
     for (ptr = mounts->mountPointList; ptr && *ptr; ptr++) {
+        size_t len = strlen(*ptr);
         if (strncmp(*ptr, base, baseLen) == 0) {
+            char *next_slash = strchr(*ptr + baseLen, '/');
+
+            /* avoid unmounting a path for which the base is just a substring
+             * base: /var/udiMount/cvmfs
+             * *ptr: /var/udiMount/cvmfs_nfs/123  <-- case 1, not ok to unmount
+             * *ptr: /var/udiMount/cvmfs_nfs      <-- case 2, not ok to unmount
+             */
+            if (next_slash && next_slash - *ptr > baseLen) {
+                continue;
+            }
+            if (!next_slash && len > baseLen) {
+                continue;
+            }
             rc = umount2(*ptr, UMOUNT_NOFOLLOW|MNT_DETACH);
             if (rc != 0) {
                 goto _unmountTree_exit;
