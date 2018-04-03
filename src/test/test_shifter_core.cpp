@@ -830,6 +830,37 @@ TEST(ShifterCoreTestGroup, validateUnmounted_Basic) {
     rc = validateUnmounted(tmpDir, 0);
     CHECK(rc == 0);
 
+    string cvmfs = string(tmpDir) + string("/cvmfs");
+    string cvmfs_nfs = string(tmpDir) + string("/cvmfs_nfs");
+    string cvmfs_nfs_subdir = string(tmpDir) + string("/cvmfs_nfs/subdir");
+
+    CHECK(mkdir(cvmfs.c_str(), 0755) == 0);
+    CHECK(mkdir(cvmfs_nfs.c_str(), 0755) == 0);
+    CHECK(mkdir(cvmfs_nfs_subdir.c_str(), 0755) == 0);
+
+    CHECK(_shifterCore_bindMount(&config, &mounts, "/", cvmfs.c_str(), 1, 0) == 0);
+    CHECK(_shifterCore_bindMount(&config, &mounts, "/", cvmfs_nfs_subdir.c_str(), 1, 0) == 0);
+
+    CHECK(unmountTree(&mounts, cvmfs.c_str()) == 0);
+
+    CHECK(validateUnmounted(cvmfs.c_str(), 0) == 0);
+    CHECK(validateUnmounted(cvmfs_nfs_subdir.c_str(), 0) != 0);
+    CHECK(unmountTree(&mounts, tmpDir) == 0);
+    CHECK(validateUnmounted(cvmfs_nfs_subdir.c_str(), 0) == 0);
+    CHECK(validateUnmounted(tmpDir, 0) == 0);
+ 
+
+    CHECK(_shifterCore_bindMount(&config, &mounts, "/", cvmfs.c_str(), 1, 0) == 0);
+    CHECK(_shifterCore_bindMount(&config, &mounts, "/", cvmfs_nfs.c_str(), 1, 0) == 0);
+
+    CHECK(unmountTree(&mounts, cvmfs.c_str()) == 0);
+
+    CHECK(validateUnmounted(cvmfs.c_str(), 0) == 0);
+    CHECK(validateUnmounted(cvmfs_nfs.c_str(), 0) != 0);
+    CHECK(unmountTree(&mounts, tmpDir) == 0);
+    CHECK(validateUnmounted(cvmfs_nfs.c_str(), 0) == 0);
+    CHECK(validateUnmounted(tmpDir, 0) == 0);
+
     free_MountList(&mounts, 0);
 }
 
