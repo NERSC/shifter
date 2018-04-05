@@ -79,6 +79,7 @@ struct options {
     VolumeMap volumeMap;
     int clearenv;
     int verbose;
+    int useWorkDir;
     int useEntryPoint;
 };
 
@@ -144,11 +145,17 @@ int main(int argc, char **argv) {
     run_args = calculate_args(opts->useEntryPoint, opts->args, opts->entrypoint,
                               imageData);
     if (run_args == NULL || run_args == NULL ) {
-        fprintf(stderr, "Error calculating run arguements\n");
+        fprintf(stderr, "Error calculating run arguments\n");
         exit(1);
     }
-    if (imageData->workdir != NULL && opts->workdir == NULL) {
-        opts->workdir = _strdup(imageData->workdir);
+    if (opts->useWorkDir) {
+        if (imageData->workdir != NULL && opts->workdir == NULL) {
+            opts->workdir = _strdup(imageData->workdir);
+        }
+        if (opts->workdir == NULL) {
+            fprintf(stderr, "No workdir specified on command line or in image definition.\n");
+            exit(1);
+        }
     }
 
     snprintf(udiRoot, PATH_MAX, "%s", udiConfig->udiMountPoint);
@@ -310,7 +317,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
         {"image", 1, 0, 'i'},
         {"entry", 2, 0, 0},
         {"entrypoint", 2, 0, 0},
-        {"workdir", 1, 0, 'w'},
+        {"workdir", 2, 0, 'w'},
         {"module", 1, 0, 'm'},
         {"env", 1, 0, 'e'},
         {"env-file", 1, 0, 0},
@@ -358,6 +365,11 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                 }
                 break;
             case 'w':
+                if (config->workdir) {
+                    free(config->workdir);
+                    config->workdir = NULL;
+                }
+                config->useWorkDir = 1;
                 if (optarg != NULL) {
                     config->workdir = _strdup(optarg);
                 }
@@ -604,7 +616,7 @@ static void _usage(int status) {
     printf("\n"
         "Usage:\n"
         "shifter [-h|--help] [-v|--verbose] [--image=<imageType>:<imageTag>]\n"
-        "    [--entrypoint[=command]] [--workdir]  \n"
+        "    [--entrypoint[=command]] [--workdir[=/path]]  \n"
         "    [-V|--volume=/path/to/bind:/mnt/in/image[:<flags>[,...]][;...]]\n"
         "    [-m|--module=<modulename>[,...]]\n"
         "    [-- /command/to/exec/in/shifter [args...]]\n"
