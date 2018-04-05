@@ -3349,27 +3349,36 @@ int shifter_unsetenv(char ***env, const char *var) {
     return _shifter_unsetenv(env, var);
 }
 
-int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
+int shifter_setupenv(char ***env, ImageData *image, const char *envfile, char **user_env, UdiRootConfig *udiConfig) {
     char **envPtr = NULL;
     int idx = 0;
     if (env == NULL || *env == NULL || image == NULL || udiConfig == NULL) {
         return 1;
     }
+
+    /* set any variables from the image */
     for (envPtr = image->env; envPtr && *envPtr; envPtr++) {
         shifter_putenv(env, *envPtr);
     }
-    for (envPtr = udiConfig->siteEnv; envPtr && *envPtr; envPtr++) {
-        shifter_putenv(env, *envPtr);
+
+    /* set any variables from env-file specified by user */
+    if (envfile) {
+        if (shifter_putenv_file(env, envfile) != 0) {
+            fprintf(stderr, "Failed to process env-file %s\n", envfile);
+            exit(1);
+        }
     }
-    for (envPtr = udiConfig->siteEnvAppend; envPtr && *envPtr; envPtr++) {
-        shifter_appendenv(env, *envPtr);
+
+    /* set any variables specified by the user */
+    if (user_env) {
+        for (envPtr = user_env; envPtr && *envPtr; envPtr++) {
+            if (shifter_putenv(env, *envPtr) != 0) {
+                fprintf(stderr, "Failed to set %s in container environment.\n", *envPtr);
+                exit(1);
+            }
+        }
     }
-    for (envPtr = udiConfig->siteEnvPrepend; envPtr && *envPtr; envPtr++) {
-        shifter_prependenv(env, *envPtr);
-    }
-    for (envPtr = udiConfig->siteEnvUnset; envPtr && *envPtr; envPtr++) {
-        shifter_unsetenv(env, *envPtr);
-    }
+
     for (idx = 0; idx < udiConfig->n_active_modules; idx++) {
         for (envPtr = udiConfig->active_modules[idx]->siteEnv; envPtr && *envPtr; envPtr++) {
             shifter_putenv(env, *envPtr);
@@ -3384,7 +3393,71 @@ int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig) {
             shifter_unsetenv(env, *envPtr);
         }
     }
+    for (envPtr = udiConfig->siteEnv; envPtr && *envPtr; envPtr++) {
+        shifter_putenv(env, *envPtr);
+    }
+    for (envPtr = udiConfig->siteEnvAppend; envPtr && *envPtr; envPtr++) {
+        shifter_appendenv(env, *envPtr);
+    }
+    for (envPtr = udiConfig->siteEnvPrepend; envPtr && *envPtr; envPtr++) {
+        shifter_prependenv(env, *envPtr);
+    }
+    for (envPtr = udiConfig->siteEnvUnset; envPtr && *envPtr; envPtr++) {
+        shifter_unsetenv(env, *envPtr);
+    }
     return 0;
+}
+
+int shifter_putenv_file(char ***env, const char *env_fname) {
+    FILE *fp = NULL;
+    char *line = NULL;
+    size_t line_sz = 0;
+    if (!env || !*env || !env_fname) {
+        goto _fail;
+    }
+
+    fp = fopen(env_fname, "r");
+    if (!fp) {
+        fprintf(stderr, "FAILED to open env-file: %s\n", env_fname);
+        goto _fail;
+    }
+    while (!feof(fp) && !ferror(fp)) {
+        size_t nread = getline(&line, &line_sz, fp);
+        char *trimmed = NULL;
+        char *eqpos = NULL;
+        if (nread == 0 || line == NULL) break;
+
+        trimmed = shifter_trim(line);
+        if (strlen(trimmed) == 0) continue;
+        if (trimmed[0] == '#') continue;
+
+        eqpos = strchr(trimmed, '=');
+        if (eqpos == NULL) {
+            fprintf(stderr, "ERROR: Invalid env-file entry: %s\n", trimmed);
+            goto _fail;
+        }
+        if (shifter_putenv(env, trimmed) != 0) {
+            fprintf(stderr, "ERROR: Invalid env-file entry: %s\n", trimmed);
+            goto _fail;
+        }
+    }
+    if (line) {
+        free(line);
+        line = NULL;
+    }
+    fclose(fp);
+    fp = NULL;
+    return 0;
+_fail:
+    if (line) {
+        free(line);
+        line = NULL;
+    }
+    if (fp) {
+        fclose(fp);
+        fp = NULL;
+    }
+    return 1;
 }
 
 /*

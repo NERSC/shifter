@@ -135,7 +135,8 @@ int shifter_putenv(char ***env, const char *var);
 int shifter_appendenv(char ***env, const char *var);
 int shifter_prependenv(char ***env, const char *var);
 int shifter_unsetenv(char ***env, const char *var);
-int shifter_setupenv(char ***env, ImageData *image, UdiRootConfig *udiConfig);
+int shifter_setupenv(char ***env, ImageData *image, const char *envfile, char **user_env, UdiRootConfig *udiConfig);
+int shifter_putenv_file(char ***env, const char *env_fname);
 struct passwd *shifter_getpwuid(uid_t tgtuid, UdiRootConfig *config);
 struct passwd *shifter_getpwnam(const char *tgtnam, UdiRootConfig *config);
 

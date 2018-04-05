@@ -1277,7 +1277,7 @@ TEST(ShifterCoreTestGroup, setupenv_test) {
     image->env[1] = NULL;
 
     /* test target */
-    int ret = shifter_setupenv(&local_env, image, config);
+    int ret = shifter_setupenv(&local_env, image, NULL, NULL, config);
 
     CHECK(ret == 0);
 
