@@ -338,16 +338,13 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
             case 0:
                 if (strcmp(long_options[longopt_index].name, "entrypoint") == 0 ||
                     strcmp(long_options[longopt_index].name, "entry") == 0) {
-                    if (!optarg) {
-                        fprintf(stderr, "%s missing an argument\n", long_options[longopt_index].name);
-                        _usage(1);
-                    }
                     if (config->entrypoint) {
                             free(config->entrypoint);
                             config->entrypoint = NULL;
                     }
                     config->useEntryPoint = 1;
-                    config->entrypoint = _strdup(optarg);
+                    if (optarg)
+                        config->entrypoint = _strdup(optarg);
                 } else if (strcmp(long_options[longopt_index].name, "env-file") == 0) {
                     if (!optarg) {
                         fprintf(stderr, "%s missing an argument\n", long_options[longopt_index].name);
