@@ -87,6 +87,23 @@ TEST(ImageDataTestGroup, FilterString_basic) {
     free(output);
 }
 
+extern "C" {
+    size_t _convert_to_list(const char *, uid_t **, size_t *);
+}
+TEST(ImageDataTestGroup, convertToListTests) {
+    uid_t *uids = NULL;
+    size_t n_uids = 0;
+    size_t ret = 0;
+    const char *one_value = "1000";
+
+    ret = _convert_to_list(one_value, &uids, &n_uids);
+    CHECK(ret == 1);
+    CHECK(n_uids == 1);
+    CHECK(uids[0] == 1000);
+
+    free(uids);
+}
+
 TEST(ImageDataTestGroup, parseImageDescriptor) {
     UdiRootConfig config;
     config.defaultImageType = strdup("docker");
