@@ -442,7 +442,7 @@ size_t _convert_to_list(const char *text, uid_t **uids, size_t *n_uids) {
     *n_uids = 0;
 
     buffer = _strdup(text);
-    search = buffer;
+    search = shifter_trim(buffer);
     svPtr = NULL;
     while ((ptr = strtok_r(search, ",", &svPtr)) != NULL) {
         search = NULL;
@@ -451,7 +451,10 @@ size_t _convert_to_list(const char *text, uid_t **uids, size_t *n_uids) {
             *uids = _realloc(*uids, alloc_size);
             id_capacity = (id_count + 2) * 2;
         }
-        *uids[id_count++] = atoi(ptr);
+        ptr = shifter_trim(ptr);
+        if (strlen(ptr) == 0)
+            continue;
+        (*uids)[id_count++] = atoi(ptr);
         if (id_count > 1000) {
             fprintf(stderr, "ERROR: id list growing too large.\n");
             goto error;

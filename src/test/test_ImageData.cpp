@@ -94,14 +94,78 @@ TEST(ImageDataTestGroup, convertToListTests) {
     uid_t *uids = NULL;
     size_t n_uids = 0;
     size_t ret = 0;
+    const char *no_values = "";
     const char *one_value = "1000";
+    const char *two_values = "1000,5000";
+    const char *three_values = "1000,5000,10000";
+    const char *final_comma = "1000,5000,";
+    const char *leading_comma = ",1000,5000";
+    const char *double_comma = "1000,,5000";
+    const char *white_space = " 1000 ,   ,5000, 10000\n";
+
+    ret = _convert_to_list(no_values, &uids, &n_uids);
+    CHECK(ret == 0);
+    CHECK(n_uids == 0);
+    CHECK(uids == NULL);
+    uids = NULL;
 
     ret = _convert_to_list(one_value, &uids, &n_uids);
     CHECK(ret == 1);
     CHECK(n_uids == 1);
     CHECK(uids[0] == 1000);
-
     free(uids);
+    uids = NULL;
+
+    ret = _convert_to_list(two_values, &uids, &n_uids);
+    CHECK(ret == 2);
+    CHECK(n_uids == 2);
+    CHECK(uids[0] == 1000);
+    CHECK(uids[1] == 5000);
+    free(uids);
+    uids = NULL;
+
+    ret = _convert_to_list(three_values, &uids, &n_uids);
+    CHECK(ret == 3);
+    CHECK(n_uids == 3);
+    CHECK(uids[0] == 1000);
+    CHECK(uids[1] == 5000);
+    CHECK(uids[2] == 10000);
+    free(uids);
+    uids = NULL;
+
+    ret = _convert_to_list(final_comma, &uids, &n_uids);
+    CHECK(ret == 2);
+    CHECK(n_uids == 2);
+    CHECK(uids[0] == 1000);
+    CHECK(uids[1] == 5000);
+    free(uids);
+    uids = NULL;
+
+    ret = _convert_to_list(leading_comma, &uids, &n_uids);
+    CHECK(ret == 2);
+    CHECK(n_uids == 2);
+    CHECK(uids[0] == 1000);
+    CHECK(uids[1] == 5000);
+    free(uids);
+    uids = NULL;
+
+    ret = _convert_to_list(double_comma, &uids, &n_uids);
+    CHECK(ret == 2);
+    CHECK(n_uids == 2);
+    CHECK(uids[0] == 1000);
+    CHECK(uids[1] == 5000);
+    free(uids);
+    uids = NULL;
+
+    ret = _convert_to_list(white_space, &uids, &n_uids);
+    CHECK(ret == 3);
+    CHECK(n_uids == 3);
+    CHECK(uids[0] == 1000);
+    CHECK(uids[1] == 5000);
+    CHECK(uids[2] == 10000);
+    free(uids);
+    uids = NULL;
+
 }
 
 TEST(ImageDataTestGroup, parseImageDescriptor) {
