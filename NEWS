@@ -5,6 +5,7 @@
 * Add support for user specifying environment variables via a file
 * Fix entrypoint bug to not require an argument if the image specifies an entrypoint
 * Fix workdir bug to only use the image workdir when the --workdir option is specified
+* Fix user/group acl parsing bug and improve error handling
 
 
 18.03.0
