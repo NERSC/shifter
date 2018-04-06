@@ -338,7 +338,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     optind = 1;
     for ( ; ; ) {
         int longopt_index = 0;
-        opt = getopt_long(argc, argv, "hnvV:i:e:Ew:m:", long_options, &longopt_index);
+        opt = getopt_long(argc, argv, "hnvV:i:e:Ew::m:", long_options, &longopt_index);
         if (opt == -1) break;
 
         switch (opt) {
