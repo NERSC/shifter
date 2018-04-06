@@ -102,6 +102,7 @@ TEST(ImageDataTestGroup, convertToListTests) {
     const char *leading_comma = ",1000,5000";
     const char *double_comma = "1000,,5000";
     const char *white_space = " 1000 ,   ,5000, 10000\n";
+    const  char *invalid_data = "1000,123temp,2000";
 
     ret = _convert_to_list(no_values, &uids, &n_uids);
     CHECK(ret == 0);
@@ -163,6 +164,14 @@ TEST(ImageDataTestGroup, convertToListTests) {
     CHECK(uids[0] == 1000);
     CHECK(uids[1] == 5000);
     CHECK(uids[2] == 10000);
+    free(uids);
+    uids = NULL;
+
+    ret = _convert_to_list(invalid_data, &uids, &n_uids);
+    CHECK(ret == 2);
+    CHECK(n_uids == 2);
+    CHECK(uids[0] == 1000);
+    CHECK(uids[1] == 2000);
     free(uids);
     uids = NULL;
 

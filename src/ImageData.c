@@ -403,9 +403,17 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
             return 1;
         }
     } else if (strcmp(key, "USERACL") == 0) {
-        _convert_to_list(value, &image->uids, &image->n_uids);
+        if (value && value[0] &&
+            _convert_to_list(value, &image->uids, &image->n_uids) == 0) {
+            fprintf(stderr, "ERROR: failed to parse USERACL from image.\n");
+            abort();
+        }
     } else if (strcmp(key, "GROUPACL") == 0) {
-        _convert_to_list(value, &image->gids, &image->n_gids);
+        if (value && value[0] &&
+            _convert_to_list(value, &image->gids, &image->n_gids) == 0) {
+            fprintf(stderr, "ERROR: failed to parse USERACL from image.\n");
+            abort();
+        }
     } else if (strcmp(key, "VOLUME") == 0) {
         char **tmp = image->volume + image->volume_size;
         char *tvalue = _ImageData_filterString(value, 1);
@@ -425,6 +433,7 @@ size_t _convert_to_list(const char *text, uid_t **uids, size_t *n_uids) {
     char *buffer = NULL;
     char *search = NULL;
     char *svPtr = NULL;
+    char *endPtr = NULL;
 
     if (!text || text[0] == '\0' || !uids || !n_uids) {
         return 0;
@@ -439,6 +448,8 @@ size_t _convert_to_list(const char *text, uid_t **uids, size_t *n_uids) {
     search = shifter_trim(buffer);
     svPtr = NULL;
     while ((ptr = strtok_r(search, ",", &svPtr)) != NULL) {
+        uid_t tmp = 0;
+        size_t len = 0;
         search = NULL;
         if (id_capacity < id_count + 2) {
             size_t alloc_size = sizeof(uid_t) * (id_count + 2) * 2;
@@ -446,9 +457,13 @@ size_t _convert_to_list(const char *text, uid_t **uids, size_t *n_uids) {
             id_capacity = (id_count + 2) * 2;
         }
         ptr = shifter_trim(ptr);
-        if (strlen(ptr) == 0)
+        len = strlen(ptr);
+        if (len == 0)
             continue;
-        (*uids)[id_count++] = atoi(ptr);
+        tmp = (uid_t) strtoul(ptr, &endPtr, 10);
+        if (endPtr != ptr + len)
+            continue;
+        (*uids)[id_count++] = tmp;
         if (id_count > 1000) {
             fprintf(stderr, "ERROR: id list growing too large.\n");
             goto error;
