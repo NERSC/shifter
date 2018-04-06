@@ -403,15 +403,9 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
             return 1;
         }
     } else if (strcmp(key, "USERACL") == 0) {
-        if (_convert_to_list(value, &image->uids, &image->n_uids) == 0) {
-            fprintf(stderr, "ERROR: faild to read USERACLs\n");
-            return 1;
-        }
+        _convert_to_list(value, &image->uids, &image->n_uids);
     } else if (strcmp(key, "GROUPACL") == 0) {
-        if (_convert_to_list(value, &image->gids, &image->n_gids) == 0) {
-            fprintf(stderr, "ERROR: failed to read GROUPACLs\n");
-            return 1;
-        }
+        _convert_to_list(value, &image->gids, &image->n_gids);
     } else if (strcmp(key, "VOLUME") == 0) {
         char **tmp = image->volume + image->volume_size;
         char *tvalue = _ImageData_filterString(value, 1);
