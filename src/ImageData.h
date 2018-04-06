@@ -71,6 +71,8 @@ typedef struct _ImageData {
     char *status;           /*!< Image status from gateway */
     uid_t *uids;            /*!< list of user ids */
     gid_t *gids;            /*!< list of group ids */
+    size_t n_uids;
+    size_t n_gids;
     size_t env_capacity;    /*!< Current # of allocated char* in env */
     size_t volume_capacity; /*!< Current # of allocated char* in volumes */
     size_t env_size;        /*!< Number of elements in env array */
