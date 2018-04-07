@@ -3209,23 +3209,36 @@ _validateUnmounted_error:
     return -1;
 }
 
-static char **_shifter_findenv(char ***env, const char *var, size_t n, size_t *nElement) {
+char **_shifter_findenv(char ***env, const char *var, size_t n, size_t *nElement) {
     char **ptr = NULL;
     char **ret = NULL;
+    char *key = NULL;
+    size_t len = 0;
     if (env == NULL || *env == NULL || var == NULL || n == 0) {
         return NULL;
     }
+
+    len = strlen(var);
+    if (len < n) {
+        len = n;
+    }
+    /* allocating an extra byte to be sure we can terminate */
+    key = _malloc(sizeof(char) * (len + 2));
+    strncpy(key, var, len + 2);
+    key[n] = '=';
+    key[n + 1] = '\0';
     if (nElement != NULL) {
         *nElement = 0;
     }
     for (ptr = *env; ptr && *ptr; ptr++) {
-        if (strncmp(*ptr, var, n) == 0) {
+        if (strncmp(*ptr, key, n + 1) == 0) {
             ret = ptr;
         }
         if (nElement != NULL) {
             (*nElement)++;
         }
     }
+    free(key);
     return ret;
 }
 

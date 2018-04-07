@@ -933,6 +933,7 @@ TEST(ShifterCoreTestGroup, _test_shifterconfig_str) {
     char *sig = generateShifterConfigString("dmj", &image, &vmap, &config);
     CHECK(sig != NULL);
     CHECK(strcmp(sig, "{\"identifier\":\"testImage\",\"user\":\"dmj\",\"volMap\":\"\",\"modules\":\"\"}") == 0);
+    free(sig);
 }
 
 #ifdef NOTROOT
@@ -1042,6 +1043,35 @@ TEST(ShifterCoreTestGroup, copyenv_test) {
         free(*cptr);
     }
     free(copied_env);
+}
+
+extern "C" {
+    char **_shifter_findenv(char ***env, const char *var, size_t n, size_t *nElement);
+}
+
+TEST(ShifterCoreTestGroup, shifter_putenv_detailed) {
+    char **env = (char **)  malloc(sizeof(char *) * 10);
+    size_t n_element = 0;
+    memset(env, 0, sizeof(char *) * 10);
+
+    char **ptr = _shifter_findenv(&env, "PATH=/a/b/c", 4, &n_element);
+    CHECK(ptr == NULL);
+    CHECK(n_element == 0);
+
+    env[0] = strdup("PATH=/hello");
+
+    ptr = _shifter_findenv(&env, "PATH=/a/b/c", 4, &n_element);
+    CHECK(ptr && *ptr == env[0]);
+    CHECK(n_element == 1);
+
+    ptr = _shifter_findenv(&env, "PA=/a/b/c", 2, &n_element);
+    CHECK(ptr == NULL);
+    CHECK(n_element == 1);
+
+    for (ptr = env; ptr && *ptr; ptr++) {
+        free(*ptr);
+    }
+    free(env);
 }
 
 TEST(ShifterCoreTestGroup, setenv_test) {
@@ -1250,7 +1280,7 @@ TEST(ShifterCoreTestGroup, setupenv_test) {
 
     /* initialize empty environment */
     local_env = (char **) malloc(sizeof(char *) * 2);
-    local_env[0] = "PATH=/incorrect";
+    local_env[0] = strdup("PATH=/incorrect");
     local_env[1] = NULL;
 
     /* copy arrays into config */
@@ -1293,6 +1323,9 @@ TEST(ShifterCoreTestGroup, setupenv_test) {
     CHECK(found == 2);
     CHECK(ptr - local_env == 2);
 
+    for (ptr = local_env; ptr && *ptr; ptr++)
+        free(*ptr);
+    free(local_env);
     free_ImageData(image, 1);
     free_UdiRootConfig(config, 1);
 }
