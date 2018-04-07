@@ -269,6 +269,18 @@ int main(int argc, char **argv) {
         environ_copy[0] = NULL;
     }
 
+    if (opts->request) {
+        char *req = alloc_strgenf("SHIFTER_IMAGEREQUEST=%s", opts->request);
+fprintf(stderr, "setting request env: %s\n", req);
+        shifter_putenv(&environ_copy, req);
+        free(req);
+    }
+    if (opts->imageIdentifier) {
+        char *ident = alloc_strgenf("SHIFTER_IMAGE=%s", opts->imageIdentifier);
+        shifter_putenv(&environ_copy, ident);
+        free(ident);
+    }
+
     /* set the environment variables */
     if (shifter_setupenv(&environ_copy, imageData, opts->envfile, opts->env, udiConfig) != 0) {
         fprintf(stderr, "Failed to setup container environment variables\n");
@@ -417,6 +429,7 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
                     }
                     config->imageType = type;
                     config->imageTag = tag;
+                    config->request = _strdup(optarg);
                 }
                 break;
             case 'e':
@@ -560,6 +573,11 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
     } else if ((envPtr = getenv("SLURM_SPANK_SHIFTER_MODULE")) != NULL) {
         module = _strdup(envPtr);
     }
+    if ((envPtr = getenv("SHIFTER_IMAGEREQUEST")) != NULL) {
+        opts->request = _strdup(envPtr);
+    } else if ((envPtr = getenv("SLURM_SPANK_SHIFTER_IMAGEREQUEST")) != NULL) {
+        opts->request = _strdup(envPtr);
+    }
 
     if (module) {
         opts->selectedModulesStr = module;
@@ -581,11 +599,6 @@ int parse_environment(struct options *opts, UdiRootConfig *udiConfig) {
         opts->imageTag = tag;
     }
 
-    if ((envPtr = getenv("SHIFTER")) != NULL) {
-        opts->request = _strdup(envPtr);
-    } else if ((envPtr = getenv("SLURM_SPANK_SHIFTER")) != NULL) {
-        opts->request = _strdup(envPtr);
-    }
     if (opts->request != NULL) {
         /* if the the imageType and Tag weren't specified earlier, parse from here */
         if (opts->imageType == NULL && opts->imageTag == NULL) {
