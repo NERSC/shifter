@@ -66,7 +66,10 @@ def generate_squashfs_image(expand_path, image_path):
     # it should be handled by the calling function
     program_exists('mksquashfs')
 
-    ret = subprocess.call(["mksquashfs", expand_path, image_path, "-all-root"])
+    args = ["mksquashfs", expand_path, image_path, "-all-root"]
+    if 'DISABLE_NOXATTRS' not in os.environ:
+        args.append('-no-xattrs')
+    ret = subprocess.call(args)
     if ret != 0:
         # error handling
         pass
