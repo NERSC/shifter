@@ -926,7 +926,7 @@ TEST(ShifterCoreTestGroup, _test_shifterconfig_str) {
     ImageData image;
     VolumeMap vmap;
     UdiRootConfig config;
-    image.identifier = "testImage";
+    image.identifier = strdup("testImage");
     memset(&vmap, 0, sizeof(VolumeMap));
     memset(&config, 0, sizeof(UdiRootConfig));
 
@@ -934,6 +934,7 @@ TEST(ShifterCoreTestGroup, _test_shifterconfig_str) {
     CHECK(sig != NULL);
     CHECK(strcmp(sig, "{\"identifier\":\"testImage\",\"user\":\"dmj\",\"volMap\":\"\",\"modules\":\"\"}") == 0);
     free(sig);
+    free(image.identifier);
 }
 
 #ifdef NOTROOT
@@ -1046,27 +1047,23 @@ TEST(ShifterCoreTestGroup, copyenv_test) {
 }
 
 extern "C" {
-    char **_shifter_findenv(char ***env, const char *var, size_t n, size_t *nElement);
+    char **_shifter_findenv(char **env, const char *var);
 }
 
 TEST(ShifterCoreTestGroup, shifter_putenv_detailed) {
     char **env = (char **)  malloc(sizeof(char *) * 10);
-    size_t n_element = 0;
     memset(env, 0, sizeof(char *) * 10);
 
-    char **ptr = _shifter_findenv(&env, "PATH=/a/b/c", 4, &n_element);
+    char **ptr = _shifter_findenv(env, "PATH=/a/b/c");
     CHECK(ptr == NULL);
-    CHECK(n_element == 0);
 
     env[0] = strdup("PATH=/hello");
 
-    ptr = _shifter_findenv(&env, "PATH=/a/b/c", 4, &n_element);
+    ptr = _shifter_findenv(env, "PATH=/a/b/c");
     CHECK(ptr && *ptr == env[0]);
-    CHECK(n_element == 1);
 
-    ptr = _shifter_findenv(&env, "PA=/a/b/c", 2, &n_element);
+    ptr = _shifter_findenv(env, "PA=/a/b/c");
     CHECK(ptr == NULL);
-    CHECK(n_element == 1);
 
     for (ptr = env; ptr && *ptr; ptr++) {
         free(*ptr);

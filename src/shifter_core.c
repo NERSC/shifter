@@ -3209,110 +3209,144 @@ _validateUnmounted_error:
     return -1;
 }
 
-char **_shifter_findenv(char ***env, const char *var, size_t n, size_t *nElement) {
-    char **ptr = NULL;
+/*! Count all elements in an env before terminating NULL */
+/*!
+  \param string array holding the environment of interest
+  \return number of elements in the environment
+ */
+size_t _shifter_envsize(char **env) {
+    size_t sz = 0;
+    char **pptr = NULL;
+    for (pptr = env; pptr && *pptr; pptr++) {
+        sz++;
+    }
+    return sz;
+}
+
+/*! Locate an environment variable in an existing environment */
+/*!
+  \param env string array holding the environment of interest
+  \param var string of the variable of interest
+  \return pointer to the variable of interest, or NULL if it is not found
+ */
+char **_shifter_findenv(char **env, const char *var) {
+    char **pptr = NULL;
     char **ret = NULL;
     char *key = NULL;
+    char *eqloc = NULL;
     size_t len = 0;
-    if (env == NULL || *env == NULL || var == NULL || n == 0) {
+    size_t n = 0;
+    if (env == NULL || var == NULL) {
         return NULL;
     }
 
+    /* var can be any of:
+     *     VARIABLE
+     *     VARIABLE=
+     *     VARIABLE=newvalue_to_enventually_be_set
+     * will allocate a buffer two bytes longer to allow adding an = and NUL
+     * terminator in worst case
+     */
     len = strlen(var);
-    if (len < n) {
-        len = n;
-    }
-    /* allocating an extra byte to be sure we can terminate */
     key = _malloc(sizeof(char) * (len + 2));
     strncpy(key, var, len + 2);
+    eqloc = strchr(var, '=');
+    if (eqloc == NULL) {
+        n = len;
+    } else {
+        n = eqloc - var;
+    }
     key[n] = '=';
     key[n + 1] = '\0';
-    if (nElement != NULL) {
-        *nElement = 0;
-    }
-    for (ptr = *env; ptr && *ptr; ptr++) {
-        if (strncmp(*ptr, key, n + 1) == 0) {
-            ret = ptr;
-        }
-        if (nElement != NULL) {
-            (*nElement)++;
+    for (pptr = env; pptr && *pptr; pptr++) {
+        if (strncmp(*pptr, key, n + 1) == 0) {
+            ret = pptr;
+            break;
         }
     }
     free(key);
     return ret;
 }
 
-static int _shifter_unsetenv(char ***env, const char *var) {
-    size_t namelen = 0;
-    size_t envsize = 0;
+/*! Remove a variable from the environment */
+/*!
+  \param env string array holding the environment of interest
+  \param var string of the variable of interest
+  \return 0 for success, non-zero for failure
+ */
+static int _shifter_unsetenv(char **env, const char *var) {
     char **pptr = NULL;
-    if (env == NULL || *env == NULL || var == NULL) {
+    size_t envsize = 0;
+    if (env == NULL || var == NULL) {
         return 1;
     }
 
-    namelen = strlen(var);
-
     /* find the needed environment variable */
-    pptr = _shifter_findenv(env, var, namelen, &envsize);
+    pptr = _shifter_findenv(env, var);
+    envsize = _shifter_envsize(env);
 
-    /* if it is found, remove the entry by shifting the array */
-    /* this relies on the env array being NULL terminated */
-    /* TODO decide if the original *pptr should be freed */
-    if (pptr != NULL) {
-        char **nptr = NULL;
-        for (nptr = pptr + 1; pptr && *pptr; nptr++, pptr++) {
-            *pptr = *nptr;
-        }
+    /* if it is found, remove the entry by swapping the final entry with the
+     * discovered entry */
+    if (pptr != NULL && envsize > 0) {
+        size_t idx = pptr - env;
+        free(*pptr);
+        env[idx] = env[envsize - 1];
+        env[envsize - 1] = NULL;
     }
     return 0;
 }
 
-static int _shifter_putenv(char ***env, const char *var, int mode) {
-    size_t namelen = 0;
+/*! Worker function for performing most of the additive environment changes */
+/*!
+  \param env pointer to string array holding the environment of interest
+             must be an environment copied by shifter_copyenv, or otherwise
+             is comprised of strings entired owned by this environment
+  \param var key=value pair to be set/appended/prepended in the env
+  \param mode flag indicating operation (REPLACE / APPEND / PREPEND)
+  \return 0 for success, non-zero for failure
+ */
+static int _shifter_putenv(char ***env, const char *var, env_putenv_mode_et mode) {
     size_t envsize = 0;
-    char *ptr = NULL;
+    char *newvalue = NULL;
     char **pptr = NULL;
     if (env == NULL || *env == NULL || var == NULL) {
         return 1;
     }
-    ptr = strchr(var, '=');
-    if (ptr == NULL) {
+    newvalue = strchr(var, '=');
+    if (newvalue == NULL) {
+        /* missing equal and value */
         return 1;
     }
-    namelen = ptr - var;
-    pptr = _shifter_findenv(env, var, namelen, &envsize);
+    newvalue++;
+    if (*newvalue == '\0') {
+        /* empty value */
+        return 1;
+    }
+    envsize = _shifter_envsize(*env);
+    pptr = _shifter_findenv(*env, var);
     if (pptr != NULL) {
-        char *value = strchr(*pptr, '=');
-        if (value != NULL) {
-            value++;
-            if (*value == 0) {
-                value = NULL;
+        char *currvalue = strchr(*pptr, '=');
+        if (currvalue != NULL) {
+            currvalue++;
+            if (*currvalue == '\0') {
+                currvalue = NULL;
             }
         }
-        if (mode == 0) {
+        if (mode == ENV_REPLACE || currvalue == NULL) {
             /* replace */
+            free(*pptr);
             *pptr = _strdup(var);
             return 0;
-        } else if (mode == 1) {
+        } else if (mode == ENV_PREPEND) {
             /* prepend */
-            char *newptr = NULL;
-            if (value == NULL) {
-                *pptr = _strdup(var);
-                return 0;
-            }
-
-            newptr = alloc_strgenf("%s:%s", var, value);
+            char *newptr = alloc_strgenf("%s:%s", var, currvalue);
+            free(*pptr);
             *pptr = newptr;
             return 0;
-        } else if (mode == 2) {
+        } else if (mode == ENV_APPEND) {
             /* append */
-            char *newptr = NULL;
-
-            if (value == NULL) {
-                *pptr = _strdup(var);
-                return 0;
-            }
-            newptr = alloc_strgenf("%s:%s", *pptr, (var + namelen + 1));
+            char *newptr = alloc_strgenf("%s:%s", *pptr, newvalue);
+            free(*pptr);
             *pptr = newptr;
             return 0;
         } else {
@@ -3321,7 +3355,7 @@ static int _shifter_putenv(char ***env, const char *var, int mode) {
     }
     *env = _realloc(*env, sizeof(char *) * (envsize + 2));
     (*env)[envsize] = _strdup(var);
-    (*env)[envsize+1] = NULL;
+    (*env)[envsize + 1] = NULL;
     return 0;
 }
 
@@ -3347,19 +3381,19 @@ char **shifter_copyenv(void) {
 }
 
 int shifter_putenv(char ***env, const char *var) {
-    return _shifter_putenv(env, var, 0);
+    return _shifter_putenv(env, var, ENV_REPLACE);
 }
 
 int shifter_appendenv(char ***env, const char *var) {
-    return _shifter_putenv(env, var, 2);
+    return _shifter_putenv(env, var, ENV_APPEND);
 }
 
 int shifter_prependenv(char ***env, const char *var) {
-    return _shifter_putenv(env, var, 1);
+    return _shifter_putenv(env, var, ENV_PREPEND);
 }
 
 int shifter_unsetenv(char ***env, const char *var) {
-    return _shifter_unsetenv(env, var);
+    return _shifter_unsetenv(*env, var);
 }
 
 int shifter_setupenv(char ***env, ImageData *image, const char *envfile, char **user_env, UdiRootConfig *udiConfig) {
