@@ -250,6 +250,14 @@ siteEnvAppend=PATH=/opt/udiImage/bin
 #
 #siteEnvPrepend=PATH=/opt/udiImage/bin
 
+# siteEnvUnset
+# Space separated list of environment variabes to unset when a shifter container
+# is setup.
+#
+# This can be useful if you want to screen out portions of the external
+# environment that should never be included in any container.
+#siteEnvUnset=_LMFILES_ LOADEDMODULES MODULEPATH MODULESHOME BASH_FUNC_module()
+
 
 #imageGateway
 #
