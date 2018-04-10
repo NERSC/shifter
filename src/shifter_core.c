@@ -3359,6 +3359,10 @@ static int _shifter_putenv(char ***env, const char *var, env_putenv_mode_et mode
     return 0;
 }
 
+/*! Make a full copy of the current enviroment and return it */
+/*!
+  \return complete copy of the current environment
+ */
 char **shifter_copyenv(void) {
     char **outenv = NULL;
     char **ptr = NULL;
@@ -3380,18 +3384,58 @@ char **shifter_copyenv(void) {
     return outenv;
 }
 
+/*! Set or replace and environment variable */
+/*!
+  \param env pointer to environment string array created by shifter_copyenv
+  \param var "key=value"-type string of value to set/replace in env
+  \return 0 for success, nonzero for error
+ */
 int shifter_putenv(char ***env, const char *var) {
     return _shifter_putenv(env, var, ENV_REPLACE);
 }
 
+/*! Append a value to an environment variable */
+/*!
+  This function will find any existing version of an environment variable in
+  env, and set the value to the current value followed by a colon followed by
+  the value following the '=' in var.  If the variable is not set in the
+  environment, then env will be set in the environment alone.
+
+  e.g., If var="PATH=/a/b/c" and PATH in the current env has PATH=/d/e/f, then
+  after this function the env will contain PATH=/d/e/f:/a/b/c
+
+  \param env pointer to environment string array created by shifter_copyenv
+  \param var "key=value"-type string of value to prepend
+  \return 0 for success, nonzero for error
+ */
 int shifter_appendenv(char ***env, const char *var) {
     return _shifter_putenv(env, var, ENV_APPEND);
 }
 
+/*! Prepend a value to an environment variable */
+/*!
+  This function will find any existing version of an environment variable in
+  env, and set the value to the value in var followed by a colon followed by the
+  current value.  If the variable is not set in the environment, then env will
+  be set in the environment alone.
+
+  e.g., If var="PATH=/a/b/c" and PATH in the current env has PATH=/d/e/f, then
+  after this function the env will contain PATH=/a/b/c:/d/e/f
+
+  \param env pointer to environment string array created by shifter_copyenv
+  \param var "key=value"-type string of value to prepend
+  \return 0 for success, nonzero for error
+ */
 int shifter_prependenv(char ***env, const char *var) {
     return _shifter_putenv(env, var, ENV_PREPEND);
 }
 
+/*! Remove a variable from the specified environment */
+/*!
+  \param env point to environment string array created by shifter_copyenv
+  \param var variable to remove from the environment
+  \return 0 for success, nonzero for error
+ */
 int shifter_unsetenv(char ***env, const char *var) {
     return _shifter_unsetenv(*env, var);
 }

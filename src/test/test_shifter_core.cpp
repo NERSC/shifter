@@ -1058,12 +1058,24 @@ TEST(ShifterCoreTestGroup, shifter_putenv_detailed) {
     CHECK(ptr == NULL);
 
     env[0] = strdup("PATH=/hello");
+    env[1] = strdup("PATH_2=/asdf");
+    env[2] = strdup("ABCDEFG=1234");
+    env[3] = strdup("ABCDE=1234");
 
     ptr = _shifter_findenv(env, "PATH=/a/b/c");
     CHECK(ptr && *ptr == env[0]);
 
     ptr = _shifter_findenv(env, "PA=/a/b/c");
     CHECK(ptr == NULL);
+
+    ptr = _shifter_findenv(env, "PATH");
+    CHECK(ptr && *ptr == env[0]);
+
+    ptr = _shifter_findenv(env, "ABCDE");
+    CHECK(ptr && *ptr == env[3]);
+
+    ptr = _shifter_findenv(env, "ABCDE=123");
+    CHECK(ptr && *ptr == env[3]);
 
     for (ptr = env; ptr && *ptr; ptr++) {
         free(*ptr);
