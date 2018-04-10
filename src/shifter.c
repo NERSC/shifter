@@ -271,7 +271,6 @@ int main(int argc, char **argv) {
 
     if (opts->request) {
         char *req = alloc_strgenf("SHIFTER_IMAGEREQUEST=%s", opts->request);
-fprintf(stderr, "setting request env: %s\n", req);
         shifter_putenv(&environ_copy, req);
         free(req);
     }
