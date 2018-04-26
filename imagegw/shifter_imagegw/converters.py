@@ -30,21 +30,23 @@ import tempfile
 from shifter_imagegw.util import program_exists
 
 
-def generate_ext4_image(expand_path, image_path):
+def generate_ext4_image(expand_path, image_path, options):
     """
     Creates an ext4 based image
     """
-    message = 'ext4 support is note implemented yet %s %s' % \
+    message = 'ext4 support is not supported %s %s' % \
               (expand_path, image_path)
     raise NotImplementedError(message)
 
 
-def generate_cramfs_image(expand_path, image_path):
+def generate_cramfs_image(expand_path, image_path, options):
     """
     Creates a CramFS based image
     """
     program_exists('mkfs.cramfs')
     cmd = ["mkfs.cramfs", expand_path, image_path]
+    if options is not None:
+        cmd.extend(options)
     ret = subprocess.call(cmd)
     if ret != 0:
         # error handling
@@ -58,7 +60,7 @@ def generate_cramfs_image(expand_path, image_path):
     return True
 
 
-def generate_squashfs_image(expand_path, image_path):
+def generate_squashfs_image(expand_path, image_path, options):
     """
     Creates a SquashFS based image
     """
@@ -66,10 +68,13 @@ def generate_squashfs_image(expand_path, image_path):
     # it should be handled by the calling function
     program_exists('mksquashfs')
 
-    args = ["mksquashfs", expand_path, image_path, "-all-root"]
-    if 'DISABLE_NOXATTRS' not in os.environ:
-        args.append('-no-xattrs')
-    ret = subprocess.call(args)
+    cmd = ["mksquashfs", expand_path, image_path, "-all-root"]
+
+    if options is not None:
+        cmd.extend(options)
+    else:
+        cmd.append('-no-xattrs')
+    ret = subprocess.call(cmd)
     if ret != 0:
         # error handling
         pass
@@ -81,7 +86,7 @@ def generate_squashfs_image(expand_path, image_path):
     return True
 
 
-def convert(fmt, expand_path, image_path):
+def convert(fmt, expand_path, image_path, options=None):
     """ do the conversion """
     if os.path.exists(image_path):
         return True
@@ -90,18 +95,29 @@ def convert(fmt, expand_path, image_path):
     (temp_fd, temp_path) = tempfile.mkstemp('.partial', fname, dirname)
     os.close(temp_fd)
     os.unlink(temp_path)
+    opts = None
+    if options is not None and fmt in options:
+        if isinstance(options[fmt], str):
+            opts = [options[fmt]]
+        elif isinstance(options[fmt], list):
+            opts = options[fmt]
+        else:
+            raise ValueError("options for format should be a string or list")
 
     try:
         success = False
         if fmt == 'squashfs':
-            success = generate_squashfs_image(expand_path, temp_path)
+            success = generate_squashfs_image(expand_path, temp_path, opts)
         elif fmt == 'cramfs':
-            success = generate_cramfs_image(expand_path, temp_path)
+            success = generate_cramfs_image(expand_path, temp_path, opts)
         elif fmt == 'ext4':
-            success = generate_ext4_image(expand_path, temp_path)
+            success = generate_ext4_image(expand_path, temp_path, opts)
         elif fmt == 'mock':
             with open(temp_path, 'w') as f:
-                f.write('bogus')
+                line = 'bogus'
+                if options is not None:
+                    line += ' '.join(opts)
+                f.write(line)
             success = True
         else:
             raise NotImplementedError("%s not a supported format" % fmt)

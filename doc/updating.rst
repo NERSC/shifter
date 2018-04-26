@@ -5,8 +5,9 @@ Version 18.03.1
 ---------------
 The parameter --no-xattrs is used when creating the squashed file.  This option
 may not be supported on older OSs such as RedHat 6 variants.  To disable this
-behavior, set the environment variable "DISABLE_NOXATTRS" to a value before
-starting the image gateway.
+behavior, add the following section to your imagemnager.json config file.
+
+    'ConverterOptions': {'squashfs': []}
 
 Version 17.04 to 18.03
 ----------------------
