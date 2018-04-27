@@ -67,7 +67,7 @@ static const char *allowedImageTypes[] = {
     NULL
 };
 
-uid_t * _convert_to_list(const char *text);
+size_t _convert_to_list(const char *text, uid_t **uids, size_t *n_uids);
 int _ImageData_assign(const char *key, const char *value, void *t_imageData);
 char *_ImageData_filterString(const char *input, int allowSlash);
 
@@ -403,9 +403,17 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
             return 1;
         }
     } else if (strcmp(key, "USERACL") == 0) {
-        image->uids = _convert_to_list(value);
+        if (value && value[0] &&
+            _convert_to_list(value, &image->uids, &image->n_uids) == 0) {
+            fprintf(stderr, "ERROR: failed to parse USERACL from image.\n");
+            abort();
+        }
     } else if (strcmp(key, "GROUPACL") == 0) {
-        image->gids = _convert_to_list(value);
+        if (value && value[0] &&
+            _convert_to_list(value, &image->gids, &image->n_gids) == 0) {
+            fprintf(stderr, "ERROR: failed to parse USERACL from image.\n");
+            abort();
+        }
     } else if (strcmp(key, "VOLUME") == 0) {
         char **tmp = image->volume + image->volume_size;
         char *tvalue = _ImageData_filterString(value, 1);
@@ -418,38 +426,63 @@ int _ImageData_assign(const char *key, const char *value, void *t_image) {
     return 0;
 }
 
-uid_t *_convert_to_list(const char *text) {
-    uid_t *ids = NULL;
+size_t _convert_to_list(const char *text, uid_t **uids, size_t *n_uids) {
     size_t id_capacity = 0;
     size_t id_count = 0;
     char *ptr = NULL;
     char *buffer = NULL;
     char *search = NULL;
     char *svPtr = NULL;
+    char *endPtr = NULL;
 
-    if (!text || text[0] == '\0') {
-        return NULL;
+    if (!text || text[0] == '\0' || !uids || !n_uids) {
+        return 0;
     }
+    if (*uids) {
+        free(*uids);
+        *uids = NULL;
+    }
+    *n_uids = 0;
 
     buffer = _strdup(text);
-    search = buffer;
+    search = shifter_trim(buffer);
     svPtr = NULL;
     while ((ptr = strtok_r(search, ",", &svPtr)) != NULL) {
+        uid_t tmp = 0;
+        size_t len = 0;
         search = NULL;
-        if (id_count + 2 < id_capacity) {
+        if (id_capacity < id_count + 2) {
             size_t alloc_size = sizeof(uid_t) * (id_count + 2) * 2;
-            ids = _realloc(ids, alloc_size);
+            *uids = _realloc(*uids, alloc_size);
             id_capacity = (id_count + 2) * 2;
         }
-        ids[id_count++] = atoi(ptr);
+        ptr = shifter_trim(ptr);
+        len = strlen(ptr);
+        if (len == 0)
+            continue;
+        tmp = (uid_t) strtoul(ptr, &endPtr, 10);
+        if (endPtr != ptr + len)
+            continue;
+        (*uids)[id_count++] = tmp;
+        if (id_count > 1000) {
+            fprintf(stderr, "ERROR: id list growing too large.\n");
+            goto error;
+        }
     }
+    *n_uids = id_count;
 
-    /* terminate with a -1 */
-    if (ids != NULL) {
-        ids[id_count] = -1;
-    }
     free(buffer);
-    return ids;
+    buffer = NULL;
+    return id_count;
+error:
+    free(buffer);
+    buffer = NULL;
+    if (*uids) {
+        free(*uids);
+        *uids = NULL;
+    }
+    *n_uids = 0;
+    return 0;
 }
 
 char *_ImageData_filterString(const char *input, int allowSlash) {
@@ -602,22 +635,21 @@ _error:
 int check_image_permissions(uid_t actualUid, gid_t actualGid, gid_t *aux_gids,
                             int naux_gids, ImageData *imageData)
 {
-    uid_t *tuid;
-    gid_t *tgid;
-    int idx = 0;
+    size_t iidx = 0;
+    size_t jidx = 0;
 
-    if (imageData->uids == NULL && imageData->gids == NULL) {
+    if (imageData->n_uids == 0 && imageData->n_gids == 0)
         return 1;
-    }
 
-    for (tuid = imageData->uids; tuid != NULL && *tuid != -1; tuid++) {
-        if (*tuid == actualUid) return 1;
-    }
-    for (tgid = imageData->gids; tgid != NULL && *tgid != -1; tgid++) {
-        if (*tgid == actualGid) return 1;
-        for (idx = 0; idx < naux_gids; idx++) {
-            if (*tgid == aux_gids[idx]) return 1;
-        }
+    for (iidx = 0; iidx < imageData->n_uids; iidx++)
+        if (imageData->uids[iidx] == actualUid)
+            return 1;
+    for (iidx = 0; iidx < imageData->n_gids; iidx++) {
+        if (imageData->gids[iidx] == actualGid)
+            return 1;
+        for (jidx = 0; jidx < naux_gids; jidx++)
+            if (imageData->gids[iidx] == aux_gids[jidx])
+                return 1;
     }
     return 0;
 }

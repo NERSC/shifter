@@ -495,7 +495,7 @@ def pull(request, updater, testmode=0):
             if not transfer_image(request):
                 raise OSError('Transfer failed')
         else:
-            logging.debug("Need to update metadata")
+            logging.debug("Updating metdata for %s" % (request['tag']))
             request['format'] = get_image_format(request)
 
             if not write_metadata(request):

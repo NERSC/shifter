@@ -713,6 +713,7 @@ class ImageMngr(object):
             self.update_mongo(ident, response)
             self.add_tag(ident, pullrec['system'], pullrec['pulltag'])
         else:
+            self.add_tag(rec['_id'], pullrec['system'], pullrec['pulltag'])
             updates = {
                 'userACL': response['userACL'],
                 'groupACL': response['groupACL'],
