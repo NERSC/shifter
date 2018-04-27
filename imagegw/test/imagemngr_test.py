@@ -5,6 +5,7 @@ import json
 import base64
 import logging
 from pymongo import MongoClient
+from nose.plugins.attrib import attr
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
@@ -174,70 +175,80 @@ class ImageMngrTestCase(unittest.TestCase):
 #
 #  Tests
 #
+    @attr('fast')
     def test_session(self):
         s = self.m.new_session(self.auth, self.system)
-        assert s is not None
+        self.assertIsNotNone(s)
         try:
             s = self.m.new_session(self.badauth, self.system)
         except:
             pass
 
+    @attr('fast')
     def test_noadmin(self):
         s = self.m.new_session(self.auth, self.system)
-        assert s is not None
+        self.assertIsNotNone(s)
         resp = self.m._isadmin(s, self.system)
-        assert resp is False
+        self.assertFalse(resp)
 
+    @attr('fast')
     def test_admin(self):
         s = self.m.new_session(self.authadmin, self.system)
-        assert s is not None
+        self.assertIsNotNone(s)
         resp = self.m._isadmin(s, self.system)
-        assert resp is True
+        self.assertTrue(resp)
 
-
-# Create an image and tag with a new tag.
-# Make sure both tags show up.
-# Remove the tag and make sure the original tags
-# doesn't also get removed.
-    def test_0add_remove_tag(self):
+    @attr('fast')
+    def test_add_remove_tag(self):
+        """
+        Create an image and tag with a new tag.
+        Make sure both tags show up.
+        Remove the tag and make sure the original tags
+        doesn't also get removed.
+        """
         record = self.good_record()
         # Create a fake record in mongo
         id = self.images.insert(record)
 
-        assert id is not None
+        self.assertIsNotNone(id)
         before = self.images.find_one({'_id': id})
-        assert before is not None
+        self.assertIsNotNone(before)
         # Add a tag a make sure it worked
         status = self.m.add_tag(id, self.system, 'testtag')
-        assert status is True
+        self.assertTrue(status)
         after = self.images.find_one({'_id': id})
-        assert after is not None
-        assert after['tag'].count('testtag') == 1
-        assert after['tag'].count(self.tag) == 1
+        self.assertIsNotNone(after)
+        self.assertIn('testtag', after['tag'])
+        self.assertIn(self.tag, after['tag'])
         # Remove a tag and make sure it worked
         status = self.m.remove_tag(self.system, 'testtag')
-        assert status is True
+        self.assertTrue(status)
         after = self.images.find_one({'_id': id})
-        assert after is not None
-        assert after['tag'].count('testtag') == 0
+        self.assertIsNotNone(after)
+        self.assertNotIn('testtag', after['tag'])
 
-    # Similar to above but just test the adding part
-    def test_0add_remove_tagitem(self):
+    @attr('fast')
+    def test_add_tagitem(self):
+        """
+        Testing adding a tag
+        """
         record = self.good_record()
         record['tag'] = self.tag
         # Create a fake record in mongo
         id = self.images.insert(record)
 
         status = self.m.add_tag(id, self.system, 'testtag')
-        assert status is True
+        self.assertTrue(status)
         rec = self.images.find_one({'_id': id})
-        assert rec is not None
-        assert rec['tag'].count(self.tag) == 1
-        assert rec['tag'].count('testtag') == 1
+        self.assertIsNotNone(rec)
+        self.assertIn(self.tag, rec['tag'])
+        self.assertIn('testtag', rec['tag'])
 
-    # Same as above but use the lookup instead of a directory
-    # direct mongo lookup
-    def test_0add_remove_withtag(self):
+    @attr('fast')
+    def test_add_remove_withtag(self):
+        """
+        Test adding a tag and using lookup
+        """
         record = self.good_record()
         # Create a fake record in mongo
         id = self.images.insert(record)
@@ -245,14 +256,17 @@ class ImageMngrTestCase(unittest.TestCase):
         session = self.m.new_session(self.auth, self.system)
         i = self.query.copy()
         status = self.m.add_tag(id, self.system, 'testtag')
-        assert status is True
+        self.assertTrue(status)
         rec = self.m.lookup(session, i)
-        assert rec is not None
-        assert rec['tag'].count(self.tag) == 1
-        assert rec['tag'].count('testtag') == 1
+        self.assertIsNotNone(rec)
+        self.assertIn(self.tag, rec['tag'])
+        self.assertIn('testtag', rec['tag'])
 
-    # Test if tag isn't a list
-    def test_0add_remove_two(self):
+    @attr('fast')
+    def test_add_remove_two(self):
+        """
+        Test that tag is a list
+        """
         record = self.good_record()
         # Create a fake record in mongo
         id1 = self.images.insert(record.copy())
@@ -261,36 +275,42 @@ class ImageMngrTestCase(unittest.TestCase):
         id2 = self.images.insert(record.copy())
 
         status = self.m.add_tag(id2, self.system, self.tag)
-        assert status is True
+        self.assertTrue(status)
         rec1 = self.images.find_one({'_id': id1})
         rec2 = self.images.find_one({'_id': id2})
-        assert rec1['tag'].count(self.tag) == 0
-        assert rec2['tag'].count(self.tag) == 1
+        self.assertNotIn(self.tag, rec1['tag'])
+        self.assertIn(self.tag, rec2['tag'])
 
-    # Similar to above but just test the adding part
-    def test_0add_same_image_two_system(self):
+    @attr('fast')
+    def test_add_same_image_two_system(self):
+        """
+        Test adding tags for the same image on
+        different systems.
+        """
         record = self.good_record()
         record['tag'] = self.tag
         # Create a fake record in mongo
         id1 = self.images.insert(record.copy())
         # add testtag for systema
         status = self.m.add_tag(id1, self.system, 'testtag')
-        assert status is True
+        self.assertTrue(status)
         record['system'] = 'systemb'
         id2 = self.images.insert(record.copy())
         status = self.m.add_tag(id2, 'systemb', 'testtag')
-        assert status is True
+        self.assertTrue(status)
         # Now make sure testtag for first system is still
         # present
         rec = self.images.find_one({'_id': id1})
-        assert rec is not None
-        assert rec['tag'].count('testtag') == 1
+        self.assertIsNotNone(rec)
+        self.assertIn('testtag', rec['tag'])
 
-    def test_0isasystem(self):
-        assert self.m._isasystem(self.system) is True
-        assert self.m._isasystem('bogus') is False
+    @attr('fast')
+    def test_isasystem(self):
+        self.assertTrue(self.m._isasystem(self.system))
+        self.assertFalse(self.m._isasystem('bogus'))
 
-    def test_0resetexp(self):
+    @attr('fast')
+    def test_resetexp(self):
         record = {'system': self.system,
                   'itype': self.itype,
                   'id': self.id,
@@ -303,47 +323,49 @@ class ImageMngrTestCase(unittest.TestCase):
                   'last_pull': 0
                   }
         id = self.images.insert(record.copy())
-        assert id is not None
+        self.assertIsNotNone(id)
         expire = self.m._resetexpire(id)
-        assert expire > time.time()
+        self.assertGreater(expire, time.time())
         rec = self.images.find_one({'_id': id})
-        assert rec['expiration'] == expire
+        self.assertEquals(rec['expiration'], expire)
 
-    def test_0pullable(self):
+    @attr('fast')
+    def test_pullable(self):
         # An old READY image
         rec = {'last_pull': 0, 'status': 'READY'}
-        assert self.m._pullable(rec) is True
+        self.assertTrue(self.m._pullable(rec))
         rec = {'last_pull': time.time(), 'status': 'READY'}
         # A recent READY image
-        assert self.m._pullable(rec) is False
+        self.assertFalse(self.m._pullable(rec))
 
         rec = {'last_pull': time.time(),
                'last_heartbeat': 0,
                'status': 'READY'}
         # A recent READY image but an old heartbeat (maybe re-pulled)
-        assert self.m._pullable(rec) is False
+        self.assertFalse(self.m._pullable(rec))
 
         # A failed image
         rec = {'last_pull': 0, 'status': 'FAILURE'}
-        assert self.m._pullable(rec) is True
+        self.assertTrue(self.m._pullable(rec))
         # recent pull
         rec = {'last_pull': time.time(), 'status': 'FAILURE'}
-        assert self.m._pullable(rec) is False
+        self.assertFalse(self.m._pullable(rec))
 
         # A hung pull
         rec = {'last_pull': 0, 'last_heartbeat': time.time() - 7200,
                'status': 'PULLING'}
-        assert self.m._pullable(rec) is True
+        self.assertTrue(self.m._pullable(rec))
         # recent pull
         rec = {'last_pull': time.time(), 'status': 'PULLING'}
-        assert self.m._pullable(rec) is False
+        self.assertFalse(self.m._pullable(rec))
 
         # A hung pull
         rec = {'last_pull': 0, 'last_heartbeat': time.time(),
                'status': 'PULLING'}
-        assert self.m._pullable(rec) is False
+        self.assertFalse(self.m._pullable(rec))
 
-    def test_0complete_pull(self):
+    @attr('fast')
+    def test_complete_pull(self):
         # Test complete_pull
         record = {'system': self.system,
                   'itype': self.itype,
@@ -361,34 +383,36 @@ class ImageMngrTestCase(unittest.TestCase):
         # Create a fake record in mongo
         # First test when there is no existing image
         id = self.images.insert(record.copy())
-        assert id is not None
+        self.assertIsNotNone(id)
         resp = {'id': id, 'tag': self.tag}
         self.m.complete_pull(id, resp)
         rec = self.images.find_one({'_id': id})
-        assert rec is not None
-        assert rec['tag'] == [self.tag]
-        assert rec['last_pull'] > 0
+        self.assertIsNotNone(rec)
+        self.assertEquals(rec['tag'], [self.tag])
+        self.assertGreater(rec['last_pull'], 0)
         # Create an identical request and
         # run complete again
         id2 = self.images.insert(record.copy())
-        assert id2 is not None
+        self.assertIsNotNone(id2)
         self.m.complete_pull(id2, resp)
         # confirm that the record was removed
         rec2 = self.images.find_one({'_id': id2})
-        assert rec2 is None
+        self.assertIsNone(rec2)
 
-    def test_0update_states(self):
+    @attr('fast')
+    def test_update_states(self):
         # Test a repull
         record = self.good_record()
         record['last_pull'] = 0
         record['status'] = 'FAILURE'
         # Create a fake record in mongo
         id = self.images.insert(record)
-        assert id is not None
+        self.assertIsNotNone(id)
         self.m.update_states()
         rec = self.images.find_one({'_id': id})
-        assert rec is None
+        self.assertIsNone(rec)
 
+    @attr('fast')
     def test_lookup(self):
         record = self.good_record()
         # Create a fake record in mongo
@@ -396,17 +420,18 @@ class ImageMngrTestCase(unittest.TestCase):
         i = self.query.copy()
         session = self.m.new_session(self.auth, self.system)
         l = self.m.lookup(session, i)
-        assert 'status' in l
-        assert '_id' in l
-        assert self.m.get_state(l['_id']) == 'READY'
+        self.assertIn('status', l)
+        self.assertIn('_id', l)
+        self.assertEquals(self.m.get_state(l['_id']), 'READY')
         i = self.query.copy()
         r = self.images.find_one({'_id': l['_id']})
-        assert 'expiration' in r
-        assert r['expiration'] > time.time()
+        self.assertIn('expiration', r)
+        self.assertGreater(r['expiration'], time.time())
         i['tag'] = 'bogus'
         l = self.m.lookup(session, i)
-        assert l is None
+        self.assertIsNone(l)
 
+    @attr('fast')
     def test_list(self):
         record = self.good_record()
         # Create a fake record in mongo
@@ -416,11 +441,11 @@ class ImageMngrTestCase(unittest.TestCase):
         rec2['status'] = 'FAILURE'
         session = self.m.new_session(self.auth, self.system)
         li = self.m.imglist(session, self.system)
-        assert len(li) == 1
+        self.assertEquals(len(li), 1)
         l = li[0]
-        assert '_id' in l
-        assert self.m.get_state(l['_id']) == 'READY'
-        assert l['_id'] == id1
+        self.assertIn('_id', l)
+        self.assertEquals(self.m.get_state(l['_id']), 'READY')
+        self.assertEquals(l['_id'], id1)
 
     def test_repull(self):
         # Test a repull
@@ -428,11 +453,11 @@ class ImageMngrTestCase(unittest.TestCase):
 
         # Create a fake record in mongo
         id = self.images.insert(record)
-        assert id is not None
+        self.assertIsNotNone(id)
         pr = self.pull
         session = self.m.new_session(self.auth, self.system)
         pull = self.m.pull(session, pr)
-        assert pull is not None
+        self.assertIsNotNone(pull)
         self.assertEqual(pull['status'], 'READY')
 
     def test_repull_pr(self):
@@ -441,18 +466,18 @@ class ImageMngrTestCase(unittest.TestCase):
 
         # Create a fake record in mongo
         id = self.images.insert(record)
-        assert id is not None
+        self.assertIsNotNone(id)
 
         # Create a pull record
         pr = self.good_pullrecord()
         pr['status'] = 'SUCCESS'
         id = self.images.insert(pr)
-        assert id is not None
+        self.assertIsNotNone(id)
 
         # Now let's try pulling it
         session = self.m.new_session(self.auth, self.system)
         pull = self.m.pull(session, self.pull)
-        assert pull is not None
+        self.assertIsNotNone(pull)
         self.assertEqual(pull['status'], 'READY')
 
     def test_repull_pr_pulling(self):
@@ -461,18 +486,18 @@ class ImageMngrTestCase(unittest.TestCase):
 
         # Create a fake record in mongo
         id = self.images.insert(record)
-        assert id is not None
+        self.assertIsNotNone(id)
 
         # Create a pull record
         pr = self.good_pullrecord()
         pr['status'] = 'PULLING'
         id = self.images.insert(pr)
-        assert id is not None
+        self.assertIsNotNone(id)
 
         # Now let's try pulling it
         session = self.m.new_session(self.auth, self.system)
         pull = self.m.pull(session, self.pull)
-        assert pull is not None
+        self.assertIsNotNone(pull)
         self.assertEqual(pull['status'], 'PULLING')
 
     def test_pull_testimage(self):
@@ -489,25 +514,25 @@ class ImageMngrTestCase(unittest.TestCase):
         # Do the pull
         session = self.m.new_session(self.auth, self.system)
         rec = self.m.pull(session, pr, testmode=1)  # ,delay=False)
-        assert rec is not None
-        assert '_id' in rec
+        self.assertIsNotNone(rec)
+        self.assertIn('_id', rec)
         id = rec['_id']
         # Re-pull the same thing.  Should give the same record
         rec = self.m.pull(session, pr, testmode=1)  # ,delay=False)
-        assert rec is not None
-        assert '_id' in rec
+        self.assertIsNotNone(rec)
+        self.assertIn('_id', rec)
         id2 = rec['_id']
-        assert id == id2
+        self.assertEquals(id, id2)
         q = {'system': self.system, 'itype': self.itype,
              'pulltag': {'$in': ['scanon/shanetest:latest']}}
         mrec = self.images.find_one(q)
-        assert '_id' in mrec
+        self.assertIn('_id', mrec)
         # Track through transistions
         state = self.time_wait(id)
-        assert state == 'READY'
+        self.assertEquals(state, 'READY')
         imagerec = self.m.lookup(session, pr)
-        assert 'ENTRY' in imagerec
-        assert 'ENV' in imagerec
+        self.assertIn('ENTRY', imagerec)
+        self.assertIn('ENV', imagerec)
 
     def test_pull(self):
         """
@@ -518,23 +543,23 @@ class ImageMngrTestCase(unittest.TestCase):
         # Do the pull
         session = self.m.new_session(self.auth, self.system)
         rec = self.m.pull(session, pr, testmode=1)  # ,delay=False)
-        assert rec is not None
+        self.assertIsNotNone(rec)
         id = rec['_id']
         # Confirm record
         q = {'system': self.system, 'itype': self.itype, 'pulltag': self.tag}
         mrec = self.images.find_one(q)
-        assert '_id' in mrec
+        self.assertIn('_id', mrec)
         # Track through transistions
         state = self.time_wait(id)
         self.assertEquals(state, 'READY')
         imagerec = self.m.lookup(session, self.pull)
-        assert 'ENTRY' in imagerec
-        assert 'ENV' in imagerec
+        self.assertIn('ENTRY', imagerec)
+        self.assertIn('ENV', imagerec)
         # Cause a failure
         self.images.drop()
         rec = self.m.pull(session, pr, testmode=2)
         time.sleep(10)
-        assert rec is not None
+        self.assertIsNotNone(rec)
         id = rec['_id']
         state = self.m.get_state(id)
         self.assertEquals(state, 'FAILURE')
@@ -551,60 +576,63 @@ class ImageMngrTestCase(unittest.TestCase):
         rec1 = self.m.pull(session, pr, testmode=1)  # ,delay=False)
         pr['tag'] = self.tag2
         rec2 = self.m.pull(session, pr, testmode=1)  # ,delay=False)
-        assert rec1 is not None
+        self.assertIsNotNone(rec1)
         id1 = rec1['_id']
-        assert rec2 is not None
+        self.assertIsNotNone(rec2)
         id2 = rec2['_id']
         # Confirm record
         q = {'system': self.system, 'itype': self.itype, 'pulltag': self.tag}
         mrec = self.images.find_one(q)
-        assert '_id' in mrec
+        self.assertIn('_id', mrec)
         state = self.time_wait(id1)
-        assert state == 'READY'
+        self.assertEquals(state, 'READY')
         state = self.time_wait(id2)
-        assert state == 'READY'
+        self.assertEquals(state, 'READY')
         mrec = self.images.find_one(q)
         self.images.drop()
 
+    @attr('fast')
     def test_checkread(self):
         """
         Let's simulate various permissions and test them.
         """
         user1 = {'uid': 1, 'gid': 1}
         self.assertTrue(self.m._checkread(user1, {}))
-        mock_image_rec = {
+        mock_image = {
             'userACL': None,
             'groupACL': None
         }
         # Test a public image with ACLs set to None
-        assert self.m._checkread(user1, mock_image_rec)
+        self.assertTrue(self.m._checkread(user1, mock_image))
         # Now empty list instead of None.  Treat it the same way.
-        mock_image_rec['userACL'] = []
-        mock_image_rec['groupACL'] = []
-        assert self.m._checkread(user1, mock_image_rec)
-        assert self.m._checkread(user1, {'private': False})
+        mock_image['userACL'] = []
+        mock_image['groupACL'] = []
+        self.assertTrue(self.m._checkread(user1, mock_image))
+        self.assertTrue(self.m._checkread(user1, {'private': False}))
         # Private false should trump other things
-        assert self.m._checkread(user1, {'private': False, 'userACL': [2]})
-        assert self.m._checkread(user1, {'private': False, 'groupACL': [2]})
+        self.assertTrue(self.m._checkread(user1,
+                                          {'private': False, 'userACL': [2]}))
+        self.assertTrue(self.m._checkread(user1,
+                                          {'private': False, 'groupACL': [2]}))
         # Now check a protected image that the user should
         # have access to
-        mock_image_rec['userACL'] = [1]
-        assert self.m._checkread(user1, mock_image_rec)
+        mock_image['userACL'] = [1]
+        self.assertTrue(self.m._checkread(user1, mock_image))
         # And Not
-        assert self.m._checkread({'uid': 2, 'gid': 1}, mock_image_rec) is False
+        self.assertFalse(self.m._checkread({'uid': 2, 'gid': 1}, mock_image))
         # Now check by groupACL
-        mock_image_rec['groupACL'] = [1]
-        assert self.m._checkread({'uid': 3, 'gid': 1}, mock_image_rec)
+        mock_image['groupACL'] = [1]
+        self.assertTrue(self.m._checkread({'uid': 3, 'gid': 1}, mock_image))
         # And Not
-        assert self.m._checkread({'uid': 3, 'gid': 2}, mock_image_rec) is False
+        self.assertFalse(self.m._checkread({'uid': 3, 'gid': 2}, mock_image))
         # What about an image with a list
-        mock_image_rec = {
+        mock_image = {
             'userACL': [1, 2, 3],
             'groupACL': [4, 5, 6]
         }
-        assert self.m._checkread(user1, mock_image_rec)
+        self.assertTrue(self.m._checkread(user1, mock_image))
         # And Not
-        assert self.m._checkread({'uid': 7, 'gid': 7}, mock_image_rec) is False
+        self.assertFalse(self.m._checkread({'uid': 7, 'gid': 7}, mock_image))
 
     def test_pulls_acl_change(self):
         """
@@ -614,7 +642,7 @@ class ImageMngrTestCase(unittest.TestCase):
         record = self.good_pullrecord()
         record['status'] = 'PULLING'
         id = self.images.insert(record)
-        assert id is not None
+        self.assertIsNotNone(id)
         # Now try to submit an ACL change
         session = self.m.new_session(self.auth, self.system)
         pr = {
@@ -626,7 +654,7 @@ class ImageMngrTestCase(unittest.TestCase):
             'groupACL': [1003, 1004]
         }
         rec = self.m.pull(session, pr)  # ,delay=False)
-        assert rec['status'] == 'PULLING'
+        self.assertEquals(rec['status'], 'PULLING')
 
     def test_pull_logic(self):
         """
@@ -643,47 +671,47 @@ class ImageMngrTestCase(unittest.TestCase):
             'remotetype': 'dockerv2',
         }
         id = self.images.insert(record)
-        assert id is not None
+        self.assertIsNotNone(id)
         session = self.m.new_session(self.auth, self.system)
         pr = basepr.copy()
         rec = self.m.pull(session, pr)  # ,delay=False)
-        assert rec['status'] == 'READY'
+        self.assertEquals(rec['status'], 'READY')
 
         # reset and test a re-pull of an old image
         self.images.remove({})
         record['last_pull'] = record['last_pull'] - 36000
         id = self.images.insert(record)
-        assert id is not None
+        self.assertIsNotNone(id)
         session = self.m.new_session(self.auth, self.system)
         rec = self.m.pull(session, pr)  # ,delay=False)
-        assert rec['status'] == 'INIT'
+        self.assertEquals(rec['status'], 'INIT')
 
         # Re-pull of new image with ACL change
         self.images.remove({})
         pr = basepr.copy()
         id = self.images.insert(record)
-        assert id is not None
+        self.assertIsNotNone(id)
         pr['userACL'] = [1001]
         session = self.m.new_session(self.auth, self.system)
         rec = self.m.pull(session, pr)  # ,delay=False)
-        assert rec['status'] == 'INIT'
+        self.assertEquals(rec['status'], 'INIT')
 
         # reset and test a re-pull of an old image
         self.images.remove({})
         pr = basepr.copy()
         record['last_pull'] = record['last_pull'] - 36000
         id = self.images.insert(record)
-        assert id is not None
+        self.assertIsNotNone(id)
         session = self.m.new_session(self.auth, self.system)
         rec = self.m.pull(session, pr)  # ,delay=False)
-        assert rec['status'] == 'INIT'
+        self.assertEquals(rec['status'], 'INIT')
         # Now let's do a re-pull with ACL change.  We should
         # get back the prev rec.  The status will now be
         # pending because we do an update status
         pr['userACL'] = [1001]
         session = self.m.new_session(self.auth, self.system)
         rec2 = self.m.pull(session, pr)  # ,delay=False)
-        assert rec2['_id'] == rec['_id']
+        self.assertEquals(rec2['_id'], rec['_id'])
         # TODO: Need to find a way to trigger this test now.
         # self.assertEquals(rec2['status'], 'PENDING')
 
@@ -704,18 +732,18 @@ class ImageMngrTestCase(unittest.TestCase):
         session = self.m.new_session(self.auth, self.system)
         rec = self.m.pull(session, pr)  # ,delay=False)
         id = rec['_id']
-        assert rec is not None
+        self.assertIsNotNone(rec)
         # Confirm record
         q = {'system': self.system, 'itype': self.itype,
              'pulltag': self.tag}
         state = self.time_wait(id)
         mrec = self.images.find_one(q)
-        assert '_id' in mrec
-        assert 'userACL' in mrec
+        self.assertIn('_id', mrec)
+        self.assertIn('userACL', mrec)
         self.assertIn('ENV', mrec)
         # Track through transistions
         state = self.time_wait(id)
-        assert state == 'READY'
+        self.assertEquals(state, 'READY')
         mrec = self.images.find_one(q)
         self.assertIn('ENV', mrec)
         self.assertIn('private', mrec)
@@ -723,7 +751,7 @@ class ImageMngrTestCase(unittest.TestCase):
 
     def test_pull_public_acl_token(self):
         """
-        Pulling a public image with ACLs should ignore the acls.
+        Pulling a public image with ACLs using a token should ignore the acls.
         """
         tokens = self.read_tokens()
         if tokens is None:
@@ -742,20 +770,20 @@ class ImageMngrTestCase(unittest.TestCase):
         session = self.m.new_session(self.auth, self.system)
         rec = self.m.pull(session, pr)  # ,delay=False)
         id = rec['_id']
-        assert rec is not None
+        self.assertIsNotNone(rec)
         # Confirm record
         q = {'system': self.system, 'itype': self.itype,
              'pulltag': self.public}
         mrec = self.images.find_one(q)
-        assert '_id' in mrec
-        assert 'userACL' in mrec
-        assert 1001 in mrec['userACL']
+        self.assertIn('_id', mrec)
+        self.assertIn('userACL', mrec)
+        self.assertIn(1001, mrec['userACL'])
         # Track through transistions
         state = self.time_wait(id)
-        assert state == 'READY'
+        self.assertEquals(state, 'READY')
         mrec = self.images.find_one(q)
-        assert 'private' in mrec
-        assert mrec['private'] is False
+        self.assertIn('private', mrec)
+        self.assertFalse(mrec['private'])
 
     def test_pull_acl(self):
         """
@@ -792,14 +820,14 @@ class ImageMngrTestCase(unittest.TestCase):
         state = self.time_wait(id)
         self.assertEquals(state, 'READY')
         imagerec = self.m.lookup(session, pr)
-        assert 'ENTRY' in imagerec
-        assert 'ENV' in imagerec
+        self.assertIn('ENTRY', imagerec)
+        self.assertIn('ENV', imagerec)
         mf = self.get_metafile(self.system, imagerec['id'])
         kv = self.read_metafile(mf)
-        assert 'USERACL' in kv
-        assert 1001 in kv['USERACL']
-        assert 1003 not in kv['USERACL']
-        assert 100 in kv['USERACL']
+        self.assertIn('USERACL', kv)
+        self.assertIn(1001, kv['USERACL'])
+        self.assertNotIn(1003, kv['USERACL'])
+        self.assertIn(100, kv['USERACL'])
         self.set_last_pull(id, time.time() - 36000)
 
         # Now let's pull it again with a new userACL
@@ -812,11 +840,11 @@ class ImageMngrTestCase(unittest.TestCase):
         state = self.time_wait(id)
         self.assertIsNone(state)
         imagerec = self.m.lookup(session, pr)
-        assert 'ENTRY' in imagerec
-        assert 'ENV' in imagerec
-        assert 1003 in imagerec['userACL']
+        self.assertIn('ENTRY', imagerec)
+        self.assertIn('ENV', imagerec)
+        self.assertIn(1003, imagerec['userACL'])
         kv = self.read_metafile(mf)
-        assert 1003 in kv['USERACL']
+        self.assertIn(1003, kv['USERACL'])
         # Try pulling the same ACLs in a different order
         self.set_last_pull(id, time.time() - 36000)
         pr['userACL'] = [1002, 1003]
@@ -847,18 +875,18 @@ class ImageMngrTestCase(unittest.TestCase):
         # Do the pull
         session = self.m.new_session(self.auth, self.system)
         rec = self.m.mngrimport(session, pr, testmode=1)  # ,delay=False)
-        assert rec is not None
+        self.assertIsNotNone(rec)
         id = rec['_id']
         # Confirm record
         q = {'system': self.system, 'itype': self.itype, 'pulltag': self.tag}
         mrec = self.images.find_one(q)
-        assert '_id' in mrec
+        self.assertIn('_id', mrec)
         # Track through transistions
         state = self.time_wait(id)
         self.assertEquals(state, 'READY')
         imagerec = self.m.lookup(session, pr)
-        assert 'ENTRY' in imagerec
-        assert 'ENV' in imagerec
+        self.assertIn('ENTRY', imagerec)
+        self.assertIn('ENV', imagerec)
 
     # TODO: Write a test that tries to update an image the
     # user doesn't have permissions to
@@ -870,19 +898,19 @@ class ImageMngrTestCase(unittest.TestCase):
         record = self.good_record()
         # Create a fake record in mongo
         id = self.images.insert(record)
-        assert id is not None
+        self.assertIsNotNone(id)
         # Create a bogus image file
         file, metafile = self.create_fakeimage(system, record['id'],
                                                self.format)
         session = self.m.new_session(self.authadmin, system)
         er = {'system': system, 'tag': self.tag, 'itype': self.itype}
         rec = self.m.expire(session, er, testmode=1)  # ,delay=False)
-        assert rec is not None
+        self.assertIsNotNone(rec)
         time.sleep(2)
         state = self.m.get_state(id)
-        assert state == 'EXPIRED'
-        assert os.path.exists(file) is False
-        assert os.path.exists(metafile) is False
+        self.assertEquals(state, 'EXPIRED')
+        self.assertFalse(os.path.exists(file))
+        self.assertFalse(os.path.exists(metafile))
 
     def test_expire_local(self):
         record = self.good_record()
@@ -890,58 +918,58 @@ class ImageMngrTestCase(unittest.TestCase):
         record['system'] = system
         # Create a fake record in mongo
         id = self.images.insert(record)
-        assert id is not None
+        self.assertIsNotNone(id)
         # Create a bogus image file
         file, metafile = self.create_fakeimage(system, record['id'],
                                                self.format)
         session = self.m.new_session(self.authadmin, system)
         er = {'system': system, 'tag': self.tag, 'itype': self.itype}
         rec = self.m.expire(session, er)  # ,delay=False)
-        assert rec is not None
+        self.assertIsNotNone(rec)
         time.sleep(2)
         state = self.m.get_state(id)
-        assert state == 'EXPIRED'
-        assert os.path.exists(file) is False
-        assert os.path.exists(metafile) is False
+        self.assertEquals(state, 'EXPIRED')
+        self.assertFalse(os.path.exists(file))
+        self.assertFalse(os.path.exists(metafile))
 
     def test_expire_noadmin(self):
         record = self.good_record()
         # Create a fake record in mongo
         id = self.images.insert(record)
-        assert id is not None
+        self.assertIsNotNone(id)
         # Create a bogus image file
         file, metafile = self.create_fakeimage(self.system, record['id'],
                                                self.format)
         session = self.m.new_session(self.auth, self.system)
         er = {'system': self.system, 'tag': self.tag, 'itype': self.itype}
         rec = self.m.expire(session, er, testmode=1)  # ,delay=False)
-        assert rec is not None
+        self.assertIsNotNone(rec)
         time.sleep(2)
         state = self.m.get_state(id)
-        assert state == 'READY'
-        assert os.path.exists(file) is True
-        assert os.path.exists(metafile) is True
+        self.assertEquals(state, 'READY')
+        self.assertTrue(os.path.exists(file))
+        self.assertTrue(os.path.exists(metafile))
 
     def test_autoexpire_stuckpull(self):
         record = self.good_pullrecord()
         record['status'] = 'ENQUEUED'
         record['last_pull'] = time.time() - 3000
         id = self.images.insert(record)
-        assert id is not None
+        self.assertIsNotNone(id)
         session = self.m.new_session(self.authadmin, self.system)
         self.m.autoexpire(session, self.system, testmode=1)
         state = self.m.get_state(id)
-        assert state is None
+        self.assertIsNone(state)
 
     def test_autoexpire_recentpull(self):
         record = self.good_pullrecord()
         record['status'] = 'ENQUEUED'
         id = self.images.insert(record)
-        assert id is not None
+        self.assertIsNotNone(id)
         session = self.m.new_session(self.authadmin, self.system)
         self.m.autoexpire(session, self.system, testmode=1)
         state = self.m.get_state(id)
-        assert state == 'ENQUEUED'
+        self.assertEquals(state, 'ENQUEUED')
 
     def test_autoexpire(self):
         record = self.good_record()
@@ -949,7 +977,7 @@ class ImageMngrTestCase(unittest.TestCase):
         # Make it a candidate for expiration (10 secs too old)
         record['expiration'] = time.time() - 10
         id = self.images.insert(record)
-        assert id is not None
+        self.assertIsNotNone(id)
         # Create a bogus image file
         file, metafile = self.create_fakeimage(self.system, record['id'],
                                                self.format)
@@ -966,7 +994,7 @@ class ImageMngrTestCase(unittest.TestCase):
         record = self.good_record()
         record['expiration'] = time.time() + 1000
         id = self.images.insert(record)
-        assert id is not None
+        self.assertIsNotNone(id)
         # Create a bogus image file
         file, metafile = self.create_fakeimage(self.system, record['id'],
                                                self.format)
@@ -974,9 +1002,9 @@ class ImageMngrTestCase(unittest.TestCase):
         self.m.autoexpire(session, self.system, testmode=1)  # ,delay=False)
         time.sleep(2)
         state = self.m.get_state(id)
-        assert state == 'READY'
-        assert os.path.exists(file) is True
-        assert os.path.exists(metafile) is True
+        self.assertEquals(state, 'READY')
+        self.assertTrue(os.path.exists(file))
+        self.assertTrue(os.path.exists(metafile))
 
     def test_autoexpire_othersystem(self):
         # A new image shouldn't expire
@@ -984,7 +1012,7 @@ class ImageMngrTestCase(unittest.TestCase):
         record['expiration'] = time.time() - 10
         record['system'] = 'other'
         id = self.images.insert(record)
-        assert id is not None
+        self.assertIsNotNone(id)
         # Create a bogus image file
         file, metafile = self.create_fakeimage(self.system, record['id'],
                                                self.format)
@@ -992,9 +1020,9 @@ class ImageMngrTestCase(unittest.TestCase):
         self.m.autoexpire(session, self.system, testmode=1)  # ,delay=False)
         time.sleep(2)
         state = self.m.get_state(id)
-        assert state == 'READY'
-        assert os.path.exists(file) is True
-        assert os.path.exists(metafile) is True
+        self.assertEquals(state, 'READY')
+        self.assertTrue(os.path.exists(file))
+        self.assertTrue(os.path.exists(metafile))
 
     def test_metrics(self):
         rec = {
@@ -1061,6 +1089,49 @@ class ImageMngrTestCase(unittest.TestCase):
         rec = self.images.find_one()
         self.assertIn('userACL', rec)
         self.assertTrue(rec['private'])
+
+    def test_pull_multiple_tags(self):
+        """
+        Test pulling an image with multiple tags.
+        """
+        pr = {
+            'system': self.system,
+            'itype': self.itype,
+            'tag': self.public,
+            'remotetype': 'dockerv2'
+        }
+        # Do the pull
+        session = self.m.new_session(self.auth, self.system)
+        rec = self.m.pull(session, pr)  # ,delay=False)
+        id = rec['_id']
+        self.assertIsNotNone(rec)
+        # Confirm record
+        q = {'system': self.system, 'itype': self.itype,
+             'pulltag': self.public}
+        mrec = self.images.find_one(q)
+        self.assertIn('_id', mrec)
+        # Track through transistions
+        state = self.time_wait(id)
+        self.assertEquals(state, 'READY')
+        mrec = self.images.find_one(q)
+
+        # Now reppull with a different tag for the same image
+        newtag = self.public.replace('latest', '1')
+        pr = {
+            'system': self.system,
+            'itype': self.itype,
+            'tag': newtag,
+            'remotetype': 'dockerv2'
+        }
+        rec = self.m.pull(session, pr)  # ,delay=False)
+        id = rec['_id']
+        self.assertIsNotNone(rec)
+        # Track through transistions
+        state = self.time_wait(id)
+        # Requery the original record
+        mrec = self.images.find_one(q)
+        self.assertIn(self.public, mrec['tag'])
+        self.assertIn(newtag, mrec['tag'])
 
 
 if __name__ == '__main__':
