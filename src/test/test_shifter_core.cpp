@@ -926,13 +926,15 @@ TEST(ShifterCoreTestGroup, _test_shifterconfig_str) {
     ImageData image;
     VolumeMap vmap;
     UdiRootConfig config;
-    image.identifier = "testImage";
+    image.identifier = strdup("testImage");
     memset(&vmap, 0, sizeof(VolumeMap));
     memset(&config, 0, sizeof(UdiRootConfig));
 
     char *sig = generateShifterConfigString("dmj", &image, &vmap, &config);
     CHECK(sig != NULL);
     CHECK(strcmp(sig, "{\"identifier\":\"testImage\",\"user\":\"dmj\",\"volMap\":\"\",\"modules\":\"\"}") == 0);
+    free(sig);
+    free(image.identifier);
 }
 
 #ifdef NOTROOT
@@ -1042,6 +1044,43 @@ TEST(ShifterCoreTestGroup, copyenv_test) {
         free(*cptr);
     }
     free(copied_env);
+}
+
+extern "C" {
+    char **_shifter_findenv(char **env, const char *var);
+}
+
+TEST(ShifterCoreTestGroup, shifter_putenv_detailed) {
+    char **env = (char **)  malloc(sizeof(char *) * 10);
+    memset(env, 0, sizeof(char *) * 10);
+
+    char **ptr = _shifter_findenv(env, "PATH=/a/b/c");
+    CHECK(ptr == NULL);
+
+    env[0] = strdup("PATH=/hello");
+    env[1] = strdup("PATH_2=/asdf");
+    env[2] = strdup("ABCDEFG=1234");
+    env[3] = strdup("ABCDE=1234");
+
+    ptr = _shifter_findenv(env, "PATH=/a/b/c");
+    CHECK(ptr && *ptr == env[0]);
+
+    ptr = _shifter_findenv(env, "PA=/a/b/c");
+    CHECK(ptr == NULL);
+
+    ptr = _shifter_findenv(env, "PATH");
+    CHECK(ptr && *ptr == env[0]);
+
+    ptr = _shifter_findenv(env, "ABCDE");
+    CHECK(ptr && *ptr == env[3]);
+
+    ptr = _shifter_findenv(env, "ABCDE=123");
+    CHECK(ptr && *ptr == env[3]);
+
+    for (ptr = env; ptr && *ptr; ptr++) {
+        free(*ptr);
+    }
+    free(env);
 }
 
 TEST(ShifterCoreTestGroup, setenv_test) {
@@ -1250,7 +1289,7 @@ TEST(ShifterCoreTestGroup, setupenv_test) {
 
     /* initialize empty environment */
     local_env = (char **) malloc(sizeof(char *) * 2);
-    local_env[0] = "PATH=/incorrect";
+    local_env[0] = strdup("PATH=/incorrect");
     local_env[1] = NULL;
 
     /* copy arrays into config */
@@ -1293,6 +1332,9 @@ TEST(ShifterCoreTestGroup, setupenv_test) {
     CHECK(found == 2);
     CHECK(ptr - local_env == 2);
 
+    for (ptr = local_env; ptr && *ptr; ptr++)
+        free(*ptr);
+    free(local_env);
     free_ImageData(image, 1);
     free_UdiRootConfig(config, 1);
 }

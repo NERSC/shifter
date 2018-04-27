@@ -56,6 +56,12 @@ extern "C" {
 #define INVALID_GROUP INT_MAX
 #define FILE_SIZE_LIMIT 5242880
 
+typedef enum _env_putenv_mode {
+    ENV_REPLACE,
+    ENV_PREPEND,
+    ENV_APPEND
+} env_putenv_mode_et;
+
 int setupUserMounts(VolumeMap *map, UdiRootConfig *udiConfig);
 int setupVolumeMapMounts(MountList *mountCache, VolumeMap *map,
         int userRequested, dev_t createTo, UdiRootConfig *udiConfig);

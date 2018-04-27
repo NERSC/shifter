@@ -1,3 +1,14 @@
+18.03.1
+========
+* Add support for clearing the external environment
+* Add support for user specifying environment variables on command line
+* Add support for user specifying environment variables via a file
+* Fix entrypoint bug to not require an argument if the image specifies an entrypoint
+* Fix workdir bug to only use the image workdir when the --workdir option is specified
+* Fix user/group acl parsing bug and improve error handling
+* Fix bug in environment variable matching
+* Add SHIFTER_IMAGEREQUEST and SHIFTER_IMAGE environment variables in the shifter environment to show the requested image tag and resolved id
+
 18.03.0
 =========
 * Support for Private Repos and user supplied ACLs on private images
