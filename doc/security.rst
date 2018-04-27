@@ -85,6 +85,31 @@ or even squashfs filesytems should be avoided unless you trust the individual
 that produced the content with root privileges. (You wouldn't pick up a USB
 drive off the street and put it into your computer, would you?)
 
+Notes on Security attributes
+----------------------------
+Linux supports the ability for file systems to have security attributes attached
+to individual files.  This allows, for example, ping to be non-setuid yet still
+create raw packets.  This can introduce additional risk with running containers.
+Shifter takes a number of precautions to mitigate this risks.  The Image gateway
+uses a python tar library that doesn't currently support extracting files with
+the security attribute.  In addition, we recommend running the gateway as a
+non-root users, e.g. shifter.  This adds additional security because an unprivileged
+user cannot add security attributes to a file.  Shifter passes flags to
+mksquashfs to further prevent these attributes from being included in the image.
+Finally, the runtime uses a number of mechanisms to ensure these attributes are
+ignored.  These combination of features greatly reduce the risk of a unprivileged
+user from using specially crafted images to gain privileges.
+
+Users making use of the custom image import option (see import.md) should take
+additional precautions since this mechanism effectively bypasses the image
+preparation steps in the gateway and the images could include security
+attributes.  It is recommended that sites build these images using a
+unprivileged account and pass the --no-xattrs flag to mksquashfs to mitigate
+this risk.  The runtime should still prevent these images from conferring any
+additional privileges to the user process, but dropping the attributes during
+preparation is a good precaution.  In addition, sites should limit the users
+allowed to perform imports.
+
 Image Manager Considerations
 ----------------------------
 
@@ -121,4 +146,3 @@ the image.  This is a non-obvious way that a program may attempt to escalate
 privilege.  On more recent Linux systems (Linux kernel >= 3.5), this risk is
 somewhat mitigated so long as the shifter executable is rebuilt for those
 systems.
-
