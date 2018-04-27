@@ -6,9 +6,9 @@ wish to support this or limit its usage, it requires extra configuration.
 
 ## Security Considerations
 
-Before enabling these features, the administrator should understand the
+Before enabling this feature, the administrator should understand the
 increased risks of allowing direct imports of images perpared outside
-of Shifter.  A Shifter gateway should not be capable
+of Shifter.  The Shifter gateway should not be capable
 of creating images that contain security attributes.  This helps minimize
 the risk of images introducing additional security risks.  If you enable
 the importing of images, you should take extra precautions in how images
