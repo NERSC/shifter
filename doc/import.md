@@ -13,9 +13,12 @@ of creating images that contain security attributes.  This helps minimize
 the risk of images introducing additional security risks.  If you enable
 the importing of images, you should take extra precautions in how images
 are prepared and who you trust to import them.  Images should ideally
-be prepared as a unprivileged user and the --no-xattrs flag should be
+be prepared as a unprivileged user and the -no-xattrs flag should be
 passed to the mksquashfs command to mitigate the risks of security attributes
-being included in the image.
+being included in the image.  When using the workload manager integration 
+(e.g. SLURM plugin), it is especially critical that direct 
+import users block xattrs since the mounts may be visible
+to processes running outside the runtime.
 
 ## Approach
 
