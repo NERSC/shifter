@@ -50,10 +50,12 @@ class ConvertersTestCase(unittest.TestCase):
         """
         Test convert function using a mock format
         """
+        opts = dict()
         output = '%s/test.squashfs' % (self.outdir)
         resp = converters.convert('mock', '', output)
         assert resp is True
         assert os.path.exists(output)
+        os.remove(output)
 
         path = self.make_fake()
 
@@ -63,8 +65,37 @@ class ConvertersTestCase(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             resp = converters.convert('ext4', path, '/tmp/blah.ext4')
 
-        resp = converters.convert('squashfs', path, output)
+        resp = converters.convert('squashfs', path, output, options=opts)
         self.assertTrue(resp)
+        with open(output) as f:
+            line = f.read()
+            self.assertIn('-no-xattrs',line)
+
+    def test_convert_options(self):
+        """
+        Test option handling
+        """
+        opts = {
+            'mock': [' blah']
+        }
+        path = self.make_fake()
+        output = '%s/test.mock' % (self.outdir)
+        if os.path.exists(output):
+            os.remove(output)
+        resp = converters.convert('mock', path, output, options=opts)
+        self.assertTrue(resp)
+        with open(output) as f:
+            v = f.read()
+            self.assertEquals(v, 'bogus blah')
+
+        os.remove(output)
+        opts['mock'] = ' blah'
+        resp = converters.convert('mock', path, output, options=opts)
+        self.assertTrue(resp)
+        with open(output) as f:
+            v = f.read()
+            self.assertEquals(v, 'bogus blah')
+        os.remove(output)
 
     def test_writemeta(self):
         """
@@ -101,14 +132,14 @@ class ConvertersTestCase(unittest.TestCase):
 
     def test_ext4(self):
         with self.assertRaises(NotImplementedError):
-            converters.generate_ext4_image('/tmp', '/tmp')
+            converters.generate_ext4_image('/tmp', '/tmp', None)
 
     def test_cramfs(self):
-        converters.generate_cramfs_image('/tmp/b', '/tmp/blah')
+        converters.generate_cramfs_image('/tmp/b', '/tmp/blah', None)
         self.assertTrue(os.path.exists('/tmp/blah'))
         os.remove('/tmp/blah')
 
     def test_squashfs(self):
-        converters.generate_squashfs_image('/tmp/b', '/tmp/blah')
+        converters.generate_squashfs_image('/tmp/b', '/tmp/blah', None)
         self.assertTrue(os.path.exists('/tmp/blah'))
         os.remove('/tmp/blah')

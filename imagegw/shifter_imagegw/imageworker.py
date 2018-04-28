@@ -56,6 +56,9 @@ if 'CacheDirectory' in CONFIG:
 if 'ExpandDirectory' in CONFIG:
     if not os.path.exists(CONFIG['ExpandDirectory']):
         os.mkdir(CONFIG['ExpandDirectory'])
+if 'ConvertOptions' in CONFIG and \
+   not isinstance(CONFIG['ConverterOptions'], dict):
+    raise ValueError('ConverterOptions must be a dictionary')
 
 
 class Updater(object):
@@ -99,6 +102,7 @@ class WorkerThreads(object):
         except Exception as err:
             resp = {'error_type': str(type(err)),
                     'message': str(err)}
+
             updater.update_status('FAILURE', 'FAILURE', response=resp)
 
     def expire(self, request, updater):
@@ -287,11 +291,16 @@ def convert_image(request):
     request['format'] = fmt
 
     edir = CONFIG['ExpandDirectory']
+    if 'ConverterOptions' in CONFIG:
+        opts = CONFIG['ConverterOptions']
+    else:
+        opts = None
 
     imagefile = os.path.join(edir, '%s.%s' % (request['id'], fmt))
     request['imagefile'] = imagefile
 
-    status = converters.convert(fmt, request['expandedpath'], imagefile)
+    status = converters.convert(fmt, request['expandedpath'], imagefile,
+                                options=opts)
     return status
 
 
@@ -505,7 +514,7 @@ def pull(request, updater, testmode=0):
         logging.error("ERROR: dopull failed system=%s tag=%s",
                       request['system'], request['tag'])
         print sys.exc_value
-        updater.update_state('FAILURE', 'FAILED')
+        updater.update_status('FAILURE', 'FAILED')
 
         # TODO: add a debugging flag and only disable cleanup if debugging
         cleanup_temporary(request)
