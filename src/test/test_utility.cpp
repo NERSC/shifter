@@ -483,8 +483,12 @@ TEST(UtilityTestGroup, merge_args) {
     CHECK(strcmp(merged[2],"b") == 0);
     CHECK(merged[3] == NULL);
     free(args1[0]);
+    free(args1[1]);
     free(args2[0]);
     free(args2[1]);
+    free(merged[0]);
+    free(merged[1]);
+    free(merged[2]);
     free(merged);
 }
 
@@ -495,6 +499,28 @@ TEST(UtilityTestGroup, make_string_array_basic) {
     CHECK(strcmp(arr[0],"astring") == 0);
     CHECK(arr[1] == NULL);
     free_args(arr);
+}
+
+TEST(UtilityTestGroup, dup_string_array_basic) {
+    char **array = (char **) malloc(sizeof(char *) * 5);
+    char **dup = NULL;
+    array[0] = strdup("string 1");
+    array[1] = strdup("string 2");
+    array[2] = strdup("string 3");
+    array[3] = strdup("string 4");
+    array[4] = NULL;
+
+    dup = dup_string_array(array);
+    CHECK(dup != NULL);
+    CHECK(dup[4] == array[4]);
+    CHECK(dup[4] == NULL);
+    CHECK(strcmp(dup[0], array[0]) == 0);
+    CHECK(strcmp(dup[1], array[1]) == 0);
+    CHECK(strcmp(dup[2], array[2]) == 0);
+    CHECK(strcmp(dup[3], array[3]) == 0);
+
+    free_string_array(array);
+    free_string_array(dup);
 }
 
 int main(int argc, char** argv) {

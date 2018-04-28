@@ -667,7 +667,7 @@ void shifterSpank_init_allocator_setup(shifterSpank_config *ssconfig) {
             _log(LOG_ERROR, "Failed to lookup image.  Aborting.");
             exit(-1);
         }
-        free(ssconfig->image);
+        ssconfig->imageRequest = ssconfig->image;
         free(ssconfig->imageType);
         ssconfig->image = image_id;
         ssconfig->imageType = _strdup("id");
@@ -684,6 +684,10 @@ void shifterSpank_init_allocator_setup(shifterSpank_config *ssconfig) {
     wrap_spank_setenv(ssconfig, "SHIFTER_IMAGETYPE", ssconfig->imageType, 1);
     wrap_spank_job_control_setenv(ssconfig, "SHIFTER_IMAGE", ssconfig->image, 1);
     wrap_spank_job_control_setenv(ssconfig, "SHIFTER_IMAGETYPE", ssconfig->imageType, 1);
+    if (ssconfig->imageRequest) {
+        wrap_spank_setenv(ssconfig, "SHIFTER_IMAGEREQUEST", ssconfig->imageRequest, 1);
+        wrap_spank_job_control_setenv(ssconfig, "SHIFTER_IMAGEREQUEST", ssconfig->imageRequest, 1);
+    }
 
     /* change the cached value of the user supplied arg to match
      * the looked-up value */

@@ -46,6 +46,7 @@ typedef struct {
     /* config options from user */
     char *image;                  /*! user requested image identifier */
     char *imageType;              /*! image type */
+    char *imageRequest;           /*! the original request string */
     char *volume;                 /*! volume remap options */
     char *modules;                /*! shifter module selection */
     int ccmMode;                  /*! flag if this is ccm mode */
