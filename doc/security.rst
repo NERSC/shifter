@@ -47,16 +47,7 @@ Therefore, to mitigate potential risks, we recommend the following:
    strict control.  The privilege capability restrictions should prevent
    processes from escalating privilege even without the nosuid restriction.
 
-   Thus, if you operate the sshd as root, *DO NOT* use the recursive mount
-   option or shared if there is _any_ chance that there are setuid-root (or
-   other privileged user) files mounted under the target path, or executables
-   that grant specific security capabilities.  The ":rec" or ":shared" options
-   can be a very powerful feature, however *USE WITH GREAT CAUTION* if you allow
-   the sshd to operate with root privilege.
-
-
-3. Use the most recent version of Shifter (16.08) as it corrects some issues
-   from the previous pre-releases.
+3. Use the most recent version of Shifter.
 
 Notes on Security Related Options and Future Directions for udiRoot
 -------------------------------------------------------------------
@@ -80,8 +71,8 @@ caused by distributed locking in traditional network filesystems.  The use of
 these loop devices, however, means that filesystems are being managed and accessed
 directly by the kernel, with privileged access.  This means that the filesystem
 files *must never be writable by users directly*, and should be produced by
-toolsets trusted by the site operating Shifter.  Directly importing ext4, xfs,
-or even squashfs filesytems should be avoided unless you trust the individual
+toolsets trusted by the site operating Shifter.  Directly importing squashfs filesytems
+should be avoided unless you trust the individual
 that produced the content with root privileges. (You wouldn't pick up a USB
 drive off the street and put it into your computer, would you?)
 
@@ -93,7 +84,7 @@ create raw packets.  This can introduce additional risk with running containers.
 Shifter takes a number of precautions to mitigate these risks.  The Image gateway
 uses a python tar library that doesn't currently support extracting files with
 the security attribute.  In addition, we recommend running the gateway as a
-non-root users, e.g. shifter.  This adds additional security because an unprivileged
+non-root user, e.g. shifter.  This adds additional security because an unprivileged
 user cannot add security attributes to a file.  Shifter passes flags to
 mksquashfs to further prevent these attributes from being included in the image.
 Finally, the runtime uses a number of mechanisms to ensure these attributes are
