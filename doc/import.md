@@ -4,6 +4,22 @@ While Shifter is primarily designed to run images built using Docker, it also
 supports directly importing pre-prepared images.  Since some sites may not
 wish to support this or limit its usage, it requires extra configuration.
 
+## Security Considerations
+
+Before enabling this feature, the administrator should understand the
+increased risks of allowing direct imports of images perpared outside
+of Shifter.  The Shifter gateway should not be capable
+of creating images that contain security attributes.  This helps minimize
+the risk of images introducing additional security risks.  If you enable
+the importing of images, you should take extra precautions in how images
+are prepared and who you trust to import them.  Images should ideally
+be prepared as a unprivileged user and the -no-xattrs flag should be
+passed to the mksquashfs command to mitigate the risks of security attributes
+being included in the image.  When using the workload manager integration 
+(e.g. SLURM plugin), it is especially critical that direct 
+import users block xattrs since the mounts may be visible
+to processes running outside the runtime.
+
 ## Approach
 
 Importing images works by copying a pre-prepared image into the shared
