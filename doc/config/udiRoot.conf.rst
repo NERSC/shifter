@@ -101,7 +101,7 @@ layer you want to examine, or to enable shifter services within an existing
 path.  Setting to 1 will allow this path-specified shifting, 0 will not.
 
 This must be enabled if the "ccm" emulation mode is desired.  (ccm emulation
-is effectively done with `shifter --image=local:/` within the SLURM integration.
+is effectively done with `shifter --image=local:/` within the Slurm integration.
 
 autoLoadKernelModule (0 or 1)
 -----------------------------
@@ -233,7 +233,7 @@ Example::
 
 imageGateway
 ------------
-Space seperated URLs for your imagegw.  Used by shifterimg and SLURM batch
+Space seperated URLs for your imagegw.  Used by shifterimg and Slurm batch
 integration to communicate with the imagegw.
 
 batchType (optional)
