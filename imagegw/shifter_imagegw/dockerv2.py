@@ -527,7 +527,13 @@ class DockerV2Handle(object):
                     # there was a checksum mismatch, nuke the file
                     os.unlink(filename)
 
-            conn.request("GET", path, None, self.headers)
+            # If the redirect path includes a verify in the path
+            # then we don't need the header.  If try to use the
+            # header, we may get back a 400.
+            if path.find('verify') > 0:
+                conn.request("GET", path, None, {})
+            else:
+                conn.request("GET", path, None, self.headers)
             resp1 = conn.getresponse()
             location = resp1.getheader('location')
             if resp1.status == 200:
