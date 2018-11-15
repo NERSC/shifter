@@ -373,7 +373,7 @@ class DockerV2Handle(object):
         (_, auth_data_str) = auth_loc_str.split(' ', 2)
 
         auth_data = {}
-        for item in auth_data_str.split(','):
+        for item in filter(None, re.split(r'(\w+=".*?"),', auth_data_str)):
             (key, val) = item.split('=', 2)
             auth_data[key] = val.replace('"', '')
 
