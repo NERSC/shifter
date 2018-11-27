@@ -104,7 +104,7 @@ use with Shifter.
 
 %if 0%{?with_slurm:1}
 %package slurm
-Summary:  SLURM Spank Module for Shifter
+Summary:  Slurm Spank Module for Shifter
 BuildRequires: slurm-devel
 
 %description slurm
@@ -120,7 +120,7 @@ jobs inside a docker image. Shifter consists of a few moving parts:
      scheduler systems.
 
 This package contains the Spank Plugin module which allows for the
-integration of Shifter with the SLURM Workload Manager.
+integration of Shifter with the Slurm Workload Manager.
 %endif
 
 %package fasthash

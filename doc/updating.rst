@@ -58,7 +58,7 @@ Version 15.12.0 to 16.08.1
      less common mount options).
 
    * Recommended Setting: defaultImageType=docker
-     This will allow shifter commands (shifter, shifterimg, SLURM integration)
+     This will allow shifter commands (shifter, shifterimg, Slurm integration)
      to assume, unless otherwise noted, that images requested are docker
      images.  This enables the user to do::
 
@@ -70,10 +70,10 @@ Version 15.12.0 to 16.08.1
 
 **sshd**
 
-The sshd is no longer started by default by the SLURM integration.  Add
+The sshd is no longer started by default by the Slurm integration.  Add
 "enable_sshd=1" to plugstack.conf if you want it.
 
-CCM mode is no longer enabled by default in the SLURM integration. Add
+CCM mode is no longer enabled by default in the Slurm integration. Add
 "enable_ccm=1" to plugstack.conf if you want it.
 
 If the sshd is configured to run via the WLM, the sshd runs as the user.

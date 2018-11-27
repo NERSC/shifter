@@ -104,7 +104,7 @@ etcPath=@SHIFTER_ETC_FILESDIR@
 # to 1 will allow this path-specified shifting, 0 will not.
 #
 # This must be enabled if the "ccm" emulation mode is desired. (ccm emulation is 
-# effectively done with shifter --image=local:/ within the SLURM integration.
+# effectively done with shifter --image=local:/ within the Slurm integration.
 
 
 #autoLoadKernelModule (0 or 1) -- DEPRECATED
@@ -261,7 +261,7 @@ siteEnvAppend=PATH=/opt/udiImage/bin
 
 #imageGateway
 #
-# Space seperated URLs for your imagegw. Used by shifterimg and SLURM batch 
+# Space seperated URLs for your imagegw. Used by shifterimg and Slurm batch
 # integration to communicate with the imagegw.
 # batchType (optional)
 #
