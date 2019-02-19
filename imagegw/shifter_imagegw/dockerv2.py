@@ -626,6 +626,10 @@ class DockerV2Handle(object):
             members = filter_layer(members, 'dev/')
             members = filter_layer(members, '/')
             members = [x for x in members if not x.name.find('..') >= 0]
+            for x in members:
+                 if x.name[0:2] == './':
+                     x.name=x.name[2:]
+
 
             # find all whiteouts
             whiteouts = [x for x in members
