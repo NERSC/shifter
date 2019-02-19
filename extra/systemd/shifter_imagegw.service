@@ -14,11 +14,9 @@ ExecStart=/usr/bin/gunicorn \
     -b 0.0.0.0:5000 --backlog 2048 \
     --access-logfile=/var/log/shifter_imagegw/access.log \
     --log-file=/var/log/shifter_imagegw/error.log \
+    -t 3600 \
     shifter_imagegw.api:app
 Restart=on-failure
-
-#ExecStart=/usr/sbin/openvpn --daemon --suppress-timestamps --writepid /var/run/openvpn/%i.pid --cd /etc/openvpn/ --config %i.conf
-#ExecReload=/sbin/killproc -p /var/run/openvpn/%i.pid -HUP /usr/sbin/openvpn
 
 [Install]
 WantedBy=multi-user.target
