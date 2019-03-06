@@ -552,7 +552,6 @@ def img_import(request, updater, testmode=0):
         # Step 1 - Calculate the hash of the file
         logging.debug("starting import hashing")
         updater.update_status('HASHING', 'HASHING')
-        logging.info(request)
         request['id'] = transfer.hash_file(request['filepath'], sysconf,
                                            logging)
         # Step 2 - Populate the metadata file
