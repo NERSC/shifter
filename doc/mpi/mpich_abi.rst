@@ -49,7 +49,7 @@ To construct the above container, one would do something like::
 (setting your tag appropriately, of course)
 
 
-SLURM User Instructions
+Slurm User Instructions
 -----------------------
 If the MPICH-abi environment is configured correctly (see below), it should be
 very easy to run the application.  Building from the example above::

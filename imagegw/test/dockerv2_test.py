@@ -105,6 +105,18 @@ class Dockerv2TestCase(unittest.TestCase):
         bfile = os.path.join(resp['expandedpath'], 'build/test2')
         assert os.path.exists(bfile)
 
+    def test_import(self):
+        cache = tempfile.mkdtemp()
+        expand = tempfile.mkdtemp()
+        self.cleanpaths.append(cache)
+        self.cleanpaths.append(expand)
+
+        resp = dockerv2.pull_image(self.options, 'scanon/importtest', 'latest',
+                                   cachedir=cache, expanddir=expand)
+        assert os.path.exists(resp['expandedpath'])
+        bfile = os.path.join(resp['expandedpath'], 'home')
+        self.assertTrue(os.path.islink(bfile))
+
     def test_need_proxy(self):
         """
         Test if proxy is needed

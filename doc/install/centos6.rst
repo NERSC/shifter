@@ -24,12 +24,12 @@ Build the RPMs from your tarball::
 
     rpmbuild -tb "shifter-$VERSION.tar.gz"
 
-*Note about SLURM support*
-To build with SLURM support do::
+*Note about Slurm support*
+To build with Slurm support do::
 
     rpmbuild -tb "shifter-$VERSION.tar.gz" --define "with_slurm /usr"
 
-Change "/usr" to the base path SLURM is installed in.
+Change "/usr" to the base path Slurm is installed in.
 
 Installing the Image Manager
 ============================

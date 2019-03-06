@@ -54,7 +54,7 @@ static shifterSpank_config *ssconfig = NULL;
 
 
 /******************************************************************************
-* SPANK interface functions to SLURM for shifter
+* SPANK interface functions to Slurm for shifter
 * 
 * slurm_spank_init:           used to initialize data structures
 * slurm_spank_init_post_opt:  executed in some contexts after host program
