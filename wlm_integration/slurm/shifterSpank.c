@@ -742,6 +742,7 @@ int read_data_from_job(shifterSpank_config *ssconfig, uint32_t *jobid, char **no
 
     if(wrap_spank_extra_job_attributes(ssconfig, *jobid, &raw_host_string, &n_nodes, tasksPerNode, shared) == ERROR) {
         _log(LOG_ERROR, "Failed to get job attributes");
+	return ERROR;
     }
 
     /* convert exploded string to encode how many tasks per host */
@@ -999,12 +1000,13 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
 
     rc = read_data_from_job(ssconfig, &job, &nodelist, &tasksPerNode, &shared);
     if (rc != SUCCESS) {
-        PROLOG_ERROR("FAILED to get job information.", ERROR);
+        PROLOG_ERROR("FAILED to get job information, exiting", ERROR);
+	goto _prolog_exit_unclean;
     }
 
     /* this prolog should not be used for shared-node jobs */
     if (shared != 0) {
-        _log(LOG_DEBUG, "shifter prolog: job is shared, moving on");
+        _log(LOG_DEBUG, "shifter prolog: job is shared, exiting");
         goto _prolog_exit_unclean;
     }
 

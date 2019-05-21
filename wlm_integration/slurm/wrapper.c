@@ -360,8 +360,6 @@ int wrap_spank_extra_job_attributes(
     job_info_msg_t *job_buf = NULL;
     hostlist_t hl;
     char *error = NULL;
-    int (*load_job)(job_info_msg_t **, uint32_t, uint16_t);
-    void (*free_job_info_msg)(job_info_msg_t *);
     hostlist_t (*hostlist_create_dims)(const char *hostlist, int dims);
     char * (*hostlist_deranged_string_malloc)(hostlist_t hl);
     void (*hostlist_uniq)(hostlist_t);
@@ -371,25 +369,27 @@ int wrap_spank_extra_job_attributes(
         slurm_error("FAILED to dlopen libslurm");
         return ERROR;
     }
-    load_job = slurm_load_job;
-    if ((error = dlerror()) != NULL) {
-        slurm_error("FAILED to lookup slurm_load_job!");
+
+    if (slurm_load_job(&job_buf, job_id, SHOW_ALL) != 0) {
+        slurm_error("Shifter: Failed to load job data");
         return ERROR;
     }
 
-    free_job_info_msg = slurm_free_job_info_msg;
+    if (job_buf == NULL) {
+        slurm_error("Shifter: Job buffer unreadable");
+        return ERROR;
+    }
+
+
     hostlist_create_dims = slurm_hostlist_create_dims;
     hostlist_deranged_string_malloc = slurm_hostlist_deranged_string_malloc;
     hostlist_uniq = slurm_hostlist_uniq;
     hostlist_destroy = slurm_hostlist_destroy;
 
-    if ((*load_job)(&job_buf, jobid, SHOW_ALL) != 0) {
-        slurm_error("%s %u", "Couldn't load job data for jobid", jobid);
-        return ERROR;
-    }
     if (job_buf->record_count != 1) {
-        slurm_error("%s", "Can't deal with this job!");
-        (*free_job_info_msg)(job_buf);
+        slurm_error("Recieved unexpected record count: %d",
+                        job_buf->record_count);
+        slurm_free_job_info_msg(job_buf);
         return ERROR;
     }
 
@@ -410,7 +410,7 @@ int wrap_spank_extra_job_attributes(
     /* nid00[1-4] -> nid001,nid002,nid003,nid004 */
     *nodelist = (*hostlist_deranged_string_malloc)(hl);
 
-    (*free_job_info_msg)(job_buf);
+    slurm_free_job_msg(job_buf);
     (*hostlist_destroy)(hl);
 
     return SUCCESS;
