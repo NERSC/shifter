@@ -388,7 +388,7 @@ int wrap_spank_extra_job_attributes(
         return ERROR;
     }
     if (job_buf->record_count != 1) {
-        slurm_error("%s", "Can't deal with this job!");
+        slurm_error("%s: %d", "Received unexpected record count", job_buf->record_count);
         (*free_job_info_msg)(job_buf);
         return ERROR;
     }
