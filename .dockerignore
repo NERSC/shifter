@@ -2,3 +2,5 @@ test.json
 docker-compose.yml
 imagegw/test/config
 *.pyc
+rpms
+autom4te.cache
