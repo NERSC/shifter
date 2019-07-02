@@ -63,8 +63,10 @@ for dir in $dirs; do
             # SLES has symlinks for asm
             realpath=$(readlink -f "/usr/include/$dir")
             cp -rp "$realpath" "${SPRT_PREFIX}/include/"
+	fi
+        if [ ! -e "${SPRT_PREFIX}/include/$dir" ]; then
+            cp -rp "/usr/include/$dir" "${SPRT_PREFIX}/include/"
         fi
-        cp -rp "/usr/include/$dir" "${SPRT_PREFIX}/include/"
     fi
 done
 

@@ -17,7 +17,7 @@
 
 Summary:   NERSC Shifter -- Containers for HPC
 Name:      shifter
-Version:   18.03.0
+Version:   18.03.2
 Release:   1.nersc%{?dist}
 License:   BSD (LBNL-modified)
 Group:     System Environment/Base
@@ -178,7 +178,11 @@ rm -f $RPM_BUILD_ROOT/%{_libexecdir}/shifter/shifter_slurm_dws_support
 
 %if 0%{!?_without_systemd:1}
 %{__mkdir_p} $RPM_BUILD_ROOT%{_unitdir}
+%if 0%{?suse_version} > 1230
+%{__install} -m 0644 extra/systemd/shifter_imagegw-2.7.service $RPM_BUILD_ROOT%{_unitdir}/shifter_imagegw.service
+%else
 %{__install} -m 0644 extra/systemd/shifter_imagegw.service $RPM_BUILD_ROOT%{_unitdir}/
+%endif
 %endif
 
 
