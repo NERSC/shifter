@@ -385,7 +385,7 @@ class DockerV2Handle(object):
         headers = {}
         if self.username=='$oauthtoken':
             self.private = True
-            headers['Authoriation'] = 'Bearer %s' % (self.password)
+            headers['Authorization'] = 'Bearer %s' % (self.password)
         elif creds and self.username is not None and self.password is not None:
             self.private = True
             auth = '%s:%s' % (self.username, self.password)
