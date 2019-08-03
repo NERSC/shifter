@@ -372,7 +372,7 @@ class DockerV2Handle(object):
         # TODO, figure out what mode was for
         (_, auth_data_str) = auth_loc_str.split(' ', 2)
 
-        auth_data = {}
+        auth_data = {'service':'', 'scope':'pull'}
         for item in filter(None, re.split(r'(\w+=".*?"),', auth_data_str)):
             (key, val) = item.split('=', 2)
             auth_data[key] = val.replace('"', '')
@@ -383,7 +383,10 @@ class DockerV2Handle(object):
                              'failed to get auth connection')
 
         headers = {}
-        if creds and self.username is not None and self.password is not None:
+        if self.username=='$oauthtoken':
+            self.private = True
+            headers['Authorization'] = 'Bearer %s' % (self.password)
+        elif creds and self.username is not None and self.password is not None:
             self.private = True
             auth = '%s:%s' % (self.username, self.password)
             headers['Authorization'] = 'Basic %s' % base64.b64encode(auth)
@@ -400,8 +403,6 @@ class DockerV2Handle(object):
 
         if resp.status != 200:
             raise ValueError('Bad response getting token: %d', resp.status)
-        if resp.getheader('content-type') != 'application/json':
-            raise ValueError('Invalid response getting token, not json')
 
         auth_resp = json.loads(resp.read())
         self.token = auth_resp['token']
@@ -528,12 +529,12 @@ class DockerV2Handle(object):
                     os.unlink(filename)
 
             # If the redirect path includes a verify in the path
-            # then we don't need the header.  If try to use the
+            # then we don't need the header.  If we try to use the
             # header, we may get back a 400.
-            if path.find('verify') > 0:
-                conn.request("GET", path, None, {})
-            else:
-                conn.request("GET", path, None, self.headers)
+            headers = self.headers
+            if path.find('verify') > 0 or path.find('X-Amz-Algorithm')>0:
+                headers = {}
+            conn.request("GET", path, None, headers)
             resp1 = conn.getresponse()
             location = resp1.getheader('location')
             if resp1.status == 200:
