@@ -400,7 +400,7 @@ class DockerV2Handle(object):
 
         if resp.status != 200:
             raise ValueError('Bad response getting token: %d', resp.status)
-        if resp.getheader('content-type') != 'application/json':
+        if not resp.getheader('content-type').startswith('application/json'):
             raise ValueError('Invalid response getting token, not json')
 
         auth_resp = json.loads(resp.read())
