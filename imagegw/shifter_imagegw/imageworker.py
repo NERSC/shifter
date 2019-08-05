@@ -468,7 +468,7 @@ def pull(request, updater, testmode=0):
     try:
         # Step 1 - Do the pull
         updater.update_status('PULLING', 'PULLING')
-        logging.info(request)
+        logging.debug(request)
         if not pull_image(request, updater=updater):
             logging.info("Worker: Pull failed")
             raise OSError('Pull failed')
