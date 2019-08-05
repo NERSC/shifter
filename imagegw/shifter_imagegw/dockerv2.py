@@ -400,6 +400,9 @@ class DockerV2Handle(object):
 
         if resp.status != 200:
             raise ValueError('Bad response getting token: %d', resp.status)
+        # The json content type can include a extra bit defining the character set
+        # so we just check the beginning.  Worst case is the json.loads will throw
+        # an error just after this.
         if not resp.getheader('content-type').startswith('application/json'):
             raise ValueError('Invalid response getting token, not json')
 
