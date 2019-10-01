@@ -625,6 +625,7 @@ int prepareSiteModifications(const char *username,
     _MKDIR("var", 0755);
     _MKDIR("var/spool", 0755);
     _MKDIR("var/run", 0755);
+    _MKDIR("var/tmp", 0755);
     _MKDIR("var/empty", 0700);
     _MKDIR("proc", 0755);
     _MKDIR("sys", 0755);
