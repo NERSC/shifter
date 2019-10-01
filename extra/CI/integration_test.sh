@@ -83,6 +83,9 @@ shifterimg pull ubuntu:16.04
 shifterimg lookup ubuntu:16.04
 ls /images
 
+echo "var/tmp exists"
+ls -ld /var/tmp
+
 echo "Ensure container gets basic setup"
 python $CIDIR/integration/test_shifterConfig_format.py ubuntu:16.04
 
