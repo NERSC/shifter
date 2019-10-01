@@ -948,6 +948,11 @@ _fail_copy_etcPath:
     mntBuffer[PATH_MAX-1] = 0;
     _BINDMOUNT(&mountCache, "/tmp", mntBuffer, 0, 1);
 
+    /* mount /var/tmp */
+    snprintf(mntBuffer, PATH_MAX, "%s/var/tmp", udiRoot);
+    mntBuffer[PATH_MAX-1] = 0;
+    _BINDMOUNT(&mountCache, "/var/tmp", mntBuffer, 0, 1);
+
 
 #undef _MKDIR
 #undef _BINDMOUNT
