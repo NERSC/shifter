@@ -67,9 +67,7 @@ int validateVolumeMap_userRequest(
         const char *to,
         VolumeMapFlag *flags)
 {
-    const char *toExactAllowed[] = {
-        "/var/tmp"
-    };
+    const char *toExactAllowed[] = {"/var/tmp", NULL};
     const char *toStartsWithDisallowed[] = {
         "/etc", "/var", "etc", "var", "/opt/udiImage", "opt/udiImage", NULL
     };
@@ -635,6 +633,19 @@ int _validateVolumeMap(
         return 4;
     }
 
+    /* checking "from" before "to" since the "to" checks can return early */
+    for (ptr = fromStartsWithDisallowed; *ptr != NULL; ptr++) {
+        size_t len = strlen(*ptr);
+        if (strncmp(from, *ptr, len) == 0) {
+            return 1;
+        }
+    }
+    for (ptr = fromExactDisallowed; *ptr != NULL; ptr++) {
+        if (strcmp(from, *ptr) == 0) {
+            return 1;
+        }
+    }
+
     for (ptr = toExactAllowed; *ptr != NULL; ptr++) {
         if (strcmp(to, *ptr) == 0) {
             return 0;
@@ -648,17 +659,6 @@ int _validateVolumeMap(
     }
     for (ptr = toExactDisallowed; *ptr != NULL; ptr++) {
         if (strcmp(to, *ptr) == 0) {
-            return 1;
-        }
-    }
-    for (ptr = fromStartsWithDisallowed; *ptr != NULL; ptr++) {
-        size_t len = strlen(*ptr);
-        if (strncmp(from, *ptr, len) == 0) {
-            return 1;
-        }
-    }
-    for (ptr = fromExactDisallowed; *ptr != NULL; ptr++) {
-        if (strcmp(from, *ptr) == 0) {
             return 1;
         }
     }
