@@ -105,6 +105,7 @@ int _validateVolumeMap(
         const char *from,
         const char *to,
         VolumeMapFlag *flags,
+        const char **toExactAllowed,
         const char **toStartsWithDisallowed, 
         const char **toExactDisallowed,
         const char **fromStartsWithDisallowed,
