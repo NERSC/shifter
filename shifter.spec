@@ -13,12 +13,14 @@
 %{!?systemd_requires:  %global _without_systemd --without-systemd}
 %endif
 
+%{!?shifter_release: %global shifter_release 1.nersc%{?dist}}
+
 %{?_with_slurm: %global with_slurm %{_prefix}}
 
 Summary:   NERSC Shifter -- Containers for HPC
 Name:      shifter
-Version:   18.03.2
-Release:   1.nersc%{?dist}
+Version:   18.03.3
+Release:   %{shifter_release}
 License:   BSD (LBNL-modified)
 Group:     System Environment/Base
 URL:       https://github.com/NERSC/shifter
