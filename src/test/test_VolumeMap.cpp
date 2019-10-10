@@ -261,6 +261,9 @@ TEST(VolumeMapTestGroup, ValidateVolumeMap_basic) {
     ret = validateVolumeMap_userRequest("/test1Loc", "/var/log", NULL);
     CHECK(ret != 0);
 
+    ret = validateVolumeMap_userRequest("/test1Loc", "/var/tmp", NULL);
+    CHECK(ret == 0);
+
     ret = validateVolumeMap_userRequest("/test1Loc", "/opt", NULL);
     CHECK(ret != 0);
 

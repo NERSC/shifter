@@ -625,6 +625,7 @@ int prepareSiteModifications(const char *username,
     _MKDIR("var", 0755);
     _MKDIR("var/spool", 0755);
     _MKDIR("var/run", 0755);
+    _MKDIR("var/tmp", 0755);
     _MKDIR("var/empty", 0700);
     _MKDIR("proc", 0755);
     _MKDIR("sys", 0755);
@@ -948,6 +949,12 @@ _fail_copy_etcPath:
     mntBuffer[PATH_MAX-1] = 0;
     _BINDMOUNT(&mountCache, "/tmp", mntBuffer, 0, 1);
 
+    /* mount /var/tmp, checking if executable as an existance check */
+    if (access("/var/tmp", X_OK) == 0) {
+        snprintf(mntBuffer, PATH_MAX, "%s/var/tmp", udiRoot);
+        mntBuffer[PATH_MAX-1] = 0;
+        _BINDMOUNT(&mountCache, "/var/tmp", mntBuffer, 0, 1);
+    }
 
 #undef _MKDIR
 #undef _BINDMOUNT
