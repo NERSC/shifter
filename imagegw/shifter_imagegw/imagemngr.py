@@ -393,6 +393,10 @@ class ImageMngr(object):
         records = self._images_find(query)
         resp = []
         for record in records:
+            if 'pulltag' not in record:
+                continue
+            if record['status'] == 'EXPIRED':
+                continue
             resp.append({'status': record['status'],
                         'image': record['pulltag']})
         return resp
