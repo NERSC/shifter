@@ -33,7 +33,8 @@ from subprocess import Popen, PIPE
 import base64
 import tempfile
 import socket
-import tarfile
+from tarfilemp import tarfile
+
 
 _EMPTY_TAR_SHA256 = \
     'sha256:a3ed95caeb02ffe68cdd9fd84406680ae93d633cb16422d00e8a7c22955b46d4'
