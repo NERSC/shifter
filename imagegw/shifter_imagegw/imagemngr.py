@@ -109,13 +109,18 @@ class ImageMngr(object):
         # Connect to database
         if 'MongoDBURI' not in self.config:
             raise NameError('MongoDBURI not defined')
-        self.workers = WorkerThreads()
+        threads = 1
+        if 'WorkerThreads' in self.config:
+            threads = int(self.config['WorkerThreads'])
+        self.workers = WorkerThreads(threads=threads)
         self.status_queue = self.workers.get_updater_queue()
         self.status_proc = Process(target=self.status_thread,
                                    name='StatusThread')
         self.status_proc.start()
         atexit.register(self.shutdown)
         self.mongo_init()
+        # Cleanup any pending requests
+        self._images_remove({'status': 'PENDING'})
 
     def shutdown(self):
         self.status_queue.put('stop')
@@ -238,6 +243,7 @@ class ImageMngr(object):
             if iGACL is not None and group in iGACL:
                 return True
         return False
+
 
     def _resetexpire(self, ident):
         """Reset the expire time.  (Not fully implemented)."""
@@ -568,8 +574,8 @@ class ImageMngr(object):
             self.logger.debug("Creating New Pull Record")
             rec = self.new_pull_record(request)
             ident = rec['_id']
-            self.logger.debug("ENQUEUEING Request")
-            self.update_mongo_state(ident, 'ENQUEUED')
+            self.logger.debug("PENDING Request")
+            self.update_mongo_state(ident, 'PENDING')
             request['tag'] = request['pulltag']
             request['session'] = session
             self.logger.debug("Calling do pull with queue=%s",
@@ -639,8 +645,8 @@ class ImageMngr(object):
         # new_pull_record works for import too
         rec = self.new_pull_record(request)
         ident = rec['_id']
-        self.logger.debug("ENQUEUEING Request, ident %s" % (ident))
-        self.update_mongo_state(ident, 'ENQUEUED')
+        self.logger.debug("PENDING Request, ident %s" % (ident))
+        self.update_mongo_state(ident, 'PENDING')
         request['tag'] = request['pulltag']
         request['session'] = session
         self.logger.debug("Calling wrkimport with queue=%s",
