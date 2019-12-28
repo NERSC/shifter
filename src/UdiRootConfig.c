@@ -481,7 +481,7 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
     written += fprintf(fp, "rootfsType = %s\n",
         (config->rootfsType != NULL ? config->rootfsType : ""));
     written += fprintf(fp, "sshdPrivilegeSeperationUser = %s\n",
-        (config->sshdPrivilegeSeperationUser != NULL ? sshdPrivilegeSeperationUser : ""));
+        (config->sshdPrivilegeSeperationUser != NULL ? config->sshdPrivilegeSeperationUser : ""));
     written += fprintf(fp, "modprobePath = %s\n",
         (config->modprobePath != NULL ? config->modprobePath : ""));
     written += fprintf(fp, "insmodPath = %s\n",
