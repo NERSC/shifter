@@ -365,6 +365,10 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         free(config->rootfsType);
         config->rootfsType = NULL;
     }
+    if (config->sshdPrivilegeSeperationUser != NULL) {
+        free(config->sshdPrivilegeSeperationUser);
+        config->sshdPrivilegeSeperationUser = NULL;
+    }
     if (config->siteFs != NULL) {
         free_VolumeMap(config->siteFs, 1);
         config->siteFs = NULL;
@@ -476,6 +480,8 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
          "slave" : "private"));
     written += fprintf(fp, "rootfsType = %s\n",
         (config->rootfsType != NULL ? config->rootfsType : ""));
+    written += fprintf(fp, "sshdPrivilegeSeperationUser = %s\n",
+        (config->sshdPrivilegeSeperationUser != NULL ? sshdPrivilegeSeperationUser : ""));
     written += fprintf(fp, "modprobePath = %s\n",
         (config->modprobePath != NULL ? config->modprobePath : ""));
     written += fprintf(fp, "insmodPath = %s\n",
@@ -693,6 +699,8 @@ static int _assign(const char *key, const char *value, void *t_config) {
         config->mkfsXfsPath = _strdup(value);
     } else if (strcmp(key, "rootfsType") == 0) {
         config->rootfsType = _strdup(value);
+    } else if (strcmp(key, "sshdPrivilegeSeperationUser") == 0) {
+        config->sshdPrivilegeSeperationUser = _strdup(value);
     } else if (strcmp(key, "gatewayTimeout") == 0) {
         config->gatewayTimeout = strtoul(value, NULL, 10);
     } else if (strcmp(key, "kmodBasePath") == 0) {

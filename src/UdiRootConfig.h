@@ -109,6 +109,7 @@ typedef struct _UdiRootConfig {
     char *optUdiImage;
     char *etcPath;
     char *rootfsType;
+    char *sshdPrivilegeSeperationUser;
     char **gwUrl;
     VolumeMap *siteFs;
     char **siteEnv;

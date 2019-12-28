@@ -776,6 +776,10 @@ _fail_copy_etcPath:
         struct passwd *pwd = shifter_getpwuid(udiConfig->target_uid, udiConfig);
         struct group *grp = getgrgid(udiConfig->target_gid);
         FILE *fp = NULL;
+        int nGroups = 0;
+        int idx = 0;
+        gid_t *gidList = NULL;
+        gid_t sshd_priv_group = -1;
         if (pwd == NULL) {
             fprintf(stderr, "Couldn't get user properties for uid %d\n", udiConfig->target_uid);
             goto _prepSiteMod_unclean;
@@ -784,6 +788,9 @@ _fail_copy_etcPath:
             fprintf(stderr, "Couldn't get group properties for gid %d\n", udiConfig->target_gid);
             goto _prepSiteMod_unclean;
         }
+
+        /* get group data */
+        gidList = shifter_getgrouplist(pwd->pw_name, udiConfig->target_gid, &nGroups);
 
         /* write out container etc/passwd */
         snprintf(srcBuffer, PATH_MAX, "%s/etc/passwd", udiRoot);
@@ -794,6 +801,15 @@ _fail_copy_etcPath:
         }
         fprintf(fp, "%s:x:%d:%d:%s:%s:%s\n", pwd->pw_name, pwd->pw_uid,
                 pwd->pw_gid, pwd->pw_gecos, pwd->pw_dir, pwd->pw_shell);
+
+        if (udiConfig->sshdPrivilegeSeperationUser) {
+            pwd = shifter_getpwnam(udiConfig->sshdPrivilegeSeperationUser, udiConfig);
+            if (pwd) {
+                fprintf(fp, "%s:x:%d:%d:%s:%s:%s\n", pwd->pw_name, pwd->pw_uid,
+                        pwd->pw_gid, pwd->pw_gecos, pwd->pw_dir, pwd->pw_shell);
+                sshd_priv_group = pwd->pw_gid;
+            }
+        }
         fclose(fp);
         fp = NULL;
 
@@ -804,7 +820,25 @@ _fail_copy_etcPath:
             fprintf(stderr, "Couldn't open group file for writing\n");
             goto _prepSiteMod_unclean;
         }
+
+        /* write out the primary group info */
         fprintf(fp, "%s:x:%d:\n", grp->gr_name, grp->gr_gid);
+
+        /* write out the aux groups */
+        for (idx = 0; idx < nGroups; idx++) {
+            if (gidList[idx] == udiConfig->target_gid)
+                continue;
+            grp = getgrgid(gidList[idx]);
+            fprintf(fp, "%s:x:%d:\n", grp->gr_name, grp->gr_gid);
+        }
+        if (udiConfig->sshdPrivilegeSeperationUser && sshd_priv_group > 0) {
+            nGroups = 0;
+            gidList = shifter_getgrouplist(udiConfig->sshdPrivilegeSeperationUser, sshd_priv_group, &nGroups);
+            for (idx = 0; idx < nGroups; idx++) {
+                grp = getgrgid(gidList[idx]);
+                fprintf(fp, "%s:x:%d:\n", grp->gr_name, grp->gr_gid);
+            }
+        }
         fclose(fp);
         fp = NULL;
 
@@ -820,6 +854,17 @@ _fail_copy_etcPath:
                 "rpc: files\nethers: files\nnetmasks: files\nnetgroup: files\n"
                 "publickey: files\nbootparams: files\nautomount: files\n"
                 "aliases: files\n");
+        fclose(fp);
+        fp = NULL;
+
+        /* write out container etc/host.conf */
+        snprintf(srcBuffer, PATH_MAX, "%s/etc/host.conf", udiRoot);
+        fp = fopen(srcBuffer, "w");
+        if (fp == NULL) {
+            fprintf(stderr, "Couldn't open host.conf for writing\n");
+            goto _prepSiteMod_unclean;
+        }
+        fprintf(fp, "order bind,hosts\nmulti on\n");
         fclose(fp);
         fp = NULL;
     } else {
