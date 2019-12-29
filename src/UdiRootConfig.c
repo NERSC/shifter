@@ -365,15 +365,10 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         free(config->rootfsType);
         config->rootfsType = NULL;
     }
-    if (config->sshdPrivilegeSeperationUser != NULL) {
-        free(config->sshdPrivilegeSeperationUser);
-        config->sshdPrivilegeSeperationUser = NULL;
-    }
     if (config->siteFs != NULL) {
         free_VolumeMap(config->siteFs, 1);
         config->siteFs = NULL;
     }
-
     if (config->username != NULL) {
         free(config->username);
         config->username = NULL;
@@ -413,6 +408,7 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         config->siteEnvAppend,
         config->siteEnvPrepend,
         config->siteEnvUnset,
+        config->usersToImport,
         NULL
     };
     char ***arrayPtr = NULL;
@@ -461,6 +457,11 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         written += fprintf(fp, " %s", ptr);
     }
     fprintf(fp, "\n");
+    written += fprintf(fp, "usersToImport =");
+    for (idx = 0; idx < config->usersToImport_size; idx++) {
+        char *ptr = config->usersToImport[idx];
+        written += fprintf(fp, " %s", ptr);
+    }
     written += fprintf(fp, "sitePreMountHook = %s\n",
         (config->sitePreMountHook != NULL ? config->sitePreMountHook : ""));
     written += fprintf(fp, "sitePostMountHook = %s\n",
@@ -480,8 +481,6 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
          "slave" : "private"));
     written += fprintf(fp, "rootfsType = %s\n",
         (config->rootfsType != NULL ? config->rootfsType : ""));
-    written += fprintf(fp, "sshdPrivilegeSeperationUser = %s\n",
-        (config->sshdPrivilegeSeperationUser != NULL ? config->sshdPrivilegeSeperationUser : ""));
     written += fprintf(fp, "modprobePath = %s\n",
         (config->modprobePath != NULL ? config->modprobePath : ""));
     written += fprintf(fp, "insmodPath = %s\n",
@@ -649,6 +648,21 @@ static int _assign(const char *key, const char *value, void *t_config) {
             search = NULL;
         }
         free(valueDup);
+    } else if (strcmp(key, "usersToImport") == 0) {
+        char *valueDup = _strdup(value);
+        char *search = valueDup;
+        char *svPtr = NULL;
+        char *ptr = NULL;
+        while ((ptr = strtok_r(search, " ", &svPtr)) != NULL) {
+            char **utiPtr = config->usersToImport + config->usersToImport_size;
+            strncpy_StringArray(ptr, strlen(ptr, &utiPtr,
+                                &(config->usersToImport),
+                                &(config->usersToImport_capacity),
+                                PNCALLOWEDFS_ALLOC_BLOCK);
+            config->usersToImport_size++;
+            search = NULL;
+        }
+        free(valueDup);
     } else if (strcmp(key, "sitePreMountHook") == 0) {
         config->sitePreMountHook = _strdup(value);
         if (config->sitePreMountHook == NULL) return 1;
@@ -699,8 +713,6 @@ static int _assign(const char *key, const char *value, void *t_config) {
         config->mkfsXfsPath = _strdup(value);
     } else if (strcmp(key, "rootfsType") == 0) {
         config->rootfsType = _strdup(value);
-    } else if (strcmp(key, "sshdPrivilegeSeperationUser") == 0) {
-        config->sshdPrivilegeSeperationUser = _strdup(value);
     } else if (strcmp(key, "gatewayTimeout") == 0) {
         config->gatewayTimeout = strtoul(value, NULL, 10);
     } else if (strcmp(key, "kmodBasePath") == 0) {
