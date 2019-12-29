@@ -552,7 +552,6 @@ int _import_user(FILE *passwd_fp, FILE *group_fp, uid_t uid, char *uname, UdiRoo
     int idx = 0;
     int nGroups = 0;
     gid_t *gidList = NULL;
-    gid_t primary_gid = -1;
 
     if (uid > 0)
         pwd = shifter_getpwuid(uid, config);
@@ -815,9 +814,6 @@ _fail_copy_etcPath:
         FILE *group_fp = NULL;
         FILE *fp = NULL;
         int idx = 0;
-
-        /* get group data */
-        gidList = shifter_getgrouplist(pwd->pw_name, udiConfig->target_gid, &nGroups);
 
         /* prepare container etc/passwd */
         snprintf(srcBuffer, PATH_MAX, "%s/etc/passwd", udiRoot);
