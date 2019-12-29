@@ -655,7 +655,7 @@ static int _assign(const char *key, const char *value, void *t_config) {
         char *ptr = NULL;
         while ((ptr = strtok_r(search, " ", &svPtr)) != NULL) {
             char **utiPtr = config->usersToImport + config->usersToImport_size;
-            strncpy_StringArray(ptr, strlen(ptr, &utiPtr,
+            strncpy_StringArray(ptr, strlen(ptr), &utiPtr,
                                 &(config->usersToImport),
                                 &(config->usersToImport_capacity),
                                 PNCALLOWEDFS_ALLOC_BLOCK);
