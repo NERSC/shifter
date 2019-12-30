@@ -121,6 +121,39 @@ etcPath=@SHIFTER_ETC_FILESDIR@
 # Recommended value: 1
 mountUdiRootWritable=1
 
+#populateEtcDynamically
+#
+# Flag to determine if shifter setup should be statically copied from etcPath
+# (set this to 0 for that), or if etcPath should be ignored and all content
+# dynamically generated based on the context of shifter execution and values in
+# usersToImport (set this to 1).  Combined with Slurm's nss-slurm populating
+# /etc/passwd and /etc/group dynamically is likely more scalable than copying
+# a large passwd/group file from a central etcPath location.
+# If this is set to 1 you should also set allowLibcPwdCalls to 1.
+#
+# Recommended value: 1
+populateEtcDynamically = 1
+
+#allowLibcPwdCalls
+#
+# Flag to determine if the passwd/group files in etcPath should be used for
+# validating and constructing shifter context, or if the host nss configuration
+# should be used.  If allowLibcPwdCalls is set to 1, recommend setting
+# populateEtcDynamically to 1 as well.
+#
+# Recommended value: 1
+allowLibcPwdCalls = 1
+
+#usersToImport
+#
+# Space delimited list of users to import into container /etc/passwd (and any
+# groups those users are in).  This is useful to integrate system accounts
+# for the sshd privilege separation (not that they are actually used, but the
+# existence of the user is needed to satisfy sshd).
+#
+# Recommended value: sshd
+# usersToImport = sshd
+
 #maxGroupCount (required)
 #
 # Maximum number of groups to allow. If the embedded sshd is being used, then this 
