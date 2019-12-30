@@ -952,7 +952,7 @@ class ImageMngrTestCase(unittest.TestCase):
 
     def test_autoexpire_stuckpull(self):
         record = self.good_pullrecord()
-        record['status'] = 'ENQUEUED'
+        record['status'] = 'PENDING'
         record['last_pull'] = time.time() - 3000
         id = self.images.insert(record)
         self.assertIsNotNone(id)
@@ -963,13 +963,13 @@ class ImageMngrTestCase(unittest.TestCase):
 
     def test_autoexpire_recentpull(self):
         record = self.good_pullrecord()
-        record['status'] = 'ENQUEUED'
+        record['status'] = 'PENDING'
         id = self.images.insert(record)
         self.assertIsNotNone(id)
         session = self.m.new_session(self.authadmin, self.system)
         self.m.autoexpire(session, self.system, testmode=1)
         state = self.m.get_state(id)
-        self.assertEquals(state, 'ENQUEUED')
+        self.assertEquals(state, 'PENDING')
 
     def test_autoexpire(self):
         record = self.good_record()
@@ -1113,7 +1113,6 @@ class ImageMngrTestCase(unittest.TestCase):
         # Track through transistions
         state = self.time_wait(id)
         self.assertEquals(state, 'READY')
-        mrec = self.images.find_one(q)
 
         # Now reppull with a different tag for the same image
         newtag = self.public.replace('latest', '1')

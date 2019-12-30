@@ -1,5 +1,5 @@
 {
-    "WorkerThreads":8,
+    "WorkerThreads":2,
     "LogLevel":"info",
     "DefaultLustreReplication": 1,
     "DefaultOstCount": 16,
