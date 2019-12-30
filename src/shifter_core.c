@@ -555,7 +555,7 @@ int _import_user(FILE *passwd_fp, FILE *group_fp, uid_t uid, char *uname, UdiRoo
 
     if (uid > 0)
         pwd = shifter_getpwuid(uid, config);
-    else if (uname)
+    if (uname)
         pwd = shifter_getpwnam(uname, config);
     if (!pwd)
         return 1;
