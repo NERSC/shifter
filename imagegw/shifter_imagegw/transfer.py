@@ -156,7 +156,7 @@ def pre_create_tempfile(basepath, filename, sh_cmd, system, logger=None):
     """
 
     # TODO: Add command to setup the file with the right striping
-    partial_fn = '%s.XXXXXX.partial' % filename
+    partial_fn = '%s.partial.XXXXXX' % filename
     temp_fn = os.path.join(basepath, partial_fn)
 
     cmd = sh_cmd(system, 'mktemp', temp_fn)
