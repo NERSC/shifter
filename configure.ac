@@ -2,12 +2,13 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.62])
-AC_INIT([shifter], [18.03.3], [shifter-hpc@googlegroups.com])
+AC_INIT([shifter], [18.03.4], [shifter-hpc@googlegroups.com])
 AC_CONFIG_SRCDIR([src/shifter_core.h])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_AUX_DIR([auxdir])
-AM_INIT_AUTOMAKE
+AM_INIT_AUTOMAKE([subdir-objects no-dependencies])
 AC_PROG_LIBTOOL
+AC_CONFIG_MACRO_DIRS([auxdir])
 
 # Checks for programs.
 AC_PROG_CXX
