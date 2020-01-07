@@ -369,7 +369,6 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         free_VolumeMap(config->siteFs, 1);
         config->siteFs = NULL;
     }
-
     if (config->username != NULL) {
         free(config->username);
         config->username = NULL;
@@ -409,6 +408,7 @@ void free_UdiRootConfig(UdiRootConfig *config, int freeStruct) {
         config->siteEnvAppend,
         config->siteEnvPrepend,
         config->siteEnvUnset,
+        config->usersToImport,
         NULL
     };
     char ***arrayPtr = NULL;
@@ -457,6 +457,11 @@ size_t fprint_UdiRootConfig(FILE *fp, UdiRootConfig *config) {
         written += fprintf(fp, " %s", ptr);
     }
     fprintf(fp, "\n");
+    written += fprintf(fp, "usersToImport =");
+    for (idx = 0; idx < config->usersToImport_size; idx++) {
+        char *ptr = config->usersToImport[idx];
+        written += fprintf(fp, " %s", ptr);
+    }
     written += fprintf(fp, "sitePreMountHook = %s\n",
         (config->sitePreMountHook != NULL ? config->sitePreMountHook : ""));
     written += fprintf(fp, "sitePostMountHook = %s\n",
@@ -640,6 +645,21 @@ static int _assign(const char *key, const char *value, void *t_config) {
                     &(config->perNodeCacheAllowedFsType_capacity),
                     PNCALLOWEDFS_ALLOC_BLOCK);
             config->perNodeCacheAllowedFsType_size++;
+            search = NULL;
+        }
+        free(valueDup);
+    } else if (strcmp(key, "usersToImport") == 0) {
+        char *valueDup = _strdup(value);
+        char *search = valueDup;
+        char *svPtr = NULL;
+        char *ptr = NULL;
+        while ((ptr = strtok_r(search, " ", &svPtr)) != NULL) {
+            char **utiPtr = config->usersToImport + config->usersToImport_size;
+            strncpy_StringArray(ptr, strlen(ptr), &utiPtr,
+                                &(config->usersToImport),
+                                &(config->usersToImport_capacity),
+                                PNCALLOWEDFS_ALLOC_BLOCK);
+            config->usersToImport_size++;
             search = NULL;
         }
         free(valueDup);

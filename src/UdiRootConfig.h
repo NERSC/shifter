@@ -115,6 +115,7 @@ typedef struct _UdiRootConfig {
     char **siteEnvAppend;
     char **siteEnvPrepend;
     char **siteEnvUnset;
+    char **usersToImport;
     ShifterModule *modules;
     int n_modules;
     ShifterModule **active_modules;
@@ -150,6 +151,8 @@ typedef struct _UdiRootConfig {
     size_t siteEnvUnset_size;
     size_t perNodeCacheAllowedFsType_capacity;
     size_t perNodeCacheAllowedFsType_size;
+    size_t usersToImport_capacity;
+    size_t usersToImport_size;
 
     /* current execution context */
     uid_t target_uid;

@@ -19,7 +19,7 @@
 
 Summary:   NERSC Shifter -- Containers for HPC
 Name:      shifter
-Version:   18.03.3
+Version:   18.03.4
 Release:   %{shifter_release}
 License:   BSD (LBNL-modified)
 Group:     System Environment/Base

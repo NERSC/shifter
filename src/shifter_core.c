@@ -537,6 +537,43 @@ _fail:
     return 1;
 }
 
+/*! Import a user into the container passwd/group files */
+/*!
+  \param passwd_fp open file pointer to container /etc/passwd file
+  \param group_fp open file pointer to container /etc/group file
+  \param uid user id to consider (-1 to ignore)
+  \param uname username to consider (NULL to ignore)
+  \param config configuration state structure
+  \return 0 for success, non-zero for error
+*/
+int _import_user(FILE *passwd_fp, FILE *group_fp, uid_t uid, char *uname, UdiRootConfig *config) {
+    struct passwd *pwd = NULL;
+    struct group *grp = NULL;
+    int idx = 0;
+    int nGroups = 0;
+    gid_t *gidList = NULL;
+
+    if (uid > 0)
+        pwd = shifter_getpwuid(uid, config);
+    if (uname)
+        pwd = shifter_getpwnam(uname, config);
+    if (!pwd)
+        return 1;
+
+    fprintf(passwd_fp, "%s:x:%d:%d:%s:%s:%s\n", pwd->pw_name, pwd->pw_uid,
+            pwd->pw_gid, pwd->pw_gecos, pwd->pw_dir, pwd->pw_shell);
+
+    /* get group data */
+    gidList = shifter_getgrouplist(pwd->pw_name, pwd->pw_gid, &nGroups);
+    for (idx = 0; idx < nGroups; idx++) {
+        grp = getgrgid(gidList[idx]);
+        if (!grp)
+            continue;
+        fprintf(group_fp, "%s:x:%d:\n", grp->gr_name, grp->gr_gid);
+    }
+    return 0;
+}
+
 /*! Setup all required files/paths for site mods to the image */
 /*!
   Setup all required files/paths for site mods to the image.  This should be
@@ -773,40 +810,41 @@ _fail_copy_etcPath:
         }
     } else if (udiConfig->target_uid != 0 && udiConfig->target_gid != 0) {
         /* udiConfig->populateEtcDynamically == 1 */
-        struct passwd *pwd = shifter_getpwuid(udiConfig->target_uid, udiConfig);
-        struct group *grp = getgrgid(udiConfig->target_gid);
+        FILE *passwd_fp = NULL;
+        FILE *group_fp = NULL;
         FILE *fp = NULL;
-        if (pwd == NULL) {
-            fprintf(stderr, "Couldn't get user properties for uid %d\n", udiConfig->target_uid);
-            goto _prepSiteMod_unclean;
-        }
-        if (grp == NULL) {
-            fprintf(stderr, "Couldn't get group properties for gid %d\n", udiConfig->target_gid);
-            goto _prepSiteMod_unclean;
-        }
+        int idx = 0;
 
-        /* write out container etc/passwd */
+        /* prepare container etc/passwd */
         snprintf(srcBuffer, PATH_MAX, "%s/etc/passwd", udiRoot);
-        fp = fopen(srcBuffer, "w");
-        if (fp == NULL) {
+        passwd_fp = fopen(srcBuffer, "w");
+        if (passwd_fp == NULL) {
             fprintf(stderr, "Couldn't open passwd file for writing\n");
             goto _prepSiteMod_unclean;
         }
-        fprintf(fp, "%s:x:%d:%d:%s:%s:%s\n", pwd->pw_name, pwd->pw_uid,
-                pwd->pw_gid, pwd->pw_gecos, pwd->pw_dir, pwd->pw_shell);
-        fclose(fp);
-        fp = NULL;
 
-        /* write out container etc/group */
+        /* prepare container etc/group */
         snprintf(srcBuffer, PATH_MAX, "%s/etc/group", udiRoot);
-        fp = fopen(srcBuffer, "w");
-        if (fp == NULL) {
+        group_fp = fopen(srcBuffer, "w");
+        if (group_fp == NULL) {
             fprintf(stderr, "Couldn't open group file for writing\n");
             goto _prepSiteMod_unclean;
         }
-        fprintf(fp, "%s:x:%d:\n", grp->gr_name, grp->gr_gid);
-        fclose(fp);
-        fp = NULL;
+
+        if (_import_user(passwd_fp, group_fp, udiConfig->target_uid, NULL, udiConfig) != 0) {
+             fprintf(stderr, "FAILED to import user.  Exiting\n");
+             goto _prepSiteMod_unclean;
+        }
+
+        for (idx = 0; idx < udiConfig->usersToImport_size; idx++) {
+            if (_import_user(passwd_fp, group_fp, -1, udiConfig->usersToImport[idx], udiConfig) != 0) {
+                fprintf(stderr, "FAILED to import user %s. Exiting\n", udiConfig->usersToImport[idx]);
+                goto _prepSiteMod_unclean;
+            }
+        }
+
+        fclose(passwd_fp);
+        fclose(group_fp);
 
         /* write out container etc/nsswitch.conf */
         snprintf(srcBuffer, PATH_MAX, "%s/etc/nsswitch.conf", udiRoot);
@@ -820,6 +858,17 @@ _fail_copy_etcPath:
                 "rpc: files\nethers: files\nnetmasks: files\nnetgroup: files\n"
                 "publickey: files\nbootparams: files\nautomount: files\n"
                 "aliases: files\n");
+        fclose(fp);
+        fp = NULL;
+
+        /* write out container etc/host.conf */
+        snprintf(srcBuffer, PATH_MAX, "%s/etc/host.conf", udiRoot);
+        fp = fopen(srcBuffer, "w");
+        if (fp == NULL) {
+            fprintf(stderr, "Couldn't open host.conf for writing\n");
+            goto _prepSiteMod_unclean;
+        }
+        fprintf(fp, "order bind,hosts\nmulti on\n");
         fclose(fp);
         fp = NULL;
     } else {
