@@ -239,12 +239,15 @@ def main():
         print "Failed to find patchelf command.  Please get patchelf into PATH before proceeding"
         sys.exit(1)
 
-    if len(sys.argv) != 2:
+    if len(sys.argv) < 2:
         print "No destination path specified"
         sys.exit(1)
 
 
     copy_tgt_path = sys.argv[1]
+    module_name = 'mpich'
+    if len(sys.argv) > 2:
+        module_name = sys.argv[2]
 
     ## only consider current cray/system modules
     fix_module_path()
@@ -285,9 +288,13 @@ def main():
     os.mkdir(copy_tgt_path)
     copy_path = os.path.join(copy_tgt_path, "mpich-%s" % mpich_version)
     os.mkdir(copy_path)
+    copy_path = os.path.join(copy_path, 'lib64')
+    os.mkdir(copy_path)
     os.mkdir('%s/%s' % (copy_path, 'dep'))
 
-    dest_tgt_path = '/opt/udiImage/modules/mpich-%s/lib64' % mpich_version
+    if not module_name:
+        module_name = 'mpich'
+    dest_tgt_path = '/opt/udiImage/modules/%s/lib64' % module_name
     dest_tgt_dep_path = '%s/%s' % (dest_tgt_path, 'dep')
 
 
