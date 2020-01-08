@@ -44,6 +44,8 @@ import subprocess
 import re
 import shutil
 
+from jinja2 import Template
+
 so_skip_patterns = [
     r'^ld-linux-.*',
     r'^libm\.so.*',
@@ -128,6 +130,10 @@ def get_module_libpaths(name):
 ## structure within the libpath
 def getlibs(libpaths, files, isdep=False):
     for path in libpaths:
+        if not os.path.exists(path):
+            continue
+
+        lfiles = []
         if os.path.isdir(path):
             lfiles = [x for x in os.listdir(path) if x.find('.so') != -1]
         elif path.find('.so') != -1:
@@ -204,6 +210,25 @@ def module_avail(name):
     stdout,stderr = pfp.communicate()
     lines = stderr.strip().split('\n')
     return [ x for x in lines if not x.endswith(':') ]
+
+def buildrpm(base_path, mpich_version):
+    os.mkdir(os.path.join(base_path, 'SOURCES'))
+    os.mkdir(os.path.join(base_path, 'SPECS'))
+
+    template = None
+    with open('shifter_cray_mpich.spec.in', 'r') as fp:
+        template = Template(fp.read())
+    spec_file = os.path.join(base_path, 'SPECS', 'shifter_cray_mpich.spec')
+    with open(spec_file, 'w') as fp:
+        fp.write(template.render(CRAY_MPICH_VERSION=mpich_version))
+
+    tarball = os.path.join(base_path, 'SOURCES', 'shifter-cray-mpich-%s.tar.gz' % mpich_version)
+    cmd = ['tar', 'zcf', tarball, '-C', base_path, 'mpich-%s' % mpich_version]
+    subprocess.call(cmd)
+    cmd = ['rpmbuild', '-ba', spec_file, '--define', "_topdir %s" % base_path]
+    subprocess.call(cmd)
+    
+    
             
 if __name__ == "__main__":
     files = {}
@@ -222,7 +247,6 @@ if __name__ == "__main__":
 
 
     copyTgtPath = sys.argv[1]
-    destTgtPath = '/opt/udiImage/modules/mpich/lib64'
 
     ## only consider current cray/system modules
     fix_module_path()
@@ -233,7 +257,10 @@ if __name__ == "__main__":
         ('intel', {'compiler': 'intel', 'modules': ('cray-mpich-abi','cray-mpich')}),
         ('cray', {'compiler': 'cce', 'modules': ('cray-mpich',)})
     ]
- 
+
+    versions = module_avail('cray-mpich-abi')
+    mpich_version = [x for x in versions if x.find('(default)') != -1][0].rsplit('/', 1)[1].replace('(default)', '')
+   
     ## find all the shared libraries and resolve dependencies for each of the pe/module combos
     for pe,pedata in prgenv:
         load_PrgEnv(pe)
@@ -258,14 +285,18 @@ if __name__ == "__main__":
         files = resolvedeps(files)
 
     os.mkdir(copyTgtPath)
-    os.mkdir('%s/%s' % (copyTgtPath, 'dep'))
+    copy_path = os.path.join(copyTgtPath, "mpich-%s" % mpich_version)
+    os.mkdir(copy_path)
+    os.mkdir('%s/%s' % (copy_path, 'dep'))
+
+    destTgtPath = '/opt/udiImage/modules/mpich-%s/lib64' % mpich_version
     destTgtDepPath = '%s/%s' % (destTgtPath, 'dep')
 
 
     for fname in files:
         if files[fname]['type'] == 'file':
             ## copy lib to appropriate dest path
-            tgtPath = '%s/%s%s' % (copyTgtPath, '%s' % ('dep/' if files[fname]['isdep'] else ''), fname)
+            tgtPath = '%s/%s%s' % (copy_path, '%s' % ('dep/' if files[fname]['isdep'] else ''), fname)
             shutil.copy2(files[fname]['path'], tgtPath)
 
             ## modify copied library to funnel links from tgt libs into dep paths
@@ -273,9 +304,10 @@ if __name__ == "__main__":
             subprocess.call(cmd)
 
         if files[fname]['type'] == 'link':
-            destPath = '%s/%s%s' % (copyTgtPath, '%s' % ('dep/' if files[fname]['isdep'] else ''), fname)
-            print fname, copyTgtPath
+            destPath = '%s/%s%s' % (copy_path, '%s' % ('dep/' if files[fname]['isdep'] else ''), fname)
+            print fname, copy_path
             print "src: %s, dest: %s" % (files[fname]['target'], destPath)
             os.symlink(files[fname]['target'], destPath)
-        
+
+    buildrpm(copyTgtPath, mpich_version)
 
