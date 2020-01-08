@@ -114,13 +114,13 @@ Note: in CLE5.2 this should be done on an internal login node; in CLE6 an
 internal or external login node should work. You'll need to install patchelf
 into your PATH prior to running (https://nixos.org/patchelf.html)
 
-Next copy /tmp/craylibs to your shifter module path (see Modules) under
-mpich/lib64, e.g., :code:`/usr/lib/shifter/modules/mpich/lib64`.
+Next copy /tmp/craylibs/mpich-<version> to your shifter module path (see Modules):
+e.g., :code:`/usr/lib/shifter/opt/mpich-<version>`.
 
 Finally, a few modifications need to be made to udiRoot.conf:
 
 1. add "module_mpich_siteEnvPrepend = LD_LIBRARY_PATH=/opt/udiImage/modules/mpich/lib64"
-2. add "module_mpich_copyPath = /usr/lib/shifter/modules/mpich"
+2. add "module_mpich_copyPath = /usr/lib/shifter/opt/mpich-<version>"
 3. add "/var/opt/cray/alps:/var/opt/cray/alps:rec" to siteFs
 4. if CLE6, add "/etc/opt/cray/wlm_detect:/etc/opt/cray/wlm_detect" to siteFs
 5. add "defaultModules = mpich" to load cray-mpich support by default in all containers
