@@ -20,7 +20,7 @@
 Name:           shifter_cray_mpich_%{cray_mpich_version}
 Version:        %{cray_mpich_version}
 Release:        1
-Summary:	cray cle6 mpich Binaries relocated for shifter's use
+Summary:	cray mpich Binaries relocated for shifter's use
 Source:         shifter-cray-mpich-%{version}.tar.gz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 License:        Proprietary
@@ -42,6 +42,7 @@ mv * "$RPM_BUILD_ROOT/usr/lib/shifter/opt/mpich-%{cray_mpich_version}/"
 %postun
 
 %files
+%dir /usr/lib/shifter/opt/mpich-%{cray_mpich_version}
 /usr/lib/shifter/opt/mpich-%{cray_mpich_version}/*
 
 %changelog
