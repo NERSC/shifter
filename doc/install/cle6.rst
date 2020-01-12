@@ -56,15 +56,26 @@ to the container environment.
    the %libexec% path if shifter-runtime RPM is used).
 
    """
-   mkdir -p /tmp/cray/lib64
-   python /path/to/extra/prep_cray_mpi_libs.py /tmp/cray/lib64
+   mkdir -p /tmp/cray
+   cd /path/to/shifter/extra
+   python ./prep_cray_mpi_libs.py /tmp/cray
    """
 
-   Copy /tmp/cray to a path within the udiImage directory (by default
-   /usr/lib/shifter/opt/udiImage)
-3. To automate override of libmpi.so modify siteEnvAppend to add:
-      LD_LIBRARY_PATH=/opt/udiImage/cray/lib64
+   You can then either copy /tmp/cray/mpich-<version> to
+   /usr/lib/shifter/opt/mpich-<version> or integrate the RPM in
+   /tmp/cray/RPMS/x86_64/shifter_cray_mpich_<version>....rpm into your
+   compute and login images.
+3. Setup a shifter module to setup cray mpich by adding the following to
+   your udiRoot.conf:
 
+       module_mpich_copyPath = /usr/lib/shifter/opt/mpich-<version>
+       module_mpich_siteEnvPrepend = LD_LIBRARY_PATH=/opt/udiImage/modules/mpich/lib64
+       module_mpich_siteEnv = SHIFTER_MODULE_MPICH=1
+
+4. If you wish the mpich module to load by default on every shifter invocation,
+   then add the following to your udiRoot.conf:
+
+       defaultModules = mpich
 
 prep_cray_mpi_libs.py copies the shared libraries from the CrayPE cray-mpich
 and cray-mpich-abi modules (for both PrgEnv-gnu and PrgEnv-intel), into the

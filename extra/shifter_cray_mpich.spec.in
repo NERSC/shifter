@@ -1,0 +1,49 @@
+#
+# spec file for package shifter_cray_mpich
+#
+# Copyright (c) 2020 SUSE LINUX GmbH, Nuernberg, Germany.
+#
+# All modifications and additions to the file contributed by third parties
+# remain the property of their copyright owners, unless otherwise agreed
+# upon. The license for this file, and modifications and additions to the
+# file, is the same license as for the pristine package itself (unless the
+# license for the pristine package is not an Open Source License, in which
+# case the license is the MIT License). An "Open Source License" is a
+# license that conforms to the Open Source Definition (Version 1.9)
+# published by the Open Source Initiative.
+
+# Please submit bugfixes or comments via http://bugs.opensuse.org/
+#
+
+%define cray_mpich_version {{CRAY_MPICH_VERSION}}
+
+Name:           shifter_cray_mpich_%{cray_mpich_version}
+Version:        %{cray_mpich_version}
+Release:        1
+Summary:	cray mpich Binaries relocated for shifter's use
+Source:         shifter-cray-mpich-%{version}.tar.gz
+BuildRoot:      %{_tmppath}/%{name}-%{version}-build
+License:        Proprietary
+AutoReq: 0
+AutoProv: 0
+
+%description
+
+%prep
+%setup -q -n mpich-%{version}
+
+%build
+
+%install
+mkdir -p "$RPM_BUILD_ROOT/usr/lib/shifter/opt/mpich-%{cray_mpich_version}"
+mv * "$RPM_BUILD_ROOT/usr/lib/shifter/opt/mpich-%{cray_mpich_version}/"
+
+%post
+%postun
+
+%files
+%dir /usr/lib/shifter/opt/mpich-%{cray_mpich_version}
+/usr/lib/shifter/opt/mpich-%{cray_mpich_version}/*
+
+%changelog
+

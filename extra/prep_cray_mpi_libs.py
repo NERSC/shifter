@@ -2,7 +2,7 @@
 ## Shifter, Copyright (c) 2016, The Regents of the University of California,
 ## through Lawrence Berkeley National Laboratory (subject to receipt of any
 ## required approvals from the U.S. Dept. of Energy).  All rights reserved.
-## 
+##
 ## Redistribution and use in source and binary forms, with or without
 ## modification, are permitted provided that the following conditions are met:
 ##  1. Redistributions of source code must retain the above copyright notice,
@@ -14,7 +14,7 @@
 ##     National Laboratory, U.S. Dept. of Energy nor the names of its
 ##     contributors may be used to endorse or promote products derived from this
 ##     software without specific prior written permission.
-## 
+##
 ## THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 ## AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 ## IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -26,7 +26,7 @@
 ## CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ## ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 ## POSSIBILITY OF SUCH DAMAGE.
-##  
+##
 ## You are under no obligation whatsoever to provide any bug fixes, patches, or
 ## upgrades to the features, functionality or performance of the source code
 ## ("Enhancements") to anyone; however, if you choose to make your Enhancements
@@ -44,7 +44,9 @@ import subprocess
 import re
 import shutil
 
-so_skip_patterns = [
+from jinja2 import Template
+
+SO_SKIP_PATTERNS = [
     r'^ld-linux-.*',
     r'^libm\.so.*',
     r'^librt\.so.*',
@@ -55,24 +57,24 @@ so_skip_patterns = [
 ]
 
 def module_list():
-    pfp = subprocess.Popen(['modulecmd','python','-t','list'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout,stderr = pfp.communicate()
+    pfp = subprocess.Popen(['modulecmd', 'python', '-t', 'list'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    _, stderr = pfp.communicate()
     modules = stderr.strip().split('\n')
     return modules[1:]
 
 def module_swap(first, second=None):
-    cmd = ['modulecmd','python','swap',first]
+    cmd = ['modulecmd', 'python', 'swap', first]
     if second:
         cmd.append(second)
     pfp = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout,stderr = pfp.communicate()
+    stdout, _ = pfp.communicate()
     if pfp.returncode == 0:
         exec(stdout)
 
 def module_load(target):
-    cmd = ['modulecmd','python','load',target]
+    cmd = ['modulecmd', 'python', 'load', target]
     pfp = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout,stderr = pfp.communicate()
+    stdout, _ = pfp.communicate()
     if pfp.returncode == 0:
         exec(stdout)
 
@@ -98,7 +100,7 @@ def load_mpich(name):
         loaded = iterable.next()
     except StopIteration:
         loaded = None
-  
+
     ## if loaded, switch to name
     if loaded:
         module_swap(loaded, name)
@@ -108,16 +110,16 @@ def load_mpich(name):
 def fix_module_path():
     try:
         paths = os.environ['MODULEPATH'].split(':')
-        paths = [ x for x in paths if x.startswith('/opt/') ]
+        paths = [x for x in paths if x.startswith('/opt/')]
         os.environ['MODULEPATH'] = ':'.join(paths)
     except:
         pass
 
 def get_module_libpaths(name):
-    pfp = subprocess.Popen(['modulecmd','python','show',name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout,stderr = pfp.communicate()
+    pfp = subprocess.Popen(['modulecmd', 'python', 'show', name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    _, stderr = pfp.communicate()
     lines = stderr.strip().split('\n')
-    lines = [ x for x in lines if x.find('CRAY_LD_LIBRARY_PATH') != -1 ]
+    lines = [x for x in lines if x.find('CRAY_LD_LIBRARY_PATH') != -1]
     paths = []
     for line in lines:
         t_path = line.split()[2]
@@ -128,19 +130,23 @@ def get_module_libpaths(name):
 ## structure within the libpath
 def getlibs(libpaths, files, isdep=False):
     for path in libpaths:
+        if not os.path.exists(path):
+            continue
+
+        lfiles = []
         if os.path.isdir(path):
             lfiles = [x for x in os.listdir(path) if x.find('.so') != -1]
         elif path.find('.so') != -1:
-            path,fname = os.path.split(path)
+            path, fname = os.path.split(path)
             print path, fname
             lfiles = [fname]
 
         for fname in lfiles:
             fullpath = '%s/%s' % (path, fname)
             realpath = os.path.realpath(fullpath)
-            basepath,libname = os.path.split(realpath)
+            _, libname = os.path.split(realpath)
             if libname not in files:
-                deps = read_libdeps(realpath, so_skip_patterns)
+                deps = read_libdeps(realpath, SO_SKIP_PATTERNS)
                 files[libname] = {
                     'type': 'file',
                     'path': realpath,
@@ -160,7 +166,7 @@ def getlibs(libpaths, files, isdep=False):
 def read_libdeps(sopath, skippatterns):
     cmd = ['patchelf', '--print-needed', sopath]
     pfp = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout,stderr = pfp.communicate()
+    stdout, _ = pfp.communicate()
     if pfp.returncode != 0:
         print "Failed to read library deps for %s" % sopath
         return None
@@ -176,14 +182,14 @@ def read_libdeps(sopath, skippatterns):
     return keep
 
 def resolvedeps(files):
-    libfiles = [ x for x in files if files[x]['type'] == 'file' ]
+    libfiles = [x for x in files if files[x]['type'] == 'file']
     lastlen = len(files.keys())
     for libfile in libfiles:
         pfp = subprocess.Popen(['ldd', files[libfile]['path']], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout,stderr = pfp.communicate()
-        lines = [ x.strip() for x in stdout.strip().split('\n') ]
-        libs = [ x.split() for x in lines ]
-        libs = [ (x[0],x[2]) for x in libs if x[0] in files[libfile]['deps'] ]
+        stdout, _ = pfp.communicate()
+        lines = [x.strip() for x in stdout.strip().split('\n')]
+        libs = [x.split() for x in lines]
+        libs = [(x[0], x[2]) for x in libs if x[0] in files[libfile]['deps']]
         for lib in libs:
             if lib[0] in files:
                 continue
@@ -201,11 +207,28 @@ def resolvedeps(files):
 
 def module_avail(name):
     pfp = subprocess.Popen(['modulecmd', 'python', '-t', 'avail', name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout,stderr = pfp.communicate()
+    _, stderr = pfp.communicate()
     lines = stderr.strip().split('\n')
-    return [ x for x in lines if not x.endswith(':') ]
-            
-if __name__ == "__main__":
+    return [x for x in lines if not x.endswith(':')]
+
+def buildrpm(base_path, mpich_version):
+    os.mkdir(os.path.join(base_path, 'SOURCES'))
+    os.mkdir(os.path.join(base_path, 'SPECS'))
+
+    template = None
+    with open('shifter_cray_mpich.spec.in', 'r') as fp:
+        template = Template(fp.read())
+    spec_file = os.path.join(base_path, 'SPECS', 'shifter_cray_mpich.spec')
+    with open(spec_file, 'w') as fp:
+        fp.write(template.render(CRAY_MPICH_VERSION=mpich_version))
+
+    tarball = os.path.join(base_path, 'SOURCES', 'shifter-cray-mpich-%s.tar.gz' % mpich_version)
+    cmd = ['tar', 'zcf', tarball, '-C', base_path, 'mpich-%s' % mpich_version]
+    subprocess.call(cmd)
+    cmd = ['rpmbuild', '-ba', spec_file, '--define', "_topdir %s" % base_path]
+    subprocess.call(cmd)
+
+def main():
     files = {}
 
     cmd = ['patchelf', '--help']
@@ -216,28 +239,33 @@ if __name__ == "__main__":
         print "Failed to find patchelf command.  Please get patchelf into PATH before proceeding"
         sys.exit(1)
 
-    if len(sys.argv) != 2:
+    if len(sys.argv) < 2:
         print "No destination path specified"
         sys.exit(1)
 
 
-    copyTgtPath = sys.argv[1]
-    destTgtPath = '/opt/udiImage/modules/mpich/lib64'
+    copy_tgt_path = sys.argv[1]
+    module_name = 'mpich'
+    if len(sys.argv) > 2:
+        module_name = sys.argv[2]
 
     ## only consider current cray/system modules
     fix_module_path()
 
     ## set the programming environments and modules we're interested in
     prgenv = [
-        ('gnu', {'compiler': 'gcc', 'modules': ('cray-mpich-abi','cray-mpich')}),
-        ('intel', {'compiler': 'intel', 'modules': ('cray-mpich-abi','cray-mpich')}),
+        ('gnu', {'compiler': 'gcc', 'modules': ('cray-mpich-abi', 'cray-mpich')}),
+        ('intel', {'compiler': 'intel', 'modules': ('cray-mpich-abi', 'cray-mpich')}),
         ('cray', {'compiler': 'cce', 'modules': ('cray-mpich',)})
     ]
- 
+
+    versions = module_avail('cray-mpich-abi')
+    mpich_version = [x for x in versions if x.find('(default)') != -1][0].rsplit('/', 1)[1].replace('(default)', '')
+
     ## find all the shared libraries and resolve dependencies for each of the pe/module combos
-    for pe,pedata in prgenv:
+    for pe, pedata in prgenv:
         load_PrgEnv(pe)
-        comp_ver = [ pedata['compiler'] ]
+        comp_ver = [pedata['compiler']]
         comp_ver.extend(module_avail(pedata['compiler']))
 
         for comp in comp_ver:
@@ -252,30 +280,41 @@ if __name__ == "__main__":
                 files = resolvedeps(files)
 
     ## a few are not detected by above strategy
-    for mod in ['wlm_detect','alps','rca']:
+    for mod in ['wlm_detect', 'alps', 'rca']:
         libpaths = get_module_libpaths(mod)
         files = getlibs(libpaths, files, isdep=True)
         files = resolvedeps(files)
 
-    os.mkdir(copyTgtPath)
-    os.mkdir('%s/%s' % (copyTgtPath, 'dep'))
-    destTgtDepPath = '%s/%s' % (destTgtPath, 'dep')
+    os.mkdir(copy_tgt_path)
+    copy_path = os.path.join(copy_tgt_path, "mpich-%s" % mpich_version)
+    os.mkdir(copy_path)
+    copy_path = os.path.join(copy_path, 'lib64')
+    os.mkdir(copy_path)
+    os.mkdir('%s/%s' % (copy_path, 'dep'))
+
+    if not module_name:
+        module_name = 'mpich'
+    dest_tgt_path = '/opt/udiImage/modules/%s/lib64' % module_name
+    dest_tgt_dep_path = '%s/%s' % (dest_tgt_path, 'dep')
 
 
     for fname in files:
         if files[fname]['type'] == 'file':
             ## copy lib to appropriate dest path
-            tgtPath = '%s/%s%s' % (copyTgtPath, '%s' % ('dep/' if files[fname]['isdep'] else ''), fname)
-            shutil.copy2(files[fname]['path'], tgtPath)
+            tgt_path = '%s/%s%s' % (copy_path, '%s' % ('dep/' if files[fname]['isdep'] else ''), fname)
+            shutil.copy2(files[fname]['path'], tgt_path)
 
             ## modify copied library to funnel links from tgt libs into dep paths
-            cmd = ['patchelf','--set-rpath', destTgtDepPath, tgtPath]
+            cmd = ['patchelf', '--set-rpath', dest_tgt_dep_path, tgt_path]
             subprocess.call(cmd)
 
         if files[fname]['type'] == 'link':
-            destPath = '%s/%s%s' % (copyTgtPath, '%s' % ('dep/' if files[fname]['isdep'] else ''), fname)
-            print fname, copyTgtPath
-            print "src: %s, dest: %s" % (files[fname]['target'], destPath)
-            os.symlink(files[fname]['target'], destPath)
-        
+            dest_path = '%s/%s%s' % (copy_path, '%s' % ('dep/' if files[fname]['isdep'] else ''), fname)
+            print fname, copy_path
+            print "src: %s, dest: %s" % (files[fname]['target'], dest_path)
+            os.symlink(files[fname]['target'], dest_path)
 
+    buildrpm(copy_tgt_path, mpich_version)
+
+if __name__ == "__main__":
+    main()
