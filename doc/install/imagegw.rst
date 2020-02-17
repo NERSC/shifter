@@ -20,6 +20,8 @@ have write access to a file system that is visible to all nodes on the compute
 cluster.  Here is a sample configuration.  Notice that Mongo would need
 to run on the same service node.
 
+.. code-block:: json
+
     {
         "DefaultImageLocation": "registry-1.docker.io",
         "DefaultImageFormat": "squashfs",
@@ -62,6 +64,8 @@ account should exist on the target system and an RSA-based key-pair should be
 configured on the target system with a copy of the private key available to
 the special account on the Image Gateway.  Here is a sample configuration for
 this deployment model.
+
+.. code-block:: json
 
     {
         "DefaultImageLocation": "registry-1.docker.io",

@@ -27,15 +27,16 @@ This is achieved by:
 Contents:
 
 .. toctree::
+   :titlesonly:
    :maxdepth: 2
 
    faq
    bestpractices
-   mpi/mpich_abi
-   install/centos6
-   install/cle6
-   install/manualinstallgpu
-   wlm/slurm
+   updating
+   install_guides
+   references
+   advanced
+   security
 
 
 

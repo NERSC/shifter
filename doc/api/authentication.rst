@@ -20,17 +20,17 @@ that case the originating request must include a more extensive
 Format of the "authentication" HTTP header
 ------------------------------------------
 * _Non-privileged requests:_ munge encoded empty string
-* _Privileged requests:_ munge encoded JSON document including one or more 
-  credentials for the remote image resources
+* _Privileged requests:_ munge encoded JSON document including one or more credentials for the remote image resources
 
 JSON document format:
 *********************
 
+.. code-block:: json
+
    {
        "authorized_locations": {
            "default":"username:password",
-           "otherloc":"username:password",
-           ...
+           "otherloc":"username:password"
        }
    }
 

@@ -16,10 +16,10 @@ We use this approach and solve the practical details for allowing container port
 
 
 Installation
-============
+------------
 
 Shifter Runtime
----------------
+***************
 
 Most often, Shifter's runtime should be installed on the frontend node as well as on the compute nodes. However, it is also possible to install shifter solely on the compute nodes and use shifter on the frontend node through Slurm.
 

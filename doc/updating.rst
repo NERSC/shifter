@@ -82,7 +82,7 @@ using, be sure to update the port in sshd_config and ssh_config to use port
 1204 (or some other port that makes sense for your site).
 
 Image Manager API
-=================
+-----------------
 We recommend that you install and run the image manager via gunicorn.  This is
 much more scalable than the Flask development server started by the older (now
 considered for debug-only) imagemngr.py.
