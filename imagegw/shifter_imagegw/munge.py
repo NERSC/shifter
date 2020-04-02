@@ -21,6 +21,7 @@
 Helper routines for munge
 """
 
+import os
 import sys
 from subprocess import Popen, PIPE
 debug = False
@@ -58,7 +59,8 @@ def unmunge(encoded, socket=None):
         if proc.returncode == 17:
             raise OSError("Replayed Credential")
         elif proc.returncode != 0:
-            memo = "Unknown munge error %d %s" % (proc.returncode, socket)
+            err_mess = os.strerror(proc.returncode)
+            memo = "munge error %d %s: %s" % (proc.returncode, socket, err_mess)
             raise OSError(memo)
 
         resp = dict()
