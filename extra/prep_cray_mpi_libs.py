@@ -40,6 +40,7 @@
 
 import os
 import sys
+import argparse
 import subprocess
 import re
 import shutil
@@ -205,8 +206,11 @@ def resolvedeps(files):
         files = resolvedeps(files)
     return files
 
-def module_avail(name):
-    pfp = subprocess.Popen(['modulecmd', 'python', '-t', 'avail', name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+def module_avail(name=None):
+    cmd = ['modulecmd', 'python', '-t', 'avail']
+    if name:
+        cmd.append(name)
+    pfp = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     _, stderr = pfp.communicate()
     lines = stderr.strip().split('\n')
     return [x for x in lines if not x.endswith(':')]
@@ -228,26 +232,10 @@ def buildrpm(base_path, mpich_version):
     cmd = ['rpmbuild', '-ba', spec_file, '--define', "_topdir %s" % base_path]
     subprocess.call(cmd)
 
-def main():
-    files = {}
-
-    cmd = ['patchelf', '--help']
-    try:
-        pfp = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        pfp.communicate()
-    except:
-        print "Failed to find patchelf command.  Please get patchelf into PATH before proceeding"
-        sys.exit(1)
-
-    if len(sys.argv) < 2:
-        print "No destination path specified"
-        sys.exit(1)
-
-
-    copy_tgt_path = sys.argv[1]
-    module_name = 'mpich'
-    if len(sys.argv) > 2:
-        module_name = sys.argv[2]
+def do_mpich(config):
+    copy_tgt_path = config.prepare_path
+    dest_tgt_path = config.dest_path
+    module_name = config.module_name
 
     ## only consider current cray/system modules
     fix_module_path()
@@ -261,6 +249,7 @@ def main():
 
     versions = module_avail('cray-mpich-abi')
     mpich_version = [x for x in versions if x.find('(default)') != -1][0].rsplit('/', 1)[1].replace('(default)', '')
+    files = {}
 
     ## find all the shared libraries and resolve dependencies for each of the pe/module combos
     for pe, pedata in prgenv:
@@ -292,11 +281,7 @@ def main():
     os.mkdir(copy_path)
     os.mkdir('%s/%s' % (copy_path, 'dep'))
 
-    if not module_name:
-        module_name = 'mpich'
-    dest_tgt_path = '/opt/udiImage/modules/%s/lib64' % module_name
     dest_tgt_dep_path = '%s/%s' % (dest_tgt_path, 'dep')
-
 
     for fname in files:
         if files[fname]['type'] == 'file':
@@ -315,6 +300,63 @@ def main():
             os.symlink(files[fname]['target'], dest_path)
 
     buildrpm(copy_tgt_path, mpich_version)
+
+def do_dockerpe(config):
+
+    ## only consider current cray/system modules
+    fix_module_path()
+
+    modules = [x[0:-9] for x in  module_avail() if x.endswith('(default)')]
+    print modules
+    pass
+
+def parse_args(args):
+    """Read configuration files/arguments"""
+
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers()
+
+    def _setup_mpich(args):
+        setattr(args, 'mode', 'mpich')
+        dest_path = '/opt/udiImage/modules/{}/lib64'.format(args.module_name)
+        if not args.dest_path:
+            setattr(args, 'dest_path', dest_path)
+
+    mpich_p = subparsers.add_parser('mpich')
+    mpich_p.add_argument('--dest-path', dest='dest_path', type=str, default=None, help='Destination path in container environment')
+    mpich_p.add_argument('--module-name', dest='module_name', type=str, default='mpich', help='Name for  shifter module')
+    mpich_p.add_argument('prepare_path', type=str, help='Destination for library preparation in host environment')
+    mpich_p.set_defaults(func=_setup_mpich)
+
+    def _setup_dockerpe(args):
+        setattr(args, 'mode', 'dockerpe')
+
+    dockerpe_p = subparsers.add_parser('dockerpe')
+    dockerpe_p.add_argument('--compiler', type=str,  default='gnu')
+    dockerpe_p.set_defaults(func=_setup_dockerpe)
+
+    values = parser.parse_args(args)
+    values.func(values)
+    delattr(values, 'func')
+    return values
+
+def main():
+    files = {}
+
+    config = parse_args(sys.argv[1:])
+
+    cmd = ['patchelf', '--help']
+    try:
+        pfp = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        pfp.communicate()
+    except:
+        print "Failed to find patchelf command.  Please get patchelf into PATH before proceeding"
+        sys.exit(1)
+
+    if config.mode == 'mpich':
+        do_mpich(config)
+    elif config.mode == 'dockerpe':
+        do_dockerpe(config)
 
 if __name__ == "__main__":
     main()
