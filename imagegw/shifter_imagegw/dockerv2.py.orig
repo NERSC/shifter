@@ -33,8 +33,7 @@ from subprocess import Popen, PIPE
 import base64
 import tempfile
 import socket
-from tarfilemp import tarfile
-
+import tarfile
 
 _EMPTY_TAR_SHA256 = \
     'sha256:a3ed95caeb02ffe68cdd9fd84406680ae93d633cb16422d00e8a7c22955b46d4'
@@ -237,7 +236,6 @@ class DockerV2Handle(object):
     username = None
     password = None
     token = None
-    manifest = None
     allow_authenticated = True
     check_layer_checksums = True
 
@@ -245,7 +243,7 @@ class DockerV2Handle(object):
     # an open is attempted
     excludeBlobSums = [_EMPTY_TAR_SHA256]
 
-    def __init__(self, imageIdent, options=None, updater=None, cachedir=None):
+    def __init__(self, imageIdent, options=None, updater=None):
         """
         Initialize an instance of the DockerV2 class.
         imageIdent is a tagged repo (e.g., ubuntu:14.04)
@@ -269,8 +267,6 @@ class DockerV2Handle(object):
         if not isinstance(options, dict):
             raise ValueError('Invalid type for DockerV2 options')
         self.updater = updater
-
-        self.cachedir = cachedir
 
         if 'baseUrl' in options:
             base_url = options['baseUrl']
@@ -377,7 +373,7 @@ class DockerV2Handle(object):
         (_, auth_data_str) = auth_loc_str.split(' ', 2)
 
         auth_data = {}
-        for item in filter(None, re.split(r'(\w+=".*?"),', auth_data_str)):
+        for item in auth_data_str.split(','):
             (key, val) = item.split('=', 2)
             auth_data[key] = val.replace('"', '')
 
@@ -404,10 +400,7 @@ class DockerV2Handle(object):
 
         if resp.status != 200:
             raise ValueError('Bad response getting token: %d', resp.status)
-        # The json content type can include a extra bit defining the character set
-        # so we just check the beginning.  Worst case is the json.loads will throw
-        # an error just after this.
-        if not resp.getheader('content-type').startswith('application/json'):
+        if resp.getheader('content-type') != 'application/json':
             raise ValueError('Invalid response getting token, not json')
 
         auth_resp = json.loads(resp.read())
@@ -460,16 +453,12 @@ class DockerV2Handle(object):
 
         # throws exceptions upon failure only
         _verify_manifest_signature(jdata, data, expected_hash)
-        self.manifest = jdata
         return jdata
 
-    def examine_manifest(self):
+    def examine_manifest(self, manifest):
         """Extract metadata from manifest."""
         self.log("PULLING", 'Constructing manifest')
-        if not self.manifest:
-            self.get_image_manifest()
-
-        (eldest, youngest) = _construct_image_metadata(self.manifest)
+        (eldest, youngest) = _construct_image_metadata(manifest)
 
         self.eldest = eldest
         self.youngest = youngest
@@ -488,12 +477,12 @@ class DockerV2Handle(object):
         resp['private'] = self.private
         return resp
 
-    def pull_layers(self):
+    def pull_layers(self, manifest, cachedir):
         """Download layers to cachedir if they do not exist."""
         # TODO: don't rely on self.eldest to demonstrate that
         # examine_manifest has run
         if self.eldest is None:
-            self.examine_manifest()
+            self.examine_manifest(manifest)
         layer = self.eldest
         while layer is not None:
             if layer['fsLayer']['blobSum'] in self.excludeBlobSums:
@@ -503,7 +492,7 @@ class DockerV2Handle(object):
             memo = "Pulling layer %s" % layer['fsLayer']['blobSum']
             self.log("PULLING", memo)
 
-            self.save_layer(layer['fsLayer']['blobSum'])
+            self.save_layer(layer['fsLayer']['blobSum'], cachedir)
             layer = layer['child']
         return True
 
@@ -518,7 +507,7 @@ class DockerV2Handle(object):
             self.headers['Authorization'] = 'Basic %s' % base64.b64encode(auth)
         return self.headers
 
-    def save_layer(self, layer):
+    def save_layer(self, layer, cachedir='./'):
         """
         Save a layer and verify with the digest
         """
@@ -529,7 +518,7 @@ class DockerV2Handle(object):
             if conn is None:
                 return None
 
-            filename = '%s/%s.tar' % (self.cachedir, layer)
+            filename = '%s/%s.tar' % (cachedir, layer)
 
             if os.path.exists(filename):
                 try:
@@ -538,13 +527,7 @@ class DockerV2Handle(object):
                     # there was a checksum mismatch, nuke the file
                     os.unlink(filename)
 
-            # If the redirect path includes a verify in the path
-            # then we don't need the header.  If try to use the
-            # header, we may get back a 400.
-            if path.find('verify') > 0:
-                conn.request("GET", path, None, {})
-            else:
-                conn.request("GET", path, None, self.headers)
+            conn.request("GET", path, None, self.headers)
             resp1 = conn.getresponse()
             location = resp1.getheader('location')
             if resp1.status == 200:
@@ -564,7 +547,7 @@ class DockerV2Handle(object):
                 return False
         maxlen = int(resp1.getheader('content-length'))
         nread = 0
-        (out_fd, out_fn) = tempfile.mkstemp('.partial', layer, self.cachedir)
+        (out_fd, out_fn) = tempfile.mkstemp('.partial', layer, cachedir)
         out_fp = os.fdopen(out_fd, 'w')
 
         try:
@@ -602,7 +585,7 @@ class DockerV2Handle(object):
             raise ValueError("checksum mismatch, failure")
         return True
 
-    def extract_docker_layers(self, base_path):
+    def extract_docker_layers(self, base_path, base_layer, cachedir='./'):
         """Analyze files in docker layers and extract minimal set to base_path.
         """
         def filter_layer(layer_members, to_remove):
@@ -616,7 +599,7 @@ class DockerV2Handle(object):
 
         layer_paths = []
         tar_file_refs = []
-        layer = self.eldest
+        layer = base_layer
         # Convert this base_path to unicode otherwise things will break
         # later.
         base_path = base_path.encode('utf-8')
@@ -626,17 +609,13 @@ class DockerV2Handle(object):
                 continue
 
             tfname = '%s.tar' % layer['fsLayer']['blobSum']
-            tfname = os.path.join(self.cachedir, tfname)
+            tfname = os.path.join(cachedir, tfname)
             tfp = tarfile.open(tfname, 'r:gz')
             tar_file_refs.append(tfp)
 
             # get directory of tar contents
             members = tfp.getmembers()
 
-            # Normalize paths
-            for x in members:
-                if x.name[0:2] == './':
-                    x.name = x.name[2:]
             # remove all illegal files
             members = filter_layer(members, 'dev/')
             members = filter_layer(members, '/')
@@ -683,7 +662,7 @@ class DockerV2Handle(object):
 
         # extract the selected files
         layer_idx = 0
-        layer = self.eldest
+        layer = base_layer
         while layer is not None:
             if layer['fsLayer']['blobSum'] in self.excludeBlobSums:
                 layer = layer['child']
@@ -726,18 +705,34 @@ def pull_image(options, repo, tag, cachedir='./', expanddir='./'):
     if 'baseUrl' not in options:
         options['baseUrl'] = 'https://registry-1.docker.io'
     imageident = '%s:%s' % (repo, tag)
-    handle = DockerV2Handle(imageident, options, cachedir=cachedir)
+    handle = DockerV2Handle(imageident, options)
 
-    meta = handle.examine_manifest()
-    handle.pull_layers()
+    manifest = handle.get_image_manifest()
+    (eldest, youngest) = _construct_image_metadata(manifest)
+    layer = eldest
+    while layer is not None:
+        handle.save_layer(layer['fsLayer']['blobSum'], cachedir)
+        layer = layer['child']
 
+    layer = eldest
+    meta = youngest
+    resp = {'id': meta['id']}
     expandedpath = os.path.join(expanddir, str(meta['id']))
-    meta['expandedpath'] = expandedpath
+    resp['expandedpath'] = expandedpath
+    if 'config' in meta:
+        config = meta['config']
+        if 'Env' in config:
+            resp['env'] = config['Env']
+        if 'WorkingDir' in config:
+            resp['workdir'] = config['WorkingDir']
+        if 'Entrypoint' in config:
+            resp['entrypoint'] = config['Entrypoint']
+
     if not os.path.exists(expandedpath):
         os.mkdir(expandedpath)
 
-    handle.extract_docker_layers(expandedpath)
-    return meta
+    handle.extract_docker_layers(expandedpath, layer, cachedir=cachedir)
+    return resp
 
 
 def main():

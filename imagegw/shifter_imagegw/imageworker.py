@@ -31,7 +31,9 @@ from multiprocessing.queues import Queue
 from multiprocessing.pool import ThreadPool
 from time import time, sleep
 from random import randint
-from shifter_imagegw import CONFIG_PATH, dockerv2, converters, transfer
+from shifter_imagegw import CONFIG_PATH, converters, transfer
+from shifter_imagegw.dockerv2 import DockerV2Handle as DockerV2
+from shifter_imagegw.dockerv2_ext import DockerV2ext
 
 CONFIG = None
 
@@ -183,25 +185,31 @@ def _pull_dockerv2(request, location, repo, tag, updater):
                 userpass = request['session']['tokens']['default']
                 options['username'] = userpass.split(':')[0]
                 options['password'] = ''.join(userpass.split(':')[1:])
-        imageident = '%s:%s' % (repo, tag)
-        dock = dockerv2.DockerV2Handle(imageident, options, updater=updater)
+        imgid = '%s:%s' % (repo, tag)
+        system = request['system']
+        if system not in CONFIG['Platforms']:
+            raise KeyError('%s is not in the configuration' % system)
+        sysconf = CONFIG['Platforms'][system]
+        if sysconf.get('use_skopeo'):
+            options['policy_file'] = sysconf.get("policy_file")
+            dock = DockerV2ext(imgid, options, updater=updater, cachedir=cdir)
+        else:
+            dock = DockerV2(imgid, options, updater=updater, cachedir=cdir)
         updater.update_status("PULLING", 'Getting manifest')
-        manifest = dock.get_image_manifest()
-        request['meta'] = dock.examine_manifest(manifest)
+        request['meta'] = dock.examine_manifest()
         request['id'] = str(request['meta']['id'])
 
         if check_image(request):
             return True
 
-        dock.pull_layers(manifest, cdir)
+        dock.pull_layers()
 
         expandedpath = tempfile.mkdtemp(suffix='extract',
                                         prefix=request['id'], dir=edir)
         request['expandedpath'] = expandedpath
 
         updater.update_status("PULLING", 'Extracting Layers')
-        dock.extract_docker_layers(expandedpath, dock.get_eldest_layer(),
-                                   cachedir=cdir)
+        dock.extract_docker_layers(expandedpath)
         return True
     except:
         logging.warn(sys.exc_value)
