@@ -58,7 +58,8 @@ after_failure:
   - ls -latrh /tmp/*
   - ls -latrh /tmp/imagegw/*
   - ls -latrh /tmp/systema/images/*
-  - cat /tmp/worker.log
+  - cat /var/log/shifter_imagegw/error.log
+  - cat /var/log/shifter_imagegw/access.log
 after_success:
   - cpp-coveralls --exclude dep -n --dump cpp_coveralls.json
   - coveralls-merge cpp_coveralls.json 
