@@ -63,17 +63,16 @@ class Dockerv2TestCase(unittest.TestCase):
         self.cleanpaths.append(expand)
         dock = DockerV2ext(image, cachedir=cache, updater=self.updater)
         resp = dock.examine_manifest()
-        print(resp)
         self.assertIn('id', resp)
         self.assertIn('private', resp)
         resp = dock.pull_layers()
         self.assertTrue(resp)
         dock.extract_docker_layers(expand)
-        self.assertTrue(os.path.exists(os.path.join(expand, 'rootfs')))
+        self.assertTrue(os.path.exists(os.path.join(expand,"bin")))
 
     def test_pull_private(self):
         if self.tokens is None:
-            pass
+            return
         tok = base64.b64decode(self.tokens['index.docker.io'])
         username, password = tok.split(':')
         image = 'scanon/shaneprivate'
@@ -89,15 +88,14 @@ class Dockerv2TestCase(unittest.TestCase):
         resp = dock.pull_layers()
         self.assertTrue(resp)
         dock.extract_docker_layers(expand)
-        self.assertTrue(os.path.exists(os.path.join(expand, 'rootfs')))
+        self.assertTrue(os.path.exists(os.path.join(expand, 'bin')))
 
 
     def test_pull_private2(self):
         if self.tokens is None:
-            pass
+            return
         tok = base64.b64decode(self.tokens['registry.services.nersc.gov'])
         username, password = tok.split(':')
-        print(username)
         image = 'scanon/alpine'
         options = {'baseUrl': 'https://registry.services.nersc.gov',
                    'username': username, 'password': password}
@@ -112,4 +110,4 @@ class Dockerv2TestCase(unittest.TestCase):
         resp = dock.pull_layers()
         self.assertTrue(resp)
         dock.extract_docker_layers(expand)
-        self.assertTrue(os.path.exists(os.path.join(expand, 'rootfs')))
+        self.assertTrue(os.path.exists(os.path.join(expand, 'bin')))

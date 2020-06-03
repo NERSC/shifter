@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# Mock skopeo utility
+
+D=$(dirname $0)
+
+if [ "z$1" = "zinspect" ] ; then
+  echo '{ "Architecture": "amd64", "Created": "2017-01-10T21:42:25.588561677Z", "Digest": "sha256:468b48e3864f5489a6fa4a35843292b101ac73c31e3272688fa3220ff485f549", "DockerVersion": "1.13.0-rc4", "Labels": {}, "Layers": [ "sha256:f810322bba2c5f0a6dd58ba31eba0543baabb4533e479ab2db376aaa8064be55", "sha256:a3ed95caeb02ffe68cdd9fd84406680ae93d633cb16422d00e8a7c22955b46d4", "sha256:86fa702c53d11ca5a8c206ae62fd45f1911007e999f49ec4116cb7c4f9f40cbd", "sha256:57dae26e12847ce0a71649c7d7e07fa79b9daf09586831230d3600ef6963bc2d", "sha256:744ea9668b0c7373dd2c779279d5f707746b11bcdd47f91922d1031d9135e8ee", "sha256:ba650fd71ca9d6a2aed9243ecf92a71496effbf6c848b579ef0eb5ba058c356f", "sha256:64bf384bc6dfa0c22b42dd1300cc2141951b7293ef2c4a2754386cdea997453c", "sha256:e44d7fd484bc1990e3ca0730c3b45db8e44937ac7fc476085ad02bd817338c84" ], "Name": "docker.io/scanon/shaneprivate", "Os": "linux", "RepoTags": [ "latest" ] }' 
+
+elif [ "z$1" = "zcopy" ] ; then
+  DEST=$(echo $5|sed 's/oci:..//'|sed 's/:image//')
+  mkdir -p $DEST
+  mkdir $DEST/blobs
+  #index
+  echo '{"schemaVersion":2,"manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:41691e1851314e2f37eee22c2a9969500d0dcab259f1357f447ef28155f22efc","size":348,"platform":{"architecture":"amd64","os":"linux"}}]}' > $DEST/index.json
+
+  # manifest
+  CDIR="$3/sha256"
+  mkdir -p $CDIR
+  echo '{"schemaVersion":2,"config":{"mediaType":"application/vnd.oci.image.config.v1+json","digest":"sha256:0f5f445df8ccbd8a062ad3d02d459e8549d9998c62a5b7cbf77baf68aa73bf5b","size":585},"layers":[{"mediaType":"application/vnd.oci.image.layer.v1.tar+gzip","digest":"sha256:df20fa9351a15782c64e6dddb2d4a6f50bf6d3688060a34c4014b0d9a752eb4c","size":2797541}]}' > $CDIR/41691e1851314e2f37eee22c2a9969500d0dcab259f1357f447ef28155f22efc
+
+  # digest
+  echo '{"created":"2020-05-29T21:19:46.363518345Z","architecture":"amd64","os":"linux","config":{"Env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],"Cmd":["/bin/sh"]},"rootfs":{"type":"layers","diff_ids":["sha256:50644c29ef5a27c9a40c393a73ece2479de78325cae7d762ef3cdc19bf42dd0a"]},"history":[{"created":"2020-05-29T21:19:46.192045972Z","created_by":"/bin/sh -c #(nop) ADD file:c92c248239f8c7b9b3c067650954815f391b7bcb09023f984972c082ace2a8d0 in / "},{"created":"2020-05-29T21:19:46.363518345Z","created_by":"/bin/sh -c #(nop)  CMD [\"/bin/sh\"]","empty_layer":true}]}' > $CDIR/0f5f445df8ccbd8a062ad3d02d459e8549d9998c62a5b7cbf77baf68aa73bf5b
+
+fi
