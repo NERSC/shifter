@@ -23,6 +23,7 @@ import tempfile
 import shutil
 import json
 import base64
+import json
 
 class update():
 
@@ -34,6 +35,7 @@ class Dockerv2TestCase(unittest.TestCase):
     def setUp(self):
         cwd = os.path.dirname(os.path.realpath(__file__))
         os.environ['PATH'] = cwd + ':' + os.environ['PATH']
+        self.test_dir = cwd
         self.updater  = update()
         self.options = None
         if 'LOCALREGISTRY' in os.environ:
@@ -111,3 +113,49 @@ class Dockerv2TestCase(unittest.TestCase):
         self.assertTrue(resp)
         dock.extract_docker_layers(expand)
         self.assertTrue(os.path.exists(os.path.join(expand, 'bin')))
+
+    def test_base_url(self):
+        image = 'alpine'
+        opt = {'baseUrl': 'https://foo.bar/'}
+        dock = DockerV2ext(image, options=opt)
+        self.assertEqual(dock.registry, 'foo.bar')
+
+    def test_authfile(self):
+        image = 'alpine'
+        dock = DockerV2ext(image)
+        with self.assertRaises(OSError):
+            dock._auth_file()
+        opt = {'username': 'foo', 'password': 'bar'}
+        dock = DockerV2ext(image, options=opt)
+        dock._auth_file()
+        fn = str(dock.auth_file)
+        with open(fn) as f:
+            data = f.read()
+        js = json.loads(data)
+        self.assertIn('auths', js)
+        os.unlink(fn)
+
+    def test_private(self):
+        image = 'private'
+        dock = DockerV2ext(image)
+        with self.assertRaises(OSError):
+            dock._auth_file()
+        opt = {'username': 'foo', 
+               'password': 'bar', 
+               'policy_file': self.test_dir + 'policy.json'
+               }
+        dock = DockerV2ext(image, options=opt)
+        dock._auth_file()
+        fn = str(dock.auth_file)
+        with open(fn) as f:
+            data = f.read()
+        js = json.loads(data)
+        self.assertIn('auths', js)
+
+    def test_policyfile(self):
+        image = 'alpine'
+        pf = self.test_dir + 'policy.json'
+        opt = {'policy_file': pf}
+        dock = DockerV2ext(image, options=opt)
+        self.assertEquals(pf, dock.policy_file)
+
