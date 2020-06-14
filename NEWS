@@ -1,3 +1,22 @@
+18.03.5
+========
+* Add support for external mode (see docs/skopeo.rst)
+
+18.03.4
+========
+* Bug fix to match pending status between the gateway and CLI
+* Bug fix to pick up the threads settings for the image gateway
+
+18.03.3
+========
+* Bug fix for JSON header type
+
+18.03.2
+========
+* Bug fix for importing images
+* Bug fix for error handling of job data loading
+* Support for SLES15
+
 18.03.1
 ========
 * Add support for clearing the external environment
