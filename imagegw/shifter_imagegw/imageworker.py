@@ -190,7 +190,7 @@ def _pull_dockerv2(request, location, repo, tag, updater):
         if system not in CONFIG['Platforms']:
             raise KeyError('%s is not in the configuration' % system)
         sysconf = CONFIG['Platforms'][system]
-        if sysconf.get('use_skopeo'):
+        if sysconf.get('use_external'):
             options['policy_file'] = sysconf.get("policy_file")
             dock = DockerV2ext(imgid, options, updater=updater, cachedir=cdir)
         else:

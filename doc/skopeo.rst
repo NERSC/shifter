@@ -26,7 +26,7 @@ is started.
 Configuration
 -------------
 
-To configure the gateway to use external mode, simply set `use_skopeo`
+To configure the gateway to use external mode, simply set `use_external`
 to true in the appropriate platform section of the imagemanager.json
 file.
 
@@ -37,7 +37,7 @@ For example:
     "Platforms": {
         "mycluster": {
             "admins": ["root"],
-            "use_skopeo": true
+            "use_external": true
         }
     }
 ...
