@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# Mock umoci
+
+DDIR=$(echo $5)
+mkdir -p $DDIR/rootfs
+mkdir -p $DDIR/rootfs/bin
+
