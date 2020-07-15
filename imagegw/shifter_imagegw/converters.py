@@ -27,7 +27,7 @@ import os
 import subprocess
 import shutil
 import tempfile
-from shifter_imagegw.util import program_exists
+from shifter_imagegw.util import program_exists, rmtree
 
 
 def generate_ext4_image(expand_path, image_path, options):
@@ -52,7 +52,7 @@ def generate_cramfs_image(expand_path, image_path, options):
         # error handling
         pass
     try:
-        shutil.rmtree(expand_path)
+        rmtree(expand_path)
     except:
         # error handling
         pass
@@ -79,7 +79,7 @@ def generate_squashfs_image(expand_path, image_path, options):
         # error handling
         pass
     try:
-        shutil.rmtree(expand_path)
+        rmtree(expand_path)
     except:
         pass
 

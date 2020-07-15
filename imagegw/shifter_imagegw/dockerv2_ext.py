@@ -23,6 +23,7 @@ includes pulling down the manifest, pulling layers, and unpacking the layers.
 
 import json
 import os
+import stat
 from subprocess import Popen, PIPE
 import base64
 import tempfile
@@ -226,6 +227,8 @@ class DockerV2ext(object):
             return False
         rootfs = os.path.join(idir, 'rootfs')
         os.rmdir(base_path)
-        shutil.move(rootfs, base_path)
+        perm = os.stat(rootfs).st_mode
+        os.chmod(rootfs, perm|stat.S_IEXEC|stat.S_IWRITE|stat.S_IREAD)
+        os.rename(rootfs, base_path)
         shutil.rmtree(idir)
         return True

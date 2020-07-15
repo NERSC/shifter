@@ -28,6 +28,8 @@
 """
 
 import os
+import stat
+import shutil
 
 
 def program_exists(program):
@@ -71,3 +73,14 @@ def which(program):
                     return candidate
 
     return None
+
+def rmtree(path):
+    def remove_readonly(func, path, _):
+        "Clear the readonly bit and reattempt the removal"
+        parent = os.path.dirname(path)
+        os.chmod(parent, stat.S_IRWXU)
+        if not os.path.islink(path):
+            os.chmod(path, stat.S_IRWXU)
+        func(path)
+
+    shutil.rmtree(path, onerror=remove_readonly)

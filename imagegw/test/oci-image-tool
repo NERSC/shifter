@@ -1,3 +1,4 @@
 #!/bin/bash
 
 # Mock oci image tool (just exit without an error)
+exit 0

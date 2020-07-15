@@ -18,6 +18,7 @@
 
 import os
 from shifter_imagegw.dockerv2_ext import DockerV2ext
+from shifter_imagegw.util import rmtree
 import unittest
 import tempfile
 import shutil
@@ -71,6 +72,25 @@ class Dockerv2TestCase(unittest.TestCase):
         self.assertTrue(resp)
         dock.extract_docker_layers(expand)
         self.assertTrue(os.path.exists(os.path.join(expand,"bin")))
+        rmtree(expand)
+        rmtree(cache)
+
+    def test_permission_bug(self):
+        cache = tempfile.mkdtemp()
+        expand = tempfile.mkdtemp()
+        image = 'scanon/permtest'
+        self.cleanpaths.append(cache)
+        self.cleanpaths.append(expand)
+        dock = DockerV2ext(image, cachedir=cache, updater=self.updater)
+        resp = dock.examine_manifest()
+        self.assertIn('id', resp)
+        self.assertIn('private', resp)
+        resp = dock.pull_layers()
+        self.assertTrue(resp)
+        dock.extract_docker_layers(expand)
+        self.assertTrue(os.path.exists(os.path.join(expand,"bin")))
+        rmtree(expand)
+        rmtree(cache)
 
     def test_pull_private(self):
         if self.tokens is None:
@@ -115,7 +135,7 @@ class Dockerv2TestCase(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(expand, 'bin')))
 
     def test_base_url(self):
-        image = 'alpine'
+        image = 'scanon/alpine'
         opt = {'baseUrl': 'https://foo.bar/'}
         dock = DockerV2ext(image, options=opt)
         self.assertEqual(dock.registry, 'foo.bar')
