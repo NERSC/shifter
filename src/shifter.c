@@ -158,6 +158,16 @@ int main(int argc, char **argv) {
         }
     }
 
+    if (opts->useEntryPoint) {
+        if (imageData->entryPoint != NULL && opts->entrypoint == NULL) {
+            opts->entrypoint = _strdup(imageData->entryPoint);
+        }
+        if (opts->entrypoint == NULL) {
+            fprintf(stderr, "No entrypoint specified on command line or in image definition.\n");
+            exit(1);
+        }
+    }
+
     snprintf(udiRoot, PATH_MAX, "%s", udiConfig->udiMountPoint);
     udiRoot[PATH_MAX - 1] = 0;
 
