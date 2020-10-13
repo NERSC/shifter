@@ -9,7 +9,7 @@ compiler:
 # command to install dependencies
 before_install:
   - sudo chmod 755 /var/log
-  - sudo add-apt-repository "deb http://us.archive.ubuntu.com/ubuntu/ precise universe multiverse"
+  - sudo add-apt-repository "deb http://us.archive.ubuntu.com/ubuntu/ bionic universe multiverse"
   - sudo apt-get update -qq
   - sudo apt-get install -qq libjson-c2 libjson-c-dev munge libmunge2 libmunge-dev libcurl4-openssl-dev autoconf automake libtool curl make valgrind xfsprogs squashfs-tools libcap-dev
   - sudo modprobe squashfs
