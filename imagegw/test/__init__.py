@@ -3,7 +3,7 @@ import subprocess
 
 
 def setup():
-    print "Module setup"
+    print("Module setup")
     os.environ['GWCONFIG'] = 'test.json'
     os.environ['CONFIG'] = 'test.json'
     test_dir = os.path.dirname(os.path.abspath(__file__))

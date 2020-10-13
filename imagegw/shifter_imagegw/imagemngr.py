@@ -36,7 +36,11 @@ from pymongo import MongoClient
 import pymongo.errors
 from shifter_imagegw.auth import Authentication
 from shifter_imagegw.imageworker import WorkerThreads
-from multiprocessing.process import Process
+try:
+    from multiprocessing import Process
+except:
+    from multiprocessing.process import Process
+
 import atexit
 
 
@@ -47,7 +51,7 @@ import atexit
 def mongo_reconnect_reattempt(call):
     """Automatically re-attempt potentially failed mongo operations"""
     def _mongo_reconnect_safe(self, *args, **kwargs):
-        for _ in xrange(2):
+        for _ in range(2):
             try:
                 return call(self, *args, **kwargs)
             except pymongo.errors.AutoReconnect:
@@ -80,9 +84,9 @@ class ImageMngr(object):
             self.logger = logging.getLogger(logname)
             self.logger.info('ImageMngr using logname %s' % (logname))
         else:
-            print "Using upstream logger"
+            print("Using upstream logger")
             self.logger = logger
-            print logger
+            print(logger)
             self.logger.info('ImageMngr using upstream logger')
 
         self.logger.debug('Initializing image manager')
@@ -796,7 +800,7 @@ class ImageMngr(object):
             resp['userACL'] = []
             resp['groupACL'] = []
 
-        for key in mappings.keys():
+        for key in list(mappings.keys()):
             if key in resp:
                 setline[mappings[key]] = resp[key]
 
@@ -927,7 +931,7 @@ class ImageMngr(object):
 
 def usage():
     """Print usage"""
-    print "Usage: imagemngr <lookup|pull|expire>"
+    print("Usage: imagemngr <lookup|pull|expire>")
     sys.exit(0)
 
 
@@ -957,7 +961,7 @@ def main():
         (req['system'], req['itype'], req['tag']) = sys.argv[0:3]
         mgr.pull('good', req)
     else:
-        print "Unknown command %s" % (command)
+        print("Unknown command %s" % (command))
         usage()
 
 

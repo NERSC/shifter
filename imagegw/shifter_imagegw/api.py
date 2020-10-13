@@ -206,12 +206,12 @@ def pull(system, imgtype, tag):
     i = {'system': system, 'itype': imgtype, 'tag': tag}
     if 'allowed_uids' in data:
         # Convert to integers
-        i['userACL'] = map(lambda x: int(x),
-                           data['allowed_uids'].split(','))
+        i['userACL'] = list(map(lambda x: int(x),
+                           data['allowed_uids'].split(',')))
     if 'allowed_gids' in data:
         # Convert to integers
-        i['groupACL'] = map(lambda x: int(x),
-                            data['allowed_gids'].split(','))
+        i['groupACL'] = list(map(lambda x: int(x),
+                            data['allowed_gids'].split(',')))
     try:
         app.logger.debug(i)
         session = mgr.new_session(auth, system)
@@ -261,12 +261,12 @@ def doimport(system, imgtype, tag):
     # Check for list of allowed users or groups
     if 'allowed_uids' in data:
         # Convert to integers
-        i['userACL'] = map(lambda x: int(x),
-                           data['allowed_uids'].split(','))
+        i['userACL'] = list(map(lambda x: int(x),
+                           data['allowed_uids'].split(',')))
     if 'allowed_gids' in data:
         # Convert to integers
-        i['groupACL'] = map(lambda x: int(x),
-                            data['allowed_gids'].split(','))
+        i['groupACL'] = list(map(lambda x: int(x),
+                            data['allowed_gids'].split(',')))
     try:
         session = mgr.new_session(auth, system)
         # only allowed users can import images

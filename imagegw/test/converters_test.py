@@ -86,7 +86,7 @@ class ConvertersTestCase(unittest.TestCase):
         self.assertTrue(resp)
         with open(output) as f:
             v = f.read()
-            self.assertEquals(v, 'bogus blah')
+            self.assertEqual(v, 'bogus blah')
 
         os.remove(output)
         opts['mock'] = ' blah'
@@ -94,7 +94,7 @@ class ConvertersTestCase(unittest.TestCase):
         self.assertTrue(resp)
         with open(output) as f:
             v = f.read()
-            self.assertEquals(v, 'bogus blah')
+            self.assertEqual(v, 'bogus blah')
         os.remove(output)
 
     def test_writemeta(self):
@@ -126,8 +126,8 @@ class ConvertersTestCase(unittest.TestCase):
         for key in keys:
             self.assertIn(key, meta)
         if 'DISABLE_ACL_METADATA' not in os.environ:
-            self.assertEquals(meta['USERACL'].find("["), -1)
-            self.assertEquals(meta['USERACL'].find("]"), -1)
+            self.assertEqual(meta['USERACL'].find("["), -1)
+            self.assertEqual(meta['USERACL'].find("]"), -1)
         self.assertGreater(len(meta['ENV']), 0)
 
     def test_ext4(self):

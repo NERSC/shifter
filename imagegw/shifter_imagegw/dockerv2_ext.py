@@ -82,8 +82,8 @@ class DockerV2ext(object):
             raise OSError("No authentication")
         user = self.options['username']
         pwd = self.options['password']
-
-        token = base64.b64encode('%s:%s' % (user, pwd))
+        pstr =  '%s:%s' % (user, pwd)
+        token = base64.b64encode(pstr.encode("utf-8")).decode("utf-8")
         afile = tempfile.mkstemp()[1]
         auth = {'auths': {
                     self.registry: {'auth': token}
@@ -104,10 +104,10 @@ class DockerV2ext(object):
         cmd.extend(['inspect', self.url])
         process = Popen(cmd, stdout=PIPE, stderr=PIPE)
         stdout, stderr = process.communicate()
-        if 'authentication required' not in stderr:
+        if 'authentication required' not in stderr.decode("utf-8"):
             if process.returncode:
                 raise OSError("Skopeo inspect failed")
-            return json.loads(stdout)
+            return json.loads(stdout.decode("utf-8"))
 
         # Private Image
         self.log("PULLING", 'Inspecting Image with auth')
@@ -120,7 +120,7 @@ class DockerV2ext(object):
         cmd.extend([self.url])
         process = Popen(cmd, stdout=PIPE, stderr=PIPE)
         stdout, stderr = process.communicate()
-        return json.loads(stdout)
+        return json.loads(stdout.decode("utf-8"))
 
     def _validate(self, idir):
         """
