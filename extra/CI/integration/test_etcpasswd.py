@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import pexpect
 import subprocess
 import sys
 
@@ -11,7 +10,15 @@ stdout, _ = proc.communicate()
 username = stdout.strip()
 
 proc = subprocess.Popen(['getent','passwd',username], stdout=subprocess.PIPE)
-passwd, _ = proc.communicate()
+passwd = proc.communicate()[0].decode("utf-8").rstrip()
 
-pex = pexpect.spawnu("shifter --image=%s cat /etc/passwd" % image_name)
-pex.expect(str(passwd.replace('\n', '\r\n')).encode("utf-8"))
+cmd = ['shifter', '--image=%s' % (image_name), 'cat', '/etc/passwd']
+proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+out = proc.communicate()[0].decode("utf-8")
+
+for line in out.split('\n'):
+    if line.startswith(passwd):
+        sys.exit(0)
+
+sys.exit(1)
+
