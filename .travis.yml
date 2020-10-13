@@ -28,7 +28,6 @@ before_script:
   - cp imagegw/test.json.example test.json
   - mkdir /tmp/imagegw /tmp/systema /tmp/systemb
   - rm imagegw/test/sha256sum
-  - find /tmp/
 script:
   - export PROC_COUNT=$(cat /proc/cpuinfo  | egrep '^processor' | wc -l)
   - ./autogen.sh
