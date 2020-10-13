@@ -2,7 +2,7 @@ sudo: true
 dist: trusty
 language: python
 python:
-  - "3.7"
+  - "3.8"
 compiler:
   - clang
   - gcc
