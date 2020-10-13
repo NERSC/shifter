@@ -7,7 +7,7 @@ import sys
 image_name = sys.argv[1]
 
 pex = pexpect.spawnu("shifter --image=%s cat /proc/self/status | grep Cap" % image_name)
-pex.expect(u'CapInh:\s+0+')
-pex.expect(u'CapPrm:\s+0+')
-pex.expect(u'CapEff:\s+0+')
-pex.expect(u'CapBnd:\s+0+')
+pex.expect('CapInh:\s+0+')
+pex.expect('CapPrm:\s+0+')
+pex.expect('CapEff:\s+0+')
+pex.expect('CapBnd:\s+0+')

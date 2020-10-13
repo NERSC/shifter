@@ -14,4 +14,4 @@ proc = subprocess.Popen(['getent','passwd',username], stdout=subprocess.PIPE)
 passwd, _ = proc.communicate()
 
 pex = pexpect.spawnu("shifter --image=%s cat /etc/passwd" % image_name)
-pex.expect(unicode(passwd.replace('\n', '\r\n')))
+pex.expect(str(passwd.replace('\n', '\r\n')))
