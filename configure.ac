@@ -42,6 +42,7 @@ AC_PATH_PROG([INSMOD_PATH], [insmod], [NotFound], [$PATH$PATH_SEPARATOR/sbin$PAT
 AC_ARG_VAR([MODPROBE_PATH], [Path to modprobe executable])
 AC_PATH_PROG([MODPROBE_PATH], [modprobe], [NotFound], [$PATH$PATH_SEPARATOR/sbin$PATH_SEPARATOR/usr/sbin])
 
+m4_define_default([_AM_PYTHON_INTERPRETER_LIST],[python2.7 python2.6 python2])
 AM_PATH_PYTHON
 
 AC_ARG_ENABLE([cray], AS_HELP_STRING([--enable-cray], [Turn on cray support and testing options]))
