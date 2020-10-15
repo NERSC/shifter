@@ -1,3 +1,5 @@
+.. _shifter-modules:
+
 Shifter Modules
 ===============
 
