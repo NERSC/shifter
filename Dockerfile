@@ -10,7 +10,7 @@ FROM ubuntu:14.04
 
 LABEL name="Shifter"
 LABEL version="18.03"
-LABEL maintainer="scanon@lbl.gov"
+LABEL maintainer="Shane Canon <scanon@lbl.gov>"
 
 # Thanks to Sven Dowideit <SvenDowideit@docker.com>
 # for a Dockerfile that configured ssh
