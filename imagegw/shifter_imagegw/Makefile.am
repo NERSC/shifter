@@ -2,6 +2,7 @@ shifter_imagegw_PYTHON = auth.py \
 				api.py \
 				converters.py \
 				dockerv2.py \
+				dockerv2_ext.py \
 				tarfilemp.py \
 				imagemngr.py \
 				imageworker.py \

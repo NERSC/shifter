@@ -87,7 +87,6 @@ class Dockerv2TestCase(unittest.TestCase):
 
         assert os.path.exists(resp['expandedpath'])
         bfile = os.path.join(resp['expandedpath'], u'\ua000')
-        self.assertIn('workdir', resp)
         assert os.path.exists(resp['expandedpath'])
         assert os.path.exists(bfile)
 
