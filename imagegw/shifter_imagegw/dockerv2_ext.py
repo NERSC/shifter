@@ -224,7 +224,7 @@ class DockerV2ext(object):
         process = Popen(cmd, stdout=PIPE)
         process.communicate()[0]
         if process.returncode:
-            return False
+            raise OSError("Unpack failed")
         rootfs = os.path.join(idir, 'rootfs')
         os.rmdir(base_path)
         perm = os.stat(rootfs).st_mode

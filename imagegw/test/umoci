@@ -2,6 +2,8 @@
 
 # Mock umoci
 
+[ -z "$UMOCI_FAIL" ] || echo "Simulate Failure" && exit 1
+
 DDIR=$(echo $5)
 mkdir -p $DDIR/rootfs
 mkdir -p $DDIR/rootfs/bin

@@ -181,6 +181,18 @@ class ImageWorkerTestCase(unittest.TestCase):
         status = self.imageworker.transfer_image(request)
         self.assertTrue(status)
 
+    def test_bad_pull_docker(self):
+        self.cleanup_cache()
+        request = self.request
+        self.imageworker.CONFIG['Platforms']['systema']['use_external'] = True
+        os.environ['UMOCI_FAIL'] = '1'
+        with self.assertRaises(OSError):
+            self.imageworker._pull_dockerv2(request, 'index.docker.io',
+                                               'scanon/shanetest', 'latest',
+                                               self.updater)
+        self.imageworker.CONFIG['Platforms']['systema']['use_external'] = False
+        os.environ.pop('UMOCI_FAIL')
+
     def test_pull_docker(self):
         self.cleanup_cache()
         request = self.request
