@@ -56,7 +56,7 @@ python shifter_imagegw.api:app &
 echo "setting up base config"
 sudo /bin/bash -c "cat /etc/shifter/udiRoot.conf.example | \
          sed 's|etcPath=.*|etcPath=/etc/shifter/shifter_etc_files|g' | \
-         sed 's|imageGateway=.*|imageGateway=http://localhost:5000|g' \
+         sed 's|imageGateway=.*|imageGateway=http://localhost:8000|g' \
          > /etc/shifter/udiRoot.conf"
 
 sudo mkdir -p /etc/shifter/shifter_etc_files
