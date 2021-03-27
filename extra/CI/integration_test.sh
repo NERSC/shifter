@@ -51,7 +51,7 @@ fi
 sudo service munge start
 
 echo "Starting imagegw api"
-gunicorn -b 0.0.0.0:5000 --backlog 2048 --access-logfile=/var/log/shifter_imagegw/access.log --log-file=/var/log/shifter_imagegw/error.log shifter_imagegw.api:app &
+python shifter_imagegw.api:app &
 
 echo "setting up base config"
 sudo /bin/bash -c "cat /etc/shifter/udiRoot.conf.example | \
