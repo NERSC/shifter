@@ -82,6 +82,8 @@ echo "Pull Image"
 shifterimg pull ubuntu:16.04
 shifterimg lookup ubuntu:16.04
 ls /images
+ls -l /usr/bin/shifter
+ls -l /var/
 shifter --image=ubuntu:16.04 echo test
 
 echo "var/tmp exists"
