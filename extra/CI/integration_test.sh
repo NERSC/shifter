@@ -51,7 +51,7 @@ fi
 sudo service munge start
 
 echo "Starting imagegw api"
-python shifter_imagegw.api:app &
+python -m shifter_imagegw.api &
 
 echo "setting up base config"
 sudo /bin/bash -c "cat /etc/shifter/udiRoot.conf.example | \
