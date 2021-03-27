@@ -81,9 +81,13 @@ sleep 10
 echo "Pull Image"
 shifterimg pull ubuntu:16.04
 shifterimg lookup ubuntu:16.04
-ls /images
+ls -l /images
+# Debugging
 ls -l /usr/bin/shifter
 ls -l /var/
+# Try mounting manually
+sudo mount /images/*.squashfs /mnt
+sudo umount /mnt
 shifter --image=ubuntu:16.04 echo test
 
 echo "var/tmp exists"
