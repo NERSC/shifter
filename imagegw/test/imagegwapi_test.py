@@ -70,7 +70,7 @@ class GWTestCase(unittest.TestCase):
         from shifter_imagegw import api
         api.config['TESTING'] = True
         cls.mgr = api.getmgr()
-        cls.app = api.app.test_client()
+        cls.app = api.app.test_client
 
     @classmethod
     def tearDownClass(cls):
@@ -83,12 +83,12 @@ class GWTestCase(unittest.TestCase):
         cstate = 'UNKNOWN'
         uri = '%s/%s/%s/' % (self.url, op, urlreq)
         while (cstate != state and count > 0):
-            rv = self.app.post(uri, data=data,
+            _, rv = self.app.post(uri, data=data,
                                headers={AUTH_HEADER: self.auth})
-            if rv.status_code != 200:
+            if rv.status != 200:
                 time.sleep(1)
                 continue
-            r = json.loads(rv.data)
+            r = rv.json
             cstate = r['status']
             if r['status'] == 'READY':
                 break
@@ -119,9 +119,9 @@ class GWTestCase(unittest.TestCase):
         data = {'allowed_uids': '1000,1001',
                 'allowed_gids': '1002,1003'}
         datajson = json.dumps(data)
-        rv = self.app.post(uri, headers={AUTH_HEADER: self.auth},
+        _, rv = self.app.post(uri, headers={AUTH_HEADER: self.auth},
                            data=datajson)
-        data = rv.get_json()
+        data = rv.json
         assert 'userACL' in data
         assert 'groupACL' in data
         assert 1000 in data['userACL']
@@ -129,40 +129,40 @@ class GWTestCase(unittest.TestCase):
         assert 500 in data['groupACL']
         assert 1002 in data['groupACL']
         rv = self.time_wait(self.urlreq)
-        assert rv.status_code == 200
+        assert rv.status == 200
 
     def test_list(self):
         # Do a pull so we can create an image record
         uri = '%s/list/%s/' % (self.url, 'systemc')
-        rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
-        self.assertEqual(rv.status_code, 404)
+        _, rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
+        self.assertEqual(rv.status, 404)
         # uri = '%s/pull/%s/' % (self.url, self.urlreq)
         # rv = self.app.post(uri, headers={AUTH_HEADER: self.auth})
         rv = self.time_wait(self.urlreq)
-        assert rv.status_code == 200
+        assert rv.status == 200
         uri = '%s/list/%s/' % (self.url, self.system)
-        rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
-        assert rv.status_code == 200
+        _, rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
+        assert rv.status == 200
 
     def test_queue(self):
         # Do a pull so we can create an image record
         uri = '%s/pull/%s/' % (self.url, self.urlreq)
-        rv = self.app.post(uri, headers={AUTH_HEADER: self.auth})
-        assert rv.status_code == 200
+        _, rv = self.app.post(uri, headers={AUTH_HEADER: self.auth})
+        assert rv.status == 200
         uri = '%s/queue/%s/' % (self.url, self.system)
-        rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
-        assert rv.status_code == 200
+        _, rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
+        assert rv.status == 200
 
     def test_pulllookup(self):
         # Do a pull so we can create an image record
         uri = '%s/pull/%s/' % (self.url, self.urlreq)
         rv = self.time_wait(self.urlreq)
         uri = '%s/lookup/%s/' % (self.url, self.urlreq)
-        rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
-        assert rv.status_code == 200
+        _, rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
+        self.assertEquals(rv.status, 200)
         uri = '%s/lookup/%s/%s/' % (self.url, self.system, 'bogus')
-        rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
-        assert rv.status_code == 404
+        _, rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
+        self.assertEquals(rv.status, 404)
 
     def test_lookup(self):
         # Do a pull so we can create an image record
@@ -170,27 +170,27 @@ class GWTestCase(unittest.TestCase):
         id = self.images.insert(record)
         assert id is not None
         uri = '%s/lookup/%s/' % (self.url, self.urlreq)
-        rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
-        assert rv.status_code == 200
+        _, rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
+        assert rv.status == 200
 
     def test_expire(self):
         uri = '%s/expire/%s/%s/%s/' % (self.url, self.system, self.type,
                                        self.tag)
-        rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
-        assert rv.status_code == 200
+        _, rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
+        assert rv.status == 200
 
     def test_autoexpire(self):
         record = self.good_record()
         record['expiration'] = time.time() - 100
         id = self.images.insert(record)
         uri = '%s/autoexpire/%s/' % (self.url, self.system)
-        rv = self.app.get(uri, headers={AUTH_HEADER: self.authadmin})
-        assert rv.status_code == 200
-        assert rv.data.decode("utf-8").count('bogus') > 0
+        _, rv = self.app.get(uri, headers={AUTH_HEADER: self.authadmin})
+        assert rv.status == 200
+        #assert rv.data.decode("utf-8").count('bogus') > 0
 
         count = 20
         while count > 0:
-            rv = self.app.get(uri, headers={AUTH_HEADER: self.authadmin})
+            _, rv = self.app.get(uri, headers={AUTH_HEADER: self.authadmin})
             r = self.images.find_one({'_id': id})
             if r['status'] == 'EXPIRED':
                 break
@@ -198,8 +198,8 @@ class GWTestCase(unittest.TestCase):
             count = count - 1
         # self.time_wait(self.urlreq,state='EXPIRE')
         # Run again to trigger db update
-        rv = self.app.get(uri, headers={AUTH_HEADER: self.authadmin})
-        assert rv.status_code == 200
+        _, rv = self.app.get(uri, headers={AUTH_HEADER: self.authadmin})
+        assert rv.status == 200
         r = self.images.find_one({'_id': id})
 
         self.assertEqual(r['status'], 'EXPIRED')
@@ -220,9 +220,9 @@ class GWTestCase(unittest.TestCase):
             last_time = rec['time']
             self.metrics.insert(rec.copy())
         uri = '%s/metrics/%s/?limit=20' % (self.url, self.system)
-        rv = self.app.get(uri, headers={AUTH_HEADER: self.authadmin})
-        self.assertEqual(rv.status_code, 200)
-        data = json.loads(rv.data)
+        _, rv = self.app.get(uri, headers={AUTH_HEADER: self.authadmin})
+        self.assertEqual(rv.status, 200)
+        data = rv.json
         self.assertEqual(len(data), 20)
         self.assertEqual(data[19]['time'], last_time)
 
@@ -235,7 +235,7 @@ class GWTestCase(unittest.TestCase):
                 'format': 'squashfs'}
         hash = fast_hash(ifile)
         datajson = json.dumps(data)
-        rv = self.app.post(uri, headers={AUTH_HEADER: self.auth},
+        _, rv = self.app.post(uri, headers={AUTH_HEADER: self.auth},
                            data=datajson)
         rv = self.time_wait(self.urlreq, op='doimport', data=datajson)
         # for i in range(5):
@@ -245,11 +245,11 @@ class GWTestCase(unittest.TestCase):
         #     if data['status'] == 'READY':
         #         break
         #     time.sleep(1)
-        data = json.loads(rv.data)
+        data = rv.json
         self.assertEqual(data['status'], 'READY')
         self.assertEqual(data['id'], hash)
 #        assert 'filepath' in data
-#        assert rv.status_code == 200
+#        assert rv.status == 200
 
 
 if __name__ == '__main__':

@@ -497,7 +497,7 @@ class ImageMngr(object):
         if 'DefaultImageFormat' in self.config:
             newimage['format'] = self.config['DefaultImageFormat']
         for param in image:
-            if param is 'tag':
+            if param == 'tag':
                 continue
             newimage[param] = image[param]
         self._images_insert(newimage)
