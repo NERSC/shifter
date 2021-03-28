@@ -1461,7 +1461,7 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
         char **argsPtr = NULL;
         int ret = 0;
         for (argsPtr = args; argsPtr - args < 8; argsPtr++) {
-            printf("%s\n", argsPtr)
+            printf("%s\n", argsPtr);
             if (argsPtr == NULL || *argsPtr == NULL) {
                 ret = 1;
             }
