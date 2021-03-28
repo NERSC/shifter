@@ -82,18 +82,6 @@ echo "Pull Image"
 shifterimg pull ubuntu:16.04
 shifterimg lookup ubuntu:16.04
 ls -l /images
-sudo mkdir /var/udiLoopMount/
-# Debugging
-ls -l /usr/bin/shifter
-ls -l /var/
-ls -l /usr/libexec/shifter
-/usr/libexec/shifter/mount --version
-# Try mounting manually
-sudo mount -n -o loop,nosuid,nodev,ro,autoclear -t squashfs /images/*.squashfs /var/udiLoopMount/
-sudo cp `which mount` /usr/libexec/shifter/mount
-/usr/libexec/shifter/mount --version
-ls -l /var/udiLoopMount/
-sudo umount /var/udiLoopMount/
 shifter --image=ubuntu:16.04 echo test
 
 echo "var/tmp exists"
