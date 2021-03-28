@@ -89,7 +89,9 @@ ls -l /var/
 ls -l /usr/libexec/shifter
 /usr/libexec/shifter/mount --version
 # Try mounting manually
-sudo /usr/libexec/shifter/mount -n -o loop,nosuid,nodev,ro,autoclear -t squashfs /images/*.squashfs /var/udiLoopMount/
+sudo mount -n -o loop,nosuid,nodev,ro,autoclear -t squashfs /images/*.squashfs /var/udiLoopMount/
+sudo cp `which mount` /usr/libexec/shifter/mount
+/usr/libexec/shifter/mount --version
 ls -l /var/udiLoopMount/
 sudo umount /var/udiLoopMount/
 shifter --image=ubuntu:16.04 echo test
