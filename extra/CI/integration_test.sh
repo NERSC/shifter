@@ -75,7 +75,7 @@ sudo touch /bin/nvidia-modprobe
 sudo chmod 755 /bin/nvidia-modprobe
 
 ## need to sleep a bit to let gunicorn get started
-sleep 10
+sleep 2
 
 
 echo "Pull Image"

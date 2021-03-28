@@ -43,7 +43,7 @@ script:
   - cd ../..
   - export ORIGPATH=$PATH
   - export PATH=$PWD/imagegw/test:$PATH
-  - PYTHONPATH=$PWD/imagegw nosetests -s --with-coverage imagegw/test
+#  - PYTHONPATH=$PWD/imagegw nosetests -s --with-coverage imagegw/test
   - export PATH=$ORIGPATH
   - export BUILDDIR=$(pwd)
   - cd /

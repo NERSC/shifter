@@ -1466,7 +1466,7 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
             }
         }
         if (ret == 0) {
-            ret = forkAndExecvSilent(args);
+            ret = forkAndExecv(args);
         }
         for (argsPtr = args; argsPtr && *argsPtr; argsPtr++) {
             free(*argsPtr);
