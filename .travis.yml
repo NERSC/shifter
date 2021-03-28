@@ -14,7 +14,6 @@ before_install:
   - sudo apt-get install -qq libjson-c-dev munge libmunge2 libmunge-dev libcurl4-openssl-dev autoconf automake libtool curl make valgrind xfsprogs squashfs-tools libcap-dev
   - sudo modprobe squashfs
   - sudo modprobe xfs
-  - sudo modprobe loop
   - cat /proc/filesystems
 install:
   - pip install -r imagegw/requirements.txt
@@ -54,6 +53,7 @@ services:
   - redis
 after_failure:
   - df /tmp
+  - dmesg
   - find /tmp/|head -100
   - ls -latrh /tmp/*
   - ls -latrh /tmp/imagegw/*

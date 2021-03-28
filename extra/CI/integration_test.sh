@@ -75,13 +75,13 @@ sudo touch /bin/nvidia-modprobe
 sudo chmod 755 /bin/nvidia-modprobe
 
 ## need to sleep a bit to let gunicorn get started
-sleep 10
+sleep 2
 
 
 echo "Pull Image"
 shifterimg pull ubuntu:16.04
 shifterimg lookup ubuntu:16.04
-ls /images
+ls -l /images
 shifter --image=ubuntu:16.04 echo test
 
 echo "var/tmp exists"
