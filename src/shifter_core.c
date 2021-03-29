@@ -1428,7 +1428,7 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
             fprintf(stderr, "ERROR: no apparent support for squashfs!");
             goto _loopMount_unclean;
         }
-        useAutoclear = 0;
+        useAutoclear = 1;
         ready = 1;
         imgType = "squashfs";
     } else if (format == FORMAT_XFS) {

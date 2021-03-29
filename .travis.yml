@@ -29,6 +29,8 @@ before_script:
   - mkdir /tmp/imagegw /tmp/systema /tmp/systemb
   - rm imagegw/test/sha256sum
 script:
+  - echo "Disabling autoclear for Travis and Kernel 5.4"
+  - sed -i 's/useAutoclear = 1;/useAutoclear = 1;/' ./src/shifter_core.c
   - export PROC_COUNT=$(cat /proc/cpuinfo  | egrep '^processor' | wc -l)
   - ./autogen.sh
   - ./configure --prefix=/usr --sysconfdir=/etc/shifter --disable-staticsshd
