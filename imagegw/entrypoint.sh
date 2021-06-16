@@ -13,8 +13,7 @@ fi
 for service in $@ ; do
   echo "service: $service"
   if [ "$service"  == "api" ] ; then
-    gunicorn -b 0.0.0.0:5000 --log-file /var/log/gunicorn.log \
-        --log-level $LOG_LEVEL  --backlog 2048 shifter_imagegw.api:app
+    python ./shifter_imagegw/api.py
   elif  [ $(echo $service|grep -c "munge:") -gt 0 ] ; then
     socket=$(echo $service|awk -F: '{print $2}')
     key=$(echo $service|awk -F: '{print $3}')

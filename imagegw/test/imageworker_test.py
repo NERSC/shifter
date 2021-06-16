@@ -25,7 +25,7 @@ DEBUG = False
 
 def update_status(ident, state, meta=None):
     if DEBUG:
-        print 'id=%s state=%s' % (ident, state)
+        print('id=%s state=%s' % (ident, state))
 
 
 class ImageWorkerTestCase(unittest.TestCase):
@@ -83,10 +83,10 @@ class ImageWorkerTestCase(unittest.TestCase):
                 kv[k] = v
         # Convert ACLs to list of ints
         if 'USERACL' in kv:
-            list = map(lambda x: int(x), kv['USERACL'].split(','))
+            list = [int(x) for x in kv['USERACL'].split(',')]
             kv['USERACL'] = list
         if 'GROUPACL' in kv:
-            list = map(lambda x: int(x), kv['GROUPACL'].split(','))
+            list = [int(x) for x in kv['GROUPACL'].split(',')]
             kv['GROUPACL'] = list
 
         return kv
@@ -100,7 +100,7 @@ class ImageWorkerTestCase(unittest.TestCase):
         meta = request['meta']
         self.assertIn('id', meta)
         self.assertIn('workdir', meta)
-        self.assertEquals(meta['entrypoint'][0], "/bin/sh")
+        self.assertEqual(meta['entrypoint'][0], "/bin/sh")
         self.assertTrue(os.path.exists(request['expandedpath']))
 
         return
@@ -181,6 +181,18 @@ class ImageWorkerTestCase(unittest.TestCase):
         status = self.imageworker.transfer_image(request)
         self.assertTrue(status)
 
+    def test_bad_pull_docker(self):
+        self.cleanup_cache()
+        request = self.request
+        self.imageworker.CONFIG['Platforms']['systema']['use_external'] = True
+        os.environ['UMOCI_FAIL'] = '1'
+        with self.assertRaises(OSError):
+            self.imageworker._pull_dockerv2(request, 'index.docker.io',
+                                               'scanon/shanetest', 'latest',
+                                               self.updater)
+        self.imageworker.CONFIG['Platforms']['systema']['use_external'] = False
+        os.environ.pop('UMOCI_FAIL')
+
     def test_pull_docker(self):
         self.cleanup_cache()
         request = self.request
@@ -201,7 +213,7 @@ class ImageWorkerTestCase(unittest.TestCase):
         meta = request['meta']
         self.assertIn('id', meta)
         self.assertTrue(os.path.exists(request['expandedpath']))
-        tfile = os.path.join(request['expandedpath'], u'\ua000')
+        tfile = os.path.join(request['expandedpath'], '\ua000')
         self.assertTrue(os.path.exists(tfile))
         return
 

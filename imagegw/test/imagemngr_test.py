@@ -43,7 +43,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.images.drop()
         self.logger = logging.getLogger("imagemngr")
         if len(self.logger.handlers) < 1:
-            print "Number of loggers %d" % (len(self.logger.handlers))
+            print(("Number of loggers %d" % (len(self.logger.handlers))))
             log_handler = logging.FileHandler('testing.log')
             logfmt = '%(asctime)s [%(name)s] %(levelname)s : %(message)s'
             log_handler.setFormatter(logging.Formatter(logfmt))
@@ -152,10 +152,10 @@ class ImageMngrTestCase(unittest.TestCase):
                 kv[k] = v
         # Convert ACLs to list of ints
         if 'USERACL' in kv:
-            list = map(lambda x: int(x), kv['USERACL'].split(','))
+            list = [int(x) for x in kv['USERACL'].split(',')]
             kv['USERACL'] = list
         if 'GROUPACL' in kv:
-            list = map(lambda x: int(x), kv['GROUPACL'].split(','))
+            list = [int(x) for x in kv['GROUPACL'].split(',')]
             kv['GROUPACL'] = list
 
         return kv
@@ -168,7 +168,7 @@ class ImageMngrTestCase(unittest.TestCase):
             return None
         with open("./tokens.cfg") as f:
             d = json.load(f)
-        for k in d.keys():
+        for k in list(d.keys()):
             d[k] = base64.b64decode(d[k])
         return d
 
@@ -327,7 +327,7 @@ class ImageMngrTestCase(unittest.TestCase):
         expire = self.m._resetexpire(id)
         self.assertGreater(expire, time.time())
         rec = self.images.find_one({'_id': id})
-        self.assertEquals(rec['expiration'], expire)
+        self.assertEqual(rec['expiration'], expire)
 
     @attr('fast')
     def test_pullable(self):
@@ -388,7 +388,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.m.complete_pull(id, resp)
         rec = self.images.find_one({'_id': id})
         self.assertIsNotNone(rec)
-        self.assertEquals(rec['tag'], [self.tag])
+        self.assertEqual(rec['tag'], [self.tag])
         self.assertGreater(rec['last_pull'], 0)
         # Create an identical request and
         # run complete again
@@ -422,7 +422,7 @@ class ImageMngrTestCase(unittest.TestCase):
         l = self.m.lookup(session, i)
         self.assertIn('status', l)
         self.assertIn('_id', l)
-        self.assertEquals(self.m.get_state(l['_id']), 'READY')
+        self.assertEqual(self.m.get_state(l['_id']), 'READY')
         i = self.query.copy()
         r = self.images.find_one({'_id': l['_id']})
         self.assertIn('expiration', r)
@@ -441,11 +441,11 @@ class ImageMngrTestCase(unittest.TestCase):
         rec2['status'] = 'FAILURE'
         session = self.m.new_session(self.auth, self.system)
         li = self.m.imglist(session, self.system)
-        self.assertEquals(len(li), 1)
+        self.assertEqual(len(li), 1)
         l = li[0]
         self.assertIn('_id', l)
-        self.assertEquals(self.m.get_state(l['_id']), 'READY')
-        self.assertEquals(l['_id'], id1)
+        self.assertEqual(self.m.get_state(l['_id']), 'READY')
+        self.assertEqual(l['_id'], id1)
 
     def test_repull(self):
         # Test a repull
@@ -522,14 +522,14 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertIsNotNone(rec)
         self.assertIn('_id', rec)
         id2 = rec['_id']
-        self.assertEquals(id, id2)
+        self.assertEqual(id, id2)
         q = {'system': self.system, 'itype': self.itype,
              'pulltag': {'$in': ['scanon/shanetest:latest']}}
         mrec = self.images.find_one(q)
         self.assertIn('_id', mrec)
         # Track through transistions
         state = self.time_wait(id)
-        self.assertEquals(state, 'READY')
+        self.assertEqual(state, 'READY')
         imagerec = self.m.lookup(session, pr)
         self.assertIn('ENTRY', imagerec)
         self.assertIn('ENV', imagerec)
@@ -551,7 +551,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertIn('_id', mrec)
         # Track through transistions
         state = self.time_wait(id)
-        self.assertEquals(state, 'READY')
+        self.assertEqual(state, 'READY')
         imagerec = self.m.lookup(session, self.pull)
         self.assertIn('ENTRY', imagerec)
         self.assertIn('ENV', imagerec)
@@ -562,7 +562,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertIsNotNone(rec)
         id = rec['_id']
         state = self.m.get_state(id)
-        self.assertEquals(state, 'FAILURE')
+        self.assertEqual(state, 'FAILURE')
 
     def test_pull2(self):
         """
@@ -585,9 +585,9 @@ class ImageMngrTestCase(unittest.TestCase):
         mrec = self.images.find_one(q)
         self.assertIn('_id', mrec)
         state = self.time_wait(id1)
-        self.assertEquals(state, 'READY')
+        self.assertEqual(state, 'READY')
         state = self.time_wait(id2)
-        self.assertEquals(state, 'READY')
+        self.assertEqual(state, 'READY')
         mrec = self.images.find_one(q)
         self.images.drop()
 
@@ -654,7 +654,7 @@ class ImageMngrTestCase(unittest.TestCase):
             'groupACL': [1003, 1004]
         }
         rec = self.m.pull(session, pr)  # ,delay=False)
-        self.assertEquals(rec['status'], 'PULLING')
+        self.assertEqual(rec['status'], 'PULLING')
 
     def test_pull_logic(self):
         """
@@ -675,7 +675,7 @@ class ImageMngrTestCase(unittest.TestCase):
         session = self.m.new_session(self.auth, self.system)
         pr = basepr.copy()
         rec = self.m.pull(session, pr)  # ,delay=False)
-        self.assertEquals(rec['status'], 'READY')
+        self.assertEqual(rec['status'], 'READY')
 
         # reset and test a re-pull of an old image
         self.images.remove({})
@@ -684,7 +684,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertIsNotNone(id)
         session = self.m.new_session(self.auth, self.system)
         rec = self.m.pull(session, pr)  # ,delay=False)
-        self.assertEquals(rec['status'], 'INIT')
+        self.assertEqual(rec['status'], 'INIT')
 
         # Re-pull of new image with ACL change
         self.images.remove({})
@@ -694,7 +694,7 @@ class ImageMngrTestCase(unittest.TestCase):
         pr['userACL'] = [1001]
         session = self.m.new_session(self.auth, self.system)
         rec = self.m.pull(session, pr)  # ,delay=False)
-        self.assertEquals(rec['status'], 'INIT')
+        self.assertEqual(rec['status'], 'INIT')
 
         # reset and test a re-pull of an old image
         self.images.remove({})
@@ -704,14 +704,14 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertIsNotNone(id)
         session = self.m.new_session(self.auth, self.system)
         rec = self.m.pull(session, pr)  # ,delay=False)
-        self.assertEquals(rec['status'], 'INIT')
+        self.assertEqual(rec['status'], 'INIT')
         # Now let's do a re-pull with ACL change.  We should
         # get back the prev rec.  The status will now be
         # pending because we do an update status
         pr['userACL'] = [1001]
         session = self.m.new_session(self.auth, self.system)
         rec2 = self.m.pull(session, pr)  # ,delay=False)
-        self.assertEquals(rec2['_id'], rec['_id'])
+        self.assertEqual(rec2['_id'], rec['_id'])
         # TODO: Need to find a way to trigger this test now.
         # self.assertEquals(rec2['status'], 'PENDING')
 
@@ -743,7 +743,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertIn('ENV', mrec)
         # Track through transistions
         state = self.time_wait(id)
-        self.assertEquals(state, 'READY')
+        self.assertEqual(state, 'READY')
         mrec = self.images.find_one(q)
         self.assertIn('ENV', mrec)
         self.assertIn('private', mrec)
@@ -755,7 +755,7 @@ class ImageMngrTestCase(unittest.TestCase):
         """
         tokens = self.read_tokens()
         if tokens is None:
-            print "Skipping private pull tests"
+            print("Skipping private pull tests")
             return
         # Use defaults for format, arch, os, ostcount, replication
         pr = {
@@ -780,7 +780,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertIn(1001, mrec['userACL'])
         # Track through transistions
         state = self.time_wait(id)
-        self.assertEquals(state, 'READY')
+        self.assertEqual(state, 'READY')
         mrec = self.images.find_one(q)
         self.assertIn('private', mrec)
         self.assertFalse(mrec['private'])
@@ -801,7 +801,7 @@ class ImageMngrTestCase(unittest.TestCase):
         # Do the pull
         tokens = self.read_tokens()
         if tokens is None:
-            print "Skipping private pull tests"
+            print("Skipping private pull tests")
             return
 
         session = self.m.new_session(self.auth, self.system)
@@ -818,7 +818,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertIn(1001, mrec['userACL'])
         # Track through transistions
         state = self.time_wait(id)
-        self.assertEquals(state, 'READY')
+        self.assertEqual(state, 'READY')
         imagerec = self.m.lookup(session, pr)
         self.assertIn('ENTRY', imagerec)
         self.assertIn('ENV', imagerec)
@@ -883,7 +883,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertIn('_id', mrec)
         # Track through transistions
         state = self.time_wait(id)
-        self.assertEquals(state, 'READY')
+        self.assertEqual(state, 'READY')
         imagerec = self.m.lookup(session, pr)
         self.assertIn('ENTRY', imagerec)
         self.assertIn('ENV', imagerec)
@@ -908,7 +908,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertIsNotNone(rec)
         time.sleep(2)
         state = self.m.get_state(id)
-        self.assertEquals(state, 'EXPIRED')
+        self.assertEqual(state, 'EXPIRED')
         self.assertFalse(os.path.exists(file))
         self.assertFalse(os.path.exists(metafile))
 
@@ -928,7 +928,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertIsNotNone(rec)
         time.sleep(2)
         state = self.m.get_state(id)
-        self.assertEquals(state, 'EXPIRED')
+        self.assertEqual(state, 'EXPIRED')
         self.assertFalse(os.path.exists(file))
         self.assertFalse(os.path.exists(metafile))
 
@@ -946,7 +946,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertIsNotNone(rec)
         time.sleep(2)
         state = self.m.get_state(id)
-        self.assertEquals(state, 'READY')
+        self.assertEqual(state, 'READY')
         self.assertTrue(os.path.exists(file))
         self.assertTrue(os.path.exists(metafile))
 
@@ -969,7 +969,7 @@ class ImageMngrTestCase(unittest.TestCase):
         session = self.m.new_session(self.authadmin, self.system)
         self.m.autoexpire(session, self.system, testmode=1)
         state = self.m.get_state(id)
-        self.assertEquals(state, 'PENDING')
+        self.assertEqual(state, 'PENDING')
 
     def test_autoexpire(self):
         record = self.good_record()
@@ -985,7 +985,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.m.autoexpire(session, self.system, testmode=1)  # ,delay=False)
         time.sleep(5)
         state = self.m.get_state(id)
-        self.assertEquals(state, 'EXPIRED')
+        self.assertEqual(state, 'EXPIRED')
         self.assertFalse(os.path.exists(file))
         self.assertFalse(os.path.exists(metafile))
 
@@ -1002,7 +1002,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.m.autoexpire(session, self.system, testmode=1)  # ,delay=False)
         time.sleep(2)
         state = self.m.get_state(id)
-        self.assertEquals(state, 'READY')
+        self.assertEqual(state, 'READY')
         self.assertTrue(os.path.exists(file))
         self.assertTrue(os.path.exists(metafile))
 
@@ -1020,7 +1020,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.m.autoexpire(session, self.system, testmode=1)  # ,delay=False)
         time.sleep(2)
         state = self.m.get_state(id)
-        self.assertEquals(state, 'READY')
+        self.assertEqual(state, 'READY')
         self.assertTrue(os.path.exists(file))
         self.assertTrue(os.path.exists(metafile))
 
@@ -1035,17 +1035,17 @@ class ImageMngrTestCase(unittest.TestCase):
         }
         # Remove everything
         self.metrics.remove({})
-        for _ in xrange(100):
+        for _ in range(100):
             rec['time'] = time.time()
             self.metrics.insert(rec.copy())
         session = self.m.new_session(self.authadmin, self.system)
         recs = self.m.get_metrics(session, self.system, 10)  # ,delay=False)
         self.assertIsNotNone(recs)
-        self.assertEquals(len(recs), 10)
+        self.assertEqual(len(recs), 10)
         # Try pulling more records than we have
         recs = self.m.get_metrics(session, self.system, 101)  # ,delay=False)
         self.assertIsNotNone(recs)
-        self.assertEquals(len(recs), 100)
+        self.assertEqual(len(recs), 100)
 
     def test_status_thread(self):
         # Stop the existing status thread
@@ -1067,7 +1067,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.m.status_queue.put('stop')
         self.m.status_thread()
         rec = self.images.find_one({'_id': id})
-        self.assertEquals(rec['status'], 'READY')
+        self.assertEqual(rec['status'], 'READY')
         # Now do a meta_only update
         # Let's add a new pull record
         record = self.good_record()
@@ -1112,7 +1112,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertIn('_id', mrec)
         # Track through transistions
         state = self.time_wait(id)
-        self.assertEquals(state, 'READY')
+        self.assertEqual(state, 'READY')
 
         # Now reppull with a different tag for the same image
         newtag = self.public.replace('latest', '1')

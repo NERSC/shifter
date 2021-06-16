@@ -195,8 +195,8 @@ class TestGPUSupport(unittest.TestCase):
     def _assert_is_subset(self, subset, superset):
         #dirty conversion to dictionaries required here
         #(there is no assertSetContainsSubset method)
-        subset_dict = dict(zip(subset, len(subset)*[None]))
-        superset_dict = dict(zip(superset, len(superset)*[None]))
+        subset_dict = dict(list(zip(subset, len(subset)*[None])))
+        superset_dict = dict(list(zip(superset, len(superset)*[None])))
         self.assertDictContainsSubset(subset_dict, superset_dict)
 
 if __name__ == "__main__":

@@ -27,7 +27,7 @@ import sys
 import subprocess
 import logging
 import tempfile
-from multiprocessing.queues import Queue
+from multiprocessing import Queue
 from multiprocessing.pool import ThreadPool
 from time import time, sleep
 from random import randint
@@ -212,7 +212,7 @@ def _pull_dockerv2(request, location, repo, tag, updater):
         dock.extract_docker_layers(expandedpath)
         return True
     except:
-        logging.warn(sys.exc_value)
+        logging.warn(sys.exc_info()[1])
         raise
 
     return False
@@ -425,7 +425,7 @@ def cleanup_temporary(request, import_image=False):
         if item not in request or request[item] is None:
             continue
         cleanitem = request[item]
-        if isinstance(cleanitem, unicode):
+        if isinstance(cleanitem, str):
             cleanitem = str(cleanitem)
 
         if not isinstance(cleanitem, str):
@@ -521,7 +521,7 @@ def pull(request, updater, testmode=0):
     except:
         logging.error("ERROR: dopull failed system=%s tag=%s",
                       request['system'], request['tag'])
-        print sys.exc_value
+        print(sys.exc_info()[1])
         updater.update_status('FAILURE', 'FAILED')
 
         # TODO: add a debugging flag and only disable cleanup if debugging
@@ -588,7 +588,7 @@ def img_import(request, updater, testmode=0):
     except:
         logging.error("ERROR: img_import failed system=%s tag=%s",
                       request['system'], request['tag'])
-        print sys.exc_value
+        print(sys.exc_info()[1])
         updater.update_status('FAILURE', 'FAILED')
 
         # TODO: add a debugging flag and only disable cleanup if debugging

@@ -116,7 +116,9 @@ def _exec_and_log(cmd, logger):
         if logger is not None:
             logger.error("Could not execute '%s'" % ' '.join(cmd))
         return
-    stdout, stderr = proc.communicate()
+    bstdout, bstderr = proc.communicate()
+    stdout = bstdout.decode("utf-8")
+    stderr = bstderr.decode("utf-8")
     if logger is not None:
         if stdout is not None and len(stdout) > 0:
             logger.debug("%s stdout: %s" % (cmd[0], stdout.strip()))
@@ -138,7 +140,9 @@ def _get_stdout_and_log(cmd, logger=None):
             logger.debug("Could not execute '%s'" % ' '.join(cmd))
             rerror = "Could not execute '%s'" % ' '.join(cmd)
         return rerror, ''
-    stdout, stderr = proc.communicate()
+    bstdout, bstderr = proc.communicate()
+    stdout = bstdout.decode("utf-8")
+    stderr = bstderr.decode("utf-8")
     if logger is not None:
         if stdout is not None and len(stdout) > 0:
             logger.debug("%s stdout: %s" % (cmd[0], stdout.strip()))
@@ -165,7 +169,9 @@ def pre_create_tempfile(basepath, filename, sh_cmd, system, logger=None):
     proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
     temp_fn = None
     if proc is not None:
-        stdout, stderr = proc.communicate()
+        bstdout, bstderr = proc.communicate()
+        stdout = bstdout.decode("utf-8")
+        stderr = bstderr.decode("utf-8")
         if proc.returncode == 0:
             temp_fn = stdout.strip()
         else:

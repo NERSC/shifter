@@ -86,7 +86,7 @@ class Dockerv2TestCase(unittest.TestCase):
                                    expanddir=expand.encode('ascii'))
 
         assert os.path.exists(resp['expandedpath'])
-        bfile = os.path.join(resp['expandedpath'], u'\ua000')
+        bfile = os.path.join(resp['expandedpath'], '\ua000')
         assert os.path.exists(resp['expandedpath'])
         assert os.path.exists(bfile)
 
