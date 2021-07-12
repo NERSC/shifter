@@ -604,6 +604,7 @@ IGNORE_TEST(ShifterCoreTestGroup, setupPerNodeCacheBackingStore_tests) {
 
     cache->fstype = strdup("xfs");
     cache->cacheSize = 200 * 1024 * 1024; // 200mb
+    cache->blockSize = 4096; // 4 KiB
 
     if (access("/sbin/mkfs.xfs", X_OK) == 0) {
         config->target_uid = getuid();

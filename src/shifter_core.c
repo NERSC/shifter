@@ -1643,9 +1643,11 @@ int setupPerNodeCacheBackingStore(VolMapPerNodeCacheConfig *cache, const char *b
         }
         args = (char **) _malloc(sizeof(char *) * 4);
         args[0] = _strdup(udiConfig->mkfsXfsPath);
-        args[1] = _strdup("-d");
-        args[2] = alloc_strgenf("name=%s,file=1,size=%lu", buffer, cache->cacheSize);
-        args[3] = NULL;
+        args[1] = _strdup("-b");
+        args[2] = alloc_strgenf("size=%lu", cache->blockSize);
+        args[3] = _strdup("-d");
+        args[4] = alloc_strgenf("name=%s,file=1,size=%lu", buffer, cache->cacheSize);
+        args[5] = NULL;
         ret = forkAndExecvSilent(args);
         for (argPtr = args; argPtr && *argPtr; argPtr++) {
             free(*argPtr);
