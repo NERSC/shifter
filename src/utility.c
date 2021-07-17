@@ -396,7 +396,7 @@ char *userInputPathFilter(const char *input, int allowSlash) {
     rptr = input;
     wptr = ret;
     while (wptr - ret < len && *rptr != 0) {
-        if (isalnum(*rptr) || *rptr == '_' || *rptr == ':' || *rptr == '.' || *rptr == '+' || *rptr == '-') {
+        if (isalnum(*rptr) || *rptr == '_' || *rptr == ':' || *rptr == '.' || *rptr == '+' || *rptr == '-' || *rptr == '#') {
             *wptr++ = *rptr;
         }
         if (allowSlash && *rptr == '/') {
