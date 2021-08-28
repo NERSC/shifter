@@ -20,7 +20,6 @@
 This module provides the worker function for the image gateway.
 """
 
-import json
 import os
 import shutil
 import sys
@@ -31,36 +30,15 @@ from multiprocessing import Queue
 from multiprocessing.pool import ThreadPool
 from time import time, sleep
 from random import randint
-from shifter_imagegw import CONFIG_PATH, converters, transfer
+from shifter_imagegw import converters, transfer
 from shifter_imagegw.dockerv2 import DockerV2Handle as DockerV2
 from shifter_imagegw.dockerv2_ext import DockerV2ext
 
-CONFIG = None
-
-if 'GWCONFIG' in os.environ:
-    CONFIGFILE = os.environ['GWCONFIG']
-else:
-    CONFIGFILE = '%s/imagemanager.json' % (CONFIG_PATH)
 
 if 'SERVER_SOFTWARE' in os.environ:
     # Make flask logging work with gunicorn
     gunicorn_error_logger = logging.getLogger('gunicorn.error')
     logging = gunicorn_error_logger
-
-logging.info("Opening %s", CONFIGFILE)
-
-with open(CONFIGFILE) as configfile:
-    CONFIG = json.load(configfile)
-
-if 'CacheDirectory' in CONFIG:
-    if not os.path.exists(CONFIG['CacheDirectory']):
-        os.mkdir(CONFIG['CacheDirectory'])
-if 'ExpandDirectory' in CONFIG:
-    if not os.path.exists(CONFIG['ExpandDirectory']):
-        os.mkdir(CONFIG['ExpandDirectory'])
-if 'ConvertOptions' in CONFIG and \
-   not isinstance(CONFIG['ConverterOptions'], dict):
-    raise ValueError('ConverterOptions must be a dictionary')
 
 
 class Updater(object):
@@ -82,12 +60,22 @@ class Updater(object):
 
 
 class WorkerThreads(object):
-    def __init__(self, threads=1):
+    def __init__(self, conf, threads=1):
         """
         Initialize the thread pool and queues.
         """
         self.pools = ThreadPool(processes=threads)
         self.updater_queue = Queue()
+        self.conf = conf
+        if 'CacheDirectory' in conf:
+            if not os.path.exists(conf['CacheDirectory']):
+                os.mkdir(conf['CacheDirectory'])
+        if 'ExpandDirectory' in conf:
+            if not os.path.exists(conf['ExpandDirectory']):
+                os.mkdir(conf['ExpandDirectory'])
+        if 'ConvertOptions' in conf and \
+           not isinstance(conf['ConverterOptions'], dict):
+            raise ValueError('ConverterOptions must be a dictionary')
 
     def get_updater_queue(self):
         return self.updater_queue
@@ -100,7 +88,8 @@ class WorkerThreads(object):
 
     def pull(self, request, updater, testmode=0):
         try:
-            pull(request, updater, testmode=testmode)
+            req = ImageRequest(self.conf, request, updater)
+            req.pull(testmode=testmode)
         except Exception as err:
             resp = {'error_type': str(type(err)),
                     'message': str(err)}
@@ -109,7 +98,8 @@ class WorkerThreads(object):
 
     def expire(self, request, updater):
         try:
-            remove_image(request, updater)
+            req = ImageRequest(self.conf, request, updater)
+            req.remove_image()
         except Exception as err:
             resp = {'error_type': str(type(err)),
                     'message': str(err)}
@@ -117,7 +107,8 @@ class WorkerThreads(object):
 
     def wrkimport(self, request, updater, testmode=0):
         try:
-            img_import(request, updater, testmode=testmode)
+            req = ImageRequest(self.conf, request, updater)
+            req.img_import(testmode=testmode)
         except Exception as err:
             resp = {'error_type': str(type(err)),
                     'message': str(err)}
@@ -142,455 +133,451 @@ class WorkerThreads(object):
                                {'testmode': testmode})
 
 
-def _get_cacert(location):
-    """ Private method to get the cert location """
-    params = CONFIG['Locations'][location]
-    cacert = None
-    currdir = os.getcwd()
-    if 'sslcacert' in params:
-        if params['sslcacert'].startswith('/'):
-            cacert = params['sslcacert']
-        else:
-            cacert = '%s/%s' % (currdir, params['sslcacert'])
-        if not os.path.exists(cacert):
-            raise OSError('%s does not exist' % cacert)
-    return cacert
+class ImageRequest(object):
+    def __init__(self, conf, request, updater):
+        self.conf = conf
+        self.request = request
+        self.updater = updater
+        self.fmt = self.conf['DefaultImageFormat']
+        if 'format' in self.request:
+            self.fmt = self.request['format']
+        self.system = self.request['system']
+        if self.system not in self.conf['Platforms']:
+            raise KeyError('%s is not in the configuration' %
+                           self.system)
+        self.sysconf = self.conf['Platforms'][self.system]
+        self.tag = request.get('tag')
+        self.id = request.get('id')
+        self.meta = None
+        self.meta_only = False
+        self.metafile = None
+        self.expandedpath = None
+        self.imagefile = None
+        self.filepath = request.get('filepath')
 
+    def _get_cacert(self, location):
+        """ Private method to get the cert location """
+        params = self.conf['Locations'][location]
+        cacert = None
+        currdir = os.getcwd()
+        if 'sslcacert' in params:
+            if params['sslcacert'].startswith('/'):
+                cacert = params['sslcacert']
+            else:
+                cacert = '%s/%s' % (currdir, params['sslcacert'])
+            if not os.path.exists(cacert):
+                raise OSError('%s does not exist' % cacert)
+        return cacert
 
-def _pull_dockerv2(request, location, repo, tag, updater):
-    """ Private method to pull a docker images. """
-    cdir = CONFIG['CacheDirectory']
-    edir = CONFIG['ExpandDirectory']
-    params = CONFIG['Locations'][location]
-    cacert = _get_cacert(location)
+    def _pull_dockerv2(self, location, repo, tag):
+        """ Private method to pull a docker images. """
+        cdir = self.conf['CacheDirectory']
+        edir = self.conf['ExpandDirectory']
+        params = self.conf['Locations'][location]
+        cacert = self._get_cacert(location)
+        request = self.request
 
-    url = 'https://%s' % location
-    if 'url' in params:
-        url = params['url']
-    try:
-        options = {}
-        if cacert is not None:
-            options['cacert'] = cacert
-        options['baseUrl'] = url
-        if 'authMethod' in params:
-            options['authMethod'] = params['authMethod']
+        url = 'https://%s' % location
+        if 'url' in params:
+            url = params['url']
+        try:
+            options = {}
+            if cacert is not None:
+                options['cacert'] = cacert
+            options['baseUrl'] = url
+            if 'authMethod' in params:
+                options['authMethod'] = params['authMethod']
 
-        if ('session' in request and 'tokens' in request['session'] and
-                request['session']['tokens']):
-            if location in request['session']['tokens']:
-                userpass = request['session']['tokens'][location]
-                options['username'] = userpass.split(':')[0]
-                options['password'] = ''.join(userpass.split(':')[1:])
-            elif ('default' in request['session']['tokens']):
-                userpass = request['session']['tokens']['default']
-                options['username'] = userpass.split(':')[0]
-                options['password'] = ''.join(userpass.split(':')[1:])
-        imgid = '%s:%s' % (repo, tag)
-        system = request['system']
-        if system not in CONFIG['Platforms']:
-            raise KeyError('%s is not in the configuration' % system)
-        sysconf = CONFIG['Platforms'][system]
-        if sysconf.get('use_external'):
-            options['policy_file'] = sysconf.get("policy_file")
-            dock = DockerV2ext(imgid, options, updater=updater, cachedir=cdir)
-        else:
-            dock = DockerV2(imgid, options, updater=updater, cachedir=cdir)
-        updater.update_status("PULLING", 'Getting manifest')
-        request['meta'] = dock.examine_manifest()
-        request['id'] = str(request['meta']['id'])
+            if ('session' in request and 'tokens' in request['session'] and
+                    request['session']['tokens']):
+                if location in request['session']['tokens']:
+                    userpass = request['session']['tokens'][location]
+                    options['username'] = userpass.split(':')[0]
+                    options['password'] = ''.join(userpass.split(':')[1:])
+                elif ('default' in request['session']['tokens']):
+                    userpass = request['session']['tokens']['default']
+                    options['username'] = userpass.split(':')[0]
+                    options['password'] = ''.join(userpass.split(':')[1:])
+            imgid = '%s:%s' % (repo, tag)
+            if self.sysconf.get('use_external'):
+                options['policy_file'] = self.sysconf.get("policy_file")
+                dock = DockerV2ext(imgid, options, updater=self.updater,
+                                   cachedir=cdir)
+            else:
+                dock = DockerV2(imgid, options, updater=self.updater,
+                                cachedir=cdir)
+            self.updater.update_status("PULLING", 'Getting manifest')
+            self.meta = dock.examine_manifest()
+            # Get the ID
+            self.id = str(self.meta['id'])
 
-        if check_image(request):
+            if self._check_image():
+                return True
+
+            dock.pull_layers()
+
+            self.expandedpath = tempfile.mkdtemp(suffix='extract',
+                                            prefix=self.id, dir=edir)
+
+            self.updater.update_status("PULLING", 'Extracting Layers')
+            dock.extract_docker_layers(self.expandedpath)
             return True
+        except:
+            logging.warn(sys.exc_info()[1])
+            raise
 
-        dock.pull_layers()
+        return False
 
-        expandedpath = tempfile.mkdtemp(suffix='extract',
-                                        prefix=request['id'], dir=edir)
-        request['expandedpath'] = expandedpath
+    def _pull_image(self):
+        """
+        pull the image down and extract the contents
 
-        updater.update_status("PULLING", 'Extracting Layers')
-        dock.extract_docker_layers(expandedpath)
+        Returns True on success
+        """
+        params = None
+        rtype = None
+
+        # See if there is a location specified
+        location = self.conf['DefaultImageLocation']
+        tag = self.tag
+        if tag.find('/') > 0:
+            parts = tag.split('/')
+            if parts[0] in self.conf['Locations']:
+                # This is a location
+                location = parts[0]
+                tag = '/'.join(parts[1:])
+
+        parts = tag.split(':')
+        if len(parts) == 2:
+            (repo, tag) = parts
+        else:
+            raise OSError('Unable to parse tag %s' % self.tag)
+        logging.debug("doing image pull for loc=%s repo=%s tag=%s", location,
+                      repo, tag)
+
+        if location in self.conf['Locations']:
+            params = self.conf['Locations'][location]
+            rtype = params['remotetype']
+        else:
+            raise KeyError('%s not found in configuration' % location)
+
+        if rtype == 'dockerv2':
+            return self._pull_dockerv2(location, repo, tag)
+        elif rtype == 'dockerhub':
+            logging.warning("Use of depcreated dockerhub type")
+            msg = 'dockerhub type is depcreated. Use dockerv2'
+            raise NotImplementedError(msg)
+        else:
+            raise NotImplementedError('Unsupported remote type %s' % rtype)
+        return False
+
+    def _examine_image(self):
+        """
+        examine the image
+
+        Returns True on success
+        """
+
+        if 'examiner' in self.conf:
+            examiner = self.conf['examiner']
+            retcode = subprocess.call([examiner, self.expandedpath,
+                                      self.id])
+            if retcode != 0:
+                return False
+
         return True
-    except:
-        logging.warn(sys.exc_info()[1])
-        raise
 
-    return False
+    def _convert_image(self):
+        """
+        Convert the image to the required format for the target system
 
+        Returns True on success
+        """
+        edir = self.conf['ExpandDirectory']
+        if 'ConverterOptions' in self.conf:
+            opts = self.conf['ConverterOptions']
+        else:
+            opts = None
 
-def pull_image(request, updater):
-    """
-    pull the image down and extract the contents
+        imagefile = os.path.join(edir, '%s.%s' % (self.id,
+                                                  self.fmt))
+        self.imagefile = imagefile
+        print(self.expandedpath)
 
-    Returns True on success
-    """
-    params = None
-    rtype = None
+        status = converters.convert(self.fmt,
+                                    self.expandedpath,
+                                    imagefile, options=opts)
+        return status
 
-    # See if there is a location specified
-    location = CONFIG['DefaultImageLocation']
-    tag = request['tag']
-    if tag.find('/') > 0:
-        parts = tag.split('/')
-        if parts[0] in CONFIG['Locations']:
-            # This is a location
-            location = parts[0]
-            tag = '/'.join(parts[1:])
+    def _write_metadata(self):
+        """
+        Write out the metadata file
 
-    parts = tag.split(':')
-    if len(parts) == 2:
-        (repo, tag) = parts
-    else:
-        raise OSError('Unable to parse tag %s' % request['tag'])
-    logging.debug("doing image pull for loc=%s repo=%s tag=%s", location,
-                  repo, tag)
+        Returns True on success
+        """
+        if 'userACL' in self.request:
+            self.meta['userACL'] = self.request['userACL']
+        if 'groupACL' in self.request:
+            self.meta['groupACL'] = self.request['groupACL']
 
-    if location in CONFIG['Locations']:
-        params = CONFIG['Locations'][location]
-        rtype = params['remotetype']
-    else:
-        raise KeyError('%s not found in configuration' % location)
+        edir = self.conf['ExpandDirectory']
 
-    if rtype == 'dockerv2':
-        return _pull_dockerv2(request, location, repo, tag, updater)
-    elif rtype == 'dockerhub':
-        logging.warning("Use of depcreated dockerhub type")
-        raise NotImplementedError('dockerhub type is depcreated. Use dockerv2')
-    else:
-        raise NotImplementedError('Unsupported remote type %s' % rtype)
-    return False
+        # initially write metadata to tempfile
+        (fdesc, metafile) = tempfile.mkstemp(prefix=self.id,
+                                             suffix='meta',
+                                             dir=edir)
+        os.close(fdesc)
+        self.metafile = metafile
 
+        status = converters.writemeta(self.fmt, self.meta, metafile)
 
-def examine_image(request):
-    """
-    examine the image
+        # after success move to final name
+        final_metafile = os.path.join(edir, '%s.meta' % (self.id))
+        shutil.move(metafile, final_metafile)
+        self.metafile= final_metafile
 
-    Returns True on success
-    """
+        return status
 
-    if 'examiner' in CONFIG:
-        examiner = CONFIG['examiner']
-        retcode = subprocess.call([examiner, request['expandedpath'],
-                                   request['id']])
-        if retcode != 0:
-            return False
+    def _check_image(self):
+        """
+        Checks if the target image is on the target system
 
-    return True
+        Returns True on success
+        """
+        image_filename = "%s.%s" % (self.id, self.fmt)
+        image_metadata = "%s.meta" % (self.id)
 
+        return transfer.imagevalid(self.sysconf, image_filename, image_metadata,
+                                   logging)
 
-def get_image_format(request):
-    """
-    Retreive the image format for the reuqest using a default if not provided.
-    """
-    fmt = CONFIG['DefaultImageFormat']
-    if fmt in request:
-        fmt = request['format']
+    def _transfer_image(self, import_image=False):
+        """
+        Transfers the image to the target system based on the configuration.
 
-    return fmt
+        Returns True on success
+        """
+        if self.meta_only:
+            return transfer.transfer(self.sysconf, None, self.metafile, logging)
+        else:
+            if not import_image:
+                return transfer.transfer(self.sysconf,
+                                         self.imagefile,
+                                         self.metafile,
+                                         logging, import_image)
+            else:
+                return transfer.transfer(self.sysconf,
+                                         self.filepath,
+                                         self.metafile,
+                                         logging,
+                                         import_image,
+                                         self.imagefile)
 
+    def remove_image(self):
+        """
+        Remove the image to the target system based on the configuration.
 
-def convert_image(request):
-    """
-    Convert the image to the required format for the target system
+        Returns True on success
+        """
+        logging.debug("do expire system=%s tag=%s", self.system,
+                      self.tag)
+        self.updater.update_status('EXPIRING', 'EXPIRING')
 
-    Returns True on success
-    """
-    fmt = get_image_format(request)
-    request['format'] = fmt
+        imagefile = self.id + '.' + self.fmt
+        meta = self.id + '.meta'
+        if self.metafile:
+            meta = self.metafile
+        if transfer.remove(self.sysconf, imagefile, meta, logging):
+            self.updater.update_status('EXPIRED', 'EXPIRED')
+        else:
+            logging.warn("Worker: Expire failed")
+            raise OSError('Expire failed')
 
-    edir = CONFIG['ExpandDirectory']
-    if 'ConverterOptions' in CONFIG:
-        opts = CONFIG['ConverterOptions']
-    else:
-        opts = None
-
-    imagefile = os.path.join(edir, '%s.%s' % (request['id'], fmt))
-    request['imagefile'] = imagefile
-
-    status = converters.convert(fmt, request['expandedpath'], imagefile,
-                                options=opts)
-    return status
-
-
-def write_metadata(request):
-    """
-    Write out the metadata file
-
-    Returns True on success
-    """
-    fmt = request['format']
-    meta = request['meta']
-    if 'userACL' in request:
-        meta['userACL'] = request['userACL']
-    if 'groupACL' in request:
-        meta['groupACL'] = request['groupACL']
-
-    edir = CONFIG['ExpandDirectory']
-
-    # initially write metadata to tempfile
-    (fdesc, metafile) = tempfile.mkstemp(prefix=request['id'], suffix='meta',
-                                         dir=edir)
-    os.close(fdesc)
-    request['metafile'] = metafile
-
-    status = converters.writemeta(fmt, meta, metafile)
-
-    # after success move to final name
-    final_metafile = os.path.join(edir, '%s.meta' % (request['id']))
-    shutil.move(metafile, final_metafile)
-    request['metafile'] = final_metafile
-
-    return status
-
-
-def check_image(request):
-    """
-    Checks if the target image is on the target system
-
-    Returns True on success
-    """
-    system = request['system']
-    if system not in CONFIG['Platforms']:
-        raise KeyError('%s is not in the configuration' % system)
-    sysconf = CONFIG['Platforms'][system]
-
-    fmt = get_image_format(request)
-    image_filename = "%s.%s" % (request['id'], fmt)
-    image_metadata = "%s.meta" % (request['id'])
-
-    return transfer.imagevalid(sysconf, image_filename, image_metadata,
-                               logging)
-
-
-def transfer_image(request, meta_only=False, import_image=False):
-    """
-    Transfers the image to the target system based on the configuration.
-
-    Returns True on success
-    """
-    system = request['system']
-    if system not in CONFIG['Platforms']:
-        raise KeyError('%s is not in the configuration' % system)
-    sysconf = CONFIG['Platforms'][system]
-    meta = None
-    if 'metafile' in request:
-        meta = request['metafile']
-    if meta_only:
-        request['meta']['meta_only'] = True
-        return transfer.transfer(sysconf, None, meta, logging)
-    else:
+    def _cleanup_temporary(self, import_image=False):
+        """
+        Helper function to cleanup any temporary files or directories.
+        """
         if not import_image:
-            return transfer.transfer(sysconf, request['imagefile'], meta,
-                                     logging, import_image)
+            items = (self.expandedpath,
+                     self.imagefile,
+                     self.metafile)
         else:
-            return transfer.transfer(sysconf, request['filepath'], meta,
-                                     logging, import_image,
-                                     request['imagefile'])
+            items = (self.expandedpath,
+                     self.metafile)
+        for cleanitem in items:
+            if cleanitem is None:
+                continue
+            if isinstance(cleanitem, str):
+                cleanitem = str(cleanitem)
 
+            if not isinstance(cleanitem, str):
+                raise ValueError('Invalid type for %s,%s' %
+                                 (cleanitem, type(cleanitem)))
+            if cleanitem == '' or cleanitem == '/':
+                raise ValueError('Invalid value for %s: %s' %
+                                 (cleanitem, cleanitem))
+            if not cleanitem.startswith(self.conf['ExpandDirectory']):
+                raise ValueError('Invalid location for %s: %s' %
+                                 (cleanitem, cleanitem))
+            if os.path.exists(cleanitem):
+                logging.info("Worker: removing %s", cleanitem)
+                try:
+                    subprocess.call(['chmod', '-R', 'u+w', cleanitem])
+                    if os.path.isdir(cleanitem):
+                        shutil.rmtree(cleanitem, ignore_errors=True)
+                    else:
+                        os.unlink(cleanitem)
+                except:
+                    logging.error("Worker: caught exception while trying to "
+                                  "clean up (%s) %s.", item, cleanitem)
 
-def remove_image(request, updater):
-    """
-    Remove the image to the target system based on the configuration.
+    def pull(self, testmode=0):
+        """
+        Main task to do the full workflow of pulling an image and transferring
+        it
+        """
+        tag = self.tag
+        logging.debug("dopull system=%s tag=%s", self.system, tag)
+        if testmode == 1:
+            states = ('PULLING', 'EXAMINATION', 'CONVERSION', 'TRANSFER')
+            for state in states:
+                logging.info("Worker: testmode Updating to %s", state)
+                self.updater.update_status(state, state)
+                sleep(1)
+            ident = '%x' % randint(0, 100000)
+            ret = {
+                'id': ident,
+                'entrypoint': ['./blah'],
+                'workdir': '/root',
+                'env': ['FOO=bar', 'BAZ=boz']
+            }
+            state = 'READY'
+            self.updater.update_status(state, state, ret)
+            return ret
+        elif testmode == 2:
+            logging.info("Worker: testmode 2 setting failure")
+            raise OSError('task failed')
+        try:
+            # Step 1 - Do the pull
+            self.updater.update_status('PULLING', 'PULLING')
+            logging.debug(self.request)
+            if not self._pull_image():
+                logging.info("Worker: Pull failed")
+                raise OSError('Pull failed')
 
-    Returns True on success
-    """
-    logging.debug("do expire system=%s tag=%s", request['system'],
-                  request['tag'])
-    updater.update_status('EXPIRING', 'EXPIRING')
+            if not self.meta:
+                raise OSError('Metadata not populated')
 
-    system = request['system']
-    if system not in CONFIG['Platforms']:
-        raise KeyError('%s is not in the configuration' % system)
-    sysconf = CONFIG['Platforms'][system]
-    imagefile = request['id'] + '.' + request['format']
-    meta = request['id'] + '.meta'
-    if 'metafile' in request:
-        meta = request['metafile']
-    if transfer.remove(sysconf, imagefile, meta, logging):
-        updater.update_status('EXPIRED', 'EXPIRED')
-    else:
-        logging.warn("Worker: Expire failed")
-        raise OSError('Expire failed')
+            if not self._check_image():
+                # Step 2 - Check the image
+                self.updater.update_status('EXAMINATION', 'Examining image')
+                logging.debug("Worker: examining image %s" % tag)
+                if not self._examine_image():
+                    raise OSError('Examine failed')
+                # Step 3 - Convert
+                self.updater.update_status('CONVERSION', 'Converting image')
+                logging.debug("Worker: converting image %s" % tag)
+                if not self._convert_image():
+                    raise OSError('Conversion failed')
+                if not self._write_metadata():
+                    raise OSError('Metadata creation failed')
+                # Step 4 - TRANSFER
+                self.updater.update_status('TRANSFER', 'Transferring image')
+                logging.debug("Worker: transferring image %s", tag)
+                if not self._transfer_image():
+                    raise OSError('Transfer failed')
+            else:
+                self.meta_only = True
+                self.meta['meta_only'] = True
+                logging.debug("Updating metdata for %s" %
+                              (self.tag))
+                if not self._write_metadata():
+                    raise OSError('Metadata creation failed')
+                self.updater.update_status('TRANSFER', 'Transferring metadata')
+                logging.debug("Worker: transferring metadata %s",
+                              self.tag)
+                if not self._transfer_image():
+                    raise OSError('Transfer failed')
 
+            # Done
+            self.updater.update_status('READY', 'Image ready',
+                                       response=self.meta)
+            self._cleanup_temporary()
+            return self.meta
 
-def cleanup_temporary(request, import_image=False):
-    """
-    Helper function to cleanup any temporary files or directories.
-    """
-    if not import_image:
-        items = ('expandedpath', 'imagefile', 'metafile')
-    else:
-        items = ('expandedpath', 'metafile')
-    for item in items:
-        if item not in request or request[item] is None:
-            continue
-        cleanitem = request[item]
-        if isinstance(cleanitem, str):
-            cleanitem = str(cleanitem)
+        except:
+            logging.error("ERROR: dopull failed system=%s tag=%s",
+                          self.system, self.tag)
+            print(sys.exc_info()[1])
+            self.updater.update_status('FAILURE', 'FAILED')
 
-        if not isinstance(cleanitem, str):
-            raise ValueError('Invalid type for %s,%s' %
-                             (item, type(cleanitem)))
-        if cleanitem == '' or cleanitem == '/':
-            raise ValueError('Invalid value for %s: %s' % (item, cleanitem))
-        if not cleanitem.startswith(CONFIG['ExpandDirectory']):
-            raise ValueError('Invalid location for %s: %s' % (item, cleanitem))
-        if os.path.exists(cleanitem):
-            logging.info("Worker: removing %s", cleanitem)
-            try:
-                subprocess.call(['chmod', '-R', 'u+w', cleanitem])
-                if os.path.isdir(cleanitem):
-                    shutil.rmtree(cleanitem, ignore_errors=True)
-                else:
-                    os.unlink(cleanitem)
-            except:
-                logging.error("Worker: caught exception while trying to "
-                              "clean up (%s) %s.", item, cleanitem)
+            # TODO: add a debugging flag and only disable cleanup if debugging
+            self._cleanup_temporary()
+            raise
 
-
-def pull(request, updater, testmode=0):
-    """
-    Main task to do the full workflow of pulling an image and transferring it
-    """
-    tag = request['tag']
-    logging.debug("dopull system=%s tag=%s", request['system'], tag)
-    if testmode == 1:
-        states = ('PULLING', 'EXAMINATION', 'CONVERSION', 'TRANSFER')
-        for state in states:
-            logging.info("Worker: testmode Updating to %s", state)
-            updater.update_status(state, state)
-            sleep(1)
-        ident = '%x' % randint(0, 100000)
-        ret = {
-            'id': ident,
-            'entrypoint': ['./blah'],
-            'workdir': '/root',
-            'env': ['FOO=bar', 'BAZ=boz']
-        }
-        state = 'READY'
-        updater.update_status(state, state, ret)
-        return ret
-    elif testmode == 2:
-        logging.info("Worker: testmode 2 setting failure")
-        raise OSError('task failed')
-    try:
-        # Step 1 - Do the pull
-        updater.update_status('PULLING', 'PULLING')
-        logging.debug(request)
-        if not pull_image(request, updater=updater):
-            logging.info("Worker: Pull failed")
-            raise OSError('Pull failed')
-
-        if 'meta' not in request:
-            raise OSError('Metadata not populated')
-
-        if not check_image(request):
-            # Step 2 - Check the image
-            updater.update_status('EXAMINATION', 'Examining image')
-            logging.debug("Worker: examining image %s" % tag)
-            if not examine_image(request):
-                raise OSError('Examine failed')
-            # Step 3 - Convert
-            updater.update_status('CONVERSION', 'Converting image')
-            logging.debug("Worker: converting image %s" % tag)
-            if not convert_image(request):
-                raise OSError('Conversion failed')
-            if not write_metadata(request):
+    def img_import(self, testmode=0):
+        """
+        Task to do the full workflow of copying an image and processing it
+        """
+        tag = self.tag
+        logging.debug("img_import system=%s tag=%s",
+                      self.system, tag)
+        if testmode == 1:
+            states = ('HASHING', 'TRANSFER', 'READY')
+            for state in states:
+                logging.info("Worker: testmode Updating to %s", state)
+                self.updater.update_status(state, state)
+                sleep(1)
+            ident = '%x' % randint(0, 100000)
+            ret = {
+                'id': ident,
+                'entrypoint': ['./blah'],
+                'workdir': '/root',
+                'env': ['FOO=bar', 'BAZ=boz']
+            }
+            state = 'READY'
+            self.updater.update_status(state, state, ret)
+            return ret
+        try:
+            # Step 0 - Check if path is valid
+            if not transfer.check_file(self.request["filepath"], self.sysconf,
+                                       logging, import_image=True):
+                raise OSError('Path not valid')
+            # Step 1 - Calculate the hash of the file
+            logging.debug("starting import hashing")
+            self.updater.update_status('HASHING', 'HASHING')
+            self.id = transfer.hash_file(self.filepath,
+                                         self.sysconf, logging)
+            # Step 2 - Populate the metadata file
+            logging.debug("starting writing metadata")
+            if not self.meta:
+                raise OSError('Metadata not populated')
+            self.meta['format'] = self.fmt
+            self.meta['user'] = self.request['session']['user']
+            if not self.write_metadata():
+                logging.info("Writing metadata")
                 raise OSError('Metadata creation failed')
-            # Step 4 - TRANSFER
-            updater.update_status('TRANSFER', 'Transferring image')
-            logging.debug("Worker: transferring image %s", tag)
-            if not transfer_image(request):
-                raise OSError('Transfer failed')
-        else:
-            logging.debug("Updating metdata for %s" % (request['tag']))
-            request['format'] = get_image_format(request)
+            # Step 3 - Copy image and meta file from user space to shifter area
+            logging.debug("starting transfer")
+            imgfile = self.id + '.' + self.fmt
+            self.imagefile = imgfile
+            self.meta['id'] = self.id
+            self.updater.update_status('TRANSFER', 'TRANSFER')
+            if not self._transfer_image(import_image=True):
+                logging.warn("Worker: Import copy failed")
+                raise OSError("Import copy failed")
 
-            if not write_metadata(request):
-                raise OSError('Metadata creation failed')
-            updater.update_status('TRANSFER', 'Transferring metadata')
-            logging.debug("Worker: transferring metadata %s", request['tag'])
-            if not transfer_image(request, meta_only=True):
-                raise OSError('Transfer failed')
+            # Done
+            self.updater.update_status('READY', 'Image ready',
+                                       response=self.meta)
+            self._cleanup_temporary(import_image=True)
+            return self.meta
 
-        # Done
-        updater.update_status('READY', 'Image ready', response=request['meta'])
-        cleanup_temporary(request)
-        return request['meta']
+        except:
+            logging.error("ERROR: img_import failed system=%s tag=%s",
+                          self.system, self.tag)
+            print(sys.exc_info()[1])
+            self.updater.update_status('FAILURE', 'FAILED')
 
-    except:
-        logging.error("ERROR: dopull failed system=%s tag=%s",
-                      request['system'], request['tag'])
-        print(sys.exc_info()[1])
-        updater.update_status('FAILURE', 'FAILED')
-
-        # TODO: add a debugging flag and only disable cleanup if debugging
-        cleanup_temporary(request)
-        raise
-
-
-def img_import(request, updater, testmode=0):
-    """
-    Task to do the full workflow of copying an image and processing it
-    """
-    tag = request['tag']
-    logging.debug("img_import system=%s tag=%s", request['system'], tag)
-    if testmode == 1:
-        states = ('HASHING', 'TRANSFER', 'READY')
-        for state in states:
-            logging.info("Worker: testmode Updating to %s", state)
-            updater.update_status(state, state)
-            sleep(1)
-        ident = '%x' % randint(0, 100000)
-        ret = {
-            'id': ident,
-            'entrypoint': ['./blah'],
-            'workdir': '/root',
-            'env': ['FOO=bar', 'BAZ=boz']
-        }
-        state = 'READY'
-        updater.update_status(state, state, ret)
-        return ret
-    try:
-        # Step 0 - Check if path is valid
-        sysconf = CONFIG['Platforms'][request['system']]
-        if not transfer.check_file(request["filepath"], sysconf, logging,
-                                   import_image=True):
-            raise OSError('Path not valid')
-        # Step 1 - Calculate the hash of the file
-        logging.debug("starting import hashing")
-        updater.update_status('HASHING', 'HASHING')
-        request['id'] = transfer.hash_file(request['filepath'], sysconf,
-                                           logging)
-        # Step 2 - Populate the metadata file
-        logging.debug("starting writing metadata")
-        if 'meta' not in request:
-            raise OSError('Metadata not populated')
-        request['meta']['format'] = request['format']
-        request['meta']['user'] = request['session']['user']
-        if not write_metadata(request):
-            logging.info("Writing metadata")
-            raise OSError('Metadata creation failed')
-        # Step 3 - Copy image and meta file from user space to shifter area
-        logging.debug("starting transfer")
-        request['imagefile'] = request['id']+'.'+request['format']
-        request['meta']['id'] = request['id']
-        updater.update_status('TRANSFER', 'TRANSFER')
-        if not transfer_image(request, import_image=True):
-            logging.warn("Worker: Import copy failed")
-            raise OSError("Import copy failed")
-
-        # Done
-        updater.update_status('READY', 'Image ready', response=request['meta'])
-        cleanup_temporary(request, import_image=True)
-        return request['meta']
-
-    except:
-        logging.error("ERROR: img_import failed system=%s tag=%s",
-                      request['system'], request['tag'])
-        print(sys.exc_info()[1])
-        updater.update_status('FAILURE', 'FAILED')
-
-        # TODO: add a debugging flag and only disable cleanup if debugging
-        cleanup_temporary(request)
-        raise
+            # TODO: add a debugging flag and only disable cleanup if debugging
+            self.cleanup_temporary(self.request)
+            raise
