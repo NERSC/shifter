@@ -13,7 +13,7 @@ testprep: test/config/ssh.key test/config/munge.key
 	docker volume inspect imagegw || docker volume create --name imagegw
 
 startdeps:
-	docker run -d --name mongot -p 27017:27017 mongo --smallfiles
+	docker run -d --name mongot -p 27017:27017 mongo
 
 starttest: testprep
 	docker build -t imagegwapi .

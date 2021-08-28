@@ -7,52 +7,25 @@
     "DefaultImageFormat": "squashfs",
     "PullUpdateTimeout": 300,
     "ImageExpirationTimeout": "90:00:00:00",
-    "CacheDirectory": "/data/",
-    "ExpandDirectory": "/data/",
     "MongoDBURI":"mongodb://mongo/",
-    "MongoDB":"ShifterTest",
-    "Broker":"redis://:mypassword@redis/",
-    "Authentication":"munge",
-    "ImportUsers":"all",
-
+    "MongoDB":"Shifter",
+    "CacheDirectory": "/images/cache/",
+    "ExpandDirectory": "/images/expand/",
     "Locations": {
         "index.docker.io": {
             "remotetype": "dockerv2",
             "authentication": "http"
-        },
-        "registry": {
-            "remotetype": "dockerv2",
-            "url" : "http://registry:5000/",
-            "authentication": "http"
         }
     },
-
     "Platforms": {
-        "systema": {
-            "mungeSocketPath": "/var/run/munge/systema.socket",
-            "usergroupService": "ldap",
-            "accesstype": "remote",
-            "admins": "root",
-            "mountCommand": "/bin/mount",
-            "host": [
-                "systema"
-            ],
-            "ssh": {
-                "username": "root",
-                "key": "/config/ssh.key",
-                "imageDir": "/images/"
-            },
-            "ldap": {
-                "userBase": "ou=People,ou=system,ou=Host,o=ldapsvc,dc=nersc,dc=gov",
-                "groupBase": "ou=PosixGroup,ou=system,ou=Host,o=ldapsvc,dc=nersc,dc=gov"
-            }
-        },
-        "systemb": {
-            "mungeSocketPath": "/var/run/munge/systemb.socket",
+        "mycluster": {
+            "mungeSocketPath": "/var/run/munge/munge.socket.2",
             "accesstype": "local",
+            "admins": ["root"],
+            "use_external": true,
             "usergroupService": "local",
             "local": {
-                "imageDir": "/images/systemb"
+                "imageDir": "/images"
             }
         }
     }

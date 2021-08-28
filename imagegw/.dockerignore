@@ -2,3 +2,5 @@ test.json
 docker-compose.yml
 test/config
 *.pyc
+private
+*__pycache__*
