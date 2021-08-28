@@ -391,7 +391,7 @@ class DockerV2Handle(object):
         if creds and self.username is not None and self.password is not None:
             self.private = True
             auth = '%s:%s' % (self.username, self.password)
-            headers['Authorization'] = 'Basic %s' % base64.b64encode(auth)
+            headers['Authorization'] = 'Basic %s' % base64.b64encode(auth.encode())
 
         match_obj = re.match(r'(https?)://(.*?)(/.*)', auth_data['realm'])
         if match_obj is None:
