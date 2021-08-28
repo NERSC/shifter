@@ -6,7 +6,7 @@
 #        If you are looking to build an image for the gateway.  Look at the Dockerfile
 #        in imagegw/src.
 
-FROM ubuntu:14.04
+FROM ubuntu:18.04
 MAINTAINER Shane Canon <scanon@lbl.gov>
 
 # Thanks to Sven Dowideit <SvenDowideit@docker.com>
