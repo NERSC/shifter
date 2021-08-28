@@ -136,12 +136,11 @@ class WorkerThreads(object):
 class ImageRequest(object):
     def __init__(self, conf, request, updater):
         self.conf = conf
-        self.request = request
         self.updater = updater
         self.fmt = self.conf['DefaultImageFormat']
-        if 'format' in self.request:
-            self.fmt = self.request['format']
-        self.system = self.request['system']
+        if 'format' in request:
+            self.fmt = request['format']
+        self.system = request['system']
         if self.system not in self.conf['Platforms']:
             raise KeyError('%s is not in the configuration' %
                            self.system)
@@ -150,10 +149,21 @@ class ImageRequest(object):
         self.id = request.get('id')
         self.meta = None
         self.meta_only = False
+        self.import_image = False
         self.metafile = None
         self.expandedpath = None
         self.imagefile = None
         self.filepath = request.get('filepath')
+        self.session = request.get('session')
+        self.tokens = None
+        self.user = None
+        if self.session:
+            self.user = self.session.get('user')
+            self.tokens = self.session.get('tokens')
+        
+        self.userACL = request.get('userACL')
+        self.groupACL = request.get('groupACL')
+
 
     def _get_cacert(self, location):
         """ Private method to get the cert location """
@@ -175,7 +185,6 @@ class ImageRequest(object):
         edir = self.conf['ExpandDirectory']
         params = self.conf['Locations'][location]
         cacert = self._get_cacert(location)
-        request = self.request
 
         url = 'https://%s' % location
         if 'url' in params:
@@ -188,14 +197,13 @@ class ImageRequest(object):
             if 'authMethod' in params:
                 options['authMethod'] = params['authMethod']
 
-            if ('session' in request and 'tokens' in request['session'] and
-                    request['session']['tokens']):
-                if location in request['session']['tokens']:
-                    userpass = request['session']['tokens'][location]
+            if (self.tokens):
+                if location in self.tokens:
+                    userpass = self.tokens[location]
                     options['username'] = userpass.split(':')[0]
                     options['password'] = ''.join(userpass.split(':')[1:])
-                elif ('default' in request['session']['tokens']):
-                    userpass = request['session']['tokens']['default']
+                elif ('default' in self.tokens):
+                    userpass = self.tokens['default']
                     options['username'] = userpass.split(':')[0]
                     options['password'] = ''.join(userpass.split(':')[1:])
             imgid = '%s:%s' % (repo, tag)
@@ -302,7 +310,6 @@ class ImageRequest(object):
         imagefile = os.path.join(edir, '%s.%s' % (self.id,
                                                   self.fmt))
         self.imagefile = imagefile
-        print(self.expandedpath)
 
         status = converters.convert(self.fmt,
                                     self.expandedpath,
@@ -315,10 +322,10 @@ class ImageRequest(object):
 
         Returns True on success
         """
-        if 'userACL' in self.request:
-            self.meta['userACL'] = self.request['userACL']
-        if 'groupACL' in self.request:
-            self.meta['groupACL'] = self.request['groupACL']
+        if self.userACL:
+            self.meta['userACL'] = self.userACL
+        if self.groupACL:
+            self.meta['groupACL'] = self.groupACL
 
         edir = self.conf['ExpandDirectory']
 
@@ -350,7 +357,7 @@ class ImageRequest(object):
         return transfer.imagevalid(self.sysconf, image_filename, image_metadata,
                                    logging)
 
-    def _transfer_image(self, import_image=False):
+    def _transfer_image(self):
         """
         Transfers the image to the target system based on the configuration.
 
@@ -359,17 +366,17 @@ class ImageRequest(object):
         if self.meta_only:
             return transfer.transfer(self.sysconf, None, self.metafile, logging)
         else:
-            if not import_image:
+            if not self.import_image:
                 return transfer.transfer(self.sysconf,
                                          self.imagefile,
                                          self.metafile,
-                                         logging, import_image)
+                                         logging, self.import_image)
             else:
                 return transfer.transfer(self.sysconf,
                                          self.filepath,
                                          self.metafile,
                                          logging,
-                                         import_image,
+                                         self.import_image,
                                          self.imagefile)
 
     def remove_image(self):
@@ -392,11 +399,11 @@ class ImageRequest(object):
             logging.warn("Worker: Expire failed")
             raise OSError('Expire failed')
 
-    def _cleanup_temporary(self, import_image=False):
+    def _cleanup_temporary(self):
         """
         Helper function to cleanup any temporary files or directories.
         """
-        if not import_image:
+        if not self.import_image:
             items = (self.expandedpath,
                      self.imagefile,
                      self.metafile)
@@ -459,7 +466,7 @@ class ImageRequest(object):
         try:
             # Step 1 - Do the pull
             self.updater.update_status('PULLING', 'PULLING')
-            logging.debug(self.request)
+            logging.debug(self.tag)
             if not self._pull_image():
                 logging.info("Worker: Pull failed")
                 raise OSError('Pull failed')
@@ -519,6 +526,7 @@ class ImageRequest(object):
         Task to do the full workflow of copying an image and processing it
         """
         tag = self.tag
+        self.import_image = True
         logging.debug("img_import system=%s tag=%s",
                       self.system, tag)
         if testmode == 1:
@@ -539,8 +547,10 @@ class ImageRequest(object):
             return ret
         try:
             # Step 0 - Check if path is valid
-            if not transfer.check_file(self.request["filepath"], self.sysconf,
-                                       logging, import_image=True):
+            if not transfer.check_file(self.filepath,
+                                       self.sysconf,
+                                       logging, 
+                                       import_image=self.import_image):
                 raise OSError('Path not valid')
             # Step 1 - Calculate the hash of the file
             logging.debug("starting import hashing")
@@ -549,11 +559,13 @@ class ImageRequest(object):
                                          self.sysconf, logging)
             # Step 2 - Populate the metadata file
             logging.debug("starting writing metadata")
-            if not self.meta:
-                raise OSError('Metadata not populated')
-            self.meta['format'] = self.fmt
-            self.meta['user'] = self.request['session']['user']
-            if not self.write_metadata():
+            # if not self.meta:
+            #     raise OSError('Metadata not populated')
+            self.meta = {
+                'format': self.fmt,
+                'user': self.user
+            }
+            if not self._write_metadata():
                 logging.info("Writing metadata")
                 raise OSError('Metadata creation failed')
             # Step 3 - Copy image and meta file from user space to shifter area
@@ -562,14 +574,14 @@ class ImageRequest(object):
             self.imagefile = imgfile
             self.meta['id'] = self.id
             self.updater.update_status('TRANSFER', 'TRANSFER')
-            if not self._transfer_image(import_image=True):
+            if not self._transfer_image():
                 logging.warn("Worker: Import copy failed")
                 raise OSError("Import copy failed")
 
             # Done
             self.updater.update_status('READY', 'Image ready',
                                        response=self.meta)
-            self._cleanup_temporary(import_image=True)
+            self._cleanup_temporary()
             return self.meta
 
         except:
@@ -579,5 +591,5 @@ class ImageRequest(object):
             self.updater.update_status('FAILURE', 'FAILED')
 
             # TODO: add a debugging flag and only disable cleanup if debugging
-            self.cleanup_temporary(self.request)
+            self._cleanup_temporary()
             raise
