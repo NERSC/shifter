@@ -28,17 +28,10 @@ import logging
 import tempfile
 from multiprocessing import Queue
 from multiprocessing.pool import ThreadPool
-from time import time, sleep
-from random import randint
+from time import time
 from shifter_imagegw import converters, transfer
 from shifter_imagegw.dockerv2 import DockerV2Handle as DockerV2
 from shifter_imagegw.dockerv2_ext import DockerV2ext
-
-
-if 'SERVER_SOFTWARE' in os.environ:
-    # Make flask logging work with gunicorn
-    gunicorn_error_logger = logging.getLogger('gunicorn.error')
-    logging = gunicorn_error_logger
 
 
 class Updater(object):
@@ -57,13 +50,14 @@ class Updater(object):
                         'message': message,
                         'response': response}
             self.update_method(ident=self.ident, state=state, meta=metadata)
-    
+
     def failed(self, e):
         if self.update_method is not None:
             metadata = {'heartbeat': time(),
                         'message': "Operation Failed",
                         'response': {}}
-            self.update_method(ident=self.ident, state="FAILURE", meta=metadata)
+            self.update_method(ident=self.ident, state="FAILURE",
+                               meta=metadata)
 
 
 class WorkerThreads(object):
@@ -168,10 +162,9 @@ class ImageRequest(object):
         if self.session:
             self.user = self.session.get('user')
             self.tokens = self.session.get('tokens')
-        
+
         self.userACL = request.get('userACL')
         self.groupACL = request.get('groupACL')
-
 
     def _get_cacert(self, location):
         """ Private method to get the cert location """
@@ -233,7 +226,8 @@ class ImageRequest(object):
             dock.pull_layers()
 
             self.expandedpath = tempfile.mkdtemp(suffix='extract',
-                                            prefix=self.id, dir=edir)
+                                                 prefix=self.id,
+                                                 dir=edir)
 
             self.updater.update_status("PULLING", 'Extracting Layers')
             dock.extract_docker_layers(self.expandedpath)
@@ -347,7 +341,7 @@ class ImageRequest(object):
         # after success move to final name
         final_metafile = os.path.join(edir, '%s.meta' % (self.id))
         shutil.move(metafile, final_metafile)
-        self.metafile= final_metafile
+        self.metafile = final_metafile
 
         return status
 
@@ -360,8 +354,8 @@ class ImageRequest(object):
         image_filename = "%s.%s" % (self.id, self.fmt)
         image_metadata = "%s.meta" % (self.id)
 
-        return transfer.imagevalid(self.sysconf, image_filename, image_metadata,
-                                   logging)
+        return transfer.imagevalid(self.sysconf, image_filename,
+                                   image_metadata, logging)
 
     def _transfer_image(self):
         """
@@ -370,7 +364,8 @@ class ImageRequest(object):
         Returns True on success
         """
         if self.meta_only:
-            return transfer.transfer(self.sysconf, None, self.metafile, logging)
+            return transfer.transfer(self.sysconf, None,
+                                     self.metafile, logging)
         else:
             if not self.import_image:
                 return transfer.transfer(self.sysconf,
@@ -520,7 +515,7 @@ class ImageRequest(object):
             # Step 0 - Check if path is valid
             if not transfer.check_file(self.filepath,
                                        self.sysconf,
-                                       logging, 
+                                       logging,
                                        import_image=self.import_image):
                 raise OSError('Path not valid')
             # Step 1 - Calculate the hash of the file

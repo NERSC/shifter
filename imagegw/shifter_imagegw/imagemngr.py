@@ -248,7 +248,6 @@ class ImageMngr(object):
                 return True
         return False
 
-
     def _resetexpire(self, ident):
         """Reset the expire time.  (Not fully implemented)."""
         # Change expire time for image

@@ -200,7 +200,7 @@ class ImageWorkerTestCase(unittest.TestCase):
         request = self.request
         req = imageworker.ImageRequest(self.config, request, self.updater)
         resp = req._pull_dockerv2('index.docker.io',
-                                               'scanon/shanetest', 'latest')
+                                  'scanon/shanetest', 'latest')
         self.assertTrue(resp)
 
     def test_pull_docker_unicode(self):

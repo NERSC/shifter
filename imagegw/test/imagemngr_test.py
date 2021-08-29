@@ -9,7 +9,6 @@ from time import sleep
 from pymongo import MongoClient
 from nose.plugins.attrib import attr
 from multiprocessing.pool import ThreadPool
-from shifter_imagegw.imageworker import Updater
 from random import randint
 
 """
@@ -31,6 +30,7 @@ modification, are permitted provided that the following conditions are met:
 
 See LICENSE for full text.
 """
+
 
 class mock_worker(WorkerThreads):
     def __init__(self, q):
@@ -77,7 +77,8 @@ class mock_worker(WorkerThreads):
         }
         state = 'READY'
         updater.update_status(state, state, ret)
-        return ret        
+        return ret
+
 
 class ImageMngrTestCase(unittest.TestCase):
 
