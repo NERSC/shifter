@@ -16,7 +16,7 @@ To start the image gateway do something like:
 If docker and docker-compose are installed, you can try starting a test environment with docker-compose.  There is a Makefile
 target that makes this easy.
 
-    make starttest
+    make -f Makefile.test starttest
 
 This will create a munge key and ssh keys in test/config.  This directory gets volumed mounted into the API and Worker images.
 See the docker-compose.yml for details.  You can modify the docker-compose and create a configuration directory to run a non-test

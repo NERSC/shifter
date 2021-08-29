@@ -322,11 +322,16 @@ int setup_libslurm() {
     if (ssconfig->libslurm_handle != NULL) return SUCCESS;
 
     ssconfig->libslurm_handle = _libslurm_dlopen();
-    if (ssconfig->libslurm_handle != NULL) return SUCCESS;
+    if (ssconfig->libslurm_handle != NULL) {
+#if SLURM_VERSION_NUMBER >= SLURM_VERSION_NUM(20,11,0)
+	    slurm_init(NULL);
+#endif
+	    return SUCCESS;
+    }
     return ERROR;
 }
 
-extern int slurm_stepd_connect(const char *dir, const char *node, uint32_t job, uint32_t step, uint16_t *protocol);
+extern int slurm_stepd_connect(const char *dir, const char *node, slurm_step_id_t *step, uint16_t *protocol);
 extern int slurm_stepd_add_extern_pid(uint32_t, uint16_t, pid_t);
 extern hostlist_t slurm_hostlist_create_dims(const char *hostlist, int dims);
 extern char * slurm_hostlist_deranged_string_malloc(hostlist_t hl);
@@ -334,10 +339,13 @@ extern char * slurm_hostlist_deranged_string_malloc(hostlist_t hl);
 int wrap_spank_stepd_connect(shifterSpank_config *ssconfig, char *dir,
     char *hostname, uint32_t jobid, uint32_t stepid, uint16_t *protocol)
 {
-    int (*stepd_connect)(const char *, const char *, uint32_t, uint32_t, uint16_t*);
+    int (*stepd_connect)(const char *, const char *, slurm_step_id_t *, uint16_t*);
     if (setup_libslurm() != SUCCESS) return -1;
     stepd_connect = slurm_stepd_connect;
-    return (*stepd_connect)(dir, hostname, jobid, stepid, protocol);
+    slurm_step_id_t step = { .job_id = jobid,
+                             .step_het_comp = NO_VAL,
+                             .step_id = stepid,};
+    return (*stepd_connect)(dir, hostname, &step, protocol);
 }
 
 int wrap_spank_stepd_add_extern_pid(shifterSpank_config *ssconfig,
