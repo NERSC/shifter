@@ -20,6 +20,8 @@ import os
 import unittest
 import json
 import shutil
+from copy import deepcopy
+from shifter_imagegw import imageworker
 DEBUG = False
 
 
@@ -33,8 +35,6 @@ class ImageWorkerTestCase(unittest.TestCase):
     def setUp(self):
         cwd = os.path.dirname(os.path.realpath(__file__))
         os.environ['PATH'] = cwd + ':' + os.environ['PATH']
-        from shifter_imagegw import imageworker
-        self.imageworker = imageworker
         self.updater = imageworker.Updater('bogusid', update_status)
         self.configfile = 'test.json'
         with open(self.configfile) as config_file:
@@ -94,14 +94,14 @@ class ImageWorkerTestCase(unittest.TestCase):
     def test_pull_image_basic(self):
         self.cleanup_cache()
         request = {'system': self.system, 'itype': self.itype, 'tag': self.tag}
-        status = self.imageworker.pull_image(request, self.updater)
+        req = imageworker.ImageRequest(self.config, request, self.updater)
+        status = req._pull_image()
         self.assertTrue(status)
-        self.assertIn('meta', request)
-        meta = request['meta']
-        self.assertIn('id', meta)
-        self.assertIn('workdir', meta)
-        self.assertEqual(meta['entrypoint'][0], "/bin/sh")
-        self.assertTrue(os.path.exists(request['expandedpath']))
+        self.assertTrue(req.meta)
+        self.assertIn('id', req.meta)
+        self.assertIn('workdir', req.meta)
+        self.assertEqual(req.meta['entrypoint'][0], "/bin/sh")
+        self.assertTrue(os.path.exists(req.expandedpath))
 
         return
 
@@ -112,12 +112,12 @@ class ImageWorkerTestCase(unittest.TestCase):
             'itype': self.itype,
             'tag': 'index.docker.io/ubuntu:latest'
         }
-        status = self.imageworker.pull_image(request, self.updater)
+        req = imageworker.ImageRequest(self.config, request, self.updater)
+        status = req._pull_image()
         self.assertTrue(status)
-        self.assertIn('meta', request)
-        meta = request['meta']
-        self.assertIn('id', meta)
-        self.assertTrue(os.path.exists(request['expandedpath']))
+        self.assertTrue(req.meta)
+        self.assertIn('id', req.meta)
+        self.assertTrue(os.path.exists(req.expandedpath))
         return
 
     # Use the URL format of the location, like an alias
@@ -128,12 +128,12 @@ class ImageWorkerTestCase(unittest.TestCase):
             'itype': self.itype,
             'tag': 'urltest/ubuntu:latest'
         }
-        status = self.imageworker.pull_image(request, self.updater)
+        req = imageworker.ImageRequest(self.config, request, self.updater)
+        status = req._pull_image()
         self.assertTrue(status)
-        self.assertIn('meta', request)
-        meta = request['meta']
-        self.assertIn('id', meta)
-        self.assertTrue(os.path.exists(request['expandedpath']))
+        self.assertTrue(req.meta)
+        self.assertIn('id', req.meta)
+        self.assertTrue(os.path.exists(req.expandedpath))
         return
 
     # Use the URL format of the location and pull a nested image
@@ -145,12 +145,12 @@ class ImageWorkerTestCase(unittest.TestCase):
             'itype': self.itype,
             'tag': 'urltest/%s' % (self.tag)
         }
-        status = self.imageworker.pull_image(request, self.updater)
+        req = imageworker.ImageRequest(self.config, request, self.updater)
+        status = req._pull_image()
         self.assertTrue(status)
-        self.assertIn('meta', request)
-        meta = request['meta']
-        self.assertIn('id', meta)
-        self.assertTrue(os.path.exists(request['expandedpath']))
+        self.assertTrue(req.meta)
+        self.assertIn('id', req.meta)
+        self.assertTrue(os.path.exists(req.expandedpath))
         return
 
     def test_convert_image(self):
@@ -161,9 +161,10 @@ class ImageWorkerTestCase(unittest.TestCase):
             shutil.rmtree(base)
         os.makedirs('%s/%s' % (base, 'a/b/c'))
         request = self.request
-        request['id'] = 'bogus'
-        request['expandedpath'] = base
-        status = self.imageworker.convert_image(request)
+        req = imageworker.ImageRequest(self.config, request, self.updater)
+        req.id = 'bogus'
+        req.expandedpath = base
+        status = req._convert_image()
         self.assertTrue(status)
         # Cleanup
         if os.path.exists(base):
@@ -178,27 +179,28 @@ class ImageWorkerTestCase(unittest.TestCase):
         with open(imagefile, 'w') as f:
             f.write('bogus')
         self.assertTrue(os.path.exists(imagefile))
-        status = self.imageworker.transfer_image(request)
+        req = imageworker.ImageRequest(self.config, request, self.updater)
+        status = req._transfer_image()
         self.assertTrue(status)
 
     def test_bad_pull_docker(self):
         self.cleanup_cache()
         request = self.request
-        self.imageworker.CONFIG['Platforms']['systema']['use_external'] = True
+        conf = deepcopy(self.config)
+        conf['Platforms']['systema']['use_external'] = True
         os.environ['UMOCI_FAIL'] = '1'
+        req = imageworker.ImageRequest(conf, request, self.updater)
         with self.assertRaises(OSError):
-            self.imageworker._pull_dockerv2(request, 'index.docker.io',
-                                               'scanon/shanetest', 'latest',
-                                               self.updater)
-        self.imageworker.CONFIG['Platforms']['systema']['use_external'] = False
+            req._pull_dockerv2('index.docker.io',
+                               'scanon/shanetest', 'latest')
         os.environ.pop('UMOCI_FAIL')
 
     def test_pull_docker(self):
         self.cleanup_cache()
         request = self.request
-        resp = self.imageworker._pull_dockerv2(request, 'index.docker.io',
-                                               'scanon/shanetest', 'latest',
-                                               self.updater)
+        req = imageworker.ImageRequest(self.config, request, self.updater)
+        resp = req._pull_dockerv2('index.docker.io',
+                                               'scanon/shanetest', 'latest')
         self.assertTrue(resp)
 
     def test_pull_docker_unicode(self):
@@ -207,51 +209,62 @@ class ImageWorkerTestCase(unittest.TestCase):
             'itype': self.itype,
             'tag': 'index.docker.io/scanon/unicode:latest'
         }
-        status = self.imageworker.pull_image(request, self.updater)
+        req = imageworker.ImageRequest(self.config, request, self.updater)
+        status = req._pull_image()
         self.assertTrue(status)
-        self.assertIn('meta', request)
-        meta = request['meta']
-        self.assertIn('id', meta)
-        self.assertTrue(os.path.exists(request['expandedpath']))
-        tfile = os.path.join(request['expandedpath'], '\ua000')
+        self.assertTrue(req.meta)
+        self.assertIn('id', req.meta)
+        self.assertTrue(os.path.exists(req.expandedpath))
+        tfile = os.path.join(req.expandedpath, '\ua000')
         self.assertTrue(os.path.exists(tfile))
         return
 
     def test_pull_image(self):
         request = self.request
-        resp = self.imageworker.pull_image(request, self.updater)
+        req = imageworker.ImageRequest(self.config, request, self.updater)
+        resp = req._pull_image()
         self.assertTrue(resp)
 
     def test_puller_testmode(self):
         request = self.request
-        result = self.imageworker.pull(request, self.updater, testmode=1)
+        req = imageworker.ImageRequest(self.config, request, self.updater)
+        result = req.pull(testmode=1)
         self.assertIn('workdir', result)
         self.assertIn('env', result)
         self.assertTrue(result)
+        req = imageworker.ImageRequest(self.config, request, self.updater)
         with self.assertRaises(OSError):
-            self.imageworker.pull(request, self.updater, testmode=2)
+            req.pull(testmode=2)
 
     def test_puller_real(self):
         request = self.request
-        result = self.imageworker.pull(request, self.updater)
+        req = imageworker.ImageRequest(self.config, request, self.updater)
+        result = req.pull()
         mf = self.get_metafile(result['id'])
         mfdata = self.read_metafile(mf)
         self.assertIn('WORKDIR', mfdata)
         request['userACL'] = [1001]
-        result = self.imageworker.pull(request, self.updater)
-        self.imageworker.remove_image(request, self.updater)
+        req = imageworker.ImageRequest(self.config, request, self.updater)
+        result = req.pull()
+        req.remove_image()
 
     def test_examine(self):
-        self.imageworker.CONFIG['examiner'] = 'exam.sh'
+        conf = deepcopy(self.config)
+        conf['examiner'] = 'exam.sh'
         base = self.imageDir + '/image'
-        request = {'id': 'bogus',
-                   'expandedpath': base}
-        result = self.imageworker.examine_image(request)
+        request = {
+                   'system': self.system,
+                   }
+        req = imageworker.ImageRequest(conf, request, self.updater)
+        req.id = 'bogus'
+        req.expandedpath = base
+        result = req._examine_image()
         self.assertTrue(result)
-        request['id'] = 'bad'
-        result = self.imageworker.examine_image(request)
+        req = imageworker.ImageRequest(conf, request, self.updater)
+        req.id = 'bad'
+        req.expandedpath = base
+        result = req._examine_image()
         self.assertFalse(result)
-        self.imageworker.CONFIG.pop('examiner')
 
 
 if __name__ == '__main__':

@@ -116,7 +116,7 @@ class ImageMngr(object):
         threads = 1
         if 'WorkerThreads' in self.config:
             threads = int(self.config['WorkerThreads'])
-        self.workers = WorkerThreads(threads=threads)
+        self.workers = WorkerThreads(self.config, threads=threads)
         self.status_queue = self.workers.get_updater_queue()
         self.status_proc = Process(target=self.status_thread,
                                    name='StatusThread')

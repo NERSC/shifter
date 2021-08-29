@@ -48,7 +48,7 @@ Shifter, please install the "shifter-runtime" package.
 Summary:  Runtime component(s) for NERSC Shifter (formerly udiRoot)
 Group:    System Environment/Base
 %if 0%{?suse_version}
-BuildRequires: munge, libcurl-devel, libjson-c-devel, pam-devel, libcap-devel
+BuildRequires: munge, libcurl-devel, libjson-c-devel, pam-devel, libcap-devel python3
 %else
 BuildRequires: munge-devel, gcc, gcc-c++
 BuildRequires: libtool autoconf automake
@@ -56,6 +56,7 @@ BuildRequires: libcurl libcurl-devel
 BuildRequires: json-c json-c-devel
 BuildRequires: pam-devel
 BuildRequires: libcap-devel
+BuildRequires: python3
 Requires: xfsprogs
 %endif
 
@@ -82,10 +83,10 @@ Summary: Image Manager/Gateway for Shifter
 %endif
 %if 0%{?rhel}
 Requires(pre): shadow-utils
-Requires: squashfs-tools python python-flask python-pymongo python-gunicorn munge
+Requires: squashfs-tools python3 python36-pymongo munge
 %endif
 %if 0%{?suse_version} > 0
-Requires: squashfs python python-flask python-pymongo python-gunicorn munge
+Requires: squashfs python3 python36-pymongo munge
 %endif
 
 %description imagegw
@@ -152,6 +153,7 @@ test -x configure || ./autogen.sh
 
 %build
 ## build udiRoot (runtime) first
+export PYTHON=python3
 %configure \
     %{?with_slurm:--with-slurm=%{with_slurm}} %{?acflags}
 
@@ -233,7 +235,7 @@ getent group > %{_sysconfdir}/shifter_etc_files/group
 %defattr(-, root, root)
 %doc AUTHORS LICENSE NEWS README* contrib extra/systemd
 %attr(0770, %{shifter_user}, %{shifter_group}) %dir %{_localstatedir}/log/%{name}_imagegw/
-%{_libdir}/python2.*/site-packages/shifter_imagegw
+%{_libdir}/python3.*/site-packages/shifter_imagegw
 %{_libexecdir}/shifter/imagecli.py*
 %{_libexecdir}/shifter/imagegwapi.py*
 %{_libexecdir}/shifter/sitecustomize.py*

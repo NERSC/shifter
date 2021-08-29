@@ -534,6 +534,27 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertIn('ENTRY', imagerec)
         self.assertIn('ENV', imagerec)
 
+    def test_pull_testimage(self):
+
+        # Use defaults for format, arch, os, ostcount, replication
+        pr = {
+            'system': self.system,
+            'itype': self.itype,
+            'tag': 'scanon/shanetest:latest',
+            'remotetype': 'dockerv2',
+            'userACL': [],
+            'groupACL': []
+        }
+        # Do the pull
+        session = self.m.new_session(self.auth, self.system)
+        rec = self.m.pull(session, pr, testmode=1)  # ,delay=False)
+        self.assertIsNotNone(rec)
+        self.assertIn('_id', rec)
+        id = rec['_id']
+        # Re-pull the same thing.  Should give the same record
+        rec = self.m.pull(session, pr, testmode=1)  # ,delay=False)
+        self.assertIsNotNone(rec)
+
     def test_pull(self):
         """
         Basic pull test including an induced pull failure.
