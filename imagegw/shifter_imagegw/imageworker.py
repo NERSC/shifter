@@ -59,7 +59,6 @@ class Updater(object):
             self.update_method(ident=self.ident, state=state, meta=metadata)
     
     def failed(self, e):
-        print(e)
         if self.update_method is not None:
             metadata = {'heartbeat': time(),
                         'message': "Operation Failed",
@@ -442,7 +441,7 @@ class ImageRequest(object):
                         os.unlink(cleanitem)
                 except:
                     logging.error("Worker: caught exception while trying to "
-                                  "clean up (%s) %s.", item, cleanitem)
+                                  "clean up %s.", cleanitem)
 
     def pull(self):
         """
