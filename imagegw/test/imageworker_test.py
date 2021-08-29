@@ -200,7 +200,7 @@ class ImageWorkerTestCase(unittest.TestCase):
         request = self.request
         req = imageworker.ImageRequest(self.config, request, self.updater)
         resp = req._pull_dockerv2('index.docker.io',
-                                               'scanon/shanetest', 'latest')
+                                  'scanon/shanetest', 'latest')
         self.assertTrue(resp)
 
     def test_pull_docker_unicode(self):
@@ -224,17 +224,6 @@ class ImageWorkerTestCase(unittest.TestCase):
         req = imageworker.ImageRequest(self.config, request, self.updater)
         resp = req._pull_image()
         self.assertTrue(resp)
-
-    def test_puller_testmode(self):
-        request = self.request
-        req = imageworker.ImageRequest(self.config, request, self.updater)
-        result = req.pull(testmode=1)
-        self.assertIn('workdir', result)
-        self.assertIn('env', result)
-        self.assertTrue(result)
-        req = imageworker.ImageRequest(self.config, request, self.updater)
-        with self.assertRaises(OSError):
-            req.pull(testmode=2)
 
     def test_puller_real(self):
         request = self.request

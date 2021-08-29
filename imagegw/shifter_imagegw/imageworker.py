@@ -28,17 +28,10 @@ import logging
 import tempfile
 from multiprocessing import Queue
 from multiprocessing.pool import ThreadPool
-from time import time, sleep
-from random import randint
+from time import time
 from shifter_imagegw import converters, transfer
 from shifter_imagegw.dockerv2 import DockerV2Handle as DockerV2
 from shifter_imagegw.dockerv2_ext import DockerV2ext
-
-
-if 'SERVER_SOFTWARE' in os.environ:
-    # Make flask logging work with gunicorn
-    gunicorn_error_logger = logging.getLogger('gunicorn.error')
-    logging = gunicorn_error_logger
 
 
 class Updater(object):
@@ -57,6 +50,14 @@ class Updater(object):
                         'message': message,
                         'response': response}
             self.update_method(ident=self.ident, state=state, meta=metadata)
+
+    def failed(self, e):
+        if self.update_method is not None:
+            metadata = {'heartbeat': time(),
+                        'message': "Operation Failed",
+                        'response': {}}
+            self.update_method(ident=self.ident, state="FAILURE",
+                               meta=metadata)
 
 
 class WorkerThreads(object):
@@ -86,10 +87,10 @@ class WorkerThreads(object):
         """
         self.updater_queue.put({'id': ident, 'state': state, 'meta': meta})
 
-    def pull(self, request, updater, testmode=0):
+    def pull(self, request, updater):
         try:
             req = ImageRequest(self.conf, request, updater)
-            req.pull(testmode=testmode)
+            req.pull()
         except Exception as err:
             resp = {'error_type': str(type(err)),
                     'message': str(err)}
@@ -105,32 +106,33 @@ class WorkerThreads(object):
                     'message': str(err)}
             updater.update_status('FAILURE', 'FAILURE', response=resp)
 
-    def wrkimport(self, request, updater, testmode=0):
+    def wrkimport(self, request, updater):
         try:
             req = ImageRequest(self.conf, request, updater)
-            req.img_import(testmode=testmode)
+            req.img_import()
         except Exception as err:
             resp = {'error_type': str(type(err)),
                     'message': str(err)}
             updater.update_status('FAILURE', 'FAILURE', response=resp)
 
-    def dopull(self, ident, request, testmode=0):
+    def dopull(self, ident, request):
         """
         Kick off a pull operation.
         """
         updater = Updater(ident, self.updater)
         self.pools.apply_async(self.pull, [request, updater],
-                               {'testmode': testmode})
+                               {}, None, updater.failed)
 
-    def doexpire(self, ident, request, testmode=0):
+    def doexpire(self, ident, request):
         updater = Updater(ident, self.updater)
-        self.pools.apply_async(self.expire, [request, updater])
+        self.pools.apply_async(self.expire, [request, updater],
+                               {}, None, updater.failed)
 
-    def dowrkimport(self, ident, request, testmode=0):
+    def dowrkimport(self, ident, request):
         logging.debug("wrkimport starting")
         updater = Updater(ident, self.updater)
         self.pools.apply_async(self.wrkimport, [request, updater],
-                               {'testmode': testmode})
+                               {}, None, updater.failed)
 
 
 class ImageRequest(object):
@@ -160,10 +162,9 @@ class ImageRequest(object):
         if self.session:
             self.user = self.session.get('user')
             self.tokens = self.session.get('tokens')
-        
+
         self.userACL = request.get('userACL')
         self.groupACL = request.get('groupACL')
-
 
     def _get_cacert(self, location):
         """ Private method to get the cert location """
@@ -225,7 +226,8 @@ class ImageRequest(object):
             dock.pull_layers()
 
             self.expandedpath = tempfile.mkdtemp(suffix='extract',
-                                            prefix=self.id, dir=edir)
+                                                 prefix=self.id,
+                                                 dir=edir)
 
             self.updater.update_status("PULLING", 'Extracting Layers')
             dock.extract_docker_layers(self.expandedpath)
@@ -339,7 +341,7 @@ class ImageRequest(object):
         # after success move to final name
         final_metafile = os.path.join(edir, '%s.meta' % (self.id))
         shutil.move(metafile, final_metafile)
-        self.metafile= final_metafile
+        self.metafile = final_metafile
 
         return status
 
@@ -352,8 +354,8 @@ class ImageRequest(object):
         image_filename = "%s.%s" % (self.id, self.fmt)
         image_metadata = "%s.meta" % (self.id)
 
-        return transfer.imagevalid(self.sysconf, image_filename, image_metadata,
-                                   logging)
+        return transfer.imagevalid(self.sysconf, image_filename,
+                                   image_metadata, logging)
 
     def _transfer_image(self):
         """
@@ -362,7 +364,8 @@ class ImageRequest(object):
         Returns True on success
         """
         if self.meta_only:
-            return transfer.transfer(self.sysconf, None, self.metafile, logging)
+            return transfer.transfer(self.sysconf, None,
+                                     self.metafile, logging)
         else:
             if not self.import_image:
                 return transfer.transfer(self.sysconf,
@@ -433,34 +436,15 @@ class ImageRequest(object):
                         os.unlink(cleanitem)
                 except:
                     logging.error("Worker: caught exception while trying to "
-                                  "clean up (%s) %s.", item, cleanitem)
+                                  "clean up %s.", cleanitem)
 
-    def pull(self, testmode=0):
+    def pull(self):
         """
         Main task to do the full workflow of pulling an image and transferring
         it
         """
         tag = self.tag
         logging.debug("dopull system=%s tag=%s", self.system, tag)
-        if testmode == 1:
-            states = ('PULLING', 'EXAMINATION', 'CONVERSION', 'TRANSFER')
-            for state in states:
-                logging.info("Worker: testmode Updating to %s", state)
-                self.updater.update_status(state, state)
-                sleep(1)
-            ident = '%x' % randint(0, 100000)
-            ret = {
-                'id': ident,
-                'entrypoint': ['./blah'],
-                'workdir': '/root',
-                'env': ['FOO=bar', 'BAZ=boz']
-            }
-            state = 'READY'
-            self.updater.update_status(state, state, ret)
-            return ret
-        elif testmode == 2:
-            logging.info("Worker: testmode 2 setting failure")
-            raise OSError('task failed')
         try:
             # Step 1 - Do the pull
             self.updater.update_status('PULLING', 'PULLING')
@@ -519,7 +503,7 @@ class ImageRequest(object):
             self._cleanup_temporary()
             raise
 
-    def img_import(self, testmode=0):
+    def img_import(self):
         """
         Task to do the full workflow of copying an image and processing it
         """
@@ -527,27 +511,11 @@ class ImageRequest(object):
         self.import_image = True
         logging.debug("img_import system=%s tag=%s",
                       self.system, tag)
-        if testmode == 1:
-            states = ('HASHING', 'TRANSFER', 'READY')
-            for state in states:
-                logging.info("Worker: testmode Updating to %s", state)
-                self.updater.update_status(state, state)
-                sleep(1)
-            ident = '%x' % randint(0, 100000)
-            ret = {
-                'id': ident,
-                'entrypoint': ['./blah'],
-                'workdir': '/root',
-                'env': ['FOO=bar', 'BAZ=boz']
-            }
-            state = 'READY'
-            self.updater.update_status(state, state, ret)
-            return ret
         try:
             # Step 0 - Check if path is valid
             if not transfer.check_file(self.filepath,
                                        self.sysconf,
-                                       logging, 
+                                       logging,
                                        import_image=self.import_image):
                 raise OSError('Path not valid')
             # Step 1 - Calculate the hash of the file
