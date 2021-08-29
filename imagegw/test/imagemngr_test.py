@@ -4,8 +4,10 @@ import time
 import json
 import base64
 import logging
+from copy import deepcopy
 from pymongo import MongoClient
 from nose.plugins.attrib import attr
+from shifter_imagegw.imagemngr import ImageMngr
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
@@ -31,7 +33,6 @@ See LICENSE for full text.
 class ImageMngrTestCase(unittest.TestCase):
 
     def setUp(self):
-        from shifter_imagegw.imagemngr import ImageMngr
         self.configfile = 'test.json'
         with open(self.configfile) as config_file:
             self.config = json.load(config_file)
@@ -533,27 +534,6 @@ class ImageMngrTestCase(unittest.TestCase):
         imagerec = self.m.lookup(session, pr)
         self.assertIn('ENTRY', imagerec)
         self.assertIn('ENV', imagerec)
-
-    def test_pull_testimage(self):
-
-        # Use defaults for format, arch, os, ostcount, replication
-        pr = {
-            'system': self.system,
-            'itype': self.itype,
-            'tag': 'scanon/shanetest:latest',
-            'remotetype': 'dockerv2',
-            'userACL': [],
-            'groupACL': []
-        }
-        # Do the pull
-        session = self.m.new_session(self.auth, self.system)
-        rec = self.m.pull(session, pr, testmode=1)  # ,delay=False)
-        self.assertIsNotNone(rec)
-        self.assertIn('_id', rec)
-        id = rec['_id']
-        # Re-pull the same thing.  Should give the same record
-        rec = self.m.pull(session, pr, testmode=1)  # ,delay=False)
-        self.assertIsNotNone(rec)
 
     def test_pull(self):
         """
@@ -1152,6 +1132,30 @@ class ImageMngrTestCase(unittest.TestCase):
         mrec = self.images.find_one(q)
         self.assertIn(self.public, mrec['tag'])
         self.assertIn(newtag, mrec['tag'])
+
+    def test_labels(self):
+        # Need use_external
+        conf = deepcopy(self.config)
+        conf['Platforms']['systema']['use_external'] = True
+        m = ImageMngr(conf, logger=self.logger)
+        # Use defaults for format, arch, os, ostcount, replication
+        pr = self.pull
+        # Do the pull
+        session = m.new_session(self.auth, self.system)
+        rec1 = m.pull(session, pr)  # ,delay=False)
+        id1 = rec1['_id']
+        # Confirm record
+        q = {'system': self.system, 'itype': self.itype, 'pulltag': self.tag}
+        state = self.time_wait(id1)
+        self.assertEqual(state, 'READY')
+        mrec = self.images.find_one(q)
+        self.assertIn('LABELS', mrec)
+        self.assertIn('alabel', mrec['LABELS'])
+        look_req = self.query.copy()
+        look = m.lookup(session, look_req)
+        self.assertIn('LABELS', look)
+        self.assertIn('alabel', look['LABELS'])
+        self.images.drop()
 
 
 if __name__ == '__main__':

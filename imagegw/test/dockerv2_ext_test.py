@@ -68,6 +68,7 @@ class Dockerv2TestCase(unittest.TestCase):
         resp = dock.examine_manifest()
         self.assertIn('id', resp)
         self.assertIn('private', resp)
+        self.assertIn('labels', resp)
         resp = dock.pull_layers()
         self.assertTrue(resp)
         dock.extract_docker_layers(expand)
