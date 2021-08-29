@@ -19,7 +19,7 @@
 
 Summary:   NERSC Shifter -- Containers for HPC
 Name:      shifter
-Version:   18.03.4
+Version:   18.03.5
 Release:   %{shifter_release}
 License:   BSD (LBNL-modified)
 Group:     System Environment/Base
@@ -256,5 +256,8 @@ getent group > %{_sysconfdir}/shifter_etc_files/group
 %{_bindir}/fasthash
 
 %changelog
+* Sun Jun 14 2020 Shane Canon <scanon@lbl.gov> - 18.04.5
+- Added support for external mode
+
 * Sun Apr 24 2016 Douglas Jacobsen <dmjacobsen@lbl.gov> - 16.04.0pre1-1
 - Initial version of spec file

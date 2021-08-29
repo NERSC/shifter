@@ -237,6 +237,7 @@ class DockerV2Handle(object):
     username = None
     password = None
     token = None
+    manifest = None
     allow_authenticated = True
     check_layer_checksums = True
 
@@ -244,7 +245,7 @@ class DockerV2Handle(object):
     # an open is attempted
     excludeBlobSums = [_EMPTY_TAR_SHA256]
 
-    def __init__(self, imageIdent, options=None, updater=None):
+    def __init__(self, imageIdent, options=None, updater=None, cachedir=None):
         """
         Initialize an instance of the DockerV2 class.
         imageIdent is a tagged repo (e.g., ubuntu:14.04)
@@ -268,6 +269,8 @@ class DockerV2Handle(object):
         if not isinstance(options, dict):
             raise ValueError('Invalid type for DockerV2 options')
         self.updater = updater
+
+        self.cachedir = cachedir
 
         if 'baseUrl' in options:
             base_url = options['baseUrl']
@@ -457,12 +460,16 @@ class DockerV2Handle(object):
 
         # throws exceptions upon failure only
         _verify_manifest_signature(jdata, data, expected_hash)
+        self.manifest = jdata
         return jdata
 
-    def examine_manifest(self, manifest):
+    def examine_manifest(self):
         """Extract metadata from manifest."""
         self.log("PULLING", 'Constructing manifest')
-        (eldest, youngest) = _construct_image_metadata(manifest)
+        if not self.manifest:
+            self.get_image_manifest()
+
+        (eldest, youngest) = _construct_image_metadata(self.manifest)
 
         self.eldest = eldest
         self.youngest = youngest
@@ -481,12 +488,12 @@ class DockerV2Handle(object):
         resp['private'] = self.private
         return resp
 
-    def pull_layers(self, manifest, cachedir):
+    def pull_layers(self):
         """Download layers to cachedir if they do not exist."""
         # TODO: don't rely on self.eldest to demonstrate that
         # examine_manifest has run
         if self.eldest is None:
-            self.examine_manifest(manifest)
+            self.examine_manifest()
         layer = self.eldest
         while layer is not None:
             if layer['fsLayer']['blobSum'] in self.excludeBlobSums:
@@ -496,7 +503,7 @@ class DockerV2Handle(object):
             memo = "Pulling layer %s" % layer['fsLayer']['blobSum']
             self.log("PULLING", memo)
 
-            self.save_layer(layer['fsLayer']['blobSum'], cachedir)
+            self.save_layer(layer['fsLayer']['blobSum'])
             layer = layer['child']
         return True
 
@@ -511,7 +518,7 @@ class DockerV2Handle(object):
             self.headers['Authorization'] = 'Basic %s' % base64.b64encode(auth)
         return self.headers
 
-    def save_layer(self, layer, cachedir='./'):
+    def save_layer(self, layer):
         """
         Save a layer and verify with the digest
         """
@@ -522,7 +529,7 @@ class DockerV2Handle(object):
             if conn is None:
                 return None
 
-            filename = '%s/%s.tar' % (cachedir, layer)
+            filename = '%s/%s.tar' % (self.cachedir, layer)
 
             if os.path.exists(filename):
                 try:
@@ -557,7 +564,7 @@ class DockerV2Handle(object):
                 return False
         maxlen = int(resp1.getheader('content-length'))
         nread = 0
-        (out_fd, out_fn) = tempfile.mkstemp('.partial', layer, cachedir)
+        (out_fd, out_fn) = tempfile.mkstemp('.partial', layer, self.cachedir)
         out_fp = os.fdopen(out_fd, 'w')
 
         try:
@@ -595,7 +602,7 @@ class DockerV2Handle(object):
             raise ValueError("checksum mismatch, failure")
         return True
 
-    def extract_docker_layers(self, base_path, base_layer, cachedir='./'):
+    def extract_docker_layers(self, base_path):
         """Analyze files in docker layers and extract minimal set to base_path.
         """
         def filter_layer(layer_members, to_remove):
@@ -609,7 +616,7 @@ class DockerV2Handle(object):
 
         layer_paths = []
         tar_file_refs = []
-        layer = base_layer
+        layer = self.eldest
         # Convert this base_path to unicode otherwise things will break
         # later.
         base_path = base_path.encode('utf-8')
@@ -619,7 +626,7 @@ class DockerV2Handle(object):
                 continue
 
             tfname = '%s.tar' % layer['fsLayer']['blobSum']
-            tfname = os.path.join(cachedir, tfname)
+            tfname = os.path.join(self.cachedir, tfname)
             tfp = tarfile.open(tfname, 'r:gz')
             tar_file_refs.append(tfp)
 
@@ -676,7 +683,7 @@ class DockerV2Handle(object):
 
         # extract the selected files
         layer_idx = 0
-        layer = base_layer
+        layer = self.eldest
         while layer is not None:
             if layer['fsLayer']['blobSum'] in self.excludeBlobSums:
                 layer = layer['child']
@@ -719,34 +726,18 @@ def pull_image(options, repo, tag, cachedir='./', expanddir='./'):
     if 'baseUrl' not in options:
         options['baseUrl'] = 'https://registry-1.docker.io'
     imageident = '%s:%s' % (repo, tag)
-    handle = DockerV2Handle(imageident, options)
+    handle = DockerV2Handle(imageident, options, cachedir=cachedir)
 
-    manifest = handle.get_image_manifest()
-    (eldest, youngest) = _construct_image_metadata(manifest)
-    layer = eldest
-    while layer is not None:
-        handle.save_layer(layer['fsLayer']['blobSum'], cachedir)
-        layer = layer['child']
+    meta = handle.examine_manifest()
+    handle.pull_layers()
 
-    layer = eldest
-    meta = youngest
-    resp = {'id': meta['id']}
     expandedpath = os.path.join(expanddir, str(meta['id']))
-    resp['expandedpath'] = expandedpath
-    if 'config' in meta:
-        config = meta['config']
-        if 'Env' in config:
-            resp['env'] = config['Env']
-        if 'WorkingDir' in config:
-            resp['workdir'] = config['WorkingDir']
-        if 'Entrypoint' in config:
-            resp['entrypoint'] = config['Entrypoint']
-
+    meta['expandedpath'] = expandedpath
     if not os.path.exists(expandedpath):
         os.mkdir(expandedpath)
 
-    handle.extract_docker_layers(expandedpath, layer, cachedir=cachedir)
-    return resp
+    handle.extract_docker_layers(expandedpath)
+    return meta
 
 
 def main():
