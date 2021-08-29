@@ -57,6 +57,14 @@ class Updater(object):
                         'message': message,
                         'response': response}
             self.update_method(ident=self.ident, state=state, meta=metadata)
+    
+    def failed(self, e):
+        print(e)
+        if self.update_method is not None:
+            metadata = {'heartbeat': time(),
+                        'message': "Operation Failed",
+                        'response': {}}
+            self.update_method(ident=self.ident, state="FAILURE", meta=metadata)
 
 
 class WorkerThreads(object):
@@ -86,10 +94,10 @@ class WorkerThreads(object):
         """
         self.updater_queue.put({'id': ident, 'state': state, 'meta': meta})
 
-    def pull(self, request, updater, testmode=0):
+    def pull(self, request, updater):
         try:
             req = ImageRequest(self.conf, request, updater)
-            req.pull(testmode=testmode)
+            req.pull()
         except Exception as err:
             resp = {'error_type': str(type(err)),
                     'message': str(err)}
@@ -105,32 +113,33 @@ class WorkerThreads(object):
                     'message': str(err)}
             updater.update_status('FAILURE', 'FAILURE', response=resp)
 
-    def wrkimport(self, request, updater, testmode=0):
+    def wrkimport(self, request, updater):
         try:
             req = ImageRequest(self.conf, request, updater)
-            req.img_import(testmode=testmode)
+            req.img_import()
         except Exception as err:
             resp = {'error_type': str(type(err)),
                     'message': str(err)}
             updater.update_status('FAILURE', 'FAILURE', response=resp)
 
-    def dopull(self, ident, request, testmode=0):
+    def dopull(self, ident, request):
         """
         Kick off a pull operation.
         """
         updater = Updater(ident, self.updater)
         self.pools.apply_async(self.pull, [request, updater],
-                               {'testmode': testmode})
+                               {}, None, updater.failed)
 
-    def doexpire(self, ident, request, testmode=0):
+    def doexpire(self, ident, request):
         updater = Updater(ident, self.updater)
-        self.pools.apply_async(self.expire, [request, updater])
+        self.pools.apply_async(self.expire, [request, updater],
+                               {}, None, updater.failed)
 
-    def dowrkimport(self, ident, request, testmode=0):
+    def dowrkimport(self, ident, request):
         logging.debug("wrkimport starting")
         updater = Updater(ident, self.updater)
         self.pools.apply_async(self.wrkimport, [request, updater],
-                               {'testmode': testmode})
+                               {}, None, updater.failed)
 
 
 class ImageRequest(object):
@@ -435,32 +444,13 @@ class ImageRequest(object):
                     logging.error("Worker: caught exception while trying to "
                                   "clean up (%s) %s.", item, cleanitem)
 
-    def pull(self, testmode=0):
+    def pull(self):
         """
         Main task to do the full workflow of pulling an image and transferring
         it
         """
         tag = self.tag
         logging.debug("dopull system=%s tag=%s", self.system, tag)
-        if testmode == 1:
-            states = ('PULLING', 'EXAMINATION', 'CONVERSION', 'TRANSFER')
-            for state in states:
-                logging.info("Worker: testmode Updating to %s", state)
-                self.updater.update_status(state, state)
-                sleep(1)
-            ident = '%x' % randint(0, 100000)
-            ret = {
-                'id': ident,
-                'entrypoint': ['./blah'],
-                'workdir': '/root',
-                'env': ['FOO=bar', 'BAZ=boz']
-            }
-            state = 'READY'
-            self.updater.update_status(state, state, ret)
-            return ret
-        elif testmode == 2:
-            logging.info("Worker: testmode 2 setting failure")
-            raise OSError('task failed')
         try:
             # Step 1 - Do the pull
             self.updater.update_status('PULLING', 'PULLING')
@@ -519,7 +509,7 @@ class ImageRequest(object):
             self._cleanup_temporary()
             raise
 
-    def img_import(self, testmode=0):
+    def img_import(self):
         """
         Task to do the full workflow of copying an image and processing it
         """
@@ -527,22 +517,6 @@ class ImageRequest(object):
         self.import_image = True
         logging.debug("img_import system=%s tag=%s",
                       self.system, tag)
-        if testmode == 1:
-            states = ('HASHING', 'TRANSFER', 'READY')
-            for state in states:
-                logging.info("Worker: testmode Updating to %s", state)
-                self.updater.update_status(state, state)
-                sleep(1)
-            ident = '%x' % randint(0, 100000)
-            ret = {
-                'id': ident,
-                'entrypoint': ['./blah'],
-                'workdir': '/root',
-                'env': ['FOO=bar', 'BAZ=boz']
-            }
-            state = 'READY'
-            self.updater.update_status(state, state, ret)
-            return ret
         try:
             # Step 0 - Check if path is valid
             if not transfer.check_file(self.filepath,
