@@ -1,3 +1,4 @@
+from shifter_imagegw.imageworker import WorkerThreads
 import os
 import unittest
 import time
@@ -5,9 +6,12 @@ import json
 import base64
 import logging
 from copy import deepcopy
+from time import sleep
 from pymongo import MongoClient
 from nose.plugins.attrib import attr
 from shifter_imagegw.imagemngr import ImageMngr
+from multiprocessing.pool import ThreadPool
+from random import randint
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
@@ -28,6 +32,54 @@ modification, are permitted provided that the following conditions are met:
 
 See LICENSE for full text.
 """
+
+
+class mock_worker(WorkerThreads):
+    def __init__(self, q):
+        self.mode = 1
+        self.q = q
+        self.pools = ThreadPool(processes=2)
+
+    def set_mode(self, mode):
+        self.mode = mode
+
+    def updater(self, ident, state, meta):
+        """
+        Updater function: This just post a message to a queue.
+        """
+        self.q.put({'id': ident, 'state': state, 'meta': meta})
+
+    def pull(self, request, updater):
+        if self.mode == 2:
+            raise OSError('task failed')
+        states = ('PULLING', 'EXAMINATION', 'CONVERSION', 'TRANSFER')
+        for state in states:
+            updater.update_status(state, state)
+            sleep(1)
+        ret = {
+            'id': '%x' % randint(0, 100000),
+            'entrypoint': ['./blah'],
+            'workdir': '/root',
+            'env': ['FOO=bar', 'BAZ=boz']
+        }
+        state = 'READY'
+        updater.update_status(state, state, ret)
+        return ret
+
+    def wrkimport(self, request, updater):
+        states = ('HASHING', 'TRANSFER', 'READY')
+        for state in states:
+            updater.update_status(state, state)
+            sleep(1)
+        ret = {
+            'id': '%x' % randint(0, 100000),
+            'entrypoint': ['./blah'],
+            'workdir': '/root',
+            'env': ['FOO=bar', 'BAZ=boz']
+        }
+        state = 'READY'
+        updater.update_status(state, state, ret)
+        return ret
 
 
 class ImageMngrTestCase(unittest.TestCase):
@@ -51,6 +103,9 @@ class ImageMngrTestCase(unittest.TestCase):
             log_handler.setLevel(logging.INFO)
             self.logger.addHandler(log_handler)
         self.m = ImageMngr(self.config, logger=self.logger)
+        # Manager with mocked worker
+        self.mtm = ImageMngr(self.config, logger=self.logger)
+        self.mtm.workers = mock_worker(self.mtm.status_queue)
         self.system = 'systema'
         self.itype = 'docker'
         self.tag = 'alpine:latest'
@@ -513,13 +568,13 @@ class ImageMngrTestCase(unittest.TestCase):
             'groupACL': []
         }
         # Do the pull
-        session = self.m.new_session(self.auth, self.system)
-        rec = self.m.pull(session, pr, testmode=1)  # ,delay=False)
+        session = self.mtm.new_session(self.auth, self.system)
+        rec = self.mtm.pull(session, pr)  # ,delay=False)
         self.assertIsNotNone(rec)
         self.assertIn('_id', rec)
         id = rec['_id']
         # Re-pull the same thing.  Should give the same record
-        rec = self.m.pull(session, pr, testmode=1)  # ,delay=False)
+        rec = self.mtm.pull(session, pr)  # ,delay=False)
         self.assertIsNotNone(rec)
         self.assertIn('_id', rec)
         id2 = rec['_id']
@@ -531,19 +586,19 @@ class ImageMngrTestCase(unittest.TestCase):
         # Track through transistions
         state = self.time_wait(id)
         self.assertEqual(state, 'READY')
-        imagerec = self.m.lookup(session, pr)
+        imagerec = self.mtm.lookup(session, pr)
         self.assertIn('ENTRY', imagerec)
         self.assertIn('ENV', imagerec)
 
-    def test_pull(self):
+    def test_pull_mocked(self):
         """
         Basic pull test including an induced pull failure.
         """
         # Use defaults for format, arch, os, ostcount, replication
         pr = self.pull
         # Do the pull
-        session = self.m.new_session(self.auth, self.system)
-        rec = self.m.pull(session, pr, testmode=1)  # ,delay=False)
+        session = self.mtm.new_session(self.auth, self.system)
+        rec = self.mtm.pull(session, pr)  # ,delay=False)
         self.assertIsNotNone(rec)
         id = rec['_id']
         # Confirm record
@@ -553,17 +608,19 @@ class ImageMngrTestCase(unittest.TestCase):
         # Track through transistions
         state = self.time_wait(id)
         self.assertEqual(state, 'READY')
-        imagerec = self.m.lookup(session, self.pull)
+        imagerec = self.mtm.lookup(session, self.pull)
         self.assertIn('ENTRY', imagerec)
         self.assertIn('ENV', imagerec)
         # Cause a failure
         self.images.drop()
-        rec = self.m.pull(session, pr, testmode=2)
-        time.sleep(10)
+        self.mtm.workers.set_mode(2)
+        rec = self.mtm.pull(session, pr)
+        time.sleep(2)
         self.assertIsNotNone(rec)
         id = rec['_id']
-        state = self.m.get_state(id)
+        state = self.mtm.get_state(id)
         self.assertEqual(state, 'FAILURE')
+        self.mtm.workers.set_mode(1)
 
     def test_pull2(self):
         """
@@ -573,10 +630,10 @@ class ImageMngrTestCase(unittest.TestCase):
         # Use defaults for format, arch, os, ostcount, replication
         pr = self.pull
         # Do the pull
-        session = self.m.new_session(self.auth, self.system)
-        rec1 = self.m.pull(session, pr, testmode=1)  # ,delay=False)
+        session = self.mtm.new_session(self.auth, self.system)
+        rec1 = self.mtm.pull(session, pr)  # ,delay=False)
         pr['tag'] = self.tag2
-        rec2 = self.m.pull(session, pr, testmode=1)  # ,delay=False)
+        rec2 = self.mtm.pull(session, pr)  # ,delay=False)
         self.assertIsNotNone(rec1)
         id1 = rec1['_id']
         self.assertIsNotNone(rec2)
@@ -788,7 +845,7 @@ class ImageMngrTestCase(unittest.TestCase):
 
     def test_pull_acl(self):
         """
-        Basic pull test with ACLs testmode image.
+        Basic pull test with ACLs image.
         """
         # Use defaults for format, arch, os, ostcount, replication
         pr = {
@@ -874,8 +931,8 @@ class ImageMngrTestCase(unittest.TestCase):
             'groupACL': []
         }
         # Do the pull
-        session = self.m.new_session(self.auth, self.system)
-        rec = self.m.mngrimport(session, pr, testmode=1)  # ,delay=False)
+        session = self.mtm.new_session(self.auth, self.system)
+        rec = self.mtm.mngrimport(session, pr)  # ,delay=False)
         self.assertIsNotNone(rec)
         id = rec['_id']
         # Confirm record
@@ -885,7 +942,7 @@ class ImageMngrTestCase(unittest.TestCase):
         # Track through transistions
         state = self.time_wait(id)
         self.assertEqual(state, 'READY')
-        imagerec = self.m.lookup(session, pr)
+        imagerec = self.mtm.lookup(session, pr)
         self.assertIn('ENTRY', imagerec)
         self.assertIn('ENV', imagerec)
 
@@ -905,7 +962,7 @@ class ImageMngrTestCase(unittest.TestCase):
                                                self.format)
         session = self.m.new_session(self.authadmin, system)
         er = {'system': system, 'tag': self.tag, 'itype': self.itype}
-        rec = self.m.expire(session, er, testmode=1)  # ,delay=False)
+        rec = self.m.expire(session, er)  # ,delay=False)
         self.assertIsNotNone(rec)
         time.sleep(2)
         state = self.m.get_state(id)
@@ -943,7 +1000,7 @@ class ImageMngrTestCase(unittest.TestCase):
                                                self.format)
         session = self.m.new_session(self.auth, self.system)
         er = {'system': self.system, 'tag': self.tag, 'itype': self.itype}
-        rec = self.m.expire(session, er, testmode=1)  # ,delay=False)
+        rec = self.m.expire(session, er)  # ,delay=False)
         self.assertIsNotNone(rec)
         time.sleep(2)
         state = self.m.get_state(id)
@@ -958,7 +1015,7 @@ class ImageMngrTestCase(unittest.TestCase):
         id = self.images.insert(record)
         self.assertIsNotNone(id)
         session = self.m.new_session(self.authadmin, self.system)
-        self.m.autoexpire(session, self.system, testmode=1)
+        self.m.autoexpire(session, self.system)
         state = self.m.get_state(id)
         self.assertIsNone(state)
 
@@ -968,7 +1025,7 @@ class ImageMngrTestCase(unittest.TestCase):
         id = self.images.insert(record)
         self.assertIsNotNone(id)
         session = self.m.new_session(self.authadmin, self.system)
-        self.m.autoexpire(session, self.system, testmode=1)
+        self.m.autoexpire(session, self.system)
         state = self.m.get_state(id)
         self.assertEqual(state, 'PENDING')
 
@@ -983,7 +1040,7 @@ class ImageMngrTestCase(unittest.TestCase):
         file, metafile = self.create_fakeimage(self.system, record['id'],
                                                self.format)
         session = self.m.new_session(self.authadmin, self.system)
-        self.m.autoexpire(session, self.system, testmode=1)  # ,delay=False)
+        self.m.autoexpire(session, self.system)  # ,delay=False)
         time.sleep(5)
         state = self.m.get_state(id)
         self.assertEqual(state, 'EXPIRED')
@@ -1000,7 +1057,7 @@ class ImageMngrTestCase(unittest.TestCase):
         file, metafile = self.create_fakeimage(self.system, record['id'],
                                                self.format)
         session = self.m.new_session(self.authadmin, self.system)
-        self.m.autoexpire(session, self.system, testmode=1)  # ,delay=False)
+        self.m.autoexpire(session, self.system)  # ,delay=False)
         time.sleep(2)
         state = self.m.get_state(id)
         self.assertEqual(state, 'READY')
@@ -1018,7 +1075,7 @@ class ImageMngrTestCase(unittest.TestCase):
         file, metafile = self.create_fakeimage(self.system, record['id'],
                                                self.format)
         session = self.m.new_session(self.authadmin, self.system)
-        self.m.autoexpire(session, self.system, testmode=1)  # ,delay=False)
+        self.m.autoexpire(session, self.system)  # ,delay=False)
         time.sleep(2)
         state = self.m.get_state(id)
         self.assertEqual(state, 'READY')
