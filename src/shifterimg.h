@@ -26,6 +26,7 @@
 
 enum ImageGwAction {
     MODE_LOOKUP = 0,
+    MODE_INSPECT,
     MODE_PULL,
     MODE_IMAGES,
     MODE_LOGIN,

@@ -778,7 +778,7 @@ char *_prepare_pull_payload(struct options *config) {
 
 ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options *config, UdiRootConfig *udiConfig) {
     const char *modeStr = NULL;
-    if (config->mode == MODE_LOOKUP) {
+    if (config->mode == MODE_LOOKUP || config->mode == MODE_INSPECT) {
         modeStr = "lookup";
     } else if (config->mode == MODE_PULL || config->mode == MODE_PULL_NONBLOCK) {
         modeStr = "pull";
@@ -880,6 +880,12 @@ ImageGwState *queryGateway(char *baseUrl, char *type, char *tag, struct options 
                 ImageGwImageRec *image = parseLookupResponse(imageGw);
                 if (image != NULL) {
                     printf("%s\n", image->identifier);
+                }
+                free_ImageGwImageRec(image, 1);
+            } else if (config->mode == MODE_INSPECT) {
+                ImageGwImageRec *image = parseLookupResponse(imageGw);
+                if (image != NULL) {
+                    printf(imageGw->message);
                 }
                 free_ImageGwImageRec(image, 1);
             } else if (config->mode == MODE_PULL_NONBLOCK) {
@@ -1162,6 +1168,8 @@ int parse_options(int argc, char **argv, struct options *config, UdiRootConfig *
     config->mode = MODE_INVALID;
     if (strcmp(argv[optind], "lookup") == 0) {
         config->mode = MODE_LOOKUP;
+    } else if (strcmp(argv[optind], "inspect") == 0) {
+        config->mode = MODE_INSPECT;
     } else if (strcmp(argv[optind], "pull") == 0) {
         config->mode = MODE_PULL;
     } else if (strcmp(argv[optind], "pullnb") == 0) {
