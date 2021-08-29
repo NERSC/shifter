@@ -1,5 +1,5 @@
 sudo: true
-dist: trusty
+dist: bionic
 language: python
 python:
   - "2.7"
@@ -9,9 +9,9 @@ compiler:
 # command to install dependencies
 before_install:
   - sudo chmod 755 /var/log
-  - sudo add-apt-repository "deb http://us.archive.ubuntu.com/ubuntu/ precise universe multiverse"
+  - sudo add-apt-repository "deb http://us.archive.ubuntu.com/ubuntu/ bionic universe multiverse"
   - sudo apt-get update -qq
-  - sudo apt-get install -qq libjson-c2 libjson-c-dev munge libmunge2 libmunge-dev libcurl4-openssl-dev autoconf automake libtool curl make valgrind xfsprogs squashfs-tools libcap-dev
+  - sudo apt-get install -qq libjson-c-dev munge libmunge2 libmunge-dev libcurl4-openssl-dev autoconf automake libtool curl make valgrind xfsprogs squashfs-tools libcap-dev
   - sudo modprobe squashfs
   - sudo modprobe xfs
   - cat /proc/filesystems
@@ -28,8 +28,9 @@ before_script:
   - cp imagegw/test.json.example test.json
   - mkdir /tmp/imagegw /tmp/systema /tmp/systemb
   - rm imagegw/test/sha256sum
-  - find /tmp/
 script:
+  - echo "Disabling autoclear for Travis and Kernel 5.4"
+  - sed -i 's/useAutoclear = 1;/useAutoclear = 0;/' ./src/shifter_core.c
   - export PROC_COUNT=$(cat /proc/cpuinfo  | egrep '^processor' | wc -l)
   - ./autogen.sh
   - ./configure --prefix=/usr --sysconfdir=/etc/shifter --disable-staticsshd
