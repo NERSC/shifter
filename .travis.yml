@@ -28,7 +28,6 @@ before_script:
   - cp imagegw/test.json.example test.json
   - mkdir /tmp/imagegw /tmp/systema /tmp/systemb
   - rm imagegw/test/sha256sum
-  - find /tmp/
 script:
   - echo "Disabling autoclear for Travis and Kernel 5.4"
   - sed -i 's/useAutoclear = 1;/useAutoclear = 0;/' ./src/shifter_core.c
