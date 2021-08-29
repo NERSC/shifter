@@ -330,7 +330,7 @@ int forkAndExecvLogToSlurm(const char *appname, char **args) {
             if (stdoutStream) {
                 ssize_t nBytes = getline(&lineBuffer, &lineBuffer_sz, stdoutStream);
                 if (nBytes > 0) {
-                    _log(LOG_ERROR, "%s stdout: %s", appname, lineBuffer);
+                    _log(LOG_DEBUG, "%s stdout: %s", appname, lineBuffer);
                 } else {
                     fclose(stdoutStream);
                     stdoutStream = NULL;
@@ -348,7 +348,7 @@ int forkAndExecvLogToSlurm(const char *appname, char **args) {
         }
 
         /* wait on the child */
-        _log(LOG_ERROR, "waiting on %s\n", appname);
+        _log(LOG_INFO, "waiting on %s\n", appname);
         waitpid(pid, &status, 0);
         if (WIFEXITED(status)) {
              rc = WEXITSTATUS(status);
@@ -928,7 +928,7 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
         set_type = 1;
     }
 
-    _log(LOG_ERROR, "about to lookup image in prolog env");
+    _log(LOG_INFO, "about to lookup image in prolog env");
     ptr = getenv("SPANK_SHIFTER_IMAGE");
     if (ptr != NULL) {
         char *tmp = imageDesc_filterString(ptr, set_type ? ssconfig->imageType : NULL);
@@ -1144,7 +1144,7 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     strncpy_StringArray(ssconfig->image, strlen(ssconfig->image), &setupRootArgs_sv, &setupRootArgs, &n_setupRootArgs, 10);
 
     for (setupRootArgs_sv = setupRootArgs; setupRootArgs_sv && *setupRootArgs_sv; setupRootArgs_sv++) {
-        _log(LOG_ERROR, "setupRoot arg %d: %s", (int)(setupRootArgs_sv - setupRootArgs), *setupRootArgs_sv);
+        _log(LOG_INFO, "setupRoot arg %d: %s", (int)(setupRootArgs_sv - setupRootArgs), *setupRootArgs_sv);
     }
 
     /* setup memory cgroup if necessary */
@@ -1168,7 +1168,7 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
 
     int status = forkAndExecvLogToSlurm("setupRoot", setupRootArgs);
 
-    _log(LOG_ERROR, "after setupRoot, exit code: %d", status);
+    _log(LOG_INFO, "after setupRoot, exit code: %d", status);
 
 
     if (status == 0) {
@@ -1183,7 +1183,7 @@ int shifterSpank_job_prolog(shifterSpank_config *ssconfig) {
     }
 
     pid = findSshd();
-    _log(LOG_DEBUG, "shifter_prolog: sshd on pid %d\n", pid);
+    _log(LOG_INFO, "shifter_prolog: sshd on pid %d\n", pid);
     
 _prolog_exit_unclean:
     if (setupRootArgs != NULL) {
@@ -1289,7 +1289,7 @@ int shifterSpank_job_epilog(shifterSpank_config *ssconfig) {
         rc = SLURM_ERROR;
     }
 
-    _log(LOG_DEBUG, "shifter_epilog: done with unsetupRoot");
+    _log(LOG_INFO, "shifter_epilog: done with unsetupRoot");
 
 _epilog_exit_unclean:
     return rc;
