@@ -322,7 +322,12 @@ int setup_libslurm() {
     if (ssconfig->libslurm_handle != NULL) return SUCCESS;
 
     ssconfig->libslurm_handle = _libslurm_dlopen();
-    if (ssconfig->libslurm_handle != NULL) return SUCCESS;
+    if (ssconfig->libslurm_handle != NULL) {
+#if SLURM_VERSION_NUMBER >= SLURM_VERSION_NUM(20,11,0)
+	    slurm_init(NULL);
+#endif
+	    return SUCCESS;
+    }
     return ERROR;
 }
 
