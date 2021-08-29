@@ -322,10 +322,8 @@ class ImageRequest(object):
 
         Returns True on success
         """
-        if self.userACL:
-            self.meta['userACL'] = self.userACL
-        if self.groupACL:
-            self.meta['groupACL'] = self.groupACL
+        self.meta['userACL'] = self.userACL
+        self.meta['groupACL'] = self.groupACL
 
         edir = self.conf['ExpandDirectory']
 
