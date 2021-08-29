@@ -48,7 +48,7 @@ the sitecustomize.py and prepare your own that does similar.
 Adding additional registries
 ----------------------------
 The locations block of the imagemanager.json file can be used to add additional
-registeries.  Here is an example that adds various public registeries. 
+registeries.  Here is an example that adds various public registeries.::
 
     "Locations": {
         "index.docker.io": {
@@ -65,7 +65,7 @@ registeries.  Here is an example that adds various public registeries.
         }
     },
 
-Pulling the image is done similar to the method used for docker.
+Pulling the image is done similar to the method used for docker.::
 
     shifterimg pull quay.io/biocontainers/barrnap:0.9--3
 
