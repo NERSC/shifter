@@ -45,6 +45,30 @@ In order to get the shifter sitecustomize.py into your PYTHONPATH.
 If that isn't appropriate for your site, then you can examine the contents of
 the sitecustomize.py and prepare your own that does similar.
 
+Adding additional registries
+----------------------------
+The locations block of the imagemanager.json file can be used to add additional
+registeries.  Here is an example that adds various public registeries. 
+
+    "Locations": {
+        "index.docker.io": {
+            "remotetype": "dockerv2",
+            "authentication": "http"
+        },
+        "nvcr.io": {
+            "remotetype": "dockerv2",
+            "authentication": "http"
+        },
+        "quay.io": {
+            "remotetype": "dockerv2",
+            "authentication": "http"
+        }
+    },
+
+Pulling the image is done similar to the method used for docker.
+
+    shifterimg pull quay.io/biocontainers/barrnap:0.9--3
+
 Can Shifter use a proxy to access registries
 --------------------------------------------
 Shifter does support using a proxy.  This is controlled through the enviornment variables, http_proxy.
