@@ -255,6 +255,16 @@ class ImageWorkerTestCase(unittest.TestCase):
         result = req._examine_image()
         self.assertFalse(result)
 
+    def test_labels(self):
+        self.cleanup_cache()
+        request = self.request
+        conf = deepcopy(self.config)
+        conf['Platforms']['systema']['use_external'] = True
+        req = imageworker.ImageRequest(conf, request, self.updater)
+        resp = req.pull()
+        self.assertIn('labels', resp)
+        self.assertIn('alabel', resp['labels'])
+
 
 if __name__ == '__main__':
     unittest.main()

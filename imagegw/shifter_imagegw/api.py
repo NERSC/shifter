@@ -100,7 +100,7 @@ def create_response(rec):
     resp = {}
     fields = (
         'id', 'system', 'itype', 'tag', 'status', 'userACL', 'groupACL',
-        'ENV', 'ENTRY', 'WORKDIR', 'last_pull', 'status_message',
+        'ENV', 'ENTRY', 'WORKDIR', 'LABELS', 'last_pull', 'status_message',
     )
     for field in fields:
         try:

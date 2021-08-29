@@ -5,9 +5,11 @@ import time
 import json
 import base64
 import logging
+from copy import deepcopy
 from time import sleep
 from pymongo import MongoClient
 from nose.plugins.attrib import attr
+from shifter_imagegw.imagemngr import ImageMngr
 from multiprocessing.pool import ThreadPool
 from random import randint
 
@@ -83,7 +85,6 @@ class mock_worker(WorkerThreads):
 class ImageMngrTestCase(unittest.TestCase):
 
     def setUp(self):
-        from shifter_imagegw.imagemngr import ImageMngr
         self.configfile = 'test.json'
         with open(self.configfile) as config_file:
             self.config = json.load(config_file)
@@ -1188,6 +1189,30 @@ class ImageMngrTestCase(unittest.TestCase):
         mrec = self.images.find_one(q)
         self.assertIn(self.public, mrec['tag'])
         self.assertIn(newtag, mrec['tag'])
+
+    def test_labels(self):
+        # Need use_external
+        conf = deepcopy(self.config)
+        conf['Platforms']['systema']['use_external'] = True
+        m = ImageMngr(conf, logger=self.logger)
+        # Use defaults for format, arch, os, ostcount, replication
+        pr = self.pull
+        # Do the pull
+        session = m.new_session(self.auth, self.system)
+        rec1 = m.pull(session, pr)  # ,delay=False)
+        id1 = rec1['_id']
+        # Confirm record
+        q = {'system': self.system, 'itype': self.itype, 'pulltag': self.tag}
+        state = self.time_wait(id1)
+        self.assertEqual(state, 'READY')
+        mrec = self.images.find_one(q)
+        self.assertIn('LABELS', mrec)
+        self.assertIn('alabel', mrec['LABELS'])
+        look_req = self.query.copy()
+        look = m.lookup(session, look_req)
+        self.assertIn('LABELS', look)
+        self.assertIn('alabel', look['LABELS'])
+        self.images.drop()
 
 
 if __name__ == '__main__':

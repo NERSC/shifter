@@ -787,6 +787,7 @@ class ImageMngr(object):
             'entrypoint': 'ENTRY',
             'env': 'ENV',
             'workdir': 'WORKDIR',
+            'labels': 'LABELS',
             'last_pull': 'last_pull',
             'userACL': 'userACL',
             'groupACL': 'groupACL',

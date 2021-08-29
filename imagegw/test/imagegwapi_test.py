@@ -3,7 +3,9 @@ import unittest
 import time
 import urllib.request, urllib.parse, urllib.error
 import json
+from copy import deepcopy
 from shifter_imagegw.fasthash import fast_hash
+from shifter_imagegw.imagemngr import ImageMngr
 from pymongo import MongoClient
 
 """
@@ -250,6 +252,27 @@ class GWTestCase(unittest.TestCase):
         self.assertEqual(data['id'], hash)
 #        assert 'filepath' in data
 #        assert rv.status == 200
+
+    def test_labels(self):
+        # Configure an API service with use_external
+        from shifter_imagegw import api
+        c = deepcopy(self.config)
+        c['Platforms']['systema']['use_external'] = True
+        api.mgr = ImageMngr(c)
+        # Do a pull so we can create an image record
+        uri = '%s/pull/%s/' % (self.url, self.urlreq)
+        app = api.app.test_client
+        app.post(uri, headers={AUTH_HEADER: self.auth})
+        time.sleep(1)
+        _, rv = app.post(uri, headers={AUTH_HEADER: self.auth})
+        self.assertEqual(rv.json['status'], 'READY')
+        uri = '%s/lookup/%s/' % (self.url, self.urlreq)
+        _, rv = app.get(uri, headers={AUTH_HEADER: self.auth})
+        self.assertEquals(rv.status, 200)
+        resp = rv.json
+        self.assertIn('LABELS', resp)
+        self.assertIn('alabel', resp['LABELS'])
+        self.assertEqual(resp['LABELS']['alabel'], 'avalue')
 
 
 if __name__ == '__main__':
