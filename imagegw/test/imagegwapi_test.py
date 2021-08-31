@@ -45,6 +45,8 @@ class GWTestCase(unittest.TestCase):
             os.makedirs(p)
         self.images = client[db].images
         self.images.drop()
+        self.requests = client[db].requests
+        self.requests.remove()
         self.metrics = client[db].metrics
         self.metrics.remove({})
         self.url = "/api"
@@ -77,6 +79,12 @@ class GWTestCase(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.mgr.shutdown()
+
+    def cleanup_pulls(self):
+        path = self.config['Platforms']['systema']['ssh']['imageDir']
+        for f in os.listdir(path):
+            if f.endswith('.meta') or f.endswith('.squashfs'):
+                os.remove(os.path.join(path, f))
 
     def time_wait(self, urlreq, data=None, state='READY', op='pull',
                   TIMEOUT=30):
@@ -116,7 +124,7 @@ class GWTestCase(unittest.TestCase):
                 'ENTRY': '',
                 }
 
-    def test_pull(self):
+    def test_pull_acl_checks(self):
         uri = '%s/pull/%s/' % (self.url, self.urlreq)
         data = {'allowed_uids': '1000,1001',
                 'allowed_gids': '1002,1003'}
@@ -156,9 +164,11 @@ class GWTestCase(unittest.TestCase):
         assert rv.status == 200
 
     def test_pulllookup(self):
+        self.cleanup_pulls()
         # Do a pull so we can create an image record
         uri = '%s/pull/%s/' % (self.url, self.urlreq)
         rv = self.time_wait(self.urlreq)
+        print(rv.json)
         uri = '%s/lookup/%s/' % (self.url, self.urlreq)
         _, rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
         self.assertEquals(rv.status, 200)
