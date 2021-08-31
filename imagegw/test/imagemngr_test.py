@@ -39,13 +39,21 @@ class mock_worker(WorkerThreads):
         self.mode = 1
         self.q = q
         self.id = None
+        self.pause = 0.2
         self.pools = ThreadPool(processes=2)
+        self.meta_only = False
 
     def set_mode(self, mode):
         self.mode = mode
 
     def set_id(self, id):
         self.id = id
+
+    def set_pause(self, pause):
+        self.pause = pause
+
+    def set_metaonly(self, meta_only):
+        self.meta_only = meta_only
 
     def updater(self, ident, state, meta):
         """
@@ -54,12 +62,13 @@ class mock_worker(WorkerThreads):
         self.q.put({'id': ident, 'state': state, 'meta': meta})
 
     def pull(self, request, updater):
+        pause = 1
         if self.mode == 2:
             raise OSError('task failed')
         states = ('PULLING', 'EXAMINATION', 'CONVERSION', 'TRANSFER')
         for state in states:
             updater.update_status(state, state)
-            sleep(0.2)
+            sleep(self.pause)
         if not self.id:
             id = '%x' % randint(0, 100000)
         else:
@@ -75,8 +84,8 @@ class mock_worker(WorkerThreads):
             ret['private'] = True
             ret['userACL'] = request['userACL']
             ret['groupACL'] = request['groupACL']
-        if self.mode == 4:
-            ret['meta_only'] = True
+        if self.meta_only:
+            ret['meta_only'] = self.meta_only
         state = 'READY'
         updater.update_status(state, state, ret)
         return ret
@@ -247,7 +256,7 @@ class ImageMngrTestCase(unittest.TestCase):
             d[k] = base64.b64decode(d[k])
         return d
 
-    def cleanup_pulls(self):
+    def _cleanup_pulls(self):
         path = self.config['Platforms']['systema']['ssh']['imageDir']
         for f in os.listdir(path):
             if f.endswith('.meta') or f.endswith('.squashfs'):
@@ -744,7 +753,7 @@ class ImageMngrTestCase(unittest.TestCase):
         # Let's try changing ACLs
         pr = self.pull
         pr['userACL'] = [101]
-        self.mtm.workers.set_mode(4)
+        self.mtm.workers.set_metaonly(True)
         rec = self.mtm.pull(session, pr)
         self.assertIsNotNone(rec)
         id = rec['_id']
@@ -975,12 +984,37 @@ class ImageMngrTestCase(unittest.TestCase):
         rec2 = self.mtm.pull(session, pr)
         self.assertEqual(rec2['_id'], rec['_id'])
 
+    @attr('offline')
+    def test_pull_edge_cases(self):
+        # Case 1 - We have an image but we don't have a pull record
+        #          We should just go ahead and try the pull.
+        self.images.insert(self.good_record())
+        self.mtm.workers.set_id('fakeid')
+        self.mtm.workers.set_pause(0)
+        session = self.mtm.new_session(self.auth, self.system)
+        rec = self.mtm.pull(session, self.pull)
+        state = self.time_wait(rec['_id'])
+        self.assertEqual(state, 'READY')
+        # This should just replace the previous image
+        self.assertEqual(self.images.find().count(), 1)
+
+        # Case 2 - We get a meta_only update but we don't have a
+        #          previous record.
+        self.images.remove()
+        self.requests.remove()
+        self.mtm.workers.set_metaonly(True)
+        rec = self.mtm.pull(session, self.pull)
+        state = self.time_wait(rec['_id'])
+        self.assertEqual(state, 'READY')
+        rec = self.mtm.lookup(session, self.query)
+        self.assertTrue(rec)
+
     def test_pull_public_acl(self):
         """
         Pulling a public image with ACLs should ignore the acls.
         """
         # Use defaults for format, arch, os, ostcount, replication
-        self.cleanup_pulls()
+        self._cleanup_pulls()
         pr = {
             'system': self.system,
             'itype': self.itype,
@@ -1446,6 +1480,11 @@ class ImageMngrTestCase(unittest.TestCase):
         rec = self.images.find_one({'_id': id})
         self.assertEqual(rec['status'], 'EXPIRED')
 
+        # Let's throw a bad message at the status thread
+        self.m.status_queue.put({})
+        self.m.status_queue.put('stop')
+        self.m.status_thread()
+
     @attr('offline')
     def test_pull_multiple_tags(self):
         """
@@ -1493,7 +1532,7 @@ class ImageMngrTestCase(unittest.TestCase):
     def test_labels(self):
         # Need use_external
         conf = deepcopy(self.config)
-        self.cleanup_pulls()
+        self._cleanup_pulls()
         conf['Platforms']['systema']['use_external'] = True
         m = ImageMngr(conf, logger=self.logger)
         # Use defaults for format, arch, os, ostcount, replication

@@ -141,35 +141,40 @@ class ImageMngr(object):
         """
         self.mongo_init()
         while True:
-            message = self.status_queue.get()
-            if message == 'stop':
-                self.logger.info("Shutting down Status Thread")
-                break
-            ident = message['id']
-            state = message['state']
-            meta = message['meta']
-            # TODO: Handle a failed expire
-            if state == "FAILURE":
-                self.logger.warn("Operation failed for %s", ident)
-                self.update_request_state(ident, state, meta)
-            elif state in ['EXPIRED', 'EXPIRING']:
-                # TODO: Maybe rethink this.
-                self._images_update({'_id': ident},
-                                    {'$set': {'status': state}})
-            elif state != 'READY':
-                self.update_request_state(ident, state, meta['response'])
-            elif 'response' in meta and meta['response']:
-                response = meta['response']
-                self.logger.debug(response)
-                if 'meta_only' in response:
-                    self.logger.debug('Updating ACLs')
-                    # We need to get the search criteria
-                    self.update_acls(ident, response)
+            try:
+                message = self.status_queue.get()
+                if message == 'stop':
+                    self.logger.info("Shutting down Status Thread")
+                    break
+                ident = message['id']
+                state = message['state']
+                meta = message['meta']
+                # TODO: Handle a failed expire
+                if state == "FAILURE":
+                    self.logger.warn("Operation failed for %s", ident)
                     self.update_request_state(ident, state, meta)
-                else:
-                    self.complete_pull(ident, response)
-                    self.update_request_state(ident, state, meta)
-                self.logger.debug('meta=%s', str(response))
+                elif state in ['EXPIRED', 'EXPIRING']:
+                    # TODO: Maybe rethink this.
+                    self._images_update({'_id': ident},
+                                        {'$set': {'status': state}})
+                elif state != 'READY':
+                    self.update_request_state(ident, state, meta['response'])
+                elif 'response' in meta and meta['response']:
+                    response = meta['response']
+                    self.logger.debug(response)
+                    if 'meta_only' in response:
+                        self.logger.debug('Updating ACLs')
+                        # We need to get the search criteria
+                        self.update_acls(ident, response)
+                        self.update_request_state(ident, state, meta)
+                    else:
+                        self.complete_pull(ident, response)
+                        self.update_request_state(ident, state, meta)
+                    self.logger.debug('meta=%s', str(response))
+            except Exception as ex:
+                # Let's log this to stderr just in case the logger
+                # isn't working
+                sys.stderr.write("Exception: %s" % (str(ex)))
 
     def check_session(self, session, system=None):
         """Check if this is a valid session
@@ -666,17 +671,12 @@ class ImageMngr(object):
         rec = self._images_find_one({'id': response['id'], 'status': 'READY',
                                     'system': pullrec['system']})
         if rec is None:
-            # This means the image already existed, but we didn't have a
-            # record of it.  That seems odd (it happens in tests).  Let's
+            # This means the image file already existed, but we didn't have a
+            # record of it.  That generally shouldn't happen.  Let's
             # note it and power on through.
             msg = "WARNING: No image record found for an ACL update"
             self.logger.warn(msg)
-            img = pullrec
-            img.pop('_id')
-            img['last_pull'] = time()
-            img['status'] = 'READY'
-            self._images_insert(img)
-            self.add_tag(ident, pullrec['system'], pullrec['pulltag'])
+            self.complete_pull(ident, response)
         else:
             self.add_tag(rec['_id'], pullrec['system'], pullrec['pulltag'])
             updates = {
@@ -705,14 +705,12 @@ class ImageMngr(object):
                                      'system': pullrec['system'],
                                      'status': 'READY'})
         tag = pullrec['pulltag']
-        if rec is not None:
+        if rec:
             # So we already had this image.
             # Let's delete the pull record.
             # TODO: update the pull time of the matching id
             self.logger.debug('Duplicate image')
-            update_rec = {
-                'last_pull': time()
-            }
+            update_rec = { 'last_pull': time() }
             self.update_mongo(rec['_id'], update_rec)
 
             # However it could be a new tag.  So let's update the tag
@@ -720,7 +718,7 @@ class ImageMngr(object):
                 rec['tag'].index(response['tag'])
             except:
                 self.add_tag(rec['_id'], pullrec['system'], tag)
-            return True
+            return
         else:
             img = self.map_response(pullrec, response)
             img['last_pull'] = time()
