@@ -1,0 +1,110 @@
+name: Integration Tests
+
+on:
+  push:
+    branches:
+    - main
+    - sanic
+    - gha
+  pull_request:
+    branches: 
+    - main
+    - sanic
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: 2.7
+      - name: Install dependencies
+        run: |
+           sudo chmod 755 /var/log
+           sudo add-apt-repository "deb http://us.archive.ubuntu.com/ubuntu/ bionic universe multiverse"
+           sudo apt-get update -qq
+           sudo apt-get install -qq libjson-c-dev munge libmunge2 libmunge-dev libcurl4-openssl-dev autoconf automake libtool curl make valgrind xfsprogs squashfs-tools libcap-dev
+           sudo modprobe squashfs
+           sudo modprobe xfs
+           pip install -r imagegw/requirements.txt
+           # install packages for tests
+           pip install nose coverage cpp-coveralls
+           # Not sure why this is needed
+           LOC=$(dirname $(which coveralls) ); sudo mv $LOC/coveralls $LOC/cpp-coveralls
+           pip install coveralls coveralls-merge
+           pip install pexpect
+      - name: Start MongoDB
+        uses: supercharge/mongodb-github-action@1.6.0
+        with:
+          mongodb-version: 4.2
+
+      - name: Build shifter
+        run: |
+          echo "Disabling autoclear for Travis and Kernel 5.4"
+          sed -i 's/useAutoclear = 1;/useAutoclear = 0;/' ./src/shifter_core.c
+          export PROC_COUNT=$(cat /proc/cpuinfo  | egrep '^processor' | wc -l)
+          ./autogen.sh
+          ./configure --prefix=/usr --sysconfdir=/etc/shifter --disable-staticsshd
+          MAKEFLAGS="-j$PROC_COUNT" make
+          MAKEFLAGS="-j$PROC_COUNT" make check
+          sudo make install 
+
+      - name: C Unit Tests
+        run: |
+          cp imagegw/test.json.example test.json
+          mkdir /tmp/imagegw /tmp/systema /tmp/systemb
+          rm imagegw/test/sha256sum
+          cd src/test
+          export DO_ROOT_TESTS=1
+          export DO_ROOT_DANGEROUS_TESTS=1
+          ../../extra/CI/test_script.sh
+          cd ../..
+
+      - name: Python Tests
+        run: |
+          export ORIGPATH=$PATH
+          export PATH=$PWD/imagegw/test:$PATH
+          PYTHONPATH=$PWD/imagegw nosetests -s --with-coverage imagegw/test
+          export PATH=$ORIGPATH
+          export BUILDDIR=$(pwd)
+          cd /
+          $BUILDDIR/extra/CI/integration_test.sh
+          cd $BUILDDIR
+
+      - name: Upload coverage
+        run: |
+          cpp-coveralls --exclude dep -n --dump cpp_coveralls.json
+          #coveralls-merge -d cpp_coveralls.json > merged-coverage
+          coveralls --merge=cpp_coveralls.json --service=github
+        env:
+          COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#          COVERALLS_FLAG_NAME: ${{ matrix.test-name }}
+#          COVERALLS_PARALLEL: true
+#
+#
+#      - name: Coveralls
+#        uses: coverallsapp/github-action@master
+#        with:
+#          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+#      - run: find . > /tmp/file.lst
+#      - uses: actions/upload-artifact@v2
+#        with:
+#          name: file listing
+#          path: /tmp/file.lst
+
+      - name: Slack Notification
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_CHANNEL: github
+          SLACK_COLOR: ${{ job.status }}
+          SLACK_ICON: https://github.com/rtCamp.png?size=48
+          SLACK_MESSAGE: 'Post Content :rocket:'
+          SLACK_TITLE: Integration Test
+          SLACK_USERNAME: rtCamp
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+#after_success:
+#notifications:
