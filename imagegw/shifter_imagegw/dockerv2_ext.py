@@ -104,7 +104,7 @@ class DockerV2ext(object):
         cmd.extend(['inspect', self.url])
         process = Popen(cmd, stdout=PIPE, stderr=PIPE)
         stdout, stderr = process.communicate()
-        if 'authentication required' not in stderr:
+        if 'authentication required' not in stderr and 'Forbidden' not in stderr:
             if process.returncode:
                 raise OSError("Skopeo inspect failed")
             return json.loads(stdout)
