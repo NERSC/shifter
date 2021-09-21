@@ -73,12 +73,13 @@ jobs:
           $BUILDDIR/extra/CI/integration_test.sh
           cd $BUILDDIR
 
-      - name: Prepare coverage
-        run: |
-          cpp-coveralls --exclude dep -n --dump cpp_coveralls.json
-          coveralls-merge cpp_coveralls.json 
-        env:
-          COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+# Coveralls is broken right now
+#      - name: Prepare coverage
+#        run: |
+#          cpp-coveralls --exclude dep -n --dump cpp_coveralls.json
+#          coveralls-merge cpp_coveralls.json 
+#        env:
+#          COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 #
 #      - name: Coveralls
