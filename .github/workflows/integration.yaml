@@ -12,7 +12,7 @@ on:
     - sanic
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -49,10 +49,6 @@ jobs:
           MAKEFLAGS="-j$PROC_COUNT" make check
           sudo make install 
 
-  test:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
       - name: C Unit Tests
         run: |
           cp imagegw/test.json.example test.json
@@ -75,15 +71,21 @@ jobs:
           $BUILDDIR/extra/CI/integration_test.sh
           cd $BUILDDIR
 
-  finish:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-    - name: Coveralls Finished
+    - name: Coveralls
       uses: coverallsapp/github-action@master
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
-        parallel-finished: true
+
+    - name: Slack Notification
+      uses: rtCamp/action-slack-notify@v2
+      env:
+        SLACK_CHANNEL: github
+        SLACK_COLOR: ${{ job.status }}
+        SLACK_ICON: https://github.com/rtCamp.png?size=48
+        SLACK_MESSAGE: 'Post Content :rocket:'
+        SLACK_TITLE: Integration Test
+        SLACK_USERNAME: rtCamp
+        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
 #after_success:
 ##  - cpp-coveralls --exclude dep -n --dump cpp_coveralls.json
 #  - coveralls-merge cpp_coveralls.json 
