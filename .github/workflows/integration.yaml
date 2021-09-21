@@ -73,16 +73,21 @@ jobs:
           $BUILDDIR/extra/CI/integration_test.sh
           cd $BUILDDIR
 
+#      - name: Prepare coverage
+#        run: |
+#          cpp-coveralls --exclude dep -n --dump cpp_coveralls.json
+#          coveralls-merge cpp_coveralls.json 
+#
+#      - name: Coveralls
+#        uses: coverallsapp/github-action@master
+#        with:
+#          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Prepare coverage
-        run: |
-          cpp-coveralls --exclude dep -n --dump cpp_coveralls.json
-          coveralls-merge cpp_coveralls.json 
-
-      - name: Coveralls
-        uses: coverallsapp/github-action@master
+      - run: find . > /tmp/file.lst
+      - uses: actions/upload-artifact@v2
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: listing
+          path: /tmp/file.lst
 
       - name: Slack Notification
         uses: rtCamp/action-slack-notify@v2
