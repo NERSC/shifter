@@ -37,8 +37,12 @@ jobs:
            pip install coveralls-merge
            pip install pexpect
 #  - LOC=$(dirname $(which coveralls) ); sudo mv $LOC/coveralls $LOC/cpp-coveralls
+      - name: Start MongoDB
+        uses: supercharge/mongodb-github-action@1.6.0
+        with:
+          mongodb-version: 4.2
 
-      - name: Integration Tests
+      - name: C Unit Tests
         run: |
           cp imagegw/test.json.example test.json
           mkdir /tmp/imagegw /tmp/systema /tmp/systemb
@@ -54,8 +58,10 @@ jobs:
           cd src/test
           export DO_ROOT_TESTS=1
           export DO_ROOT_DANGEROUS_TESTS=1
-          ../../extra/CI/test_script.sh || ignore
+          ../../extra/CI/test_script.sh || echo ignore
           cd ../..
+      - name: Python Tests
+        run: |
           export ORIGPATH=$PATH
           export PATH=$PWD/imagegw/test:$PATH
           PYTHONPATH=$PWD/imagegw nosetests -s --with-coverage imagegw/test
