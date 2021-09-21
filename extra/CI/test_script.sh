@@ -23,16 +23,21 @@ function runTest() {
    test=$1
    source=$2
    sources="$test-$source"
+   echo "Running $test"
    timeout 90 ./$test -v
    if [[ "x$DO_ROOT_TESTS" == "x1" && -x ${test}_AsRoot ]]; then
+      echo "Running $test as Root"
       sudo timeout 90 ./${test}_AsRoot
       sources="$sources ${test}_AsRoot-$source"
    fi
    if [[ "x$DO_ROOT_DANGEROUS_TESTS" == "x1" && -x ${test}_AsRootDangerous ]]; then
+      echo "Running $test as Root with a side of DANGER"
       sudo timeout 90 ./${test}_AsRootDangerous
       sources="$sources ${test}_AsRootDangerous-$source"
    fi
+   echo "Running valgrind for $test"
    valgrind --tool=memcheck --leak-check=full --suppressions=valgrind.suppressions -v ./$test
+   echo "Coverage"
    gcov -b $sources 
 }
 
