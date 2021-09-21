@@ -40,11 +40,8 @@ jobs:
         with:
           mongodb-version: 4.2
 
-      - name: C Unit Tests
+      - name: Build shifter
         run: |
-          cp imagegw/test.json.example test.json
-          mkdir /tmp/imagegw /tmp/systema /tmp/systemb
-          rm imagegw/test/sha256sum
           echo "Disabling autoclear for Travis and Kernel 5.4"
           sed -i 's/useAutoclear = 1;/useAutoclear = 0;/' ./src/shifter_core.c
           export PROC_COUNT=$(cat /proc/cpuinfo  | egrep '^processor' | wc -l)
@@ -53,11 +50,18 @@ jobs:
           MAKEFLAGS="-j$PROC_COUNT" make
           MAKEFLAGS="-j$PROC_COUNT" make check
           sudo make install 
+
+      - name: C Unit Tests
+        run: |
+          cp imagegw/test.json.example test.json
+          mkdir /tmp/imagegw /tmp/systema /tmp/systemb
+          rm imagegw/test/sha256sum
           cd src/test
           export DO_ROOT_TESTS=1
           export DO_ROOT_DANGEROUS_TESTS=1
-          ../../extra/CI/test_script.sh || echo ignore
+          ../../extra/CI/test_script.sh
           cd ../..
+
       - name: Python Tests
         run: |
           export ORIGPATH=$PATH

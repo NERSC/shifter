@@ -36,7 +36,7 @@ function runTest() {
       sources="$sources ${test}_AsRootDangerous-$source"
    fi
    echo "Running valgrind for $test"
-   valgrind --tool=memcheck --leak-check=full --suppressions=valgrind.suppressions -v ./$test
+   valgrind --tool=memcheck --leak-check=full --suppressions=valgrind.suppressions -v ./$test || echo "ignore valgrind"
    echo "Coverage"
    gcov -b $sources 
 }
