@@ -31,10 +31,8 @@ jobs:
            sudo modprobe squashfs
            sudo modprobe xfs
            pip install -r imagegw/requirements.txt
-           pip install coverage
-           pip install cpp-coveralls
-           pip install coveralls
-           pip install coveralls-merge
+           # install packages for tests
+           pip install nose coverage cpp-coveralls coveralls coveralls-merge
            pip install pexpect
 #  - LOC=$(dirname $(which coveralls) ); sudo mv $LOC/coveralls $LOC/cpp-coveralls
       - name: Start MongoDB
