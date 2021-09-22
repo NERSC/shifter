@@ -22,8 +22,8 @@ jobs:
         run: |
           docker build -t rpm -f ./extra/Dockerfile.centos7_rpms .
           docker run -v `pwd`/rpms:/rpms rpm cp -a /root/rpmbuild/RPMS /root/rpmbuild/SRPMS/ /rpms/
-          chmod -R a+r rpms
-          find rpms -type d |xargs chmod a+rx
+          docker run -v `pwd`/rpms:/rpms rpm chmod -R a+r /rpms
+          docker run -v `pwd`/rpms:/rpms rpm chmod a+rx /rpms/* /rpms/RPMS/*
           pwd
           find rpms -ls
       - name: Upload artifact
