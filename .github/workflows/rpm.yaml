@@ -27,11 +27,11 @@ jobs:
           #docker run -v /rpms:/rpms rpm chmod a+rx /rpms/* /rpms/RPMS/*
           find /rpms -ls
       - name: Upload artifact
-        uses: actions/upload-artifact@v1.0.0
+        uses: actions/upload-artifact@v2
         with:
           name: RPMs
           path: |
             /rpms/RPMS/x86_64/*.rpm
-            /rpms/SRPMS/x86_64/*.rpm
+            /rpms/SRPMS/*.rpm
 
            
