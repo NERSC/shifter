@@ -75,9 +75,9 @@ jobs:
 
       - name: Prepare coverage
         run: |
+          coveralls --service=github
 #          cpp-coveralls --exclude dep -n --dump cpp_coveralls.json
 #          coveralls-merge cpp_coveralls.json 
-          coveralls --service=github
         env:
           COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
