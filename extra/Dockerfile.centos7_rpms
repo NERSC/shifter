@@ -17,7 +17,7 @@ ADD . /shifter
 RUN cd / && \
     VERSION=$(grep '\[shifter]' shifter/configure.ac |awk -F, '{print $2}'|sed 's/ *\[\(.*\)\]/\1/') && \
     sed -i "s/Version:.*/Version:   $VERSION/" shifter/shifter.spec && \
-    cd shifter && rm configure && sh ./autogen.sh && cd .. && \
+    cd shifter && rm -f configure && sh ./autogen.sh && cd .. && \
     cp -rp shifter "shifter-$VERSION" && \
     tar cf "shifter-$VERSION.tar.gz" "shifter-$VERSION" 
 
