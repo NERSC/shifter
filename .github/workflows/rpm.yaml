@@ -29,6 +29,6 @@ jobs:
         with:
           name: RPMs
           path: |
-            rpms/RPMS/x86_64/*rpm
+            rpms/RPMS/x86_64/
 
            
