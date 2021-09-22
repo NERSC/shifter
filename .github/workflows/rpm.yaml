@@ -10,7 +10,7 @@ on:
     - sanic
 
 jobs:
-  test:
+  rpmbuild:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -26,5 +26,5 @@ jobs:
         uses: actions/upload-artifact@v1.0.0
         with:
           name: RPMs
-          path: /rpms/*
+          path: ./rpms/*
            
