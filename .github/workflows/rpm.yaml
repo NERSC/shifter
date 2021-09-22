@@ -26,7 +26,8 @@ jobs:
         uses: actions/upload-artifact@v1.0.0
         with:
           name: RPMs
-          path: rpms/RPMS/x86_64/*rpm
-          path: rpms/SRPMS/*rpm
+          path: |
+            rpms/RPMS/x86_64/*rpm
+            rpms/SRPMS/*rpm
 
            
