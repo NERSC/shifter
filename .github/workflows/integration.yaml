@@ -73,17 +73,11 @@ jobs:
           $BUILDDIR/extra/CI/integration_test.sh
           cd $BUILDDIR
 
-      - name: Setup upterm session
-        uses: lhotari/action-upterm@v1
-        env:
-          COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Prepare coverage
+      - name: Upload coverage
         run: |
           cpp-coveralls --exclude dep -n --dump cpp_coveralls.json
-          coveralls-merge -d cpp_coveralls.json > merged-coverage
-          coveralls --service=github
+          #coveralls-merge -d cpp_coveralls.json > merged-coverage
+          coveralls --merge=cpp_coveralls.json --service=github
         env:
           COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -96,11 +90,11 @@ jobs:
 #        with:
 #          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - run: find . > /tmp/file.lst
-      - uses: actions/upload-artifact@v2
-        with:
-          name: file listing
-          path: /tmp/file.lst
+#      - run: find . > /tmp/file.lst
+#      - uses: actions/upload-artifact@v2
+#        with:
+#          name: file listing
+#          path: /tmp/file.lst
 
       - name: Slack Notification
         uses: rtCamp/action-slack-notify@v2
