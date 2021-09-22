@@ -1,0 +1,30 @@
+name: RPM Build
+
+on:
+  push:
+    branches:
+    - build_rpms
+  pull_request:
+    branches:
+    - main
+    - sanic
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: 2.7
+      - name: build rpms
+        run: |
+          docker build -t rpm -f ./extra/Dockerfile.centos7_rpms .
+          docker run -v `pwd`/rpms:/rpms rpm cp -a /root/rpmbuild/RPMS /root/rpmbuild/SRPMS/ /rpms/
+      - name: Upload artifact
+        uses: actions/upload-artifact@v1.0.0
+        with:
+          name: RPMs
+          path: /rpms/*
+           

@@ -1,0 +1,35 @@
+FROM centos:7
+MAINTAINER Shane Canon <scanon@lbl.gov>
+
+
+RUN yum -y update && yum -y install make git gcc
+
+RUN yum -y install epel-release && \
+    yum -y install rpm-build gcc glibc-devel munge libcurl-devel json-c \
+         json-c-devel pam-devel munge-devel libtool autoconf automake aclocal \
+         gcc-c++ python-pip xfsprogs squashfs-tools python-devel libcap-devel
+
+RUN yum -y install python3
+
+ADD . /shifter
+
+#    touch shifter/* shifter/*/* && \
+RUN cd / && \
+    VERSION=$(grep '\[shifter]' shifter/configure.ac |awk -F, '{print $2}'|sed 's/ *\[\(.*\)\]/\1/') && \
+    sed -i "s/Version:.*/Version:   $VERSION/" shifter/shifter.spec && \
+    cd shifter && rm configure && sh ./autogen.sh && cd .. && \
+    cp -rp shifter "shifter-$VERSION" && \
+    tar cf "shifter-$VERSION.tar.gz" "shifter-$VERSION" 
+
+RUN \
+    VERSION=$(grep '\[shifter]' shifter/configure.ac |awk -F, '{print $2}'|sed 's/ *\[\(.*\)\]/\1/') && \
+    ls -l && \
+    rpmbuild -ta ./shifter-$VERSION.tar.gz
+
+# CMD [ "cp","-a","/root/rpmbuild/RPMS","/rpms/" ]
+
+# Usage:
+#
+# docker build -t shifterrpm:17.11.1 -f Dockerfile.rpmbuild .
+#
+# docker run -v `pwd`/rpms:/rpms shifterrpm:17.11.1
