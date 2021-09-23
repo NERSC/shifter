@@ -2,10 +2,6 @@ name: Integration Tests
 
 on:
   push:
-    branches:
-    - main
-    - sanic
-    - gha
   pull_request:
     branches: 
     - main
