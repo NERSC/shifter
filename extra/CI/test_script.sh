@@ -36,11 +36,12 @@ function runTest() {
       sources="$sources ${test}_AsRootDangerous-$source"
    fi
    echo "Running valgrind for $test"
-   valgrind --tool=memcheck --leak-check=full --suppressions=valgrind.suppressions -v ./$test || echo "ignore valgrind"
+   valgrind --tool=memcheck --leak-check=full --suppressions=valgrind.suppressions -v ./$test >> valgrind.out 2 >&1 || echo "ignore valgrind errors"
    echo "Coverage"
    gcov -b $sources 
 }
 
+touch valgrind.out
 runTest test_ImageData ImageData
 runTest test_MountList MountList
 runTest test_UdiRootConfig UdiRootConfig

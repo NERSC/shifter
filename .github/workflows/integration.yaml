@@ -68,6 +68,9 @@ jobs:
           export PATH=$PWD/imagegw/test:$PATH
           PYTHONPATH=$PWD/imagegw nosetests -s --with-coverage imagegw/test
           export PATH=$ORIGPATH
+
+      - name: Run Integration Test
+        run: |
           export BUILDDIR=$(pwd)
           cd /
           $BUILDDIR/extra/CI/integration_test.sh
@@ -81,6 +84,12 @@ jobs:
         env:
           COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: Valgrind Output
+          path: extra/CI/valgrind.out
 
       - name: Slack Notification
         uses: rtCamp/action-slack-notify@v2
