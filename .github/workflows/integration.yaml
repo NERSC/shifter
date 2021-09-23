@@ -89,7 +89,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: Valgrind Output
-          path: extra/CI/valgrind.out
+          path: src/test/valgrind.out
 
       - name: Slack Notification
         uses: rtCamp/action-slack-notify@v2
