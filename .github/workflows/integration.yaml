@@ -6,6 +6,7 @@ on:
     branches: 
     - main
     - sanic
+    - sanic2
 
 jobs:
   test:
