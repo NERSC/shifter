@@ -486,6 +486,8 @@ class DockerV2Handle(object):
                     resp['workdir'] = config['WorkingDir']
             if 'Entrypoint' in config:
                 resp['entrypoint'] = config['Entrypoint']
+            if 'Cmd' in config:
+                resp['cmd'] = config['Cmd']
         resp['private'] = self.private
         return resp
 

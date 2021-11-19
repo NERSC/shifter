@@ -165,6 +165,8 @@ class DockerV2ext(object):
                     resp['workdir'] = config['WorkingDir']
             if 'Entrypoint' in config:
                 resp['entrypoint'] = config['Entrypoint']
+            if 'Cmd' in config:
+                resp['cmd'] = config['Cmd']
             if 'Labels' in config:
                 resp['labels'] = config['Labels']
         resp['private'] = self.private

@@ -149,9 +149,11 @@ def writemeta(fmt, meta, metafile):
         if 'DISABLE_ACL_METADATA' in os.environ:
             private = False
         meta_fd.write("FORMAT: %s\n" % (fmt))
-        if 'entrypoint' in meta and meta['entrypoint'] is not None:
+        if meta.get('entrypoint'):
             meta_fd.write("ENTRY: %s\n" % (meta['entrypoint']))
-        if 'workdir' in meta and meta['workdir'] is not None:
+        if meta.get('cmd'):
+            meta_fd.write("CMD: %s\n" % (meta['cmd']))
+        if meta.get('workdir'):
             meta_fd.write("WORKDIR: %s\n" % (meta['workdir']))
         if private and 'userACL' in meta and meta['userACL'] is not None:
             acls = ','.join(map(lambda x: str(x), meta['userACL']))
