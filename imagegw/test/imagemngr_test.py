@@ -1194,6 +1194,7 @@ class ImageMngrTestCase(unittest.TestCase):
         # Need use_external
         conf = deepcopy(self.config)
         conf['Platforms']['systema']['use_external'] = True
+        os.environ['ENABLE_LABELS'] = "1"
         m = ImageMngr(conf, logger=self.logger)
         # Use defaults for format, arch, os, ostcount, replication
         pr = self.pull

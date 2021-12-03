@@ -787,13 +787,15 @@ class ImageMngr(object):
             'entrypoint': 'ENTRY',
             'env': 'ENV',
             'workdir': 'WORKDIR',
-            'labels': 'LABELS',
             'last_pull': 'last_pull',
             'userACL': 'userACL',
             'groupACL': 'groupACL',
             'private': 'private',
             'status': 'status'
         }
+        if os.environ.get('ENABLE_LABELS'):
+            mappings['labels'] = 'LABELS'
+
         if 'private' in resp and resp['private'] is False:
             resp['userACL'] = []
             resp['groupACL'] = []
