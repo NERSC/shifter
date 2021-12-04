@@ -101,6 +101,7 @@ class ImageWorkerTestCase(unittest.TestCase):
         self.assertIn('id', req.meta)
         self.assertIn('workdir', req.meta)
         self.assertEqual(req.meta['entrypoint'][0], "/bin/sh")
+        self.assertEqual(req.meta['cmd'][0], "/app.sh")
         self.assertTrue(os.path.exists(req.expandedpath))
 
         return

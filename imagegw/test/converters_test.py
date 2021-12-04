@@ -104,6 +104,7 @@ class ConvertersTestCase(unittest.TestCase):
 
         meta = {'workdir': "/tmp/",
                 'entrypoint': '/bin/sh',
+                'cmd': '/script',
                 'env': ['a=b', 'c=d'],
                 'private': True,
                 'userACL': [1000, 1001],
@@ -120,7 +121,7 @@ class ConvertersTestCase(unittest.TestCase):
                     meta['ENV'].append(v)
                 else:
                     meta[k] = v
-        keys = ['WORKDIR', 'FORMAT', 'ENTRY']
+        keys = ['WORKDIR', 'FORMAT', 'ENTRY', 'CMD']
         if 'DISABLE_ACL_METADATA' not in os.environ:
             keys.extend(['USERACL', 'GROUPACL'])
         for key in keys:
