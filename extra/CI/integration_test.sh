@@ -46,7 +46,7 @@ done
 
 echo "setting up munge"
 if [[ -e /usr/sbin/create-munge-key ]]; then
-    sudo /usr/sbin/create-munge-key
+    sudo /usr/sbin/create-munge-key -f
 fi
 sudo service munge start
 
