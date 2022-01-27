@@ -21,6 +21,8 @@
 Helper routines for munge
 """
 
+from ctypes import cdll, c_char_p
+from ctypes.util import find_library
 import sys
 from subprocess import Popen, PIPE
 debug = False
@@ -53,13 +55,13 @@ def unmunge(encoded, socket=None):
             com.extend(['-S', socket])
         proc = Popen(com, stdin=PIPE, stdout=PIPE, stderr=PIPE)
         output = proc.communicate(input=encoded)[0]
-        if proc.returncode == 15:
-            raise OSError("Expired Credential")
-        if proc.returncode == 17:
-            raise OSError("Replayed Credential")
-        elif proc.returncode != 0:
-            memo = "Unknown munge error %d %s" % (proc.returncode, socket)
-            raise OSError(memo)
+
+        if proc.returncode:
+            lib_munge_name = find_library("munge")
+            lib = cdll.LoadLibrary(lib_munge_name)
+            munge_strerror = lib.munge_strerror
+            munge_strerror.restype = c_char_p
+            raise OSError(munge_strerror(proc.returncode))
 
         resp = dict()
         inmessage = False
