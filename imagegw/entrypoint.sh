@@ -21,6 +21,11 @@ for service in $@ ; do
     chown munge /etc/munge/$socket.key
     chmod 600 /etc/munge/$socket.key
     runuser -u munge -- /usr/sbin/munged  -S /var/run/munge/${socket}.socket --key-file=/etc/munge/$socket.key --force -F &
+  elif [ "$service"  == "munge" ] ; then
+    cp /config/munge.key /etc/munge/munge.key
+    chown munge /etc/munge/munge.key
+    chmod 600 /etc/munge/munge.key
+    runuser -u munge -- /usr/sbin/munged  --key-file=/etc/munge/munge.key --force -F
   else
     echo "$service not recognized"
   fi

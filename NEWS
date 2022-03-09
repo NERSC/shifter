@@ -1,3 +1,7 @@
+22.02.1
+=======
+* Minor fixes and updates to run on CLE 6.X
+
 21.03.1
 =======
 * Update from Python 2 to Python 3 in the Gateway

@@ -258,6 +258,7 @@ class GWTestCase(unittest.TestCase):
         from shifter_imagegw import api
         c = deepcopy(self.config)
         c['Platforms']['systema']['use_external'] = True
+        os.environ['ENABLE_LABELS'] = "1"
         api.mgr = ImageMngr(c)
         # Do a pull so we can create an image record
         uri = '%s/pull/%s/' % (self.url, self.urlreq)
