@@ -40,6 +40,7 @@
 #include <fcntl.h>
 #include <grp.h>
 #include <pwd.h>
+#include <linux/version.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -1428,7 +1429,11 @@ int loopMount(const char *imagePath, const char *loopMountPath, ImageFormat form
             fprintf(stderr, "ERROR: no apparent support for squashfs!");
             goto _loopMount_unclean;
         }
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,3,0)
+        useAutoclear = 0;
+#else
         useAutoclear = 1;
+#endif
         ready = 1;
         imgType = "squashfs";
     } else if (format == FORMAT_XFS) {

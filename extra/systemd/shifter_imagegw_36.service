@@ -1,0 +1,17 @@
+[Unit]
+Description=Shifter image manager
+After=munge.service
+
+[Service]
+Type=simple
+User=shifter
+Group=shifter
+PrivateTmp=true
+Environment=PYTHONPATH=/opt/shifter-python-21.12/
+PermissionsStartOnly=true
+ExecStart=/usr/bin/python3.6 -m shifter_imagegw.api
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+

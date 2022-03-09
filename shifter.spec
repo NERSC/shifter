@@ -19,8 +19,8 @@
 
 Summary:   NERSC Shifter -- Containers for HPC
 Name:      shifter
-Version:   18.03.6
-Release:   %{shifter_release}
+Version:   22.02.1
+Release: 20220218
 License:   BSD (LBNL-modified)
 Group:     System Environment/Base
 URL:       https://github.com/NERSC/shifter
@@ -86,7 +86,7 @@ Requires(pre): shadow-utils
 Requires: squashfs-tools python3 python36-pymongo munge
 %endif
 %if 0%{?suse_version} > 0
-Requires: squashfs python3 python36-pymongo munge
+Requires: squashfs python3 munge shifter-python
 %endif
 
 %description imagegw
@@ -183,7 +183,7 @@ rm -f $RPM_BUILD_ROOT/%{_libexecdir}/shifter/shifter_slurm_dws_support
 %if 0%{!?_without_systemd:1}
 %{__mkdir_p} $RPM_BUILD_ROOT%{_unitdir}
 %if 0%{?suse_version} > 1230
-%{__install} -m 0644 extra/systemd/shifter_imagegw-2.7.service $RPM_BUILD_ROOT%{_unitdir}/shifter_imagegw.service
+%{__install} -m 0644 extra/systemd/shifter_imagegw_36.service $RPM_BUILD_ROOT%{_unitdir}/shifter_imagegw.service
 %else
 %{__install} -m 0644 extra/systemd/shifter_imagegw.service $RPM_BUILD_ROOT%{_unitdir}/
 %endif
