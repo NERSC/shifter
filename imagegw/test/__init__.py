@@ -6,6 +6,7 @@ def setup():
     print("Module setup")
     os.environ['GWCONFIG'] = 'test.json'
     os.environ['CONFIG'] = 'test.json'
+    os.environ['ENABLE_LABELS'] = '1'
     test_dir = os.path.dirname(os.path.abspath(__file__))
     os.environ['PATH'] = '%s:%s' % (test_dir, os.environ['PATH'])
     # Create __init__
