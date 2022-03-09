@@ -344,6 +344,6 @@ def queue(request, system):
 
 
 if __name__ == "__main__":
-  workers = int(os.environ.get("WORKERS", 4))
+  workers = int(os.environ.get("WORKERS", 1))
   app.run(host="0.0.0.0", port=8000, workers=workers)
 
