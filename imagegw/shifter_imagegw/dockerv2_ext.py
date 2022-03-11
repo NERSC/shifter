@@ -105,9 +105,9 @@ class DockerV2ext(object):
         process = Popen(cmd, stdout=PIPE, stderr=PIPE)
         stdout, stderr = process.communicate()
         stderr_str = stderr.decode("utf-8")
-        if 'authentication required' not in stderr_str and 'Forbidden' not in stderr_str:
-            if process.returncode:
-                raise OSError("Skopeo inspect failed")
+        auth_errors = ['authentication', 'forbidden', 'unauthorized']
+        if not any(a_err in stderr_str.lower() for a_err in auth_errors):
+                raise OSError("Skopeo inspect failed: %s" % (stderr_str))
             return json.loads(stdout.decode("utf-8"))
 
         # Private Image
