@@ -50,7 +50,7 @@
 void _usage(int ret) {
     FILE *output = stdout;
     fprintf(output, "Usage:\n shifterimg [options] <mode> <type:tag>\n\n");
-    fprintf(output, "    Mode: images, lookup, or pull\n");
+    fprintf(output, "    Mode: images, login, lookup, or pull\n");
     fprintf(output, "\nOptions:\n");
     fprintf(output, " --user/-u <list>    List of users allowed to access a "
             "private image\n");
