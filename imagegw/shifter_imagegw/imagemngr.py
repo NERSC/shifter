@@ -36,7 +36,11 @@ from pymongo import MongoClient
 import pymongo.errors
 from shifter_imagegw.auth import Authentication
 from shifter_imagegw.imageworker import WorkerThreads
-from multiprocessing.process import Process
+try:
+    from multiprocessing import Process
+except:
+    from multiprocessing.process import Process
+
 import atexit
 
 
@@ -47,7 +51,7 @@ import atexit
 def mongo_reconnect_reattempt(call):
     """Automatically re-attempt potentially failed mongo operations"""
     def _mongo_reconnect_safe(self, *args, **kwargs):
-        for _ in xrange(2):
+        for _ in range(2):
             try:
                 return call(self, *args, **kwargs)
             except pymongo.errors.AutoReconnect:
@@ -80,9 +84,9 @@ class ImageMngr(object):
             self.logger = logging.getLogger(logname)
             self.logger.info('ImageMngr using logname %s' % (logname))
         else:
-            print "Using upstream logger"
+            print("Using upstream logger")
             self.logger = logger
-            print logger
+            print(logger)
             self.logger.info('ImageMngr using upstream logger')
 
         self.logger.debug('Initializing image manager')
@@ -112,7 +116,7 @@ class ImageMngr(object):
         threads = 1
         if 'WorkerThreads' in self.config:
             threads = int(self.config['WorkerThreads'])
-        self.workers = WorkerThreads(threads=threads)
+        self.workers = WorkerThreads(self.config, threads=threads)
         self.status_queue = self.workers.get_updater_queue()
         self.status_proc = Process(target=self.status_thread,
                                    name='StatusThread')
@@ -243,7 +247,6 @@ class ImageMngr(object):
             if iGACL is not None and group in iGACL:
                 return True
         return False
-
 
     def _resetexpire(self, ident):
         """Reset the expire time.  (Not fully implemented)."""
@@ -493,24 +496,22 @@ class ImageMngr(object):
         if 'DefaultImageFormat' in self.config:
             newimage['format'] = self.config['DefaultImageFormat']
         for param in image:
-            if param is 'tag':
+            if param == 'tag':
                 continue
             newimage[param] = image[param]
         self._images_insert(newimage)
         return newimage
 
-    def pull(self, session, image, testmode=0):
+    def pull(self, session, image):
         """
         pull the image
         Takes an auth token, a request object
-        Optional: testmode={0,1,2} See below...
         """
         request = {
             'system': image['system'],
             'itype': image['itype'],
             'pulltag': image['tag']
         }
-        self.logger.debug('Pull called Test Mode=%d', testmode)
         if not self.check_session(session, request['system']):
             self.logger.warn('Invalid session on system %s', request['system'])
             raise OSError("Invalid Session")
@@ -580,7 +581,7 @@ class ImageMngr(object):
             request['session'] = session
             self.logger.debug("Calling do pull with queue=%s",
                               request['system'])
-            self.workers.dopull(ident, request, testmode=testmode)
+            self.workers.dopull(ident, request)
 
             memo = "pull request queued s=%s t=%s" \
                 % (request['system'], request['tag'])
@@ -590,7 +591,7 @@ class ImageMngr(object):
 
         return rec
 
-    def mngrimport(self, session, image, testmode=0):
+    def mngrimport(self, session, image):
         """
         import the image directly from a file
         Only for allowed users
@@ -651,7 +652,7 @@ class ImageMngr(object):
         request['session'] = session
         self.logger.debug("Calling wrkimport with queue=%s",
                           request['system'])
-        self.workers.dowrkimport(ident, request, testmode=testmode)
+        self.workers.dowrkimport(ident, request)
 
         memo = "import request queued s=%s t=%s" \
             % (request['system'], request['tag'])
@@ -792,11 +793,14 @@ class ImageMngr(object):
             'private': 'private',
             'status': 'status'
         }
+        if os.environ.get('ENABLE_LABELS'):
+            mappings['labels'] = 'LABELS'
+
         if 'private' in resp and resp['private'] is False:
             resp['userACL'] = []
             resp['groupACL'] = []
 
-        for key in mappings.keys():
+        for key in list(mappings.keys()):
             if key in resp:
                 setline[mappings[key]] = resp[key]
 
@@ -825,7 +829,7 @@ class ImageMngr(object):
             if time() > nextpull:
                 self._images_remove({'_id': rec['_id']})
 
-    def autoexpire(self, session, system, testmode=0):
+    def autoexpire(self, session, system):
         """Auto expire images and do cleanup"""
         # While this should be safe, let's restrict this to admins
         if not self._isadmin(session, system):
@@ -859,17 +863,17 @@ class ImageMngr(object):
             self.logger.debug(rec['expiration'] > time())
         return expired
 
-    def expire_id(self, rec, ident, testmode=0):
+    def expire_id(self, rec, ident):
         """ Helper function to expire by id """
-        memo = "Calling do expire id=%s TM=%d" \
-            % (ident, testmode)
+        memo = "Calling do expire id=%s" \
+            % (ident)
         self.logger.debug(memo)
 
         self.workers.doexpire(ident, rec)
         self.logger.info("expire request queued s=%s t=%s",
                          rec['system'], ident)
 
-    def expire(self, session, image, testmode=0):
+    def expire(self, session, image):
         """Expire an image.  (Not Implemented)"""
         if not self._isadmin(session, image['system']):
             return False
@@ -882,8 +886,8 @@ class ImageMngr(object):
         if rec is None:
             return None
         ident = rec.pop('_id')
-        memo = "Calling do expire with queue=%s id=%s TM=%d" \
-            % (image['system'], ident, testmode)
+        memo = "Calling do expire with queue=%s id=%s" \
+            % (image['system'], ident)
         self.logger.debug(memo)
         self.workers.doexpire(ident, rec)
 
@@ -927,7 +931,7 @@ class ImageMngr(object):
 
 def usage():
     """Print usage"""
-    print "Usage: imagemngr <lookup|pull|expire>"
+    print("Usage: imagemngr <lookup|pull|expire>")
     sys.exit(0)
 
 
@@ -957,7 +961,7 @@ def main():
         (req['system'], req['itype'], req['tag']) = sys.argv[0:3]
         mgr.pull('good', req)
     else:
-        print "Unknown command %s" % (command)
+        print("Unknown command %s" % (command))
         usage()
 
 

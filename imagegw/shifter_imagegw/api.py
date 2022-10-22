@@ -27,10 +27,13 @@ import sys
 import logging
 import shifter_imagegw
 from shifter_imagegw.imagemngr import ImageMngr
-from flask import Flask, request, jsonify
+from sanic import Sanic
+from sanic.log import logger
+from sanic import response
+from sanic.response import json as jsonify
+from sanic.exceptions import NotFound
 
-
-app = Flask("shifter")
+app = Sanic("shifter")
 config = {}
 AUTH_HEADER = 'authentication'
 
@@ -40,33 +43,26 @@ if 'GWCONFIG' in os.environ:
 else:
     CONFIG_FILE = '%s/imagemanager.json' % (shifter_imagegw.CONFIG_PATH)
 
-if 'SERVER_SOFTWARE' in os.environ:
-    # Make flask logging work with gunicorn
-    logname = 'gunicorn.error'
-    gunicorn_error_logger = logging.getLogger('gunicorn.error')
-    app.logger.handlers.extend(gunicorn_error_logger.handlers)
-else:
-    logname = 'shifter'
-app.logger.debug('Initializing api image manager')
+logger.debug('Initializing api image manager')
 
-app.logger.info("initializing with %s" % (CONFIG_FILE))
+logger.info("initializing with %s" % (CONFIG_FILE))
 with open(CONFIG_FILE) as config_file:
     config = json.load(config_file)
     if 'LogLevel' in config:
         LOG_STRING = config['LogLevel'].lower()
         if LOG_STRING == 'debug':
-            app.logger.setLevel(logging.DEBUG)
+            logger.setLevel(logging.DEBUG)
         elif LOG_STRING == 'info':
-            app.logger.setLevel(logging.INFO)
+            logger.setLevel(logging.INFO)
         elif LOG_STRING == 'warn':
-            app.logger.setLevel(logging.WARN)
+            logger.setLevel(logging.WARN)
         elif LOG_STRING == 'error':
-            app.logger.setLevel(logging.ERROR)
+            logger.setLevel(logging.ERROR)
         elif LOG_STRING == 'critical':
-            app.logger.setLevel(logging.CRITICAL)
+            logger.setLevel(logging.CRITICAL)
         else:
-            app.logger.critical('Unrecongnized Log Level specified')
-mgr = ImageMngr(config, logname=logname)
+            logger.critical('Unrecongnized Log Level specified')
+mgr = ImageMngr(config, logname="sanic.root")
 
 
 def getmgr():
@@ -78,24 +74,25 @@ def getmgr():
 
 
 # For RESTful Service
-@app.errorhandler(404)
-def not_found(error=None):
+# @app.errorhandler(404)
+@app.exception(NotFound)
+def not_found(request, error=None):
     """ Standard error function to return a 404. """
-    app.logger.warning("404 return")
+    logger.warning("404 return")
     message = {
         'status': 404,
         'error': str(error),
         'message': 'Not Found: ' + request.url,
     }
-    resp = jsonify(message)
-    resp.status_code = 404
+    resp = jsonify(message, status=404)
+    # resp.status_code = 404
     return resp
 
 
 @app.route('/')
-def apihelp():
+def apihelp(request):
     """ API helper return """
-    return "{lookup,pull,expire,list}"
+    return response.text("{lookup,pull,expire,list}")
 
 
 def create_response(rec):
@@ -103,7 +100,7 @@ def create_response(rec):
     resp = {}
     fields = (
         'id', 'system', 'itype', 'tag', 'status', 'userACL', 'groupACL',
-        'ENV', 'ENTRY', 'WORKDIR', 'last_pull', 'status_message',
+        'ENV', 'ENTRY', 'WORKDIR', 'LABELS', 'last_pull', 'status_message',
     )
     for field in fields:
         try:
@@ -116,21 +113,21 @@ def create_response(rec):
 # List images
 # This will list the images for a system
 @app.route('/api/list/<system>/', methods=["GET"])
-def imglist(system):
+def imglist(request, system):
     """ List images for a specific system. """
     auth = request.headers.get(AUTH_HEADER)
-    app.logger.debug("list system=%s" % (system))
+    logger.debug("list system=%s" % (system))
     try:
         session = mgr.new_session(auth, system)
         records = mgr.imglist(session, system)
         if records is None:
-            return not_found('image not found')
+            return not_found(request, 'image not found')
     except OSError:
-        app.logger.warning('Bad session or system')
-        return not_found('Bad session or system')
+        logger.warning('Bad session or system')
+        return not_found(request, 'Bad session or system')
     except:
-        app.logger.exception('Unknown Exception in List')
-        return not_found('%s' % (sys.exc_value))
+        logger.exception('Unknown Exception in List')
+        return not_found(request, '%s' % (sys.exc_value))
     images = []
     for rec in records:
         images.append(create_response(rec))
@@ -140,8 +137,8 @@ def imglist(system):
 
 # Lookup image
 # This will lookup the status of the requested image.
-@app.route('/api/lookup/<system>/<imgtype>/<path:tag>/', methods=["GET"])
-def lookup(system, imgtype, tag):
+@app.route('/api/lookup/<system>/<imgtype>/<tag:path>/', methods=["GET"])
+def lookup(request, system, imgtype, tag):
     """ Lookup an image for a system and return its record """
     if (imgtype == "docker" or imgtype == "custom") and tag.find(':') == -1:
         tag = '%s:latest' % (tag)
@@ -149,43 +146,43 @@ def lookup(system, imgtype, tag):
     auth = request.headers.get(AUTH_HEADER)
     memo = 'lookup system=%s imgtype=%s tag=%s auth=%s' \
            % (system, imgtype, tag, auth)
-    app.logger.debug(memo)
+    logger.debug(memo)
     i = {'system': system, 'itype': imgtype, 'tag': tag}
     try:
         session = mgr.new_session(auth, system)
         rec = mgr.lookup(session, i)
         if rec is None:
-            app.logger.debug("Image lookup failed.")
-            return not_found('image not found')
+            logger.debug("Image lookup failed.")
+            return not_found(request, 'image not found')
     except:
-        app.logger.exception('Exception in lookup')
-        return not_found('%s %s' % (sys.exc_type, sys.exc_value))
+        logger.exception('Exception in lookup')
+        return not_found(request, '%s %s' % (sys.exc_type, sys.exc_value))
     return jsonify(create_response(rec))
 
 
 # Get Metrics
 # This will return the most recent XX lookup records.
 @app.route('/api/metrics/<system>/', methods=["GET"])
-def metrics(system):
+def metrics(request, system):
     """ Lookup an image for a system and return its record """
     auth = request.headers.get(AUTH_HEADER)
     memo = 'metrics system=%s auth=%s' \
            % (system, auth)
-    app.logger.debug(memo)
+    logger.debug(memo)
     limit = int(request.args.get('limit', '10'))
     try:
         session = mgr.new_session(auth, system)
         recs = mgr.get_metrics(session, system, limit)
     except:
-        app.logger.exception('Exception in metrics')
-        return not_found('%s %s' % (sys.exc_type, sys.exc_value))
+        logger.exception('Exception in metrics')
+        return not_found(request, '%s %s' % (sys.exc_type, sys.exc_value))
     return jsonify(recs)
 
 
 # Pull image
 # This will pull the requested image.
-@app.route('/api/pull/<system>/<imgtype>/<path:tag>/', methods=["POST"])
-def pull(system, imgtype, tag):
+@app.route('/api/pull/<system>/<imgtype>/<tag:path>/', methods=["POST"])
+def pull(request, system, imgtype, tag):
     """ Pull a specific image and tag for a systems. """
     if imgtype == "docker" and tag.find(':') == -1:
         tag = '%s:latest' % (tag)
@@ -193,41 +190,41 @@ def pull(system, imgtype, tag):
     auth = request.headers.get(AUTH_HEADER)
     data = {}
     try:
-        rqd = request.get_data()
-        if rqd is not "" and rqd is not None:
-            data = json.loads(rqd)
+        data = request.json
+        if data is None:
+            data = {}
     except:
-        app.logger.warn("Unable to parse pull data '%s'" %
+        logger.warn("Unable to parse pull data '%s'" %
                         (request.get_data()))
         pass
 
     memo = "pull system=%s imgtype=%s tag=%s" % (system, imgtype, tag)
-    app.logger.debug(memo)
+    logger.debug(memo)
     i = {'system': system, 'itype': imgtype, 'tag': tag}
     if 'allowed_uids' in data:
         # Convert to integers
-        i['userACL'] = map(lambda x: int(x),
-                           data['allowed_uids'].split(','))
+        i['userACL'] = list(map(lambda x: int(x),
+                           data['allowed_uids'].split(',')))
     if 'allowed_gids' in data:
         # Convert to integers
-        i['groupACL'] = map(lambda x: int(x),
-                            data['allowed_gids'].split(','))
+        i['groupACL'] = list(map(lambda x: int(x),
+                            data['allowed_gids'].split(',')))
     try:
-        app.logger.debug(i)
+        logger.debug(i)
         session = mgr.new_session(auth, system)
-        app.logger.debug(session)
+        logger.debug(session)
         rec = mgr.pull(session, i)
-        app.logger.debug(rec)
+        logger.debug(rec)
     except:
-        app.logger.exception('Exception in pull')
-        return not_found('%s %s' % (sys.exc_type, sys.exc_value))
+        logger.exception('Exception in pull')
+        return not_found(request, '%s %s' % (sys.exc_type, sys.exc_value))
     return jsonify(create_response(rec))
 
 
 # Import image
 # This will import the requested image from a file path on the system.
-@app.route('/api/doimport/<system>/<imgtype>/<path:tag>/', methods=["POST"])
-def doimport(system, imgtype, tag):
+@app.route('/api/doimport/<system>/<imgtype>/<tag:path>/', methods=["POST"])
+def doimport(request, system, imgtype, tag):
     """
     Pull a specific image and tag for a systems.
     """
@@ -237,16 +234,16 @@ def doimport(system, imgtype, tag):
     auth = request.headers.get(AUTH_HEADER)
     data = {}
     try:
-        rqd = request.get_data()
-        if rqd is not "" and rqd is not None:
-            data = json.loads(rqd)
+        data = request.json
+        if data is None:
+            data = {}
     except:
-        app.logger.warn("Unable to parse doimport data '%s'" %
-                        (request.get_data()))
+        logger.warn("Unable to parse doimport data '%s'" %
+                        (request.text))
         pass
 
     memo = "import system=%s imgtype=%s tag=%s" % (system, imgtype, tag)
-    app.logger.debug(memo)
+    logger.debug(memo)
     i = {'system': system, 'itype': imgtype, 'tag': tag}
     # Check for path to import file
     if 'filepath' in data:
@@ -261,12 +258,12 @@ def doimport(system, imgtype, tag):
     # Check for list of allowed users or groups
     if 'allowed_uids' in data:
         # Convert to integers
-        i['userACL'] = map(lambda x: int(x),
-                           data['allowed_uids'].split(','))
+        i['userACL'] = list(map(lambda x: int(x),
+                           data['allowed_uids'].split(',')))
     if 'allowed_gids' in data:
         # Convert to integers
-        i['groupACL'] = map(lambda x: int(x),
-                            data['allowed_gids'].split(','))
+        i['groupACL'] = list(map(lambda x: int(x),
+                            data['allowed_gids'].split(',')))
     try:
         session = mgr.new_session(auth, system)
         # only allowed users can import images
@@ -284,33 +281,33 @@ def doimport(system, imgtype, tag):
                 msg = "User %s not allowed to import image from file." % (user)
                 raise OSError(msg)
         rec = mgr.mngrimport(session, i)
-        app.logger.debug(rec)
+        logger.debug(rec)
     except:
-        app.logger.exception('Exception in import')
-        return not_found('%s %s' % (sys.exc_type, sys.exc_value))
+        logger.exception('Exception in import')
+        return not_found(request, '%s %s' % (sys.exc_type, sys.exc_value))
     return jsonify(create_response(rec))
 
 
 # auto expire
 # This will autoexpire images and cleanup stuck pulls
 @app.route('/api/autoexpire/<system>/', methods=["GET"])
-def autoexpire(system):
+def autoexpire(request, system):
     """ Run the autoexpire handler to purge old images """
     auth = request.headers.get(AUTH_HEADER)
-    app.logger.debug("autoexpire system=%s" % (system))
+    logger.debug("autoexpire system=%s" % (system))
     try:
         session = mgr.new_session(auth, system)
         resp = mgr.autoexpire(session, system)
     except:
-        app.logger.exception('Exception in autoexpire')
-        return not_found()
+        logger.exception('Exception in autoexpire')
+        return not_found(request)
     return jsonify({'status': resp})
 
 
 # expire image
 # This will expire an image which removes it from the cache.
-@app.route('/api/expire/<system>/<imgtype>/<path:tag>/', methods=["GET"])
-def expire(system, imgtype, tag):
+@app.route('/api/expire/<system>/<imgtype>/<tag:path>/', methods=["GET"])
+def expire(request, system, imgtype, tag):
     """ Expire a sepcific image for a system """
     if imgtype == "docker" and tag.find(':') == -1:
         tag = '%s:latest' % (tag)
@@ -318,29 +315,35 @@ def expire(system, imgtype, tag):
     auth = request.headers.get(AUTH_HEADER)
     i = {'system': system, 'itype': imgtype, 'tag': tag}
     memo = "expire system=%s imgtype=%s tag=%s" % (system, imgtype, tag)
-    app.logger.debug(memo)
+    logger.debug(memo)
     resp = None
     try:
         session = mgr.new_session(auth, system)
         resp = mgr.expire(session, i)
     except:
-        app.logger.exception('Exception in expire')
-        return not_found()
+        logger.exception('Exception in expire')
+        return not_found(request)
     return jsonify({'status': resp})
 
 
 # Show queue
 # This will list pull requests and their state
 @app.route('/api/queue/<system>/', methods=["GET"])
-def queue(system):
+def queue(request, system):
     """ List images for a specific system. """
     # auth = request.headers.get(AUTH_HEADER)
-    app.logger.debug("show queue system=%s" % (system))
+    logger.debug("show queue system=%s" % (system))
     try:
         session = mgr.new_session(None, system)
         records = mgr.show_queue(session, system)
     except:
-        app.logger.exception('Exception in queue')
-        return not_found('%s' % (sys.exc_value))
+        logger.exception('Exception in queue')
+        return not_found(request, '%s' % (sys.exc_value))
     resp = {'list': records}
     return jsonify(resp)
+
+
+if __name__ == "__main__":
+  workers = int(os.environ.get("WORKERS", 1))
+  app.run(host="0.0.0.0", port=8000, workers=workers)
+

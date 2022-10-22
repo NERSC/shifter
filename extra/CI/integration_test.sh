@@ -9,7 +9,7 @@ fi
 
 PYDIR=
 for libpath in lib lib64; do
-    for pypath in python2.6 python2.7; do
+    for pypath in python2.6 python2.7 python3.7 python3.8; do
         for packagepath in site-packages dist-packages; do
             if [[ -e "/usr/$libpath/$pypath/$packagepath/shifter_imagegw" ]]; then
                 PYDIR="/usr/$libpath/$pypath/$packagepath"
@@ -51,12 +51,12 @@ fi
 sudo service munge start
 
 echo "Starting imagegw api"
-gunicorn -b 0.0.0.0:5000 --backlog 2048 --access-logfile=/var/log/shifter_imagegw/access.log --log-file=/var/log/shifter_imagegw/error.log shifter_imagegw.api:app &
+python -m shifter_imagegw.api &
 
 echo "setting up base config"
 sudo /bin/bash -c "cat /etc/shifter/udiRoot.conf.example | \
          sed 's|etcPath=.*|etcPath=/etc/shifter/shifter_etc_files|g' | \
-         sed 's|imageGateway=.*|imageGateway=http://localhost:5000|g' \
+         sed 's|imageGateway=.*|imageGateway=http://localhost:8000|g' \
          > /etc/shifter/udiRoot.conf"
 
 sudo mkdir -p /etc/shifter/shifter_etc_files
@@ -75,13 +75,14 @@ sudo touch /bin/nvidia-modprobe
 sudo chmod 755 /bin/nvidia-modprobe
 
 ## need to sleep a bit to let gunicorn get started
-sleep 10
+sleep 2
 
 
 echo "Pull Image"
 shifterimg pull ubuntu:16.04
 shifterimg lookup ubuntu:16.04
-ls /images
+ls -l /images
+shifter --image=ubuntu:16.04 echo test
 
 echo "var/tmp exists"
 ls -ld /var/tmp

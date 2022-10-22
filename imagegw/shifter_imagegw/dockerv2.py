@@ -22,8 +22,8 @@ includes pulling down the manifest, pulling layers, and unpacking the layers.
 """
 
 import hashlib
-import urlparse
-import httplib
+import urllib.parse
+import http.client
 import ssl
 import json
 import os
@@ -33,7 +33,8 @@ from subprocess import Popen, PIPE
 import base64
 import tempfile
 import socket
-from tarfilemp import tarfile
+#from .tarfilemp import tarfile
+import tarfile
 
 
 _EMPTY_TAR_SHA256 = \
@@ -54,7 +55,7 @@ def need_proxy(hostname):
     """
     if 'no_proxy' in os.environ and os.environ['no_proxy']:
         domains = os.environ['no_proxy'].split(',')
-        ismatch = True in map(lambda x: hostname.endswith(x), domains)
+        ismatch = True in [hostname.endswith(x) for x in domains]
         return not ismatch
     else:
         return True
@@ -104,31 +105,31 @@ def _verify_manifest_signature(manifest, text, digest):
 
 def _setup_http_conn(url, cacert=None):
     """Prepare http connection object and return it."""
-    target = urlparse.urlparse(url)
+    target = urllib.parse.urlparse(url)
     conn = None
 
     if target.scheme == 'http':
         if 'http_proxy' in os.environ and need_proxy(target.hostname):
-            proxy = urlparse.urlparse(os.environ['http_proxy'])
-            conn = httplib.HTTPConnection(proxy.netloc)
+            proxy = urllib.parse.urlparse(os.environ['http_proxy'])
+            conn = http.client.HTTPConnection(proxy.netloc)
             conn.set_tunnel(
                 target.hostname,
                 target.port if target.port else 80
             )
             conn.connect()
         else:
-            conn = httplib.HTTPConnection(target.netloc)
+            conn = http.client.HTTPConnection(target.netloc)
     elif target.scheme == 'https':
         useproxy = False
         if 'https_proxy' in os.environ and need_proxy(target.hostname):
-            proxy = urlparse.urlparse(os.environ['https_proxy'])
+            proxy = urllib.parse.urlparse(os.environ['https_proxy'])
             useproxy = True
         try:
             ssl_context = ssl.create_default_context()
             if cacert is not None:
                 ssl_context = ssl.create_default_context(cafile=cacert)
             if useproxy:
-                conn = httplib.HTTPSConnection(
+                conn = http.client.HTTPSConnection(
                     proxy.netloc,
                     context=ssl_context
                 )
@@ -138,13 +139,13 @@ def _setup_http_conn(url, cacert=None):
                 )
                 conn.connect()
             else:
-                conn = httplib.HTTPSConnection(
+                conn = http.client.HTTPSConnection(
                     target.netloc,
                     context=ssl_context
                 )
         except AttributeError:
             if useproxy:
-                conn = httplib.HTTPSConnection(
+                conn = http.client.HTTPSConnection(
                     proxy.netloc,
                     key_file=None,
                     cert_file=cacert
@@ -155,7 +156,7 @@ def _setup_http_conn(url, cacert=None):
                 )
                 conn.connect()
             else:
-                conn = httplib.HTTPSConnection(
+                conn = http.client.HTTPSConnection(
                     target.netloc,
                     key_file=None,
                     cert_file=cacert
@@ -377,7 +378,7 @@ class DockerV2Handle(object):
         (_, auth_data_str) = auth_loc_str.split(' ', 2)
 
         auth_data = {}
-        for item in filter(None, re.split(r'(\w+=".*?"),', auth_data_str)):
+        for item in [_f for _f in re.split(r'(\w+=".*?"),', auth_data_str) if _f]:
             (key, val) = item.split('=', 2)
             auth_data[key] = val.replace('"', '')
 
@@ -390,7 +391,7 @@ class DockerV2Handle(object):
         if creds and self.username is not None and self.password is not None:
             self.private = True
             auth = '%s:%s' % (self.username, self.password)
-            headers['Authorization'] = 'Basic %s' % base64.b64encode(auth)
+            headers['Authorization'] = 'Basic %s' % base64.b64encode(auth.encode())
 
         match_obj = re.match(r'(https?)://(.*?)(/.*)', auth_data['realm'])
         if match_obj is None:
@@ -485,6 +486,8 @@ class DockerV2Handle(object):
                     resp['workdir'] = config['WorkingDir']
             if 'Entrypoint' in config:
                 resp['entrypoint'] = config['Entrypoint']
+            if 'Cmd' in config:
+                resp['cmd'] = config['Cmd']
         resp['private'] = self.private
         return resp
 
@@ -560,12 +563,12 @@ class DockerV2Handle(object):
                                    match_obj.groups()[1])
                 path = match_obj.groups()[2]
             else:
-                print 'ERROR: Getting layer recieved status: %d' % resp1.status
+                print('ERROR: Getting layer recieved status: %d' % resp1.status)
                 return False
         maxlen = int(resp1.getheader('content-length'))
         nread = 0
         (out_fd, out_fn) = tempfile.mkstemp('.partial', layer, self.cachedir)
-        out_fp = os.fdopen(out_fd, 'w')
+        out_fp = os.fdopen(out_fd, 'wb')
 
         try:
             readsz = 4 * 1024 * 1024  # read 4MB chunks
@@ -574,7 +577,6 @@ class DockerV2Handle(object):
                 buff = resp1.read(readsz)
                 if buff is None:
                     break
-
                 out_fp.write(buff)
                 nread += len(buff)
             out_fp.close()
@@ -596,7 +598,7 @@ class DockerV2Handle(object):
         exec_name = '%s%s' % (hash_type, 'sum')
         process = Popen([exec_name, filename], stdout=PIPE)
 
-        stdout = process.communicate()[0]
+        stdout = process.communicate()[0].decode("utf-8")
         checksum = stdout.split(' ', 1)[0]
         if checksum != value:
             raise ValueError("checksum mismatch, failure")
@@ -619,7 +621,7 @@ class DockerV2Handle(object):
         layer = self.eldest
         # Convert this base_path to unicode otherwise things will break
         # later.
-        base_path = base_path.encode('utf-8')
+        # base_path = base_path.encode('utf-8')
         while layer is not None:
             if layer['fsLayer']['blobSum'] in self.excludeBlobSums:
                 layer = layer['child']
@@ -731,6 +733,11 @@ def pull_image(options, repo, tag, cachedir='./', expanddir='./'):
     meta = handle.examine_manifest()
     handle.pull_layers()
 
+    try:
+        expanddir = expanddir.decode("utf-8")
+    except:
+        pass
+ 
     expandedpath = os.path.join(expanddir, str(meta['id']))
     meta['expandedpath'] = expandedpath
     if not os.path.exists(expandedpath):

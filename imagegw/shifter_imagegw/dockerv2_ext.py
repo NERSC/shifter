@@ -82,8 +82,8 @@ class DockerV2ext(object):
             raise OSError("No authentication")
         user = self.options['username']
         pwd = self.options['password']
-
-        token = base64.b64encode('%s:%s' % (user, pwd))
+        pstr =  '%s:%s' % (user, pwd)
+        token = base64.b64encode(pstr.encode("utf-8")).decode("utf-8")
         afile = tempfile.mkstemp()[1]
         auth = {'auths': {
                     self.registry: {'auth': token}
@@ -104,10 +104,14 @@ class DockerV2ext(object):
         cmd.extend(['inspect', self.url])
         process = Popen(cmd, stdout=PIPE, stderr=PIPE)
         stdout, stderr = process.communicate()
-        if 'authentication required' not in stderr and 'Forbidden' not in stderr:
+        stderr_str = stderr.decode("utf-8")
+        auth_errors = ['authentication', 'forbidden', 'unauthorized']
+        # see if we got some type of unauthorized response
+        if not any(a_err in stderr_str.lower() for a_err in auth_errors):
+            # See if it exited with an error
             if process.returncode:
-                raise OSError("Skopeo inspect failed")
-            return json.loads(stdout)
+                raise OSError("Skopeo inspect failed: %s" % (stderr_str))
+            return json.loads(stdout.decode("utf-8"))
 
         # Private Image
         self.log("PULLING", 'Inspecting Image with auth')
@@ -120,7 +124,7 @@ class DockerV2ext(object):
         cmd.extend([self.url])
         process = Popen(cmd, stdout=PIPE, stderr=PIPE)
         stdout, stderr = process.communicate()
-        return json.loads(stdout)
+        return json.loads(stdout.decode("utf-8"))
 
     def _validate(self, idir):
         """
@@ -164,6 +168,11 @@ class DockerV2ext(object):
                     resp['workdir'] = config['WorkingDir']
             if 'Entrypoint' in config:
                 resp['entrypoint'] = config['Entrypoint']
+            if 'Cmd' in config:
+                resp['cmd'] = config['Cmd']
+            if 'Labels' in config:
+                resp['labels'] = config['Labels']
+        resp['private'] = self.private
         resp['private'] = self.private
         return resp
 
@@ -224,7 +233,7 @@ class DockerV2ext(object):
         process = Popen(cmd, stdout=PIPE)
         process.communicate()[0]
         if process.returncode:
-            return False
+            raise OSError("Unpack failed")
         rootfs = os.path.join(idir, 'rootfs')
         os.rmdir(base_path)
         perm = os.stat(rootfs).st_mode

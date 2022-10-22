@@ -1,3 +1,14 @@
+22.02.1
+=======
+* Minor fixes and updates to run on CLE 6.X
+
+21.03.1
+=======
+* Update from Python 2 to Python 3 in the Gateway
+* Convert from Flask to Sanic in the Gateway 
+* Bug fix to catch Umoci failures
+* Update to Dockerfile to include tools to support use_external mode
+
 18.03.5
 ========
 * Add support for external mode (see docs/skopeo.rst)

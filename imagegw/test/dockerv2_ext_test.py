@@ -29,7 +29,7 @@ import json
 class update():
 
     def update_status(self, state, message):
-        print("%s: %s" % (state, message))
+        print(("%s: %s" % (state, message)))
 
 class Dockerv2TestCase(unittest.TestCase):
 
@@ -68,6 +68,7 @@ class Dockerv2TestCase(unittest.TestCase):
         resp = dock.examine_manifest()
         self.assertIn('id', resp)
         self.assertIn('private', resp)
+        self.assertIn('labels', resp)
         resp = dock.pull_layers()
         self.assertTrue(resp)
         dock.extract_docker_layers(expand)
@@ -177,5 +178,5 @@ class Dockerv2TestCase(unittest.TestCase):
         pf = self.test_dir + 'policy.json'
         opt = {'policy_file': pf}
         dock = DockerV2ext(image, options=opt)
-        self.assertEquals(pf, dock.policy_file)
+        self.assertEqual(pf, dock.policy_file)
 

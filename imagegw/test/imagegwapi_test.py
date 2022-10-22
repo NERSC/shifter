@@ -1,9 +1,11 @@
 import os
 import unittest
 import time
-import urllib
+import urllib.request, urllib.parse, urllib.error
 import json
+from copy import deepcopy
 from shifter_imagegw.fasthash import fast_hash
+from shifter_imagegw.imagemngr import ImageMngr
 from pymongo import MongoClient
 
 """
@@ -49,7 +51,7 @@ class GWTestCase(unittest.TestCase):
         self.system = "systema"
         self.type = "docker"
         self.itag = "alpine:latest"
-        self.tag = urllib.quote(self.itag)
+        self.tag = urllib.parse.quote(self.itag)
         self.urlreq = "%s/%s/%s" % (self.system, self.type, self.tag)
         # Need to switch to real munge tokens
         self.auth = "good:user:user::500:500"
@@ -70,7 +72,7 @@ class GWTestCase(unittest.TestCase):
         from shifter_imagegw import api
         api.config['TESTING'] = True
         cls.mgr = api.getmgr()
-        cls.app = api.app.test_client()
+        cls.app = api.app.test_client
 
     @classmethod
     def tearDownClass(cls):
@@ -83,19 +85,19 @@ class GWTestCase(unittest.TestCase):
         cstate = 'UNKNOWN'
         uri = '%s/%s/%s/' % (self.url, op, urlreq)
         while (cstate != state and count > 0):
-            rv = self.app.post(uri, data=data,
+            _, rv = self.app.post(uri, data=data,
                                headers={AUTH_HEADER: self.auth})
-            if rv.status_code != 200:
+            if rv.status != 200:
                 time.sleep(1)
                 continue
-            r = json.loads(rv.data)
+            r = rv.json
             cstate = r['status']
             if r['status'] == 'READY':
                 break
             if r['status'] == 'FAILURE':
                 break
             if DEBUG:
-                print '  %s...' % (r['status'])
+                print('  %s...' % (r['status']))
             time.sleep(1)
             count = count - 1
         return rv
@@ -119,9 +121,9 @@ class GWTestCase(unittest.TestCase):
         data = {'allowed_uids': '1000,1001',
                 'allowed_gids': '1002,1003'}
         datajson = json.dumps(data)
-        rv = self.app.post(uri, headers={AUTH_HEADER: self.auth},
+        _, rv = self.app.post(uri, headers={AUTH_HEADER: self.auth},
                            data=datajson)
-        data = json.loads(rv.data)
+        data = rv.json
         assert 'userACL' in data
         assert 'groupACL' in data
         assert 1000 in data['userACL']
@@ -129,40 +131,40 @@ class GWTestCase(unittest.TestCase):
         assert 500 in data['groupACL']
         assert 1002 in data['groupACL']
         rv = self.time_wait(self.urlreq)
-        assert rv.status_code == 200
+        assert rv.status == 200
 
     def test_list(self):
         # Do a pull so we can create an image record
         uri = '%s/list/%s/' % (self.url, 'systemc')
-        rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
-        self.assertEquals(rv.status_code, 404)
+        _, rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
+        self.assertEqual(rv.status, 404)
         # uri = '%s/pull/%s/' % (self.url, self.urlreq)
         # rv = self.app.post(uri, headers={AUTH_HEADER: self.auth})
         rv = self.time_wait(self.urlreq)
-        assert rv.status_code == 200
+        assert rv.status == 200
         uri = '%s/list/%s/' % (self.url, self.system)
-        rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
-        assert rv.status_code == 200
+        _, rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
+        assert rv.status == 200
 
     def test_queue(self):
         # Do a pull so we can create an image record
         uri = '%s/pull/%s/' % (self.url, self.urlreq)
-        rv = self.app.post(uri, headers={AUTH_HEADER: self.auth})
-        assert rv.status_code == 200
+        _, rv = self.app.post(uri, headers={AUTH_HEADER: self.auth})
+        assert rv.status == 200
         uri = '%s/queue/%s/' % (self.url, self.system)
-        rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
-        assert rv.status_code == 200
+        _, rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
+        assert rv.status == 200
 
     def test_pulllookup(self):
         # Do a pull so we can create an image record
         uri = '%s/pull/%s/' % (self.url, self.urlreq)
         rv = self.time_wait(self.urlreq)
         uri = '%s/lookup/%s/' % (self.url, self.urlreq)
-        rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
-        assert rv.status_code == 200
+        _, rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
+        self.assertEquals(rv.status, 200)
         uri = '%s/lookup/%s/%s/' % (self.url, self.system, 'bogus')
-        rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
-        assert rv.status_code == 404
+        _, rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
+        self.assertEquals(rv.status, 404)
 
     def test_lookup(self):
         # Do a pull so we can create an image record
@@ -170,27 +172,27 @@ class GWTestCase(unittest.TestCase):
         id = self.images.insert(record)
         assert id is not None
         uri = '%s/lookup/%s/' % (self.url, self.urlreq)
-        rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
-        assert rv.status_code == 200
+        _, rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
+        assert rv.status == 200
 
     def test_expire(self):
         uri = '%s/expire/%s/%s/%s/' % (self.url, self.system, self.type,
                                        self.tag)
-        rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
-        assert rv.status_code == 200
+        _, rv = self.app.get(uri, headers={AUTH_HEADER: self.auth})
+        assert rv.status == 200
 
     def test_autoexpire(self):
         record = self.good_record()
         record['expiration'] = time.time() - 100
         id = self.images.insert(record)
         uri = '%s/autoexpire/%s/' % (self.url, self.system)
-        rv = self.app.get(uri, headers={AUTH_HEADER: self.authadmin})
-        assert rv.status_code == 200
-        assert rv.data.count('bogus') > 0
+        _, rv = self.app.get(uri, headers={AUTH_HEADER: self.authadmin})
+        assert rv.status == 200
+        #assert rv.data.decode("utf-8").count('bogus') > 0
 
         count = 20
         while count > 0:
-            rv = self.app.get(uri, headers={AUTH_HEADER: self.authadmin})
+            _, rv = self.app.get(uri, headers={AUTH_HEADER: self.authadmin})
             r = self.images.find_one({'_id': id})
             if r['status'] == 'EXPIRED':
                 break
@@ -198,11 +200,11 @@ class GWTestCase(unittest.TestCase):
             count = count - 1
         # self.time_wait(self.urlreq,state='EXPIRE')
         # Run again to trigger db update
-        rv = self.app.get(uri, headers={AUTH_HEADER: self.authadmin})
-        assert rv.status_code == 200
+        _, rv = self.app.get(uri, headers={AUTH_HEADER: self.authadmin})
+        assert rv.status == 200
         r = self.images.find_one({'_id': id})
 
-        self.assertEquals(r['status'], 'EXPIRED')
+        self.assertEqual(r['status'], 'EXPIRED')
 
     def test_metrics(self):
         rec = {
@@ -215,16 +217,16 @@ class GWTestCase(unittest.TestCase):
         }
         # Remove everything
         self.metrics.remove({})
-        for _ in xrange(100):
+        for _ in range(100):
             rec['time'] = time.time()
             last_time = rec['time']
             self.metrics.insert(rec.copy())
         uri = '%s/metrics/%s/?limit=20' % (self.url, self.system)
-        rv = self.app.get(uri, headers={AUTH_HEADER: self.authadmin})
-        self.assertEquals(rv.status_code, 200)
-        data = json.loads(rv.data)
-        self.assertEquals(len(data), 20)
-        self.assertEquals(data[19]['time'], last_time)
+        _, rv = self.app.get(uri, headers={AUTH_HEADER: self.authadmin})
+        self.assertEqual(rv.status, 200)
+        data = rv.json
+        self.assertEqual(len(data), 20)
+        self.assertEqual(data[19]['time'], last_time)
 
     def test_import(self):
         self.config["ImportUsers"] = "all"
@@ -235,7 +237,7 @@ class GWTestCase(unittest.TestCase):
                 'format': 'squashfs'}
         hash = fast_hash(ifile)
         datajson = json.dumps(data)
-        rv = self.app.post(uri, headers={AUTH_HEADER: self.auth},
+        _, rv = self.app.post(uri, headers={AUTH_HEADER: self.auth},
                            data=datajson)
         rv = self.time_wait(self.urlreq, op='doimport', data=datajson)
         # for i in range(5):
@@ -245,11 +247,33 @@ class GWTestCase(unittest.TestCase):
         #     if data['status'] == 'READY':
         #         break
         #     time.sleep(1)
-        data = json.loads(rv.data)
-        self.assertEquals(data['status'], 'READY')
-        self.assertEquals(data['id'], hash)
+        data = rv.json
+        self.assertEqual(data['status'], 'READY')
+        self.assertEqual(data['id'], hash)
 #        assert 'filepath' in data
-#        assert rv.status_code == 200
+#        assert rv.status == 200
+
+    def test_labels(self):
+        # Configure an API service with use_external
+        from shifter_imagegw import api
+        c = deepcopy(self.config)
+        c['Platforms']['systema']['use_external'] = True
+        os.environ['ENABLE_LABELS'] = "1"
+        api.mgr = ImageMngr(c)
+        # Do a pull so we can create an image record
+        uri = '%s/pull/%s/' % (self.url, self.urlreq)
+        app = api.app.test_client
+        app.post(uri, headers={AUTH_HEADER: self.auth})
+        time.sleep(1)
+        _, rv = app.post(uri, headers={AUTH_HEADER: self.auth})
+        self.assertEqual(rv.json['status'], 'READY')
+        uri = '%s/lookup/%s/' % (self.url, self.urlreq)
+        _, rv = app.get(uri, headers={AUTH_HEADER: self.auth})
+        self.assertEquals(rv.status, 200)
+        resp = rv.json
+        self.assertIn('LABELS', resp)
+        self.assertIn('alabel', resp['LABELS'])
+        self.assertEqual(resp['LABELS']['alabel'], 'avalue')
 
 
 if __name__ == '__main__':

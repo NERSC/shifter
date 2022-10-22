@@ -35,7 +35,7 @@ def munge(text, socket=None):
         if socket is not None:
             com.extend(['-S', socket])
         proc = Popen(com, stdout=PIPE, stderr=PIPE)
-        stdout = proc.communicate()[0]
+        stdout = str(proc.communicate()[0])
         return stdout.replace('\n', '')
     except:
         return None
@@ -52,7 +52,7 @@ def unmunge(encoded, socket=None):
         if socket is not None:
             com.extend(['-S', socket])
         proc = Popen(com, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        output = proc.communicate(input=encoded)[0]
+        output = proc.communicate(input=encoded.encode('utf-8'))[0]
         if proc.returncode == 15:
             raise OSError("Expired Credential")
         if proc.returncode == 17:
@@ -60,11 +60,10 @@ def unmunge(encoded, socket=None):
         elif proc.returncode != 0:
             memo = "Unknown munge error %d %s" % (proc.returncode, socket)
             raise OSError(memo)
-
         resp = dict()
         inmessage = False
         message = ''
-        for line in output.splitlines():
+        for line in output.decode("utf-8").splitlines():
             if line == '':
                 inmessage = True
                 continue
@@ -84,7 +83,7 @@ def unmunge(encoded, socket=None):
         return resp
     except:
         if debug:
-            print sys.exc_value
+            print(sys.exc_info()[1])
         raise
 
 
@@ -92,7 +91,7 @@ def usage(program):
     """
     Help for test mode of munge helpers
     """
-    print "%s <munge|unmunge>" % (program)
+    print("%s <munge|unmunge>" % (program))
 
 
 def _main():
@@ -106,11 +105,11 @@ def _main():
 
     command = sys.argv.pop(0)
     if command == 'munge':
-        print munge('test')
+        print(munge('test'))
     elif command == "unmunge":
         message = sys.stdin.read().strip()
         resp = unmunge(message, socket="/var/run/munge/munge.socket")
-        print "Response: " + resp
+        print("Response: " + resp)
     else:
         usage(program)
 

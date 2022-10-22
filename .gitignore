@@ -74,3 +74,10 @@ wlm_integration/slurm/test/test_shifterSpank_prolog
 wlm_integration/slurm/test/test_shifterSpank_cgroup
 wlm_integration/slurm/test/test_shifterSpank_util
 tokens.cfg
+imagegw/private
+*.bak
+.coverage
+rpms
+doc/html
+local/
+

@@ -459,6 +459,8 @@ int pathcmp(const char *a, const char *b) {
 int is_json_array(const char *value) {
     if (value[0] == '[' && value[1] == 'u' && value[2] == '\'') {
         return 1;
+    } else if (value[0] == '[' && value[1] == '\'') {
+        return 1;
     } else {
         return 0;
     }

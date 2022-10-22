@@ -1,4 +1,3 @@
-pymongo
-flask
-gunicorn
+pymongo==3.12.1
+sanic==20.9.1
 pylint

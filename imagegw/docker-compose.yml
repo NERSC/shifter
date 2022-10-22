@@ -1,17 +1,20 @@
 api:
   image: imagegwapi
   ports:
-   - 5555:5000
+   - 5555:8000
   links:
    - mongo
-   - systema
-   - registry
   volumes:
-   - imagegw:/data
+   - imagegw:/images
+   - munge:/var/run/munge/
    - ./test/config:/config
-  command: munge:systema:munge munge:systemb:munge api
+  command: api
+munge:
+  image: munge
+  volumes:
+   - munge:/var/run/munge/
 mongo:
-  image: mongo:2.6
+  image: mongo:3
   volumes:
     - /data/db
   command: --smallfiles
