@@ -33,7 +33,7 @@ from sanic import response
 from sanic.response import json as jsonify
 from sanic.exceptions import NotFound
 
-app = Sanic("shifter")
+app = Sanic("shifter", strict_slashes=True)
 config = {}
 AUTH_HEADER = 'authentication'
 
@@ -110,6 +110,14 @@ def create_response(rec):
     return resp
 
 
+def decode_path(pth):
+    """
+    Convert a URL encoded path.  We just
+    see a few outliers currently
+    """
+    return pth.replace("%3A", ":")
+
+
 # List images
 # This will list the images for a system
 @app.route('/api/list/<system>/', methods=["GET"])
@@ -140,6 +148,7 @@ def imglist(request, system):
 @app.route('/api/lookup/<system>/<imgtype>/<tag:path>/', methods=["GET"])
 def lookup(request, system, imgtype, tag):
     """ Lookup an image for a system and return its record """
+    tag = decode_path(tag)
     if (imgtype == "docker" or imgtype == "custom") and tag.find(':') == -1:
         tag = '%s:latest' % (tag)
 
@@ -184,6 +193,7 @@ def metrics(request, system):
 @app.route('/api/pull/<system>/<imgtype>/<tag:path>/', methods=["POST"])
 def pull(request, system, imgtype, tag):
     """ Pull a specific image and tag for a systems. """
+    tag = decode_path(tag)
     if imgtype == "docker" and tag.find(':') == -1:
         tag = '%s:latest' % (tag)
 
@@ -228,6 +238,7 @@ def doimport(request, system, imgtype, tag):
     """
     Pull a specific image and tag for a systems.
     """
+    tag = decode_path(tag)
     if imgtype == "docker" and tag.find(':') == -1:
         tag = '%s:latest' % (tag)
 
@@ -309,6 +320,7 @@ def autoexpire(request, system):
 @app.route('/api/expire/<system>/<imgtype>/<tag:path>/', methods=["GET"])
 def expire(request, system, imgtype, tag):
     """ Expire a sepcific image for a system """
+    tag = decode_path(tag)
     if imgtype == "docker" and tag.find(':') == -1:
         tag = '%s:latest' % (tag)
 
@@ -344,6 +356,5 @@ def queue(request, system):
 
 
 if __name__ == "__main__":
-  workers = int(os.environ.get("WORKERS", 1))
-  app.run(host="0.0.0.0", port=8000, workers=workers)
-
+    workers = int(os.environ.get("WORKERS", 1))
+    app.run(host="0.0.0.0", port=8000, workers=workers)

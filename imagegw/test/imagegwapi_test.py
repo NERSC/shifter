@@ -8,6 +8,7 @@ from shifter_imagegw.fasthash import fast_hash
 from shifter_imagegw.imagemngr import ImageMngr
 from pymongo import MongoClient
 
+
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
 through Lawrence Berkeley National Laboratory (subject to receipt of any
