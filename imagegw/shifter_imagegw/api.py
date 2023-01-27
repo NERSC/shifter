@@ -23,7 +23,6 @@ This module provides the REST API for the image gateway.
 
 import json
 import os
-import sys
 import logging
 import shifter_imagegw
 from shifter_imagegw.imagemngr import ImageMngr
@@ -41,11 +40,11 @@ AUTH_HEADER = 'authentication'
 if 'GWCONFIG' in os.environ:
     CONFIG_FILE = os.environ['GWCONFIG']
 else:
-    CONFIG_FILE = '%s/imagemanager.json' % (shifter_imagegw.CONFIG_PATH)
+    CONFIG_FILE = f'{shifter_imagegw.CONFIG_PATH}/imagemanager.json'
 
 logger.debug('Initializing api image manager')
 
-logger.info("initializing with %s" % (CONFIG_FILE))
+logger.info(f"initializing with {CONFIG_FILE}")
 with open(CONFIG_FILE) as config_file:
     config = json.load(config_file)
     if 'LogLevel' in config:
@@ -124,7 +123,7 @@ def decode_path(pth):
 def imglist(request, system):
     """ List images for a specific system. """
     auth = request.headers.get(AUTH_HEADER)
-    logger.debug("list system=%s" % (system))
+    logger.debug(f"list system={system}")
     try:
         session = mgr.new_session(auth, system)
         records = mgr.imglist(session, system)
@@ -133,9 +132,9 @@ def imglist(request, system):
     except OSError:
         logger.warning('Bad session or system')
         return not_found(request, 'Bad session or system')
-    except Exception:
+    except Exception as ex:
         logger.exception('Unknown Exception in List')
-        return not_found(request, '%s' % (sys.exc_value))
+        return not_found(request, ex)
     images = []
     for rec in records:
         images.append(create_response(rec))
@@ -150,11 +149,10 @@ def lookup(request, system, imgtype, tag):
     """ Lookup an image for a system and return its record """
     tag = decode_path(tag)
     if (imgtype == "docker" or imgtype == "custom") and tag.find(':') == -1:
-        tag = '%s:latest' % (tag)
+        tag = f'{tag}:latest'
 
     auth = request.headers.get(AUTH_HEADER)
-    memo = 'lookup system=%s imgtype=%s tag=%s auth=%s' \
-           % (system, imgtype, tag, auth)
+    memo = f'lookup system={system} imgtype={imgtype} tag={tag} auth={auth}'
     logger.debug(memo)
     i = {'system': system, 'itype': imgtype, 'tag': tag}
     try:
@@ -163,9 +161,9 @@ def lookup(request, system, imgtype, tag):
         if rec is None:
             logger.debug("Image lookup failed.")
             return not_found(request, 'image not found')
-    except Exception:
+    except Exception as ex:
         logger.exception('Exception in lookup')
-        return not_found(request, '%s %s' % (sys.exc_type, sys.exc_value))
+        return not_found(request, ex)
     return jsonify(create_response(rec))
 
 
@@ -175,16 +173,15 @@ def lookup(request, system, imgtype, tag):
 def metrics(request, system):
     """ Lookup an image for a system and return its record """
     auth = request.headers.get(AUTH_HEADER)
-    memo = 'metrics system=%s auth=%s' \
-           % (system, auth)
+    memo = f'metrics system={system} auth={auth}'
     logger.debug(memo)
     limit = int(request.args.get('limit', '10'))
     try:
         session = mgr.new_session(auth, system)
         recs = mgr.get_metrics(session, system, limit)
-    except Exception:
+    except Exception as ex:
         logger.exception('Exception in metrics')
-        return not_found(request, '%s %s' % (sys.exc_type, sys.exc_value))
+        return not_found(request, ex)
     return jsonify(recs)
 
 
@@ -195,7 +192,7 @@ def pull(request, system, imgtype, tag):
     """ Pull a specific image and tag for a systems. """
     tag = decode_path(tag)
     if imgtype == "docker" and tag.find(':') == -1:
-        tag = '%s:latest' % (tag)
+        tag = f'{tag}:latest'
 
     auth = request.headers.get(AUTH_HEADER)
     data = {}
@@ -208,7 +205,7 @@ def pull(request, system, imgtype, tag):
         logger.warn(f"Unable to parse pull data '{data}'")
         pass
 
-    memo = "pull system=%s imgtype=%s tag=%s" % (system, imgtype, tag)
+    memo = f"pull system={system} imgtype={imgtype} tag={tag}"
     logger.debug(memo)
     i = {'system': system, 'itype': imgtype, 'tag': tag}
     if 'allowed_uids' in data:
@@ -225,9 +222,9 @@ def pull(request, system, imgtype, tag):
         logger.debug(session)
         rec = mgr.pull(session, i)
         logger.debug(rec)
-    except Exception:
+    except Exception as ex:
         logger.exception('Exception in pull')
-        return not_found(request, '%s %s' % (sys.exc_type, sys.exc_value))
+        return not_found(request, ex)
     return jsonify(create_response(rec))
 
 
@@ -240,7 +237,7 @@ def doimport(request, system, imgtype, tag):
     """
     tag = decode_path(tag)
     if imgtype == "docker" and tag.find(':') == -1:
-        tag = '%s:latest' % (tag)
+        tag = f'{tag}:latest'
 
     auth = request.headers.get(AUTH_HEADER)
     data = {}
@@ -249,11 +246,9 @@ def doimport(request, system, imgtype, tag):
         if data is None:
             data = {}
     except Exception:
-        logger.warn("Unable to parse doimport data '%s'" %
-                    (request.text))
-        pass
+        logger.warn(f"Unable to parse doimport data '{request.text}'")
 
-    memo = "import system=%s imgtype=%s tag=%s" % (system, imgtype, tag)
+    memo = f"import system={system} imgtype={imgtype} tag={tag}"
     logger.debug(memo)
     i = {'system': system, 'itype': imgtype, 'tag': tag}
     # Check for path to import file
@@ -289,13 +284,13 @@ def doimport(request, system, imgtype, tag):
         # Check if user on approved list
         if len(iusers) > 0 and iusers != "all":
             if user not in iusers:
-                msg = "User %s not allowed to import image from file." % (user)
+                msg = f"User {user} not allowed to import image from file."
                 raise OSError(msg)
         rec = mgr.mngrimport(session, i)
         logger.debug(rec)
-    except Exception:
+    except Exception as ex:
         logger.exception('Exception in import')
-        return not_found(request, '%s %s' % (sys.exc_type, sys.exc_value))
+        return not_found(request, ex)
     return jsonify(create_response(rec))
 
 
@@ -305,7 +300,7 @@ def doimport(request, system, imgtype, tag):
 def autoexpire(request, system):
     """ Run the autoexpire handler to purge old images """
     auth = request.headers.get(AUTH_HEADER)
-    logger.debug("autoexpire system=%s" % (system))
+    logger.debug(f"autoexpire system={system}")
     try:
         session = mgr.new_session(auth, system)
         resp = mgr.autoexpire(session, system)
@@ -322,11 +317,11 @@ def expire(request, system, imgtype, tag):
     """ Expire a sepcific image for a system """
     tag = decode_path(tag)
     if imgtype == "docker" and tag.find(':') == -1:
-        tag = '%s:latest' % (tag)
+        tag = f'{tag}:latest'
 
     auth = request.headers.get(AUTH_HEADER)
     i = {'system': system, 'itype': imgtype, 'tag': tag}
-    memo = "expire system=%s imgtype=%s tag=%s" % (system, imgtype, tag)
+    memo = f"expire system={system} imgtype={imgtype} tag={tag}"
     logger.debug(memo)
     resp = None
     try:
@@ -344,13 +339,13 @@ def expire(request, system, imgtype, tag):
 def queue(request, system):
     """ List images for a specific system. """
     # auth = request.headers.get(AUTH_HEADER)
-    logger.debug("show queue system=%s" % (system))
+    logger.debug(f"show queue system={system}")
     try:
         session = mgr.new_session(None, system)
         records = mgr.show_queue(session, system)
-    except Exception:
+    except Exception as ex:
         logger.exception('Exception in queue')
-        return not_found(request, '%s' % (sys.exc_value))
+        return not_found(request, ex)
     resp = {'list': records}
     return jsonify(resp)
 
