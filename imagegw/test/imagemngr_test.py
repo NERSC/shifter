@@ -83,57 +83,59 @@ class mock_worker(WorkerThreads):
 
 
 class ImageMngrTestCase(unittest.TestCase):
-
-    def setUp(self):
-        self.configfile = 'test.json'
-        with open(self.configfile) as config_file:
-            self.config = json.load(config_file)
-        mongodb = self.config['MongoDBURI']
-        client = MongoClient(mongodb)
-        db = self.config['MongoDB']
-        self.images = client[db].images
-        self.metrics = client[db].metrics
-        self.images.drop()
-        self.logger = logging.getLogger("imagemngr")
-        if len(self.logger.handlers) < 1:
-            print(("Number of loggers %d" % (len(self.logger.handlers))))
+    @classmethod
+    def setup_class(cls):
+        cls.configfile = 'test.json'
+        with open(cls.configfile) as config_file:
+            cls.config = json.load(config_file)
+        mongodb = cls.config['MongoDBURI']
+        cls.client = MongoClient(mongodb)
+        db = cls.config['MongoDB']
+        cls.images = cls.client[db].images
+        cls.metrics = cls.client[db].metrics
+        cls.images.drop()
+        cls.logger = logging.getLogger("imagemngr")
+        if len(cls.logger.handlers) < 1:
+            print(("Number of loggers %d" % (len(cls.logger.handlers))))
             log_handler = logging.FileHandler('testing.log')
             logfmt = '%(asctime)s [%(name)s] %(levelname)s : %(message)s'
             log_handler.setFormatter(logging.Formatter(logfmt))
             log_handler.setLevel(logging.INFO)
-            self.logger.addHandler(log_handler)
-        self.m = ImageMngr(self.config, logger=self.logger)
+            cls.logger.addHandler(log_handler)
+        cls.m = ImageMngr(cls.config, logger=cls.logger)
         # Manager with mocked worker
-        self.mtm = ImageMngr(self.config, logger=self.logger)
-        self.mtm.workers = mock_worker(self.mtm.status_queue)
-        self.system = 'systema'
-        self.itype = 'docker'
-        self.tag = 'alpine:latest'
-        self.id = 'fakeid'
-        self.tag2 = 'test2'
-        self.public = 'index.docker.io/busybox:latest'
-        self.private = 'index.docker.io/scanon/shaneprivate:latest'
-        self.format = 'squashfs'
-        self.auth = 'good:user:user::100:100'
-        self.authadmin = 'good:root:root::0:0'
-        self.badauth = 'bad:user:user::100:100'
-        self.logfile = '/tmp/worker.log'
-        self.pid = 0
+        cls.mtm = ImageMngr(cls.config, logger=cls.logger)
+        cls.mtm.workers = mock_worker(cls.mtm.status_queue)
+        cls.system = 'systema'
+        cls.itype = 'docker'
+        cls.tag = 'alpine:latest'
+        cls.id = 'fakeid'
+        cls.tag2 = 'test2'
+        cls.public = 'index.docker.io/busybox:latest'
+        cls.private = 'index.docker.io/scanon/shaneprivate:latest'
+        cls.format = 'squashfs'
+        cls.auth = 'good:user:user::100:100'
+        cls.authadmin = 'good:root:root::0:0'
+        cls.badauth = 'bad:user:user::100:100'
+        cls.logfile = '/tmp/worker.log'
+        cls.pid = 0
+        if os.path.exists(cls.logfile):
+            pass  # os.unlink(cls.logfile)
+
+    def setUp(self):
+        self.images.remove({})
         self.query = {'system': self.system, 'itype': self.itype,
                       'tag': self.tag}
         self.pull = {'system': self.system, 'itype': self.itype,
                      'tag': self.tag, 'remotetype': 'dockerv2',
                      'userACL': [], 'groupACL': []}
-        if os.path.exists(self.logfile):
-            pass  # os.unlink(self.logfile)
-        # Cleanup Mongo
-        self.images.remove({})
 
-    def tearDown(self):
+    @classmethod
+    def teardown_class(cls):
         """
         tear down should stop the worker
         """
-        self.m.shutdown()
+        cls.m.shutdown()
 
     def time_wait(self, id, wstate='READY', TIMEOUT=30):
         poll_interval = 0.5
@@ -237,7 +239,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertIsNotNone(s)
         try:
             s = self.m.new_session(self.badauth, self.system)
-        except:
+        except Exception:
             pass
 
     @attr('fast')
@@ -475,17 +477,17 @@ class ImageMngrTestCase(unittest.TestCase):
         self.images.insert(record)
         i = self.query.copy()
         session = self.m.new_session(self.auth, self.system)
-        l = self.m.lookup(session, i)
-        self.assertIn('status', l)
-        self.assertIn('_id', l)
-        self.assertEqual(self.m.get_state(l['_id']), 'READY')
+        look = self.m.lookup(session, i)
+        self.assertIn('status', look)
+        self.assertIn('_id', look)
+        self.assertEqual(self.m.get_state(look['_id']), 'READY')
         i = self.query.copy()
-        r = self.images.find_one({'_id': l['_id']})
+        r = self.images.find_one({'_id': look['_id']})
         self.assertIn('expiration', r)
         self.assertGreater(r['expiration'], time.time())
         i['tag'] = 'bogus'
-        l = self.m.lookup(session, i)
-        self.assertIsNone(l)
+        look = self.m.lookup(session, i)
+        self.assertIsNone(look)
 
     @attr('fast')
     def test_list(self):
@@ -498,10 +500,10 @@ class ImageMngrTestCase(unittest.TestCase):
         session = self.m.new_session(self.auth, self.system)
         li = self.m.imglist(session, self.system)
         self.assertEqual(len(li), 1)
-        l = li[0]
-        self.assertIn('_id', l)
-        self.assertEqual(self.m.get_state(l['_id']), 'READY')
-        self.assertEqual(l['_id'], id1)
+        look = li[0]
+        self.assertIn('_id', look)
+        self.assertEqual(self.m.get_state(look['_id']), 'READY')
+        self.assertEqual(look['_id'], id1)
 
     def test_repull(self):
         # Test a repull

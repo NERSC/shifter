@@ -36,11 +36,7 @@ from pymongo import MongoClient
 import pymongo.errors
 from shifter_imagegw.auth import Authentication
 from shifter_imagegw.imageworker import WorkerThreads
-try:
-    from multiprocessing import Process
-except:
-    from multiprocessing.process import Process
-
+from multiprocessing import Process
 import atexit
 
 
@@ -281,7 +277,7 @@ class ImageMngr(object):
                 return False
             if key not in b:
                 return False
-        except:
+        except Exception:
             return True
         aitems = a[key]
         bitems = b[key]
@@ -307,7 +303,7 @@ class ImageMngr(object):
                 'time': time()
             }
             self._metrics_insert(r)
-        except:
+        except Exception:
             self.logger.warn('Failed to log lookup.')
 
     def get_metrics(self, session, system, limit):
@@ -766,7 +762,7 @@ class ImageMngr(object):
             # However it could be a new tag.  So let's update the tag
             try:
                 rec['tag'].index(response['tag'])
-            except:
+            except Exception:
                 self.add_tag(rec['_id'], pullrec['system'], tag)
             return True
         else:

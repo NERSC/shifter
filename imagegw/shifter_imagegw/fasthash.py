@@ -11,11 +11,11 @@ def fast_hash(infile):
 
     m = hashlib.sha256()
     with open(infile, 'rb', 1024 * 1024) as f:
-        l = f.read(1024 * 1024)
-        while (len(l) > 0):
-            m.update(l)
+        chunk = f.read(1024 * 1024)
+        while (len(chunk) > 0):
+            m.update(chunk)
             f.seek(1024 * 1024 * (512 - 1), 1)
-            l = f.read(1024 * 1024)
+            chunk = f.read(1024 * 1024)
     return m.hexdigest()
 
 

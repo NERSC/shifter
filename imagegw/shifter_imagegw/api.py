@@ -133,7 +133,7 @@ def imglist(request, system):
     except OSError:
         logger.warning('Bad session or system')
         return not_found(request, 'Bad session or system')
-    except:
+    except Exception:
         logger.exception('Unknown Exception in List')
         return not_found(request, '%s' % (sys.exc_value))
     images = []
@@ -163,7 +163,7 @@ def lookup(request, system, imgtype, tag):
         if rec is None:
             logger.debug("Image lookup failed.")
             return not_found(request, 'image not found')
-    except:
+    except Exception:
         logger.exception('Exception in lookup')
         return not_found(request, '%s %s' % (sys.exc_type, sys.exc_value))
     return jsonify(create_response(rec))
@@ -182,7 +182,7 @@ def metrics(request, system):
     try:
         session = mgr.new_session(auth, system)
         recs = mgr.get_metrics(session, system, limit)
-    except:
+    except Exception:
         logger.exception('Exception in metrics')
         return not_found(request, '%s %s' % (sys.exc_type, sys.exc_value))
     return jsonify(recs)
@@ -203,9 +203,9 @@ def pull(request, system, imgtype, tag):
         data = request.json
         if data is None:
             data = {}
-    except:
-        logger.warn("Unable to parse pull data '%s'" %
-                        (request.get_data()))
+    except Exception:
+        data = request.get_data()
+        logger.warn(f"Unable to parse pull data '{data}'")
         pass
 
     memo = "pull system=%s imgtype=%s tag=%s" % (system, imgtype, tag)
@@ -214,18 +214,18 @@ def pull(request, system, imgtype, tag):
     if 'allowed_uids' in data:
         # Convert to integers
         i['userACL'] = list(map(lambda x: int(x),
-                           data['allowed_uids'].split(',')))
+                            data['allowed_uids'].split(',')))
     if 'allowed_gids' in data:
         # Convert to integers
         i['groupACL'] = list(map(lambda x: int(x),
-                            data['allowed_gids'].split(',')))
+                             data['allowed_gids'].split(',')))
     try:
         logger.debug(i)
         session = mgr.new_session(auth, system)
         logger.debug(session)
         rec = mgr.pull(session, i)
         logger.debug(rec)
-    except:
+    except Exception:
         logger.exception('Exception in pull')
         return not_found(request, '%s %s' % (sys.exc_type, sys.exc_value))
     return jsonify(create_response(rec))
@@ -248,9 +248,9 @@ def doimport(request, system, imgtype, tag):
         data = request.json
         if data is None:
             data = {}
-    except:
+    except Exception:
         logger.warn("Unable to parse doimport data '%s'" %
-                        (request.text))
+                    (request.text))
         pass
 
     memo = "import system=%s imgtype=%s tag=%s" % (system, imgtype, tag)
@@ -270,11 +270,11 @@ def doimport(request, system, imgtype, tag):
     if 'allowed_uids' in data:
         # Convert to integers
         i['userACL'] = list(map(lambda x: int(x),
-                           data['allowed_uids'].split(',')))
+                            data['allowed_uids'].split(',')))
     if 'allowed_gids' in data:
         # Convert to integers
         i['groupACL'] = list(map(lambda x: int(x),
-                            data['allowed_gids'].split(',')))
+                             data['allowed_gids'].split(',')))
     try:
         session = mgr.new_session(auth, system)
         # only allowed users can import images
@@ -293,7 +293,7 @@ def doimport(request, system, imgtype, tag):
                 raise OSError(msg)
         rec = mgr.mngrimport(session, i)
         logger.debug(rec)
-    except:
+    except Exception:
         logger.exception('Exception in import')
         return not_found(request, '%s %s' % (sys.exc_type, sys.exc_value))
     return jsonify(create_response(rec))
@@ -309,7 +309,7 @@ def autoexpire(request, system):
     try:
         session = mgr.new_session(auth, system)
         resp = mgr.autoexpire(session, system)
-    except:
+    except Exception:
         logger.exception('Exception in autoexpire')
         return not_found(request)
     return jsonify({'status': resp})
@@ -332,7 +332,7 @@ def expire(request, system, imgtype, tag):
     try:
         session = mgr.new_session(auth, system)
         resp = mgr.expire(session, i)
-    except:
+    except Exception:
         logger.exception('Exception in expire')
         return not_found(request)
     return jsonify({'status': resp})
@@ -348,7 +348,7 @@ def queue(request, system):
     try:
         session = mgr.new_session(None, system)
         records = mgr.show_queue(session, system)
-    except:
+    except Exception:
         logger.exception('Exception in queue')
         return not_found(request, '%s' % (sys.exc_value))
     resp = {'list': records}

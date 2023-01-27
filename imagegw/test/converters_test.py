@@ -69,7 +69,7 @@ class ConvertersTestCase(unittest.TestCase):
         self.assertTrue(resp)
         with open(output) as f:
             line = f.read()
-            self.assertIn('-no-xattrs',line)
+            self.assertIn('-no-xattrs', line)
 
     def test_convert_options(self):
         """

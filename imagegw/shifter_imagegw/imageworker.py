@@ -232,7 +232,7 @@ class ImageRequest(object):
             self.updater.update_status("PULLING", 'Extracting Layers')
             dock.extract_docker_layers(self.expandedpath)
             return True
-        except:
+        except Exception:
             logging.warn(sys.exc_info()[1])
             raise
 
@@ -434,7 +434,7 @@ class ImageRequest(object):
                         shutil.rmtree(cleanitem, ignore_errors=True)
                     else:
                         os.unlink(cleanitem)
-                except:
+                except Exception:
                     logging.error("Worker: caught exception while trying to "
                                   "clean up %s.", cleanitem)
 
@@ -493,7 +493,7 @@ class ImageRequest(object):
             self._cleanup_temporary()
             return self.meta
 
-        except:
+        except Exception:
             logging.error("ERROR: dopull failed system=%s tag=%s",
                           self.system, self.tag)
             print(sys.exc_info()[1])
@@ -550,7 +550,7 @@ class ImageRequest(object):
             self._cleanup_temporary()
             return self.meta
 
-        except:
+        except Exception:
             logging.error("ERROR: img_import failed system=%s tag=%s",
                           self.system, self.tag)
             print(sys.exc_info()[1])

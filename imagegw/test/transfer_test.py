@@ -62,13 +62,13 @@ class TransferTestCase(unittest.TestCase):
         # expect ssh -i somefile nobody@localhost echo test
         self.assertEqual(len(cmd), 6)
         self.assertEqual('|'.join(cmd),
-                          'ssh|-i|somefile|nobody@localhost|echo|test')
+                         'ssh|-i|somefile|nobody@localhost|echo|test')
 
         self.system['ssh']['sshCmdOptions'] = ['-t']
         cmd = transfer._ssh_cmd(self.system, 'echo', 'test')
         self.assertEqual(len(cmd), 7)
         self.assertEqual('|'.join(cmd),
-                          'ssh|-i|somefile|-t|nobody@localhost|echo|test')
+                         'ssh|-i|somefile|-t|nobody@localhost|echo|test')
         del self.system['ssh']['sshCmdOptions']
 
         cmd = transfer._ssh_cmd(self.system)
@@ -83,20 +83,19 @@ class TransferTestCase(unittest.TestCase):
         cmd = transfer._scp_cmd(self.system, 'a', 'b')
         self.assertEqual(len(cmd), 5)
         self.assertEqual('|'.join(cmd),
-                          'scp|-i|somefile|a|nobody@localhost:b')
+                         'scp|-i|somefile|a|nobody@localhost:b')
 
         self.system['ssh']['scpCmdOptions'] = ['-t']
         cmd = transfer._scp_cmd(self.system, 'a', 'b')
         self.assertEqual(len(cmd), 6)
         self.assertEqual('|'.join(cmd),
-                          'scp|-i|somefile|-t|a|nobody@localhost:b')
+                         'scp|-i|somefile|-t|a|nobody@localhost:b')
         del self.system['ssh']['scpCmdOptions']
 
     def inode_counter(self, dirname):
         inodes = 0
         for root, dirs, files in os.walk(dirname):
             inodes += len(files)
-        #self.inodes += len(fnames)
         return inodes
 
     def test_copyfile_local(self):

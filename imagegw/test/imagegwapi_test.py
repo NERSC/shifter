@@ -1,7 +1,9 @@
 import os
 import unittest
 import time
-import urllib.request, urllib.parse, urllib.error
+import urllib.request
+import urllib.parse
+import urllib.error
 import json
 from copy import deepcopy
 from shifter_imagegw.fasthash import fast_hash
@@ -87,7 +89,7 @@ class GWTestCase(unittest.TestCase):
         uri = '%s/%s/%s/' % (self.url, op, urlreq)
         while (cstate != state and count > 0):
             _, rv = self.app.post(uri, data=data,
-                               headers={AUTH_HEADER: self.auth})
+                                  headers={AUTH_HEADER: self.auth})
             if rv.status != 200:
                 time.sleep(1)
                 continue
@@ -123,7 +125,7 @@ class GWTestCase(unittest.TestCase):
                 'allowed_gids': '1002,1003'}
         datajson = json.dumps(data)
         _, rv = self.app.post(uri, headers={AUTH_HEADER: self.auth},
-                           data=datajson)
+                              data=datajson)
         data = rv.json
         assert 'userACL' in data
         assert 'groupACL' in data
@@ -189,7 +191,6 @@ class GWTestCase(unittest.TestCase):
         uri = '%s/autoexpire/%s/' % (self.url, self.system)
         _, rv = self.app.get(uri, headers={AUTH_HEADER: self.authadmin})
         assert rv.status == 200
-        #assert rv.data.decode("utf-8").count('bogus') > 0
 
         count = 20
         while count > 0:
@@ -239,7 +240,7 @@ class GWTestCase(unittest.TestCase):
         hash = fast_hash(ifile)
         datajson = json.dumps(data)
         _, rv = self.app.post(uri, headers={AUTH_HEADER: self.auth},
-                           data=datajson)
+                              data=datajson)
         rv = self.time_wait(self.urlreq, op='doimport', data=datajson)
         # for i in range(5):
         #     rv = self.app.post(uri, headers={AUTH_HEADER: self.auth},

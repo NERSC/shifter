@@ -33,7 +33,6 @@ from subprocess import Popen, PIPE
 import base64
 import tempfile
 import socket
-#from .tarfilemp import tarfile
 import tarfile
 
 
@@ -378,7 +377,8 @@ class DockerV2Handle(object):
         (_, auth_data_str) = auth_loc_str.split(' ', 2)
 
         auth_data = {}
-        for item in [_f for _f in re.split(r'(\w+=".*?"),', auth_data_str) if _f]:
+        for item in [_f for _f in re.split(r'(\w+=".*?"),',
+                     auth_data_str) if _f]:
             (key, val) = item.split('=', 2)
             auth_data[key] = val.replace('"', '')
 
@@ -390,8 +390,9 @@ class DockerV2Handle(object):
         headers = {}
         if creds and self.username is not None and self.password is not None:
             self.private = True
-            auth = '%s:%s' % (self.username, self.password)
-            headers['Authorization'] = 'Basic %s' % base64.b64encode(auth.encode())
+            auth = f'{self.username}:{self.password}'
+            authb64 = base64.b64encode(auth.encode())
+            headers['Authorization'] = f'Basic {authb64}'
 
         match_obj = re.match(r'(https?)://(.*?)(/.*)', auth_data['realm'])
         if match_obj is None:
@@ -405,9 +406,9 @@ class DockerV2Handle(object):
 
         if resp.status != 200:
             raise ValueError('Bad response getting token: %d', resp.status)
-        # The json content type can include a extra bit defining the character set
-        # so we just check the beginning.  Worst case is the json.loads will throw
-        # an error just after this.
+        # The json content type can include a extra bit defining the
+        # character set so we just check the beginning.  Worst case is
+        # the json.loads will throw an error just after this.
         if not resp.getheader('content-type').startswith('application/json'):
             raise ValueError('Invalid response getting token, not json')
 
@@ -433,7 +434,7 @@ class DockerV2Handle(object):
             self.do_token_auth(resp1.getheader('WWW-Authenticate'))
             try:
                 return self.get_image_manifest(retrying=True)
-            except:
+            except Exception:
                 # Likely failed because it needs a cred, continue
                 pass
 
@@ -563,7 +564,8 @@ class DockerV2Handle(object):
                                    match_obj.groups()[1])
                 path = match_obj.groups()[2]
             else:
-                print('ERROR: Getting layer recieved status: %d' % resp1.status)
+                status = resp1.status
+                print(f'ERROR: Getting layer recieved status: {status}')
                 return False
         maxlen = int(resp1.getheader('content-length'))
         nread = 0
@@ -581,7 +583,7 @@ class DockerV2Handle(object):
                 nread += len(buff)
             out_fp.close()
             self.check_layer_checksum(layer, out_fn)
-        except:
+        except Exception:
             os.unlink(out_fn)
             out_fp.close()
             raise
@@ -735,9 +737,9 @@ def pull_image(options, repo, tag, cachedir='./', expanddir='./'):
 
     try:
         expanddir = expanddir.decode("utf-8")
-    except:
+    except Exception:
         pass
- 
+
     expandedpath = os.path.join(expanddir, str(meta['id']))
     meta['expandedpath'] = expandedpath
     if not os.path.exists(expandedpath):

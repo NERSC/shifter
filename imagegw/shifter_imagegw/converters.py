@@ -25,7 +25,6 @@ format for shifter.
 
 import os
 import subprocess
-import shutil
 import tempfile
 from shifter_imagegw.util import program_exists, rmtree
 
@@ -53,7 +52,7 @@ def generate_cramfs_image(expand_path, image_path, options):
         pass
     try:
         rmtree(expand_path)
-    except:
+    except Exception:
         # error handling
         pass
 
@@ -80,7 +79,7 @@ def generate_squashfs_image(expand_path, image_path, options):
         pass
     try:
         rmtree(expand_path)
-    except:
+    except Exception:
         pass
 
     return True
@@ -121,7 +120,7 @@ def convert(fmt, expand_path, image_path, options=None):
             success = True
         else:
             raise NotImplementedError("%s not a supported format" % fmt)
-    except:
+    except Exception:
         if os.path.exists(temp_path):
             os.unlink(temp_path)
         raise
@@ -130,7 +129,7 @@ def convert(fmt, expand_path, image_path, options=None):
         return False
     try:
         os.rename(temp_path, image_path)
-    except:
+    except Exception:
         return False
 
     # Some error must have occurred

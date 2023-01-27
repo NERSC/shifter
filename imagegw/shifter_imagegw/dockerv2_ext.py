@@ -82,7 +82,7 @@ class DockerV2ext(object):
             raise OSError("No authentication")
         user = self.options['username']
         pwd = self.options['password']
-        pstr =  '%s:%s' % (user, pwd)
+        pstr = f'{user}:{pwd}'
         token = base64.b64encode(pstr.encode("utf-8")).decode("utf-8")
         afile = tempfile.mkstemp()[1]
         auth = {'auths': {
@@ -237,7 +237,8 @@ class DockerV2ext(object):
         rootfs = os.path.join(idir, 'rootfs')
         os.rmdir(base_path)
         perm = os.stat(rootfs).st_mode
-        os.chmod(rootfs, perm|stat.S_IEXEC|stat.S_IWRITE|stat.S_IREAD)
+        flags = stat.S_IEXEC | stat.S_IWRITE | stat.S_IREAD
+        os.chmod(rootfs, perm | flags)
         os.rename(rootfs, base_path)
         shutil.rmtree(idir)
         return True

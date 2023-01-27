@@ -75,7 +75,7 @@ class Authentication(object):
         message_json = response['MESSAGE']
         try:
             ret['tokens'] = json.loads(message_json)['authorized_locations']
-        except:
+        except Exception:
             pass
         return ret
 

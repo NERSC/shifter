@@ -24,12 +24,13 @@ import tempfile
 import shutil
 import json
 import base64
-import json
+
 
 class update():
 
     def update_status(self, state, message):
         print(("%s: %s" % (state, message)))
+
 
 class Dockerv2TestCase(unittest.TestCase):
 
@@ -37,13 +38,12 @@ class Dockerv2TestCase(unittest.TestCase):
         cwd = os.path.dirname(os.path.realpath(__file__))
         os.environ['PATH'] = cwd + ':' + os.environ['PATH']
         self.test_dir = cwd
-        self.updater  = update()
+        self.updater = update()
         self.options = None
         if 'LOCALREGISTRY' in os.environ:
             self.options = {'baseUrl': os.environ['LOCALREGISTRY']}
         self.cleanpaths = []
         self.tokens = self.read_tokens()
-
 
     def read_tokens(self):
         if not os.path.exists("./tokens.cfg"):
@@ -51,7 +51,6 @@ class Dockerv2TestCase(unittest.TestCase):
         with open("./tokens.cfg") as f:
             d = json.load(f)
         return d
-
 
     def tearDown(self):
         return
@@ -72,7 +71,7 @@ class Dockerv2TestCase(unittest.TestCase):
         resp = dock.pull_layers()
         self.assertTrue(resp)
         dock.extract_docker_layers(expand)
-        self.assertTrue(os.path.exists(os.path.join(expand,"bin")))
+        self.assertTrue(os.path.exists(os.path.join(expand, "bin")))
         rmtree(expand)
         rmtree(cache)
 
@@ -89,7 +88,7 @@ class Dockerv2TestCase(unittest.TestCase):
         resp = dock.pull_layers()
         self.assertTrue(resp)
         dock.extract_docker_layers(expand)
-        self.assertTrue(os.path.exists(os.path.join(expand,"bin")))
+        self.assertTrue(os.path.exists(os.path.join(expand, "bin")))
         rmtree(expand)
         rmtree(cache)
 
@@ -112,7 +111,6 @@ class Dockerv2TestCase(unittest.TestCase):
         self.assertTrue(resp)
         dock.extract_docker_layers(expand)
         self.assertTrue(os.path.exists(os.path.join(expand, 'bin')))
-
 
     def test_pull_private2(self):
         if self.tokens is None:
@@ -161,8 +159,8 @@ class Dockerv2TestCase(unittest.TestCase):
         dock = DockerV2ext(image)
         with self.assertRaises(OSError):
             dock._auth_file()
-        opt = {'username': 'foo', 
-               'password': 'bar', 
+        opt = {'username': 'foo',
+               'password': 'bar',
                'policy_file': self.test_dir + 'policy.json'
                }
         dock = DockerV2ext(image, options=opt)
@@ -179,4 +177,3 @@ class Dockerv2TestCase(unittest.TestCase):
         opt = {'policy_file': pf}
         dock = DockerV2ext(image, options=opt)
         self.assertEqual(pf, dock.policy_file)
-
