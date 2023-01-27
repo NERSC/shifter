@@ -48,7 +48,7 @@ class Authentication(object):
         elif config['Authentication'] == "mock":
             self.type = 'mock'
         else:
-            memo = 'Unsupported auth type %s' % (config['Authentication'])
+            memo = f"Unsupported auth type {config['Authentication']}"
             raise NotImplementedError(memo)
 
     def _authenticate_munge(self, authstr, system=None):
@@ -101,7 +101,7 @@ class Authentication(object):
             raise OSError('Bad AuthString')
 
         if status != 'good':
-            raise OSError('Auth Failed st=%s' % status)
+            raise OSError(f"Auth Failed st={status}")
 
         return ret
 

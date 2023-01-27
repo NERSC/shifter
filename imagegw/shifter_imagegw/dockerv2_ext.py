@@ -59,7 +59,7 @@ class DockerV2ext(object):
                 registry = registry[7:]
             registry = registry.rstrip('/')
         self.registry = registry
-        self.url = 'docker://%s/%s' % (registry, imageIdent)
+        self.url = f'docker://{registry}/{imageIdent}'
         self.private = False
         self.meta = self._inspect()
         self.meta['id'] = self.meta['Digest'].replace('sha256:', '')
@@ -110,7 +110,7 @@ class DockerV2ext(object):
         if not any(a_err in stderr_str.lower() for a_err in auth_errors):
             # See if it exited with an error
             if process.returncode:
-                raise OSError("Skopeo inspect failed: %s" % (stderr_str))
+                raise OSError(f"Skopeo inspect failed: {stderr_str}"
             return json.loads(stdout.decode("utf-8"))
 
         # Private Image
@@ -200,7 +200,7 @@ class DockerV2ext(object):
         cmd.extend(['copy', '--dest-shared-blob-dir', self.cache_dir])
         if self.private:
             cmd.extend(['--authfile', self.auth_file])
-        cmd.extend([self.url, 'oci://%s:image' % outdir])
+        cmd.extend([self.url, f'oci://{outdir}:image'])
         process = Popen(cmd, stdout=PIPE, stderr=PIPE)
         stdout, stderr = process.communicate()
 

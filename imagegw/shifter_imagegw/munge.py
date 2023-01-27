@@ -58,7 +58,7 @@ def unmunge(encoded, socket=None):
         if proc.returncode == 17:
             raise OSError("Replayed Credential")
         elif proc.returncode != 0:
-            memo = "Unknown munge error %d %s" % (proc.returncode, socket)
+            memo = f"Unknown munge error {proc.returncode} {socket}"
             raise OSError(memo)
         resp = dict()
         inmessage = False
@@ -91,7 +91,7 @@ def usage(program):
     """
     Help for test mode of munge helpers
     """
-    print("%s <munge|unmunge>" % (program))
+    print(f"{program} <munge|unmunge>")
 
 
 def _main():
