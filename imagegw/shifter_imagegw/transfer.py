@@ -58,10 +58,10 @@ def _ssh_cmd(system, *args):
     hostname = system['host'][0]
     username = system['ssh']['username']
     if 'key' in system['ssh']:
-        ssh.extend(['-i', '%s' % system['ssh']['key']])
+        ssh.extend(['-i', system['ssh']['key']])
     if 'sshCmdOptions' in system['ssh']:
         ssh.extend(system['ssh']['sshCmdOptions'])
-    ssh.extend(['%s@%s' % (username, hostname)])
+    ssh.append(f'{username}@{hostname}')
     ssh.extend(args)
     return ssh
 
@@ -77,10 +77,10 @@ def _scp_cmd(system, localfile, remotefile):
     hostname = system['host'][0]
     username = system['ssh']['username']
     if 'key' in system['ssh']:
-        ssh.extend(['-i', '%s' % system['ssh']['key']])
+        ssh.extend(['-i', system['ssh']['key']])
     if 'scpCmdOptions' in system['ssh']:
         ssh.extend(system['ssh']['scpCmdOptions'])
-    ssh.extend([localfile, '%s@%s:%s' % (username, hostname, remotefile)])
+    ssh.extend([localfile, f'{username}@{hostname}:{remotefile}'])
     return ssh
 
 
@@ -97,11 +97,11 @@ def _import_cp_cmd(system, localfile, remotefile):
     hostname = system['host'][0]
     username = system['ssh']['username']
     if 'key' in system['ssh']:
-        ssh.extend(['-i', '%s' % system['ssh']['key']])
+        ssh.extend(['-i', system['ssh']['key']])
     if 'scpCmdOptions' in system['ssh']:
         ssh.extend(system['ssh']['scpCmdOptions'])
-    ssh.extend(['%s@%s' % (username, hostname)])
-    ssh.extend(['cp %s %s' % (localfile, remotefile)])
+    ssh.append(f'{username}@{hostname}')
+    ssh.append(f'cp {localfile} {remotefile}')
     return ssh
 
 
@@ -110,20 +110,22 @@ def _exec_and_log(cmd, logger):
     Execute a command and log the results to logger
     """
     if logger is not None:
-        logger.info("about to exec: %s" % ' '.join(cmd))
+        cmd = ' '.join(cmd)
+        logger.info(f"about to exec: {cmd}")
     proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
     if proc is None:
         if logger is not None:
-            logger.error("Could not execute '%s'" % ' '.join(cmd))
+            cmd = ' '.join(cmd)
+            logger.debug(f"Could not execute '{cmd}'")
         return
     bstdout, bstderr = proc.communicate()
     stdout = bstdout.decode("utf-8")
     stderr = bstderr.decode("utf-8")
     if logger is not None:
         if stdout is not None and len(stdout) > 0:
-            logger.debug("%s stdout: %s" % (cmd[0], stdout.strip()))
+            logger.debug(f"{cmd[0]} stdout: {stdout.strip()}")
         if stderr is not None and len(stderr) > 0:
-            logger.error("%s stderr: %s" % (cmd[0], stderr.strip()))
+            logger.error(f"{cmd[0]} stderr: {stderr.strip()}")
     return proc.returncode
 
 
@@ -132,25 +134,27 @@ def _get_stdout_and_log(cmd, logger=None):
     Execute a command and return stdout and stderr. Log the results to logger
     """
     if logger is not None:
-        logger.info("about to exec: %s" % ' '.join(cmd))
+        cmd = ' '.join(cmd)
+        logger.info(f"about to exec: {cmd}")
     rerror = ''
     proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
     if proc is None:
         if logger is not None:
-            logger.debug("Could not execute '%s'" % ' '.join(cmd))
-            rerror = "Could not execute '%s'" % ' '.join(cmd)
+            cmd = ' '.join(cmd)
+            logger.debug(f"Could not execute '{cmd}'")
+            rerror = f"Could not execute '{cmd}'"
         return rerror, ''
     bstdout, bstderr = proc.communicate()
     stdout = bstdout.decode("utf-8")
     stderr = bstderr.decode("utf-8")
     if logger is not None:
         if stdout is not None and len(stdout) > 0:
-            logger.debug("%s stdout: %s" % (cmd[0], stdout.strip()))
+            logger.debug(f"{cmd[0]} stdout: {stdout.strip()}")
         if stderr is not None and len(stderr) > 0:
-            logger.debug("%s stderr: %s" % (cmd[0], stderr.strip()))
+            logger.error(f"{cmd[0]} stderr: {stderr.strip()}")
             # push this error back to calling function so
             # it can be reported sensibly
-            rerror = "%s %s" % (cmd[0], stderr.strip())
+            rerror = f"{cmd[0]} stderr: {stderr.strip()}"
     return rerror, stdout
 
 
@@ -160,12 +164,13 @@ def pre_create_tempfile(basepath, filename, sh_cmd, system, logger=None):
     """
 
     # TODO: Add command to setup the file with the right striping
-    partial_fn = '%s.partial.XXXXXX' % filename
+    partial_fn = f'{filename}.partial.XXXXXX'
     temp_fn = os.path.join(basepath, partial_fn)
 
     cmd = sh_cmd(system, 'mktemp', temp_fn)
     if logger is not None:
-        logger.info('about to exec: %s' % ' '.join(cmd))
+        cmd = ' '.join(cmd)
+        logger.info(f"about to exec: {cmd}")
     proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
     temp_fn = None
     if proc is not None:
@@ -175,11 +180,11 @@ def pre_create_tempfile(basepath, filename, sh_cmd, system, logger=None):
         if proc.returncode == 0:
             temp_fn = stdout.strip()
         else:
-            memo = 'Failed to precreate transfer file, %s (%d)' \
-                   % (stderr, proc.returncode)
+            memo = 'Failed to precreate transfer file, ' + \
+                   f'{stderr} ({proc.returncode})'
             raise OSError(memo)
         if len(stderr) > 0 and logger is not None:
-            logger.error("%s" % (stderr.strip()))
+            logger.error(str(stderr.strip()))
     chmod_cmd = sh_cmd(system, 'chmod', '0600', temp_fn)
     ret = _exec_and_log(chmod_cmd, logger)
     if ret != 0:
@@ -203,7 +208,7 @@ def copy_file(filename, system, logger=None):
         cp_cmd = _scp_cmd
         basepath = system['ssh']['imageDir']
     else:
-        memo = '%s is not supported as a transfer type' % system['accesstype']
+        memo = f"{system['accesstype']} is not supported as a transfer type"
         raise NotImplementedError(memo)
 
     image_fn = os.path.split(filename)[1]
@@ -216,8 +221,8 @@ def copy_file(filename, system, logger=None):
         raise OSError('Got no valid response back from tempfile precreation')
 
     if not temp_fn.startswith(basepath):
-        memo = 'Got unexpected response back from tempfile precreation: %s' \
-               % temp_fn
+        memo = "Got unexpected response back from tempfile" +\
+               f"precreation: {temp_fn}"
         raise OSError(memo)
 
     copyret = None
@@ -279,7 +284,7 @@ def import_copy_file(filename, destfilename, system,
         cp_cmd = _import_cp_cmd
         basepath = system['ssh']['imageDir']
     else:
-        memo = '%s is not supported as a transfer type' % system['accesstype']
+        memo = f"{system['accesstype']} is not supported as a transfer type"
         raise NotImplementedError(memo)
 
     image_fn = os.path.split(destfilename)[1]
@@ -292,8 +297,8 @@ def import_copy_file(filename, destfilename, system,
         raise OSError('Got no valid response back from tempfile precreation')
 
     if not temp_fn.startswith(basepath):
-        memo = 'Got unexpected response back from tempfile precreation: %s' \
-               % temp_fn
+        memo = "Got unexpected response back from tempfile" +\
+               f"precreation: {temp_fn}"
         raise OSError(memo)
 
     copyret = None
@@ -376,9 +381,9 @@ def hash_file(filename, system, logger=None):
     hash_cmd = sh_cmd(system, 'fasthash', filename)
     ret = _get_stdout_and_log(hash_cmd, logger)
     if len(ret[0]) != 0:
-        raise OSError("Error calculating hash: %s" % (ret[0]))
+        raise OSError(f"Error calculating hash: {ret[0]}")
     if logger is not None:
-        logger.info("fasthash returning: %s" % ret[1])
+        logger.info(f"fasthash returning: {ret[1]}")
     # return hash, strip off new line at end
     return ret[1].strip()
 
@@ -403,7 +408,7 @@ def transfer(system, image_path, metadata_path=None, logger=None,
         if image_path is None or copy_file(image_path, system, logger):
             return True
     if logger is not None:
-        logger.error("Transfer of %s failed" % image_path)
+        logger.error(f"Transfer of {image_path} failed")
     return False
 
 
@@ -416,7 +421,7 @@ def remove(system, image_path, metadata_path=None, logger=None):
     if remove_file(image_path, system, logger):
         return True
     if logger is not None:
-        logger.error("Remove of %s failed" % image_path)
+        logger.error(f"Remove of {image_path} failed")
     return False
 
 

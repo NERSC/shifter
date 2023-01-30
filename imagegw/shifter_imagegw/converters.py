@@ -33,8 +33,7 @@ def generate_ext4_image(expand_path, image_path, options):
     """
     Creates an ext4 based image
     """
-    message = 'ext4 support is not supported %s %s' % \
-              (expand_path, image_path)
+    message = f"ext4 support is not supported {expand_path} {image_path}"
     raise NotImplementedError(message)
 
 
@@ -119,7 +118,7 @@ def convert(fmt, expand_path, image_path, options=None):
                 f.write(line)
             success = True
         else:
-            raise NotImplementedError("%s not a supported format" % fmt)
+            raise NotImplementedError(f"{fmt} not a supported format")
     except Exception:
         if os.path.exists(temp_path):
             os.unlink(temp_path)
@@ -147,24 +146,24 @@ def writemeta(fmt, meta, metafile):
         # This can be deprecated in the future.
         if 'DISABLE_ACL_METADATA' in os.environ:
             private = False
-        meta_fd.write("FORMAT: %s\n" % (fmt))
+        meta_fd.write(f"FORMAT: {fmt}\n")
         if meta.get('entrypoint'):
-            meta_fd.write("ENTRY: %s\n" % (meta['entrypoint']))
+            meta_fd.write(f"ENTRY: {meta['entrypoint']}\n")
         if meta.get('cmd'):
-            meta_fd.write("CMD: %s\n" % (meta['cmd']))
+            meta_fd.write(f"CMD: {meta['cmd']}\n")
         if meta.get('workdir'):
-            meta_fd.write("WORKDIR: %s\n" % (meta['workdir']))
+            meta_fd.write(f"WORKDIR: {meta['workdir']}\n")
         if private and 'userACL' in meta and meta['userACL'] is not None:
             acls = ','.join(map(lambda x: str(x), meta['userACL']))
-            meta_fd.write("USERACL: %s\n" % (acls))
+            meta_fd.write(f"USERACL: {acls}\n")
         if private and 'groupACL' in meta and meta['groupACL'] is not None:
             acls = ','.join(map(lambda x: str(x), meta['groupACL']))
-            meta_fd.write("GROUPACL: %s\n" % (acls))
+            meta_fd.write(f"GROUPACL: {acls}\n")
         if 'env' in meta and meta['env'] is not None:
             for keyval in meta['env']:
-                meta_fd.write("ENV: %s\n" % (keyval))
+                meta_fd.write(f"ENV: {keyval}\n")
         if 'user' in meta:
-            meta_fd.write("USER: %s\n" % meta['user'])
+            meta_fd.write("USER: {meta['user']}\n")
         meta_fd.close()
     # Some error must have occurred
     return True

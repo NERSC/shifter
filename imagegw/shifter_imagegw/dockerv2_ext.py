@@ -110,7 +110,7 @@ class DockerV2ext(object):
         if not any(a_err in stderr_str.lower() for a_err in auth_errors):
             # See if it exited with an error
             if process.returncode:
-                raise OSError(f"Skopeo inspect failed: {stderr_str}"
+                raise OSError(f"Skopeo inspect failed: {stderr_str}")
             return json.loads(stdout.decode("utf-8"))
 
         # Private Image
