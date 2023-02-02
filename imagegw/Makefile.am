@@ -2,7 +2,8 @@ SUBDIRS = shifter_imagegw
 
 dist_pkglibexec_SCRIPTS = imagecli.py \
                           imagegwapi.py \
-						  sitecustomize.py
+                          oci-image-tool-wrapper \
+                          sitecustomize.py
 
 dist_sysconf_DATA  = imagemanager.json.example
 

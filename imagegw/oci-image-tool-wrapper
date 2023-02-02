@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# Extract the proper digest
+D=$(cat $1/index.json|python -mjson.tool|grep -A1 application/vnd.oci.image.manifest.v1+json|grep dig|sed 's/.* .//'|sed 's/".*//')
+
+# Call oci-image-tool on just that digest
+exec /usr/bin/oci-image-tool validate -type image -ref digest=${D} $1
+

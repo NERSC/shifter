@@ -15,8 +15,20 @@ RUN \
     make && make install
 
 # Need newer version of skopeo then what is available from kubic
-FROM debian:sid as skopeo
-RUN apt-get -y update && apt-get -y install skopeo
+#FROM debian:sid as skopeo
+#RUN apt-get -y update && apt-get -y install skopeo
+
+FROM debian:bullseye as skopeo
+RUN \
+    apt-get -y update && \
+    apt-get -y install golang wget go-md2man git make libgpgme-dev libdevmapper-dev
+
+RUN \
+    git clone https://github.com/containers/skopeo $GOPATH/src/github.com/containers/skopeo && \
+    cd $GOPATH/src/github.com/containers/skopeo && \
+    git checkout v1.4.1 && make bin/skopeo && \
+    DISABLE_DOCS=1 make
+
 
 
 FROM python:3.8-slim
@@ -26,8 +38,9 @@ RUN apt-get -y update && apt-get -y install squashfs-tools munge libassuan0 libg
 RUN mkdir /var/run/munge && chown munge /var/run/munge
 
 COPY --from=tools /usr/bin/umoci /usr/bin/oci-image-tool /usr/bin/
-COPY --from=skopeo /usr/bin/skopeo /usr/bin/
-COPY --from=skopeo /etc/containers/ /etc/containers/
+
+RUN apt-get -y install skopeo
+COPY --from=skopeo /src/github.com/containers/skopeo/bin/skopeo /usr/bin/
 
 WORKDIR /usr/src/app
 
@@ -40,6 +53,13 @@ COPY . /usr/src/app
 RUN echo "CONFIG_PATH='/config'" >> /usr/src/app/shifter_imagegw/__init__.py
 
 ENV PYTHONPATH=/usr/src/app/
+
+RUN cp /usr/src/app/oci-image-tool-wrapper /usr/local/bin/oci-image-tool-wrapper
+
+# Test that the tools work
+RUN \
+    skopeo && umoci && /usr/bin/oci-image-tool
+
 
 ENTRYPOINT [ "./entrypoint.sh" ]
 CMD [ ]
