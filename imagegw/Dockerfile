@@ -41,7 +41,6 @@ COPY --from=tools /usr/bin/umoci /usr/bin/oci-image-tool /usr/bin/
 
 RUN apt-get -y install skopeo
 COPY --from=skopeo /src/github.com/containers/skopeo/bin/skopeo /usr/bin/
-#COPY --from=skopeo /etc/containers/ /etc/containers/
 
 WORKDIR /usr/src/app
 
@@ -55,10 +54,12 @@ RUN echo "CONFIG_PATH='/config'" >> /usr/src/app/shifter_imagegw/__init__.py
 
 ENV PYTHONPATH=/usr/src/app/
 
+RUN cp /usr/src/app/oci-image-tool-wrapper /usr/local/bin/oci-image-tool-wrapper
+
 # Test that the tools work
 RUN \
-    skopeo && umoci && oci-image-tool
-    
+    skopeo && umoci && /usr/bin/oci-image-tool
+
 
 ENTRYPOINT [ "./entrypoint.sh" ]
 CMD [ ]

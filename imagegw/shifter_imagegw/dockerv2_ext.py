@@ -131,8 +131,7 @@ class DockerV2ext(object):
         Validate image pull
         """
         self.log("PULLING", 'Validating Image')
-        cmd = ['oci-image-tool', 'validate', '--type',
-               'image', idir]
+        cmd = ['oci-image-tool-wrapper', idir]
         process = Popen(cmd, stdout=PIPE)
         stdout = process.communicate()[0]
         if process.returncode:
