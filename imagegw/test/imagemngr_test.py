@@ -127,7 +127,7 @@ class ImageMngrTestCase(unittest.TestCase):
         if os.path.exists(self.logfile):
             pass  # os.unlink(self.logfile)
         # Cleanup Mongo
-        self.images.remove({})
+        self.images.delete_many({})
 
     def tearDown(self):
         """
@@ -264,7 +264,7 @@ class ImageMngrTestCase(unittest.TestCase):
         """
         record = self.good_record()
         # Create a fake record in mongo
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
 
         self.assertIsNotNone(id)
         before = self.images.find_one({'_id': id})
@@ -291,7 +291,7 @@ class ImageMngrTestCase(unittest.TestCase):
         record = self.good_record()
         record['tag'] = self.tag
         # Create a fake record in mongo
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
 
         status = self.m.add_tag(id, self.system, 'testtag')
         self.assertTrue(status)
@@ -307,7 +307,7 @@ class ImageMngrTestCase(unittest.TestCase):
         """
         record = self.good_record()
         # Create a fake record in mongo
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
 
         session = self.m.new_session(self.auth, self.system)
         i = self.query.copy()
@@ -325,10 +325,10 @@ class ImageMngrTestCase(unittest.TestCase):
         """
         record = self.good_record()
         # Create a fake record in mongo
-        id1 = self.images.insert(record.copy())
+        id1 = self.images.insert_one(record.copy()).inserted_id
         record['id'] = 'fakeid2'
         record['tag'] = []
-        id2 = self.images.insert(record.copy())
+        id2 = self.images.insert_one(record.copy()).inserted_id
 
         status = self.m.add_tag(id2, self.system, self.tag)
         self.assertTrue(status)
@@ -346,12 +346,12 @@ class ImageMngrTestCase(unittest.TestCase):
         record = self.good_record()
         record['tag'] = self.tag
         # Create a fake record in mongo
-        id1 = self.images.insert(record.copy())
+        id1 = self.images.insert_one(record.copy()).inserted_id
         # add testtag for systema
         status = self.m.add_tag(id1, self.system, 'testtag')
         self.assertTrue(status)
         record['system'] = 'systemb'
-        id2 = self.images.insert(record.copy())
+        id2 = self.images.insert_one(record.copy()).inserted_id
         status = self.m.add_tag(id2, 'systemb', 'testtag')
         self.assertTrue(status)
         # Now make sure testtag for first system is still
@@ -378,7 +378,7 @@ class ImageMngrTestCase(unittest.TestCase):
                   'ENTRY': '',
                   'last_pull': 0
                   }
-        id = self.images.insert(record.copy())
+        id = self.images.insert_one(record.copy()).inserted_id
         self.assertIsNotNone(id)
         expire = self.m._resetexpire(id)
         self.assertGreater(expire, time.time())
@@ -438,7 +438,7 @@ class ImageMngrTestCase(unittest.TestCase):
         record['last_pull'] = 0
         # Create a fake record in mongo
         # First test when there is no existing image
-        id = self.images.insert(record.copy())
+        id = self.images.insert_one(record.copy()).inserted_id
         self.assertIsNotNone(id)
         resp = {'id': id, 'tag': self.tag}
         self.m.complete_pull(id, resp)
@@ -448,7 +448,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertGreater(rec['last_pull'], 0)
         # Create an identical request and
         # run complete again
-        id2 = self.images.insert(record.copy())
+        id2 = self.images.insert_one(record.copy()).inserted_id
         self.assertIsNotNone(id2)
         self.m.complete_pull(id2, resp)
         # confirm that the record was removed
@@ -462,7 +462,7 @@ class ImageMngrTestCase(unittest.TestCase):
         record['last_pull'] = 0
         record['status'] = 'FAILURE'
         # Create a fake record in mongo
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
         self.assertIsNotNone(id)
         self.m.update_states()
         rec = self.images.find_one({'_id': id})
@@ -472,7 +472,7 @@ class ImageMngrTestCase(unittest.TestCase):
     def test_lookup(self):
         record = self.good_record()
         # Create a fake record in mongo
-        self.images.insert(record)
+        self.images.insert_one(record).inserted_id
         i = self.query.copy()
         session = self.m.new_session(self.auth, self.system)
         l = self.m.lookup(session, i)
@@ -491,7 +491,7 @@ class ImageMngrTestCase(unittest.TestCase):
     def test_list(self):
         record = self.good_record()
         # Create a fake record in mongo
-        id1 = self.images.insert(record.copy())
+        id1 = self.images.insert_one(record.copy()).inserted_id
         # rec2 is a failed pull, it shouldn't be listed
         rec2 = record.copy()
         rec2['status'] = 'FAILURE'
@@ -508,7 +508,7 @@ class ImageMngrTestCase(unittest.TestCase):
         record = self.good_record()
 
         # Create a fake record in mongo
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
         self.assertIsNotNone(id)
         pr = self.pull
         session = self.m.new_session(self.auth, self.system)
@@ -521,13 +521,13 @@ class ImageMngrTestCase(unittest.TestCase):
         record = self.good_record()
 
         # Create a fake record in mongo
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
         self.assertIsNotNone(id)
 
         # Create a pull record
         pr = self.good_pullrecord()
         pr['status'] = 'SUCCESS'
-        id = self.images.insert(pr)
+        id = self.images.insert_one(pr).inserted_id
         self.assertIsNotNone(id)
 
         # Now let's try pulling it
@@ -541,13 +541,13 @@ class ImageMngrTestCase(unittest.TestCase):
         record = self.good_record()
 
         # Create a fake record in mongo
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
         self.assertIsNotNone(id)
 
         # Create a pull record
         pr = self.good_pullrecord()
         pr['status'] = 'PULLING'
-        id = self.images.insert(pr)
+        id = self.images.insert_one(pr).inserted_id
         self.assertIsNotNone(id)
 
         # Now let's try pulling it
@@ -612,7 +612,7 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertIn('ENTRY', imagerec)
         self.assertIn('ENV', imagerec)
         # Cause a failure
-        self.images.drop()
+        self.images.delete_many({})
         self.mtm.workers.set_mode(2)
         rec = self.mtm.pull(session, pr)
         time.sleep(2)
@@ -647,7 +647,7 @@ class ImageMngrTestCase(unittest.TestCase):
         state = self.time_wait(id2)
         self.assertEqual(state, 'READY')
         mrec = self.images.find_one(q)
-        self.images.drop()
+        self.images.delete_many({})
 
     @attr('fast')
     def test_checkread(self):
@@ -699,7 +699,7 @@ class ImageMngrTestCase(unittest.TestCase):
         """
         record = self.good_pullrecord()
         record['status'] = 'PULLING'
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
         self.assertIsNotNone(id)
         # Now try to submit an ACL change
         session = self.m.new_session(self.auth, self.system)
@@ -728,7 +728,7 @@ class ImageMngrTestCase(unittest.TestCase):
             'tag': tag,
             'remotetype': 'dockerv2',
         }
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
         self.assertIsNotNone(id)
         session = self.m.new_session(self.auth, self.system)
         pr = basepr.copy()
@@ -736,18 +736,18 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertEqual(rec['status'], 'READY')
 
         # reset and test a re-pull of an old image
-        self.images.remove({})
+        self.images.delete_many({})
         record['last_pull'] = record['last_pull'] - 36000
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
         self.assertIsNotNone(id)
         session = self.m.new_session(self.auth, self.system)
         rec = self.m.pull(session, pr)  # ,delay=False)
         self.assertEqual(rec['status'], 'INIT')
 
         # Re-pull of new image with ACL change
-        self.images.remove({})
+        self.images.delete_many({})
         pr = basepr.copy()
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
         self.assertIsNotNone(id)
         pr['userACL'] = [1001]
         session = self.m.new_session(self.auth, self.system)
@@ -755,10 +755,10 @@ class ImageMngrTestCase(unittest.TestCase):
         self.assertEqual(rec['status'], 'INIT')
 
         # reset and test a re-pull of an old image
-        self.images.remove({})
+        self.images.delete_many({})
         pr = basepr.copy()
         record['last_pull'] = record['last_pull'] - 36000
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
         self.assertIsNotNone(id)
         session = self.m.new_session(self.auth, self.system)
         rec = self.m.pull(session, pr)  # ,delay=False)
@@ -913,7 +913,7 @@ class ImageMngrTestCase(unittest.TestCase):
         # Don't wait because it should immediately finish
         self.assertEqual(rec['status'], 'READY')
         kv = self.read_metafile(mf)
-        self.images.drop()
+        self.images.delete_many({})
 
     def test_import(self):
         """
@@ -955,7 +955,7 @@ class ImageMngrTestCase(unittest.TestCase):
         system = self.system
         record = self.good_record()
         # Create a fake record in mongo
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
         self.assertIsNotNone(id)
         # Create a bogus image file
         file, metafile = self.create_fakeimage(system, record['id'],
@@ -975,7 +975,7 @@ class ImageMngrTestCase(unittest.TestCase):
         system = 'systemb'
         record['system'] = system
         # Create a fake record in mongo
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
         self.assertIsNotNone(id)
         # Create a bogus image file
         file, metafile = self.create_fakeimage(system, record['id'],
@@ -993,7 +993,7 @@ class ImageMngrTestCase(unittest.TestCase):
     def test_expire_noadmin(self):
         record = self.good_record()
         # Create a fake record in mongo
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
         self.assertIsNotNone(id)
         # Create a bogus image file
         file, metafile = self.create_fakeimage(self.system, record['id'],
@@ -1012,7 +1012,7 @@ class ImageMngrTestCase(unittest.TestCase):
         record = self.good_pullrecord()
         record['status'] = 'PENDING'
         record['last_pull'] = time.time() - 3000
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
         self.assertIsNotNone(id)
         session = self.m.new_session(self.authadmin, self.system)
         self.m.autoexpire(session, self.system)
@@ -1022,7 +1022,7 @@ class ImageMngrTestCase(unittest.TestCase):
     def test_autoexpire_recentpull(self):
         record = self.good_pullrecord()
         record['status'] = 'PENDING'
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
         self.assertIsNotNone(id)
         session = self.m.new_session(self.authadmin, self.system)
         self.m.autoexpire(session, self.system)
@@ -1034,7 +1034,7 @@ class ImageMngrTestCase(unittest.TestCase):
 
         # Make it a candidate for expiration (10 secs too old)
         record['expiration'] = time.time() - 10
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
         self.assertIsNotNone(id)
         # Create a bogus image file
         file, metafile = self.create_fakeimage(self.system, record['id'],
@@ -1051,7 +1051,7 @@ class ImageMngrTestCase(unittest.TestCase):
         # A new image shouldn't expire
         record = self.good_record()
         record['expiration'] = time.time() + 1000
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
         self.assertIsNotNone(id)
         # Create a bogus image file
         file, metafile = self.create_fakeimage(self.system, record['id'],
@@ -1069,7 +1069,7 @@ class ImageMngrTestCase(unittest.TestCase):
         record = self.good_record()
         record['expiration'] = time.time() - 10
         record['system'] = 'other'
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
         self.assertIsNotNone(id)
         # Create a bogus image file
         file, metafile = self.create_fakeimage(self.system, record['id'],
@@ -1092,10 +1092,10 @@ class ImageMngrTestCase(unittest.TestCase):
             "type": self.itype
         }
         # Remove everything
-        self.metrics.remove({})
+        self.metrics.delete_many({})
         for _ in range(100):
             rec['time'] = time.time()
-            self.metrics.insert(rec.copy())
+            self.metrics.insert_one(rec.copy())
         session = self.m.new_session(self.authadmin, self.system)
         recs = self.m.get_metrics(session, self.system, 10)  # ,delay=False)
         self.assertIsNotNone(recs)
@@ -1113,7 +1113,7 @@ class ImageMngrTestCase(unittest.TestCase):
         record = self.good_record()
         record['pulltag'] = 'bogus'
         record['status'] = 'PULLING'
-        rec = self.images.insert(record)
+        rec = self.images.insert_one(record).inserted_id
         id = record['_id']
         m = {
             'id': id,
@@ -1131,7 +1131,7 @@ class ImageMngrTestCase(unittest.TestCase):
         record = self.good_record()
         record['pulltag'] = 'bogus'
         record['status'] = 'PULLING'
-        id = self.images.insert(record)
+        id = self.images.insert_one(record).inserted_id
         m = {
             'id': id,
             'state': 'READY',

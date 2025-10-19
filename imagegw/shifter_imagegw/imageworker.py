@@ -26,11 +26,11 @@ import sys
 import subprocess
 import logging
 import tempfile
+import traceback
 from multiprocessing import Queue
 from multiprocessing.pool import ThreadPool
 from time import time
 from shifter_imagegw import converters, transfer
-from shifter_imagegw.dockerv2 import DockerV2Handle as DockerV2
 from shifter_imagegw.dockerv2_ext import DockerV2ext
 
 
@@ -208,13 +208,9 @@ class ImageRequest(object):
                     options['username'] = userpass.split(':')[0]
                     options['password'] = ''.join(userpass.split(':')[1:])
             imgid = '%s:%s' % (repo, tag)
-            if self.sysconf.get('use_external'):
-                options['policy_file'] = self.sysconf.get("policy_file")
-                dock = DockerV2ext(imgid, options, updater=self.updater,
+            options['policy_file'] = self.sysconf.get("policy_file")
+            dock = DockerV2ext(imgid, options, updater=self.updater,
                                    cachedir=cdir)
-            else:
-                dock = DockerV2(imgid, options, updater=self.updater,
-                                cachedir=cdir)
             self.updater.update_status("PULLING", 'Getting manifest')
             self.meta = dock.examine_manifest()
             # Get the ID
@@ -232,9 +228,10 @@ class ImageRequest(object):
             self.updater.update_status("PULLING", 'Extracting Layers')
             dock.extract_docker_layers(self.expandedpath)
             return True
-        except:
-            logging.warn(sys.exc_info()[1])
-            raise
+        except Exception as e:
+            logging.warning(sys.exc_info()[1])
+            traceback.print_exc()
+            raise(e)
 
         return False
 
@@ -493,7 +490,7 @@ class ImageRequest(object):
             self._cleanup_temporary()
             return self.meta
 
-        except:
+        except Exception as e:
             logging.error("ERROR: dopull failed system=%s tag=%s",
                           self.system, self.tag)
             print(sys.exc_info()[1])
@@ -501,7 +498,7 @@ class ImageRequest(object):
 
             # TODO: add a debugging flag and only disable cleanup if debugging
             self._cleanup_temporary()
-            raise
+            raise(e)
 
     def img_import(self):
         """
@@ -541,7 +538,7 @@ class ImageRequest(object):
             self.meta['id'] = self.id
             self.updater.update_status('TRANSFER', 'TRANSFER')
             if not self._transfer_image():
-                logging.warn("Worker: Import copy failed")
+                logging.warning("Worker: Import copy failed")
                 raise OSError("Import copy failed")
 
             # Done

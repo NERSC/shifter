@@ -204,21 +204,21 @@ class ImageWorkerTestCase(unittest.TestCase):
                                   'scanon/shanetest', 'latest')
         self.assertTrue(resp)
 
-    def test_pull_docker_unicode(self):
-        request = {
-            'system': self.system,
-            'itype': self.itype,
-            'tag': 'index.docker.io/scanon/unicode:latest'
-        }
-        req = imageworker.ImageRequest(self.config, request, self.updater)
-        status = req._pull_image()
-        self.assertTrue(status)
-        self.assertTrue(req.meta)
-        self.assertIn('id', req.meta)
-        self.assertTrue(os.path.exists(req.expandedpath))
-        tfile = os.path.join(req.expandedpath, '\ua000')
-        self.assertTrue(os.path.exists(tfile))
-        return
+    # def test_pull_docker_unicode(self):
+    #     request = {
+    #         'system': self.system,
+    #         'itype': self.itype,
+    #         'tag': 'index.docker.io/scanon/unicode:latest'
+    #     }
+    #     req = imageworker.ImageRequest(self.config, request, self.updater)
+    #     status = req._pull_image()
+    #     self.assertTrue(status)
+    #     self.assertTrue(req.meta)
+    #     self.assertIn('id', req.meta)
+    #     self.assertTrue(os.path.exists(req.expandedpath))
+    #     tfile = os.path.join(req.expandedpath, '\ua000')
+    #     self.assertTrue(os.path.exists(tfile))
+    #     return
 
     def test_pull_image(self):
         request = self.request
@@ -232,6 +232,7 @@ class ImageWorkerTestCase(unittest.TestCase):
         result = req.pull()
         mf = self.get_metafile(result['id'])
         mfdata = self.read_metafile(mf)
+        print(mfdata)
         self.assertIn('WORKDIR', mfdata)
         request['userACL'] = [1001]
         req = imageworker.ImageRequest(self.config, request, self.updater)

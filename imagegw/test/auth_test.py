@@ -17,47 +17,52 @@
 # See LICENSE for full text.
 
 import os
-import unittest
+import pytest
 from shifter_imagegw.auth import Authentication
 
-
-class AuthTestCase(unittest.TestCase):
-
-    def setUp(self):
-        self.test_dir = os.path.dirname(os.path.abspath(__file__)) + \
-                        "/../test/"
-        self.encoded = "xxxx\n"
-        self.message = "test"
-        self.expired = "expired"
-        with open(self.test_dir + "munge.test", 'w') as f:
-            f.write(self.encoded)
-        self.system = 'systema'
-        self.config = {
-            "Authentication": "munge",
-            "Platforms": {self.system: {"mungeSocketPath": "/tmp/munge.s"}}
-        }
-        self.auth = Authentication(self.config)
-
-    def tearDown(self):
-        with open(self.test_dir + "munge.expired", 'w') as f:
-            f.write('')
-
-    def test_auth(self):
-        """ Test success """
-        resp = self.auth.authenticate(self.encoded, self.system)
-        assert resp is not None
-        self.assertIsInstance(resp, dict)
-
-    def test_auth_replay(self):
-        resp = self.auth.authenticate(self.encoded, self.system)
-        assert resp is not None
-        with self.assertRaises(OSError):
-            resp = self.auth.authenticate(self.encoded, self.system)
-
-    def test_auth_bad(self):
-        with self.assertRaises(OSError):
-            self.auth.authenticate("bad", self.system)
+@pytest.fixture(autouse=True)
+def set_path(monkeypatch):
+    test_dir = os.path.dirname(os.path.abspath(__file__)) + "/../test/"
+    monkeypatch.setenv("PATH", f"{os.environ['PATH']}:{test_dir}")
 
 
-if __name__ == '__main__':
-    unittest.main()
+@pytest.fixture
+def auth_env():
+    test_dir = os.path.dirname(os.path.abspath(__file__)) + "/../test/"
+    encoded = "xxxx\n"
+    system = 'systema'
+    config = {
+        "Authentication": "munge",
+        "Platforms": {system: {"mungeSocketPath": "/tmp/munge.s"}}
+    }
+
+    # setup
+    with open(test_dir + "munge.test", 'w') as f:
+        f.write(encoded)
+
+    auth = Authentication(config)
+
+    yield {
+        'test_dir': test_dir,
+        'encoded': encoded,
+        'system': system,
+        'auth': auth,
+    }
+
+
+def test_auth(auth_env):
+    resp = auth_env['auth'].authenticate(auth_env['encoded'], auth_env['system'])
+    assert resp is not None
+    assert isinstance(resp, dict)
+
+
+def test_auth_replay(auth_env):
+    resp = auth_env['auth'].authenticate(auth_env['encoded'], auth_env['system'])
+    assert resp is not None
+    with pytest.raises(OSError):
+        auth_env['auth'].authenticate(auth_env['encoded'], auth_env['system'])
+
+
+def test_auth_bad(auth_env):
+    with pytest.raises(OSError):
+        auth_env['auth'].authenticate("bad", auth_env['system'])

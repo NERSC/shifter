@@ -55,9 +55,9 @@ def mongo_reconnect_reattempt(call):
             try:
                 return call(self, *args, **kwargs)
             except pymongo.errors.AutoReconnect:
-                self.logger.warn("Error: mongo reconnect attmempt")
+                self.logger.warning("Error: mongo reconnect attmempt")
                 sleep(2)
-        self.logger.warn("Error: Failed to deal with mongo auto-reconnect!")
+        self.logger.warning("Error: Failed to deal with mongo auto-reconnect!")
         raise OSError('Reconnect to mongo failed')
     return _mongo_reconnect_safe
 
@@ -124,7 +124,7 @@ class ImageMngr(object):
         atexit.register(self.shutdown)
         self.mongo_init()
         # Cleanup any pending requests
-        self._images_remove({'status': 'PENDING'})
+        self._images_remove_many({'status': 'PENDING'})
 
     def shutdown(self):
         self.status_queue.put('stop')
@@ -152,7 +152,7 @@ class ImageMngr(object):
             meta = message['meta']
             # TODO: Handle a failed expire
             if state == "FAILURE":
-                self.logger.warn("Operation failed for %s", ident)
+                self.logger.warning("Operation failed for %s", ident)
 
             # print "Status: %s" % (state)
             # A response message
@@ -174,14 +174,14 @@ class ImageMngr(object):
         session is a session handle
         """
         if 'magic' not in session:
-            self.logger.warn("request recieved with no magic")
+            self.logger.warning("request recieved with no magic")
             return False
         elif session['magic'] is not self.magic:
-            self.logger.warn("request received with bad magic %s",
+            self.logger.warning("request received with bad magic %s",
                              session['magic'])
             return False
         if system is not None and session['system'] != system:
-            self.logger.warn("request received with a bad system %s!=%s",
+            self.logger.warning("request received with a bad system %s!=%s",
                              session['system'], system)
             return False
         return True
@@ -208,7 +208,7 @@ class ImageMngr(object):
         """Look up auxilary groups. """
         proc = Popen(['id', '-G', '%d' % (uid)], stdout=PIPE, stderr=PIPE)
         if proc is None:
-            self.logger.warn("Group lookup failed")
+            self.logger.warning("Group lookup failed")
             return []
         stdout, stderr = proc.communicate()
         groups = []
@@ -308,7 +308,7 @@ class ImageMngr(object):
             }
             self._metrics_insert(r)
         except:
-            self.logger.warn('Failed to log lookup.')
+            self.logger.warning('Failed to log lookup.')
 
     def get_metrics(self, session, system, limit):
         """
@@ -319,7 +319,7 @@ class ImageMngr(object):
             return recs
         if self.metrics is None:
             return recs
-        count = self.metrics.count()
+        count = self.metrics.count_documents({})
         skip = count - limit
         if skip < 0:
             skip = 0
@@ -513,7 +513,7 @@ class ImageMngr(object):
             'pulltag': image['tag']
         }
         if not self.check_session(session, request['system']):
-            self.logger.warn('Invalid session on system %s', request['system'])
+            self.logger.warning('Invalid session on system %s', request['system'])
             raise OSError("Invalid Session")
         # If a pull request exist for this tag
         #  check to see if it is expired or a failure, if so remove it
@@ -610,7 +610,7 @@ class ImageMngr(object):
         self.logger.debug('mngrmport called for file %s' % (fp))
         # self.logger.debug(image)
         if not self.check_session(session, request['system']):
-            self.logger.warn('Invalid session on system %s', request['system'])
+            self.logger.warning('Invalid session on system %s', request['system'])
             raise OSError("Invalid Session")
         # Skip checks about previous requests for now
         # Future work could check the fasthash and
@@ -699,8 +699,8 @@ class ImageMngr(object):
         """
         Helper function to remove a tag to an image.
         """
-        self._images_update({'system': system, 'tag': {'$in': [tag]}},
-                            {'$pull': {'tag': tag}}, multi=True)
+        self._images_update_many({'system': system, 'tag': {'$in': [tag]}},
+                            {'$pull': {'tag': tag}})
         return True
 
     def update_acls(self, ident, response):
@@ -718,7 +718,7 @@ class ImageMngr(object):
             # record of it.  That seems odd (it happens in tests).  Let's
             # note it and power on through.
             msg = "WARNING: No image record found for an ACL update"
-            self.logger.warn(msg)
+            self.logger.warning(msg)
             response['last_pull'] = time()
             response['status'] = 'READY'
             self.update_mongo(ident, response)
@@ -745,7 +745,7 @@ class ImageMngr(object):
         self.logger.debug("Complete called for %s %s", ident, str(response))
         pullrec = self._images_find_one({'_id': ident})
         if pullrec is None:
-            self.logger.warn('Missing pull request (r=%s)', str(response))
+            self.logger.warning('Missing pull request (r=%s)', str(response))
             return
         # Check that this image ident doesn't already exist for this system
         rec = self._images_find_one({'id': response['id'],
@@ -756,7 +756,7 @@ class ImageMngr(object):
             # So we already had this image.
             # Let's delete the pull record.
             # TODO: update the pull time of the matching id
-            self.logger.warn('Duplicate image')
+            self.logger.warning('Duplicate image')
             update_rec = {
                 'last_pull': time()
             }
@@ -897,15 +897,33 @@ class ImageMngr(object):
 
         return True
 
+    def __getstate__(self):
+        self_dict = self.__dict__.copy()
+        del self_dict['workers']
+        return self_dict
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
     @mongo_reconnect_reattempt
     def _images_remove(self, *args, **kwargs):
         """ Decorated function to remove images from mongo """
-        return self.images.remove(*args, **kwargs)
+        return self.images.delete_one(*args, **kwargs)
+
+    @mongo_reconnect_reattempt
+    def _images_remove_many(self, *args, **kwargs):
+        """ Decorated function to remove images from mongo """
+        return self.images.delete_many(*args, **kwargs)
 
     @mongo_reconnect_reattempt
     def _images_update(self, *args, **kwargs):
         """ Decorated function to updates images in mongo """
-        return self.images.update(*args, **kwargs)
+        return self.images.update_one(*args, **kwargs)
+
+    @mongo_reconnect_reattempt
+    def _images_update_many(self, *args, **kwargs):
+        """ Decorated function to updates images in mongo """
+        return self.images.update_many(*args, **kwargs)
 
     @mongo_reconnect_reattempt
     def _images_find(self, *args, **kwargs):
@@ -920,13 +938,13 @@ class ImageMngr(object):
     @mongo_reconnect_reattempt
     def _images_insert(self, *args, **kwargs):
         """ Decorated function to insert an image in mongo """
-        return self.images.insert(*args, **kwargs)
+        return self.images.insert_one(*args, **kwargs).inserted_id
 
     @mongo_reconnect_reattempt
     def _metrics_insert(self, *args, **kwargs):
         """ Decorated function to insert an image in mongo """
         if self.metrics is not None:
-            return self.metrics.insert(*args, **kwargs)
+            return self.metrics.insert_one(*args, **kwargs).inserted_id
 
 
 def usage():

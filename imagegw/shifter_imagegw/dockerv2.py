@@ -95,7 +95,9 @@ def _verify_manifest_signature(manifest, text, digest):
             elif format_length != protected['formatLength']:
                 msg = 'formatLen did not match between signature blocks'
                 raise ValueError(msg)
-    message = text[0:format_length] + format_tail
+    message = text[0:format_length]
+    if format_tail:
+        message += format_tail
     if hashlib.sha256(message).hexdigest() != digest:
         msg = 'Failed to match manifest digest to downloaded content'
         raise ValueError(msg)
