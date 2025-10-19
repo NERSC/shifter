@@ -17,45 +17,48 @@
 # See LICENSE for full text.
 
 import os
-import unittest
+import pytest
 from shifter_imagegw import munge
 
 
-class MungeTestCase(unittest.TestCase):
-
-    def setUp(self):
-        self.test_dir = os.path.dirname(os.path.abspath(__file__)) + \
-                        "/../test/"
-        self.encoded = "xxxx\n"
-        self.message = "test"
-        self.expired = "expired"
-        with open(self.test_dir + "munge.test", 'w') as f:
-            f.write(self.encoded)
-
-    def tearDown(self):
-        with open(self.test_dir + "munge.expired", 'w') as f:
-            f.write('')
-
-    def test_munge(self):
-        resp = munge.munge(self.message)
-        assert resp is not None
-
-    def test_unmunge(self):
-        resp = munge.unmunge(self.encoded)
-        assert resp['MESSAGE'] == self.message
-
-    def test_unmunge_expired(self):
-        with open(self.test_dir + "munge.expired", 'w') as f:
-            f.write(self.expired)
-        with self.assertRaises(OSError):
-            munge.unmunge(self.expired)
-
-    def test_unmunge_replay(self):
-        resp = munge.unmunge(self.encoded)
-        assert resp['MESSAGE'] == self.message
-        with self.assertRaises(OSError):
-            munge.unmunge(self.encoded)
+@pytest.fixture(autouse=True)
+def set_path(monkeypatch):
+    test_dir = os.path.dirname(os.path.abspath(__file__)) + "/../test/"
+    monkeypatch.setenv("PATH", f"{os.environ['PATH']}:{test_dir}")
 
 
-if __name__ == '__main__':
-    unittest.main()
+@pytest.fixture(autouse=True)
+def setup_files():
+    test_dir = os.path.dirname(os.path.abspath(__file__)) + "/../test/"
+    encoded = "xxxx\n"
+    message = "test"
+    expired = "expired"
+    with open(test_dir + "munge.test", 'w') as f:
+        f.write(encoded)
+    with open(test_dir + "munge.expired", 'w') as f:
+        f.write('')
+    return {"test_dir": test_dir, "encoded": encoded, "message": message, "expired": expired}
+
+
+def test_munge(setup_files):
+    resp = munge.munge(setup_files["message"])
+    assert resp is not None
+
+
+def test_unmunge(setup_files):
+    resp = munge.unmunge(setup_files["encoded"])
+    assert resp['MESSAGE'] == setup_files["message"]
+
+
+def test_unmunge_expired(setup_files):
+    with open(setup_files["test_dir"] + "munge.expired", 'w') as f:
+        f.write(setup_files["expired"])
+    with pytest.raises(OSError):
+        munge.unmunge(setup_files["expired"])
+
+
+def test_unmunge_replay(setup_files):
+    resp = munge.unmunge(setup_files["encoded"])
+    assert resp['MESSAGE'] == setup_files["message"]
+    with pytest.raises(OSError):
+        munge.unmunge(setup_files["encoded"])
