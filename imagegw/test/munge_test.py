@@ -19,6 +19,7 @@
 import os
 import pytest
 from shifter_imagegw import munge
+from shifter_imagegw.errors import AuthenticationError
 
 
 @pytest.fixture(autouse=True)
@@ -53,12 +54,12 @@ def test_unmunge(setup_files):
 def test_unmunge_expired(setup_files):
     with open(setup_files["test_dir"] + "munge.expired", 'w') as f:
         f.write(setup_files["expired"])
-    with pytest.raises(OSError):
+    with pytest.raises(AuthenticationError):
         munge.unmunge(setup_files["expired"])
 
 
 def test_unmunge_replay(setup_files):
     resp = munge.unmunge(setup_files["encoded"])
     assert resp['MESSAGE'] == setup_files["message"]
-    with pytest.raises(OSError):
+    with pytest.raises(AuthenticationError):
         munge.unmunge(setup_files["encoded"])

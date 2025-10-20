@@ -23,6 +23,7 @@ Helper routines for munge
 
 import sys
 from subprocess import Popen, PIPE
+from shifter_imagegw.errors import AuthenticationError
 debug = False
 
 
@@ -54,12 +55,12 @@ def unmunge(encoded, socket=None):
         proc = Popen(com, stdin=PIPE, stdout=PIPE, stderr=PIPE)
         output = proc.communicate(input=encoded.encode('utf-8'))[0]
         if proc.returncode == 15:
-            raise OSError("Expired Credential")
+            raise AuthenticationError('Expired Credential')
         if proc.returncode == 17:
-            raise OSError("Replayed Credential")
+            raise AuthenticationError('Replayed Credential')
         elif proc.returncode != 0:
-            memo = "Unknown munge error %d %s" % (proc.returncode, socket)
-            raise OSError(memo)
+            memo = f"Unknown munge error {proc.returncode}"
+            raise AuthenticationError(memo)
         resp = dict()
         inmessage = False
         message = ''
@@ -81,7 +82,7 @@ def unmunge(encoded, socket=None):
             return None
         resp['MESSAGE'] = message
         return resp
-    except:
+    except Exception as ex:
         if debug:
             print(sys.exc_info()[1])
         raise

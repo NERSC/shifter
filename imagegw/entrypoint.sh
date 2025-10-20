@@ -13,7 +13,7 @@ fi
 for service in $@ ; do
   echo "service: $service"
   if [ "$service"  == "api" ] ; then
-    python ./shifter_imagegw/api.py
+    uvicorn --host 0.0.0.0 shifter_imagegw.api:app
   elif  [ $(echo $service|grep -c "munge:") -gt 0 ] ; then
     socket=$(echo $service|awk -F: '{print $2}')
     key=$(echo $service|awk -F: '{print $3}')

@@ -1,3 +1,4 @@
 pymongo==3.12.1
-sanic==20.9.1
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
 pylint
