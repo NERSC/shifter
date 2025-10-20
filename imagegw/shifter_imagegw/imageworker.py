@@ -45,14 +45,14 @@ class Updater(object):
 
     def update_status(self, state, message, response=None):
         """ update the status including the heartbeat and message """
-        if self.update_method is not None:
+        if self.update_method:
             metadata = {'heartbeat': time(),
                         'message': message,
                         'response': response}
             self.update_method(ident=self.ident, state=state, meta=metadata)
 
     def failed(self, e):
-        if self.update_method is not None:
+        if self.update_method:
             metadata = {'heartbeat': time(),
                         'message': "Operation Failed",
                         'response': {}}
@@ -119,6 +119,7 @@ class WorkerThreads(object):
         """
         Kick off a pull operation.
         """
+        logging.debug("dopull called")
         updater = Updater(ident, self.updater)
         self.pools.apply_async(self.pull, [request, updater],
                                {}, None, updater.failed)
@@ -441,13 +442,12 @@ class ImageRequest(object):
         it
         """
         tag = self.tag
-        logging.debug("dopull system=%s tag=%s", self.system, tag)
         try:
             # Step 1 - Do the pull
             self.updater.update_status('PULLING', 'PULLING')
             logging.debug(self.tag)
             if not self._pull_image():
-                logging.info("Worker: Pull failed")
+                logging.warning("Worker: Pull failed")
                 raise OSError('Pull failed')
 
             if not self.meta:
@@ -529,7 +529,7 @@ class ImageRequest(object):
                 'user': self.user
             }
             if not self._write_metadata():
-                logging.info("Writing metadata")
+                logging.warning("Writing metadata failed")
                 raise OSError('Metadata creation failed')
             # Step 3 - Copy image and meta file from user space to shifter area
             logging.debug("starting transfer")

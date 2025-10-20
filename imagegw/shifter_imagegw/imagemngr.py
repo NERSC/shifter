@@ -35,6 +35,7 @@ from time import time, sleep
 from pymongo import MongoClient
 import pymongo.errors
 from shifter_imagegw.auth import Authentication
+from shifter_imagegw.errors import AuthenticationError
 from shifter_imagegw.imageworker import WorkerThreads
 try:
     from multiprocessing import Process
@@ -58,7 +59,7 @@ def mongo_reconnect_reattempt(call):
                 self.logger.warning("Error: mongo reconnect attmempt")
                 sleep(2)
         self.logger.warning("Error: Failed to deal with mongo auto-reconnect!")
-        raise OSError('Reconnect to mongo failed')
+        raise AuthenticationError('Reconnect to mongo failed')
     return _mongo_reconnect_safe
 
 
@@ -127,7 +128,9 @@ class ImageMngr(object):
         self._images_remove_many({'status': 'PENDING'})
 
     def shutdown(self):
+        logging.info("Shutdown called")
         self.status_queue.put('stop')
+        self.status_proc.terminate()
 
     def mongo_init(self):
         client = MongoClient(self.config['MongoDBURI'])
@@ -307,7 +310,7 @@ class ImageMngr(object):
                 'time': time()
             }
             self._metrics_insert(r)
-        except:
+        except Exception as e:
             self.logger.warning('Failed to log lookup.')
 
     def get_metrics(self, session, system, limit):
@@ -338,10 +341,10 @@ class ImageMngr(object):
             return {'magic': self.magic, 'system': system}
         arec = self.auth.authenticate(auth_string, system)
         if arec is None and isinstance(arec, dict):
-            raise OSError("Authenication returned None")
+            raise AuthenticationError("Authenication returned None")
         else:
             if 'user' not in arec:
-                raise OSError("Authentication returned invalid response")
+                raise AuthenticationError("Authentication returned invalid response")
             session = arec
             session['magic'] = self.magic
             session['system'] = system
@@ -362,12 +365,12 @@ class ImageMngr(object):
         }
         self.update_states()
         rec = self._images_find_one(query)
-        if rec is not None:
+        if rec:
             if self._checkread(session, rec) is False:
                 return None
             self._resetexpire(rec['_id'])
 
-        if self.metrics is not None:
+        if rec and self.metrics is not None:
             self._add_metrics(session, image, rec)
         return rec
 
@@ -943,8 +946,8 @@ class ImageMngr(object):
     @mongo_reconnect_reattempt
     def _metrics_insert(self, *args, **kwargs):
         """ Decorated function to insert an image in mongo """
-        if self.metrics is not None:
-            return self.metrics.insert_one(*args, **kwargs).inserted_id
+        if self.metrics:
+            return self.metrics.insert_one(*args, **kwargs)
 
 
 def usage():

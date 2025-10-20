@@ -19,6 +19,7 @@
 import os
 import pytest
 from shifter_imagegw.auth import Authentication
+from shifter_imagegw.errors import AuthenticationError
 
 @pytest.fixture(autouse=True)
 def set_path(monkeypatch):
@@ -59,10 +60,10 @@ def test_auth(auth_env):
 def test_auth_replay(auth_env):
     resp = auth_env['auth'].authenticate(auth_env['encoded'], auth_env['system'])
     assert resp is not None
-    with pytest.raises(OSError):
+    with pytest.raises(AuthenticationError):
         auth_env['auth'].authenticate(auth_env['encoded'], auth_env['system'])
 
 
 def test_auth_bad(auth_env):
-    with pytest.raises(OSError):
+    with pytest.raises(AuthenticationError):
         auth_env['auth'].authenticate("bad", auth_env['system'])
