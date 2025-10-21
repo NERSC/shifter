@@ -18,10 +18,10 @@
 # See LICENSE for full text.
 
 """
-Install, remove, and manipulate files on the systems either local or remote
+Install, remove, and manipulate files on the systems
 
 Will use local shell/copy commands to perform needed actions if the system has
-filesystems locally available.  Uses ssh for remote access to platforms.
+filesystems locally available.
 """
 
 import os
@@ -42,67 +42,6 @@ def _cp_cmd(system, localfile, targetfile):
     Helper function to build a local copy command
     """
     return ['cp', localfile, targetfile]
-
-
-def _ssh_cmd(system, *args):
-    """
-    Helper function to build a remote shell command
-    """
-    if len(args) == 0:
-        return None
-
-    ssh = ['ssh']
-
-    # TODO think about if the host selection needs to be smarter
-    # also, is this guaranteed to be an iterable object?
-    hostname = system['host'][0]
-    username = system['ssh']['username']
-    if 'key' in system['ssh']:
-        ssh.extend(['-i', '%s' % system['ssh']['key']])
-    if 'sshCmdOptions' in system['ssh']:
-        ssh.extend(system['ssh']['sshCmdOptions'])
-    ssh.extend(['%s@%s' % (username, hostname)])
-    ssh.extend(args)
-    return ssh
-
-
-def _scp_cmd(system, localfile, remotefile):
-    """
-    Helper function to build a remote copy command
-    """
-    ssh = ['scp']
-
-    # TODO think about if the host selection needs to be smarter
-    # also, is this guaranteed to be an iterable object?
-    hostname = system['host'][0]
-    username = system['ssh']['username']
-    if 'key' in system['ssh']:
-        ssh.extend(['-i', '%s' % system['ssh']['key']])
-    if 'scpCmdOptions' in system['ssh']:
-        ssh.extend(system['ssh']['scpCmdOptions'])
-    ssh.extend([localfile, '%s@%s:%s' % (username, hostname, remotefile)])
-    return ssh
-
-
-def _import_cp_cmd(system, localfile, remotefile):
-    """
-    Helper function to build a remote copy command
-    Image will always be in user space on the system
-    Worker could be local or remote, so just treat as remote
-    """
-    ssh = ['ssh']
-
-    # TODO think about if the host selection needs to be smarter
-    # also, is this guaranteed to be an iterable object?
-    hostname = system['host'][0]
-    username = system['ssh']['username']
-    if 'key' in system['ssh']:
-        ssh.extend(['-i', '%s' % system['ssh']['key']])
-    if 'scpCmdOptions' in system['ssh']:
-        ssh.extend(system['ssh']['scpCmdOptions'])
-    ssh.extend(['%s@%s' % (username, hostname)])
-    ssh.extend(['cp %s %s' % (localfile, remotefile)])
-    return ssh
 
 
 def _exec_and_log(cmd, logger):
@@ -194,17 +133,9 @@ def copy_file(filename, system, logger=None):
     sh_cmd = None
     cp_cmd = None
     basepath = None
-    if system.accesstype == 'local':
-        sh_cmd = _sh_cmd
-        cp_cmd = _cp_cmd
-        basepath = system.imageDir
-    elif system.accesstype == 'remote':
-        sh_cmd = _ssh_cmd
-        cp_cmd = _scp_cmd
-        basepath = system.imageDir
-    else:
-        memo = '%s is not supported as a transfer type' % system.accesstype
-        raise NotImplementedError(memo)
+    sh_cmd = _sh_cmd
+    cp_cmd = _cp_cmd
+    basepath = system.imageDir
 
     image_fn = os.path.split(filename)[1]
     target_fn = os.path.join(basepath, image_fn)
@@ -269,17 +200,9 @@ def import_copy_file(filename, destfilename, system, logger=None):
     sh_cmd = None
     cp_cmd = None
     basepath = None
-    if system.accesstype == 'local':
-        sh_cmd = _sh_cmd
-        cp_cmd = _cp_cmd
-        basepath = system.imageDir
-    elif system.accesstype == 'remote':
-        sh_cmd = _ssh_cmd
-        cp_cmd = _import_cp_cmd
-        basepath = system['ssh']['imageDir']
-    else:
-        memo = '%s is not supported as a transfer type' % system.accesstype
-        raise NotImplementedError(memo)
+    sh_cmd = _sh_cmd
+    cp_cmd = _cp_cmd
+    basepath = system.imageDir
 
     image_fn = os.path.split(destfilename)[1]
     target_fn = os.path.join(basepath, image_fn)
@@ -323,12 +246,8 @@ def remove_file(filename, system, logger=None):
     """
     sh_cmd = None
     basepath = None
-    if system.accesstype == 'local':
-        sh_cmd = _sh_cmd
-        basepath = system.imageDir
-    elif system.accesstype == 'remote':
-        sh_cmd = _ssh_cmd
-        basepath = system['ssh']['imageDir']
+    sh_cmd = _sh_cmd
+    basepath = system.imageDir
     image_fn = os.path.split(filename)[1]
     target_fn = os.path.join(basepath, image_fn)
     rm_cmd = sh_cmd(system, 'rm', '-f', target_fn)
@@ -342,12 +261,8 @@ def check_file(filename, system, logger=None, import_image=False):
     """
     sh_cmd = None
     basepath = None
-    if system.accesstype == 'local':
-        sh_cmd = _sh_cmd
-        basepath = system.imageDir
-    elif system.accesstype == 'remote':
-        sh_cmd = _ssh_cmd
-        basepath = system['ssh']['imageDir']
+    sh_cmd = _sh_cmd
+    basepath = system.imageDir
     image_fn = os.path.split(filename)[1]
     target_fn = os.path.join(basepath, image_fn)
     if import_image:
@@ -363,15 +278,9 @@ def check_file(filename, system, logger=None, import_image=False):
 
 def hash_file(filename, system, logger=None):
     """
-    Calculate a hash of the image file,
-    because this can be remote or local,
-    need to use a separate helper executable fasthash
-    assume it is in the path already
+    Calculate a hash of the image file.
     """
-    if system.accesstype == 'local':
-        sh_cmd = _sh_cmd
-    elif system.accesstype == 'remote':
-        sh_cmd = _ssh_cmd
+    sh_cmd = _sh_cmd
     hash_cmd = sh_cmd(system, 'fasthash', filename)
     ret = _get_stdout_and_log(hash_cmd, logger)
     if len(ret[0]) != 0:
