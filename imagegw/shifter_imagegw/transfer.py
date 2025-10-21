@@ -194,16 +194,16 @@ def copy_file(filename, system, logger=None):
     sh_cmd = None
     cp_cmd = None
     basepath = None
-    if system['accesstype'] == 'local':
+    if system.accesstype == 'local':
         sh_cmd = _sh_cmd
         cp_cmd = _cp_cmd
-        basepath = system['local']['imageDir']
-    elif system['accesstype'] == 'remote':
+        basepath = system.imageDir
+    elif system.accesstype == 'remote':
         sh_cmd = _ssh_cmd
         cp_cmd = _scp_cmd
-        basepath = system['ssh']['imageDir']
+        basepath = system.imageDir
     else:
-        memo = '%s is not supported as a transfer type' % system['accesstype']
+        memo = '%s is not supported as a transfer type' % system.accesstype
         raise NotImplementedError(memo)
 
     image_fn = os.path.split(filename)[1]
@@ -225,7 +225,7 @@ def copy_file(filename, system, logger=None):
     try:
         copy = cp_cmd(system, filename, temp_fn)
         copyret = _exec_and_log(copy, logger)
-    except:
+    except Exception:
         rm_cmd = sh_cmd(system, 'rm', temp_fn)
         _exec_and_log(rm_cmd, logger)
         raise
@@ -241,7 +241,7 @@ def copy_file(filename, system, logger=None):
             mvret = _exec_and_log(mv_cmd, logger)
             if mvret != 0:
                 raise OSError('failed mv command')
-        except:
+        except Exception:
             # TODO we might also need to remove target_fn in this case
             rm_cmd = sh_cmd(system, 'rm', temp_fn)
             _exec_and_log(rm_cmd, logger)
@@ -254,12 +254,13 @@ def copy_file(filename, system, logger=None):
             if ret != 0:
                 raise OSError('failed chmod command')
             return ret == 0
-        except:
-            rm_cmd = sh_cmd(system, "rm", target_fn);
+        except Exception:
+            rm_cmd = sh_cmd(system, "rm", target_fn)
             _exec_and_log(rm_cmd, logger)
             raise
 
     return False
+
 
 def import_copy_file(filename, destfilename, system, logger=None):
     """
@@ -268,16 +269,16 @@ def import_copy_file(filename, destfilename, system, logger=None):
     sh_cmd = None
     cp_cmd = None
     basepath = None
-    if system['accesstype'] == 'local':
+    if system.accesstype == 'local':
         sh_cmd = _sh_cmd
         cp_cmd = _cp_cmd
-        basepath = system['local']['imageDir']
-    elif system['accesstype'] == 'remote':
+        basepath = system.imageDir
+    elif system.accesstype == 'remote':
         sh_cmd = _ssh_cmd
         cp_cmd = _import_cp_cmd
         basepath = system['ssh']['imageDir']
     else:
-        memo = '%s is not supported as a transfer type' % system['accesstype']
+        memo = '%s is not supported as a transfer type' % system.accesstype
         raise NotImplementedError(memo)
 
     image_fn = os.path.split(destfilename)[1]
@@ -298,7 +299,7 @@ def import_copy_file(filename, destfilename, system, logger=None):
     try:
         copy = cp_cmd(system, filename, temp_fn)
         copyret = _exec_and_log(copy, logger)
-    except:
+    except Exception:
         rm_cmd = sh_cmd(system, 'rm', temp_fn)
         _exec_and_log(rm_cmd, logger)
         raise
@@ -308,7 +309,7 @@ def import_copy_file(filename, destfilename, system, logger=None):
             mv_cmd = sh_cmd(system, 'mv', temp_fn, target_fn)
             ret = _exec_and_log(mv_cmd, logger)
             return ret == 0
-        except:
+        except Exception:
             # TODO we might also need to remove target_fn in this case
             rm_cmd = sh_cmd(system, 'rm', temp_fn)
             _exec_and_log(rm_cmd, logger)
@@ -322,10 +323,10 @@ def remove_file(filename, system, logger=None):
     """
     sh_cmd = None
     basepath = None
-    if system['accesstype'] == 'local':
+    if system.accesstype == 'local':
         sh_cmd = _sh_cmd
-        basepath = system['local']['imageDir']
-    elif system['accesstype'] == 'remote':
+        basepath = system.imageDir
+    elif system.accesstype == 'remote':
         sh_cmd = _ssh_cmd
         basepath = system['ssh']['imageDir']
     image_fn = os.path.split(filename)[1]
@@ -341,10 +342,10 @@ def check_file(filename, system, logger=None, import_image=False):
     """
     sh_cmd = None
     basepath = None
-    if system['accesstype'] == 'local':
+    if system.accesstype == 'local':
         sh_cmd = _sh_cmd
-        basepath = system['local']['imageDir']
-    elif system['accesstype'] == 'remote':
+        basepath = system.imageDir
+    elif system.accesstype == 'remote':
         sh_cmd = _ssh_cmd
         basepath = system['ssh']['imageDir']
     image_fn = os.path.split(filename)[1]
@@ -367,9 +368,9 @@ def hash_file(filename, system, logger=None):
     need to use a separate helper executable fasthash
     assume it is in the path already
     """
-    if system['accesstype'] == 'local':
+    if system.accesstype == 'local':
         sh_cmd = _sh_cmd
-    elif system['accesstype'] == 'remote':
+    elif system.accesstype == 'remote':
         sh_cmd = _ssh_cmd
     hash_cmd = sh_cmd(system, 'fasthash', filename)
     ret = _get_stdout_and_log(hash_cmd, logger)

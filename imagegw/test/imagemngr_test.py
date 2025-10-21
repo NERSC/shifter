@@ -11,6 +11,7 @@ from pymongo import MongoClient
 from shifter_imagegw.imagemngr import ImageMngr
 from multiprocessing.pool import ThreadPool
 from random import randint
+from shifter_imagegw.config import Config
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
@@ -87,16 +88,26 @@ def set_path(monkeypatch):
     monkeypatch.setenv("PATH", f"{test_dir}:{os.environ['PATH']}")
 
 
+@pytest.fixture()
+def conf():
+    configfile = 'test.json'
+    with open(configfile) as config_file:
+        data = json.load(config_file)
+    config = Config(data)
+    yield config
+
+
 @pytest.fixture(autouse=True)
 def ctx():
     class Conf():
         def __init__(self):
             self.configfile = 'test.json'
             with open(self.configfile) as config_file:
-                self.config = json.load(config_file)
-            mongodb = self.config['MongoDBURI']
+                data = json.load(config_file)
+            self.config = Config(data)
+            mongodb = self.config.MongoDBURI
             client = MongoClient(mongodb)
-            db = self.config['MongoDB']
+            db = self.config.MongoDB
             self.images = client[db].images
             self.metrics = client[db].metrics
             self.images.drop()
@@ -119,10 +130,10 @@ def ctx():
             self.logfile = '/tmp/worker.log'
             self.pid = 0
             self.query = {'system': self.system, 'itype': self.itype,
-                            'tag': self.tag}
+                          'tag': self.tag}
             self.pull = {'system': self.system, 'itype': self.itype,
-                            'tag': self.tag, 'remotetype': 'dockerv2',
-                            'userACL': [], 'groupACL': []}
+                         'tag': self.tag, 'remotetype': 'dockerv2',
+                         'userACL': [], 'groupACL': []}
             if os.path.exists(self.logfile):
                 pass  # os.unlink(self.logfile)
             # Cleanup Mongo
@@ -130,6 +141,7 @@ def ctx():
     conf = Conf()
     yield conf
     conf.m.shutdown()
+
 
 def time_wait(ctx, id, wstate='READY', TIMEOUT=30):
     poll_interval = 0.5
@@ -143,20 +155,16 @@ def time_wait(ctx, id, wstate='READY', TIMEOUT=30):
         time.sleep(poll_interval)
     return state
 
+
 def get_metafile(self, system, id):
-    if self.config['Platforms'][system]['accesstype'] == 'remote':
-        idir = self.config['Platforms'][system]['ssh']['imageDir']
-    else:
-        idir = self.config['Platforms'][system]['local']['imageDir']
+    idir = self.config.Platforms[system].imageDir
 
     metafile = os.path.join(idir, '%s.meta' % (id))
     return metafile
 
+
 def create_fakeimage(ctx, system, id, format):
-    if ctx.config['Platforms'][system]['accesstype'] == 'remote':
-        idir = ctx.config['Platforms'][system]['ssh']['imageDir']
-    else:
-        idir = ctx.config['Platforms'][system]['local']['imageDir']
+    idir = ctx.config.Platforms[system].imageDir
 
     if os.path.exists(idir) is False:
         os.makedirs(idir)
@@ -167,6 +175,7 @@ def create_fakeimage(ctx, system, id, format):
     with open(metafile, 'w') as f:
         f.write('')
     return file, metafile
+
 
 def good_pullrecord(self):
     return {'system': self.system,
@@ -180,6 +189,7 @@ def good_pullrecord(self):
             'ENTRY': '',
             'last_pull': time.time()
             }
+
 
 def good_record(ctx):
     return {
@@ -195,6 +205,7 @@ def good_record(ctx):
         'ENV': [],
         'ENTRY': ''
     }
+
 
 def read_metafile(self, metafile):
     kv = {}
@@ -212,8 +223,10 @@ def read_metafile(self, metafile):
 
     return kv
 
+
 def set_last_pull(self, id, t):
     self.m.images.update({'_id': id}, {'$set': {'last_pull': t}})
+
 
 def read_tokens():
     if not os.path.exists("./tokens.cfg"):
@@ -224,6 +237,7 @@ def read_tokens():
         d[k] = base64.b64decode(d[k])
     return d
 
+
 #
 #  Tests
 #
@@ -232,24 +246,22 @@ def test_session(ctx):
     assert s
     try:
         s = ctx.m.new_session(ctx.badauth, ctx.system)
-    except:
+    except Exception:
         pass
-
 
 
 def test_noadmin(ctx):
     s = ctx.m.new_session(ctx.auth, ctx.system)
     assert s
     resp = ctx.m._isadmin(s, ctx.system)
-    assert resp == False
-
+    assert resp is False
 
 
 def test_admin(ctx):
     s = ctx.m.new_session(ctx.authadmin, ctx.system)
     assert s
     resp = ctx.m._isadmin(s, ctx.system)
-    assert resp == True
+    assert resp is True
 
 
 def test_add_remove_tag(ctx):
@@ -276,7 +288,7 @@ def test_add_remove_tag(ctx):
     assert ctx.tag in after['tag']
     # Remove a tag and make sure it worked
     status = ctx.m.remove_tag(ctx.system, 'testtag')
-    assert status == True
+    assert status is True
     after = ctx.images.find_one({'_id': id})
     assert after
     assert 'testtag' not in after['tag']
@@ -299,7 +311,6 @@ def test_add_remove_two(ctx):
     rec2 = ctx.images.find_one({'_id': id2})
     assert ctx.tag not in rec1['tag']
     assert ctx.tag in rec2['tag']
-
 
 
 def test_add_same_image_two_system(ctx):
@@ -335,7 +346,7 @@ def test_add_tagitem(ctx):
     id = ctx.images.insert_one(record).inserted_id
 
     status = ctx.m.add_tag(id, ctx.system, 'testtag')
-    assert status == True
+    assert status is True
     rec = ctx.images.find_one({'_id': id})
     assert rec
     assert ctx.tag in rec['tag']
@@ -353,7 +364,7 @@ def test_add_remove_withtag(ctx):
     session = ctx.m.new_session(ctx.auth, ctx.system)
     i = ctx.query.copy()
     status = ctx.m.add_tag(id, ctx.system, 'testtag')
-    assert status == True
+    assert status is True
     rec = ctx.m.lookup(session, i)
     assert rec
     assert ctx.tag in rec['tag']
@@ -362,21 +373,21 @@ def test_add_remove_withtag(ctx):
 
 def test_isasystem(ctx):
     assert ctx.m._isasystem(ctx.system)
-    assert ctx.m._isasystem('bogus') == False
+    assert ctx.m._isasystem('bogus') is False
 
 
 def test_resetexp(ctx):
     record = {'system': ctx.system,
-                'itype': ctx.itype,
-                'id': ctx.id,
-                'pulltag': ctx.tag,
-                'status': 'READY',
-                'userACL': [],
-                'groupACL': [],
-                'ENV': [],
-                'ENTRY': '',
-                'last_pull': 0
-                }
+              'itype': ctx.itype,
+              'id': ctx.id,
+              'pulltag': ctx.tag,
+              'status': 'READY',
+              'userACL': [],
+              'groupACL': [],
+              'ENV': [],
+              'ENTRY': '',
+              'last_pull': 0
+              }
     id = ctx.images.insert_one(record.copy()).inserted_id
     assert id
     expire = ctx.m._resetexpire(id)
@@ -394,8 +405,8 @@ def test_pullable(ctx):
     assert ctx.m._pullable(rec) is False
 
     rec = {'last_pull': time.time(),
-            'last_heartbeat': 0,
-            'status': 'READY'}
+           'last_heartbeat': 0,
+           'status': 'READY'}
     # A recent READY image but an old heartbeat (maybe re-pulled)
     assert ctx.m._pullable(rec) is False
 
@@ -408,7 +419,7 @@ def test_pullable(ctx):
 
     # A hung pull
     rec = {'last_pull': 0, 'last_heartbeat': time.time() - 7200,
-            'status': 'PULLING'}
+           'status': 'PULLING'}
     assert ctx.m._pullable(rec) is True
     # recent pull
     rec = {'last_pull': time.time(), 'status': 'PULLING'}
@@ -416,23 +427,23 @@ def test_pullable(ctx):
 
     # A hung pull
     rec = {'last_pull': 0, 'last_heartbeat': time.time(),
-            'status': 'PULLING'}
+           'status': 'PULLING'}
     assert ctx.m._pullable(rec) is False
 
 
 def test_complete_pull(ctx):
     # Test complete_pull
     record = {'system': ctx.system,
-                'itype': ctx.itype,
-                'id': ctx.id,
-                'pulltag': ctx.tag,
-                'status': 'READY',
-                'userACL': [],
-                'groupACL': [],
-                'ENV': [],
-                'ENTRY': '',
-                'last_pull': 0
-                }
+              'itype': ctx.itype,
+              'id': ctx.id,
+              'pulltag': ctx.tag,
+              'status': 'READY',
+              'userACL': [],
+              'groupACL': [],
+              'ENV': [],
+              'ENTRY': '',
+              'last_pull': 0
+              }
     record = good_pullrecord(ctx)
     record['last_pull'] = 0
     # Create a fake record in mongo
@@ -468,25 +479,23 @@ def test_update_states(ctx):
     assert rec is None
 
 
-
 def test_lookup(ctx):
     record = good_record(ctx)
     # Create a fake record in mongo
     ctx.images.insert_one(record).inserted_id
     i = ctx.query.copy()
     session = ctx.m.new_session(ctx.auth, ctx.system)
-    l = ctx.m.lookup(session, i)
-    assert 'status' in l
-    assert '_id' in l
-    assert ctx.m.get_state(l['_id']) == 'READY'
+    lup = ctx.m.lookup(session, i)
+    assert 'status' in lup
+    assert '_id' in lup
+    assert ctx.m.get_state(lup['_id']) == 'READY'
     i = ctx.query.copy()
-    r = ctx.images.find_one({'_id': l['_id']})
+    r = ctx.images.find_one({'_id': lup['_id']})
     assert 'expiration' in r
     assert r['expiration'] > time.time()
     i['tag'] = 'bogus'
-    l = ctx.m.lookup(session, i)
-    assert l is None
-
+    lup = ctx.m.lookup(session, i)
+    assert lup is None
 
 
 def test_list(ctx):
@@ -499,10 +508,11 @@ def test_list(ctx):
     session = ctx.m.new_session(ctx.auth, ctx.system)
     li = ctx.m.imglist(session, ctx.system)
     assert len(li) == 1
-    l = li[0]
-    assert '_id' in l
-    assert ctx.m.get_state(l['_id']) == 'READY'
-    assert l['_id'] == id1
+    lup = li[0]
+    assert '_id' in lup
+    assert ctx.m.get_state(lup['_id']) == 'READY'
+    assert lup['_id'] == id1
+
 
 def test_repull(ctx):
     # Test a repull
@@ -536,7 +546,7 @@ def test_repull_pr(ctx):
     session = ctx.m.new_session(ctx.auth, ctx.system)
     pull = ctx.m.pull(session, ctx.pull)
     assert pull
-    assert pull['status'] =='READY'
+    assert pull['status'] == 'READY'
 
 
 def test_repull_pr_pulling(ctx):
@@ -557,7 +567,7 @@ def test_repull_pr_pulling(ctx):
     session = ctx.m.new_session(ctx.auth, ctx.system)
     pull = ctx.m.pull(session, ctx.pull)
     assert pull
-    assert pull['status'] =='PULLING'
+    assert pull['status'] == 'PULLING'
 
 
 def xtest_pull_testimage(ctx):
@@ -584,7 +594,7 @@ def xtest_pull_testimage(ctx):
     id2 = rec['_id']
     assert id == id2
     q = {'system': ctx.system, 'itype': ctx.itype,
-            'pulltag': {'$in': ['scanon/shanetest:latest']}}
+         'pulltag': {'$in': ['scanon/shanetest:latest']}}
     mrec = ctx.images.find_one(q)
     assert '_id' in mrec
     # Track through transistions
@@ -626,7 +636,6 @@ def test_pull_mocked(ctx):
     state = ctx.mtm.get_state(id)
     assert state == 'FAILURE'
     ctx.mtm.workers.set_mode(1)
-
 
 
 def test_pull2(ctx):
@@ -698,7 +707,6 @@ def test_checkread(ctx):
     assert ctx.m._checkread({'uid': 7, 'gid': 7}, mock_image) is False
 
 
-
 def test_pulls_acl_change(ctx):
     """
     This simulates a pull inflight + an ACL pull
@@ -720,6 +728,7 @@ def test_pulls_acl_change(ctx):
     }
     rec = ctx.m.pull(session, pr)  # ,delay=False)
     assert rec['status'] == 'PULLING'
+
 
 def test_pull_logic(ctx):
     """
@@ -781,7 +790,6 @@ def test_pull_logic(ctx):
     # ctx.assertEquals(rec2['status'], 'PENDING')
 
 
-
 def test_pull_public_acl(ctx):
     """
     Pulling a public image with ACLs should ignore the acls.
@@ -802,7 +810,7 @@ def test_pull_public_acl(ctx):
     assert rec
     # Confirm record
     q = {'system': ctx.system, 'itype': ctx.itype,
-            'pulltag': ctx.tag}
+         'pulltag': ctx.tag}
     state = time_wait(ctx, id)
     mrec = ctx.images.find_one(q)
     assert '_id' in mrec
@@ -815,6 +823,7 @@ def test_pull_public_acl(ctx):
     assert 'ENV' in mrec
     assert 'private' in mrec
     assert mrec['private'] is False
+
 
 def test_pull_public_acl_token(ctx):
     """
@@ -840,7 +849,7 @@ def test_pull_public_acl_token(ctx):
     assert rec
     # Confirm record
     q = {'system': ctx.system, 'itype': ctx.itype,
-            'pulltag': ctx.public}
+         'pulltag': ctx.public}
     mrec = ctx.images.find_one(q)
     assert '_id' in mrec
     assert 'userACL' in mrec
@@ -851,6 +860,7 @@ def test_pull_public_acl_token(ctx):
     mrec = ctx.images.find_one(q)
     assert 'private' in mrec
     assert mrec['private'] is False
+
 
 def test_pull_acl(ctx):
     """
@@ -878,7 +888,7 @@ def test_pull_acl(ctx):
     id = rec['_id']
     # Confirm record
     q = {'system': ctx.system, 'itype': ctx.itype,
-            'pulltag': ctx.private}
+         'pulltag': ctx.private}
     mrec = ctx.images.find_one(q)
     assert '_id' in mrec
     assert 'userACL' in mrec
@@ -924,6 +934,7 @@ def test_pull_acl(ctx):
     kv = ctx.read_metafile(mf)
     ctx.images.delete_many({})
 
+
 def test_import(ctx):
     """
     Basic import test
@@ -955,11 +966,11 @@ def test_import(ctx):
     assert 'ENTRY' in imagerec
     assert 'ENV' in imagerec
 
+
 # TODO: Write a test that tries to update an image the
 # user doesn't have permissions to
 def test_acl_update_denied(ctx):
     pass
-
 
 
 def test_expire_remote(ctx):
@@ -970,7 +981,7 @@ def test_expire_remote(ctx):
     assert id
     # Create a bogus image file
     file, metafile = create_fakeimage(ctx, system, record['id'],
-                                            ctx.format)
+                                      ctx.format)
     session = ctx.m.new_session(ctx.authadmin, system)
     er = {'system': system, 'tag': ctx.tag, 'itype': ctx.itype}
     rec = ctx.m.expire(session, er)  # ,delay=False)
@@ -980,6 +991,7 @@ def test_expire_remote(ctx):
     assert state == 'EXPIRED'
     assert os.path.exists(file) is False
     assert os.path.exists(metafile) is False
+
 
 def test_expire_local(ctx):
     record = good_record(ctx)
@@ -990,7 +1002,7 @@ def test_expire_local(ctx):
     assert id
     # Create a bogus image file
     file, metafile = create_fakeimage(ctx, system, record['id'],
-                                            ctx.format)
+                                      ctx.format)
     session = ctx.m.new_session(ctx.authadmin, system)
     er = {'system': system, 'tag': ctx.tag, 'itype': ctx.itype}
     rec = ctx.m.expire(session, er)  # ,delay=False)
@@ -1001,6 +1013,7 @@ def test_expire_local(ctx):
     assert os.path.exists(file) is False
     assert os.path.exists(metafile) is False
 
+
 def test_expire_noadmin(ctx):
     record = good_record(ctx)
     # Create a fake record in mongo
@@ -1008,16 +1021,17 @@ def test_expire_noadmin(ctx):
     assert id
     # Create a bogus image file
     file, metafile = create_fakeimage(ctx, ctx.system, record['id'],
-                                            ctx.format)
+                                      ctx.format)
     session = ctx.m.new_session(ctx.auth, ctx.system)
     er = {'system': ctx.system, 'tag': ctx.tag, 'itype': ctx.itype}
-    rec = ctx.m.expire(session, er)  # ,delay=False)
+    _ = ctx.m.expire(session, er)  # ,delay=False)
     # assert rec
     time.sleep(2)
     state = ctx.m.get_state(id)
     assert state == 'READY'
     assert os.path.exists(file)
     assert os.path.exists(metafile)
+
 
 def test_autoexpire_stuckpull(ctx):
     record = good_pullrecord(ctx)
@@ -1030,6 +1044,7 @@ def test_autoexpire_stuckpull(ctx):
     state = ctx.m.get_state(id)
     assert state is None
 
+
 def test_autoexpire_recentpull(ctx):
     record = good_pullrecord(ctx)
     record['status'] = 'PENDING'
@@ -1040,6 +1055,7 @@ def test_autoexpire_recentpull(ctx):
     state = ctx.m.get_state(id)
     assert state == 'PENDING'
 
+
 def test_autoexpire(ctx):
     record = good_record(ctx)
 
@@ -1049,7 +1065,7 @@ def test_autoexpire(ctx):
     assert id
     # Create a bogus image file
     file, metafile = create_fakeimage(ctx, ctx.system, record['id'],
-                                            ctx.format)
+                                      ctx.format)
     session = ctx.m.new_session(ctx.authadmin, ctx.system)
     ctx.m.autoexpire(session, ctx.system)  # ,delay=False)
     time.sleep(5)
@@ -1067,7 +1083,7 @@ def test_autoexpire_dontexpire(ctx):
     assert id
     # Create a bogus image file
     file, metafile = create_fakeimage(ctx, ctx.system, record['id'],
-                                            ctx.format)
+                                      ctx.format)
     session = ctx.m.new_session(ctx.authadmin, ctx.system)
     ctx.m.autoexpire(session, ctx.system)  # ,delay=False)
     time.sleep(2)
@@ -1086,7 +1102,7 @@ def test_autoexpire_othersystem(ctx):
     assert id
     # Create a bogus image file
     file, metafile = create_fakeimage(ctx, ctx.system, record['id'],
-                                            ctx.format)
+                                      ctx.format)
     session = ctx.m.new_session(ctx.authadmin, ctx.system)
     ctx.m.autoexpire(session, ctx.system)  # ,delay=False)
     time.sleep(2)
@@ -1094,6 +1110,7 @@ def test_autoexpire_othersystem(ctx):
     assert state == 'READY'
     assert os.path.exists(file) is True
     assert os.path.exists(metafile) is True
+
 
 def test_metrics(ctx):
     rec = {
@@ -1137,7 +1154,7 @@ def test_status_thread(ctx):
     # Create a fake response and queue it
     ctx.m.status_queue.put(m)
     ctx.m.status_queue.put('stop')
-    ctx.m.status_thread()
+    ctx.m.status_thread(config=ctx.config)
     rec = ctx.images.find_one({'_id': id})
     assert rec['status'] == 'READY'
     # Now do a meta_only update
@@ -1157,11 +1174,10 @@ def test_status_thread(ctx):
     m['meta']['response']['private'] = True
     ctx.m.status_queue.put(m)
     ctx.m.status_queue.put('stop')
-    ctx.m.status_thread()
+    ctx.m.status_thread(ctx.config)
     rec = ctx.images.find_one()
     assert 'userACL' in rec
     rec['private'] is True
-
 
 
 def test_pull_multiple_tags(ctx):
@@ -1181,7 +1197,7 @@ def test_pull_multiple_tags(ctx):
     assert rec
     # Confirm record
     q = {'system': ctx.system, 'itype': ctx.itype,
-            'pulltag': ctx.public}
+         'pulltag': ctx.public}
     mrec = ctx.images.find_one(q)
     assert '_id' in mrec
     # Track through transistions
@@ -1206,10 +1222,10 @@ def test_pull_multiple_tags(ctx):
     ctx.public in mrec['tag']
     assert newtag in mrec['tag']
 
+
 def test_labels(ctx):
     # Need use_external
     conf = deepcopy(ctx.config)
-    conf['Platforms']['systema']['use_external'] = True
     os.environ['ENABLE_LABELS'] = "1"
     m = ImageMngr(conf, logger=ctx.logger)
     # Use defaults for format, arch, os, ostcount, replication
@@ -1230,4 +1246,3 @@ def test_labels(ctx):
     assert 'LABELS' in look
     assert 'alabel' in look['LABELS']
     ctx.images.drop()
-

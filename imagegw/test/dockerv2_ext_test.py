@@ -20,10 +20,8 @@ import os
 from shifter_imagegw.dockerv2_ext import DockerV2ext
 from shifter_imagegw.util import rmtree
 import tempfile
-import shutil
 import json
 import base64
-import json
 import pytest
 
 
@@ -171,8 +169,8 @@ def test_private(test_dir):
     dock = DockerV2ext(image)
     with pytest.raises(OSError):
         dock._auth_file()
-    opt = {'username': 'foo', 
-           'password': 'bar', 
+    opt = {'username': 'foo',
+           'password': 'bar',
            'policy_file': test_dir + 'policy.json'
            }
     dock = DockerV2ext(image, options=opt)
@@ -190,4 +188,3 @@ def test_policyfile(test_dir):
     opt = {'policy_file': pf}
     dock = DockerV2ext(image, options=opt)
     assert pf == dock.policy_file
-

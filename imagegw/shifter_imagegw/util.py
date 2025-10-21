@@ -74,6 +74,7 @@ def which(program):
 
     return None
 
+
 def rmtree(path):
     def remove_readonly(func, path, _):
         "Clear the readonly bit and reattempt the removal"

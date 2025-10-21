@@ -32,6 +32,7 @@ from multiprocessing.pool import ThreadPool
 from time import time
 from shifter_imagegw import converters, transfer
 from shifter_imagegw.dockerv2_ext import DockerV2ext
+from shifter_imagegw.config import Config
 
 
 class Updater(object):
@@ -68,15 +69,10 @@ class WorkerThreads(object):
         self.pools = ThreadPool(processes=threads)
         self.updater_queue = Queue()
         self.conf = conf
-        if 'CacheDirectory' in conf:
-            if not os.path.exists(conf['CacheDirectory']):
-                os.mkdir(conf['CacheDirectory'])
-        if 'ExpandDirectory' in conf:
-            if not os.path.exists(conf['ExpandDirectory']):
-                os.mkdir(conf['ExpandDirectory'])
-        if 'ConvertOptions' in conf and \
-           not isinstance(conf['ConverterOptions'], dict):
-            raise ValueError('ConverterOptions must be a dictionary')
+        if not os.path.exists(conf.CacheDirectory):
+            os.mkdir(conf.CacheDirectory)
+        if not os.path.exists(conf.ExpandDirectory):
+            os.mkdir(conf.ExpandDirectory)
 
     def get_updater_queue(self):
         return self.updater_queue
@@ -137,17 +133,16 @@ class WorkerThreads(object):
 
 
 class ImageRequest(object):
-    def __init__(self, conf, request, updater):
+    def __init__(self, conf: Config, request, updater):
         self.conf = conf
         self.updater = updater
-        self.fmt = self.conf['DefaultImageFormat']
+        self.fmt = self.conf.DefaultImageFormat
         if 'format' in request:
             self.fmt = request['format']
         self.system = request['system']
-        if self.system not in self.conf['Platforms']:
-            raise KeyError('%s is not in the configuration' %
-                           self.system)
-        self.sysconf = self.conf['Platforms'][self.system]
+        if self.system not in self.conf.Platforms:
+            raise KeyError(f'{self.system} is not in the configuration')
+        self.sysconf = self.conf.Platforms[self.system]
         self.tag = request.get('tag')
         self.id = request.get('id')
         self.meta = None
@@ -169,35 +164,35 @@ class ImageRequest(object):
 
     def _get_cacert(self, location):
         """ Private method to get the cert location """
-        params = self.conf['Locations'][location]
+        loc = self.conf.Locations[location]
         cacert = None
         currdir = os.getcwd()
-        if 'sslcacert' in params:
-            if params['sslcacert'].startswith('/'):
-                cacert = params['sslcacert']
+        if loc.sslcacert:
+            if loc.sslcacert.startswith('/'):
+                cacert = loc.sslcacert
             else:
-                cacert = '%s/%s' % (currdir, params['sslcacert'])
+                cacert = f'{currdir}/{loc.sslcacert}'
             if not os.path.exists(cacert):
-                raise OSError('%s does not exist' % cacert)
+                raise OSError(f'{cacert} does not exist')
         return cacert
 
     def _pull_dockerv2(self, location, repo, tag):
         """ Private method to pull a docker images. """
-        cdir = self.conf['CacheDirectory']
-        edir = self.conf['ExpandDirectory']
-        params = self.conf['Locations'][location]
+        cdir = self.conf.CacheDirectory
+        edir = self.conf.ExpandDirectory
+        loc = self.conf.Locations[location]
         cacert = self._get_cacert(location)
 
-        url = 'https://%s' % location
-        if 'url' in params:
-            url = params['url']
+        url = f'https://{location}'
+        if loc.url:
+            url = loc.url
         try:
             options = {}
             if cacert is not None:
                 options['cacert'] = cacert
             options['baseUrl'] = url
-            if 'authMethod' in params:
-                options['authMethod'] = params['authMethod']
+            # if loc.authMethod:
+            #     options['authMethod'] = loc.authMethod
 
             if (self.tokens):
                 if location in self.tokens:
@@ -208,10 +203,10 @@ class ImageRequest(object):
                     userpass = self.tokens['default']
                     options['username'] = userpass.split(':')[0]
                     options['password'] = ''.join(userpass.split(':')[1:])
-            imgid = '%s:%s' % (repo, tag)
-            options['policy_file'] = self.sysconf.get("policy_file")
+            imgid = f'{repo}:{tag}'
+            options['policy_file'] = self.sysconf.policy_file
             dock = DockerV2ext(imgid, options, updater=self.updater,
-                                   cachedir=cdir)
+                               cachedir=cdir)
             self.updater.update_status("PULLING", 'Getting manifest')
             self.meta = dock.examine_manifest()
             # Get the ID
@@ -230,9 +225,9 @@ class ImageRequest(object):
             dock.extract_docker_layers(self.expandedpath)
             return True
         except Exception as e:
-            logging.warning(sys.exc_info()[1])
+            logging.warning(str(e))
             traceback.print_exc()
-            raise(e)
+            raise e
 
         return False
 
@@ -246,11 +241,11 @@ class ImageRequest(object):
         rtype = None
 
         # See if there is a location specified
-        location = self.conf['DefaultImageLocation']
+        location = self.conf.DefaultImageLocation
         tag = self.tag
         if tag.find('/') > 0:
             parts = tag.split('/')
-            if parts[0] in self.conf['Locations']:
+            if parts[0] in self.conf.Locations:
                 # This is a location
                 location = parts[0]
                 tag = '/'.join(parts[1:])
@@ -259,15 +254,14 @@ class ImageRequest(object):
         if len(parts) == 2:
             (repo, tag) = parts
         else:
-            raise OSError('Unable to parse tag %s' % self.tag)
-        logging.debug("doing image pull for loc=%s repo=%s tag=%s", location,
-                      repo, tag)
+            raise OSError(f'Unable to parse tag {self.tag}')
+        logging.debug(f"doing image pull for loc={location} repo={repo} tag={tag}")
 
-        if location in self.conf['Locations']:
-            params = self.conf['Locations'][location]
-            rtype = params['remotetype']
+        if location in self.conf.Locations:
+            params = self.conf.Locations[location]
+            rtype = params.remotetype
         else:
-            raise KeyError('%s not found in configuration' % location)
+            raise KeyError(f'{location} not found in configuration')
 
         if rtype == 'dockerv2':
             return self._pull_dockerv2(location, repo, tag)
@@ -276,7 +270,7 @@ class ImageRequest(object):
             msg = 'dockerhub type is depcreated. Use dockerv2'
             raise NotImplementedError(msg)
         else:
-            raise NotImplementedError('Unsupported remote type %s' % rtype)
+            raise NotImplementedError(f'Unsupported remote type {rtype}')
         return False
 
     def _examine_image(self):
@@ -286,8 +280,8 @@ class ImageRequest(object):
         Returns True on success
         """
 
-        if 'examiner' in self.conf:
-            examiner = self.conf['examiner']
+        if self.conf.examiner:
+            examiner = self.conf.examiner
             retcode = subprocess.call([examiner, self.expandedpath,
                                       self.id])
             if retcode != 0:
@@ -301,14 +295,13 @@ class ImageRequest(object):
 
         Returns True on success
         """
-        edir = self.conf['ExpandDirectory']
-        if 'ConverterOptions' in self.conf:
-            opts = self.conf['ConverterOptions']
+        edir = self.conf.ExpandDirectory
+        if self.conf.ConverterOptions:
+            opts = self.conf.ConverterOptions
         else:
             opts = None
 
-        imagefile = os.path.join(edir, '%s.%s' % (self.id,
-                                                  self.fmt))
+        imagefile = os.path.join(edir, f'{self.id}.{self.fmt}')
         self.imagefile = imagefile
 
         status = converters.convert(self.fmt,
@@ -325,7 +318,7 @@ class ImageRequest(object):
         self.meta['userACL'] = self.userACL
         self.meta['groupACL'] = self.groupACL
 
-        edir = self.conf['ExpandDirectory']
+        edir = self.conf.ExpandDirectory
 
         # initially write metadata to tempfile
         (fdesc, metafile) = tempfile.mkstemp(prefix=self.id,
@@ -337,7 +330,7 @@ class ImageRequest(object):
         status = converters.writemeta(self.fmt, self.meta, metafile)
 
         # after success move to final name
-        final_metafile = os.path.join(edir, '%s.meta' % (self.id))
+        final_metafile = os.path.join(edir, f'{self.id}.meta')
         shutil.move(metafile, final_metafile)
         self.metafile = final_metafile
 
@@ -349,8 +342,8 @@ class ImageRequest(object):
 
         Returns True on success
         """
-        image_filename = "%s.%s" % (self.id, self.fmt)
-        image_metadata = "%s.meta" % (self.id)
+        image_filename = f"{self.id}.{self.fmt}"
+        image_metadata = f"{self.id}.meta"
 
         return transfer.imagevalid(self.sysconf, image_filename,
                                    image_metadata, logging)
@@ -384,12 +377,11 @@ class ImageRequest(object):
 
         Returns True on success
         """
-        logging.debug("do expire system=%s tag=%s", self.system,
-                      self.tag)
+        logging.debug(f"do expire system={self.system} tag={self.tag}")
         self.updater.update_status('EXPIRING', 'EXPIRING')
 
-        imagefile = self.id + '.' + self.fmt
-        meta = self.id + '.meta'
+        imagefile = f'{self.id}.{self.fmt}'
+        meta = f'{self.id}.meta'
         if self.metafile:
             meta = self.metafile
         if transfer.remove(self.sysconf, imagefile, meta, logging):
@@ -416,25 +408,22 @@ class ImageRequest(object):
                 cleanitem = str(cleanitem)
 
             if not isinstance(cleanitem, str):
-                raise ValueError('Invalid type for %s,%s' %
-                                 (cleanitem, type(cleanitem)))
+                raise ValueError(f'Invalid type for {cleanitem},{type(cleanitem)}')
             if cleanitem == '' or cleanitem == '/':
-                raise ValueError('Invalid value for %s: %s' %
-                                 (cleanitem, cleanitem))
-            if not cleanitem.startswith(self.conf['ExpandDirectory']):
-                raise ValueError('Invalid location for %s: %s' %
-                                 (cleanitem, cleanitem))
+                raise ValueError(f'Invalid value for {cleanitem}: {cleanitem}')
+            if not cleanitem.startswith(self.conf.ExpandDirectory):
+                raise ValueError(f'Invalid location for {cleanitem}: {cleanitem}')
             if os.path.exists(cleanitem):
-                logging.info("Worker: removing %s", cleanitem)
+                logging.info(f"Worker: removing {cleanitem}")
                 try:
                     subprocess.call(['chmod', '-R', 'u+w', cleanitem])
                     if os.path.isdir(cleanitem):
                         shutil.rmtree(cleanitem, ignore_errors=True)
                     else:
                         os.unlink(cleanitem)
-                except:
+                except Exception:
                     logging.error("Worker: caught exception while trying to "
-                                  "clean up %s.", cleanitem)
+                                  f"clean up {cleanitem}")
 
     def pull(self):
         """
@@ -456,12 +445,12 @@ class ImageRequest(object):
             if not self._check_image():
                 # Step 2 - Check the image
                 self.updater.update_status('EXAMINATION', 'Examining image')
-                logging.debug("Worker: examining image %s" % tag)
+                logging.debug(f"Worker: examining image {tag}")
                 if not self._examine_image():
                     raise OSError('Examine failed')
                 # Step 3 - Convert
                 self.updater.update_status('CONVERSION', 'Converting image')
-                logging.debug("Worker: converting image %s" % tag)
+                logging.debug(f"Worker: converting image {tag}")
                 if not self._convert_image():
                     raise OSError('Conversion failed')
                 if not self._write_metadata():
@@ -474,8 +463,7 @@ class ImageRequest(object):
             else:
                 self.meta_only = True
                 self.meta['meta_only'] = True
-                logging.debug("Updating metdata for %s" %
-                              (self.tag))
+                logging.debug(f"Updating metdata for {self.tag}")
                 if not self._write_metadata():
                     raise OSError('Metadata creation failed')
                 self.updater.update_status('TRANSFER', 'Transferring metadata')
@@ -491,14 +479,13 @@ class ImageRequest(object):
             return self.meta
 
         except Exception as e:
-            logging.error("ERROR: dopull failed system=%s tag=%s",
-                          self.system, self.tag)
+            logging.error(f"ERROR: dopull failed system={self.system} tag={self.tag}")
             print(sys.exc_info()[1])
             self.updater.update_status('FAILURE', 'FAILED')
 
             # TODO: add a debugging flag and only disable cleanup if debugging
             self._cleanup_temporary()
-            raise(e)
+            raise e
 
     def img_import(self):
         """
@@ -506,8 +493,7 @@ class ImageRequest(object):
         """
         tag = self.tag
         self.import_image = True
-        logging.debug("img_import system=%s tag=%s",
-                      self.system, tag)
+        logging.debug(f"img_import system={self.system} tag={tag}")
         try:
             # Step 0 - Check if path is valid
             if not transfer.check_file(self.filepath,
@@ -533,7 +519,7 @@ class ImageRequest(object):
                 raise OSError('Metadata creation failed')
             # Step 3 - Copy image and meta file from user space to shifter area
             logging.debug("starting transfer")
-            imgfile = self.id + '.' + self.fmt
+            imgfile = f'{self.id}.{self.fmt}'
             self.imagefile = imgfile
             self.meta['id'] = self.id
             self.updater.update_status('TRANSFER', 'TRANSFER')
@@ -547,9 +533,8 @@ class ImageRequest(object):
             self._cleanup_temporary()
             return self.meta
 
-        except:
-            logging.error("ERROR: img_import failed system=%s tag=%s",
-                          self.system, self.tag)
+        except Exception:
+            logging.error(f"ERROR: img_import failed system={self.system} tag={self.tag}")
             print(sys.exc_info()[1])
             self.updater.update_status('FAILURE', 'FAILED')
 
