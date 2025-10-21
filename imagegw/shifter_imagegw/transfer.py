@@ -49,20 +49,20 @@ def _exec_and_log(cmd, logger):
     Execute a command and log the results to logger
     """
     if logger is not None:
-        logger.info("about to exec: %s" % ' '.join(cmd))
+        logger.info(f"about to exec: {' '.join(cmd)}")
     proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
     if proc is None:
         if logger is not None:
-            logger.error("Could not execute '%s'" % ' '.join(cmd))
+            logger.error(f"Could not execute {' '.join(cmd)}")
         return
     bstdout, bstderr = proc.communicate()
     stdout = bstdout.decode("utf-8")
     stderr = bstderr.decode("utf-8")
     if logger is not None:
         if stdout is not None and len(stdout) > 0:
-            logger.debug("%s stdout: %s" % (cmd[0], stdout.strip()))
+            logger.debug("{cmd[0]} stdout: {stdout.strip()}")
         if stderr is not None and len(stderr) > 0:
-            logger.error("%s stderr: %s" % (cmd[0], stderr.strip()))
+            logger.error("{cmd[0]} stdout: {stdoerr.strip()}")
     return proc.returncode
 
 
@@ -71,22 +71,22 @@ def _get_stdout_and_log(cmd, logger=None):
     Execute a command and return stdout and stderr. Log the results to logger
     """
     if logger is not None:
-        logger.info("about to exec: %s" % ' '.join(cmd))
+        logger.info(f"about to exec: {' '.join(cmd)}")
     rerror = ''
     proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
     if proc is None:
         if logger is not None:
-            logger.debug("Could not execute '%s'" % ' '.join(cmd))
-            rerror = "Could not execute '%s'" % ' '.join(cmd)
+            rerror = f"Could not execute {' '.join(cmd)}"
+            logger.error(rerror)
         return rerror, ''
     bstdout, bstderr = proc.communicate()
     stdout = bstdout.decode("utf-8")
     stderr = bstderr.decode("utf-8")
     if logger is not None:
         if stdout is not None and len(stdout) > 0:
-            logger.debug("%s stdout: %s" % (cmd[0], stdout.strip()))
+            logger.debug("{cmd[0]} stdout: {stdout.strip()}")
         if stderr is not None and len(stderr) > 0:
-            logger.debug("%s stderr: %s" % (cmd[0], stderr.strip()))
+            logger.error("{cmd[0]} stdout: {stdoerr.strip()}")
             # push this error back to calling function so
             # it can be reported sensibly
             rerror = "%s %s" % (cmd[0], stderr.strip())
@@ -104,7 +104,7 @@ def pre_create_tempfile(basepath, filename, sh_cmd, system, logger=None):
 
     cmd = sh_cmd(system, 'mktemp', temp_fn)
     if logger is not None:
-        logger.info('about to exec: %s' % ' '.join(cmd))
+        logger.info(f"about to exec: {' '.join(cmd)}")
     proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
     temp_fn = None
     if proc is not None:
@@ -114,11 +114,11 @@ def pre_create_tempfile(basepath, filename, sh_cmd, system, logger=None):
         if proc.returncode == 0:
             temp_fn = stdout.strip()
         else:
-            memo = 'Failed to precreate transfer file, %s (%d)' \
-                   % (stderr, proc.returncode)
+            memo = 'Failed to precreate transfer file, ' \
+                   f'{stderr} {str(proc.returncode)}'
             raise OSError(memo)
         if len(stderr) > 0 and logger is not None:
-            logger.error("%s" % (stderr.strip()))
+            logger.error(str(stderr.strip()))
     chmod_cmd = sh_cmd(system, 'chmod', '0600', temp_fn)
     ret = _exec_and_log(chmod_cmd, logger)
     if ret != 0:
@@ -147,8 +147,8 @@ def copy_file(filename, system, logger=None):
         raise OSError('Got no valid response back from tempfile precreation')
 
     if not temp_fn.startswith(basepath):
-        memo = 'Got unexpected response back from tempfile precreation: %s' \
-               % temp_fn
+        memo = 'Got unexpected response back from tempfile precreation: ' \
+               f'{temp_fn}'
         raise OSError(memo)
 
     copyret = None
@@ -214,8 +214,8 @@ def import_copy_file(filename, destfilename, system, logger=None):
         raise OSError('Got no valid response back from tempfile precreation')
 
     if not temp_fn.startswith(basepath):
-        memo = 'Got unexpected response back from tempfile precreation: %s' \
-               % temp_fn
+        memo = 'Got unexpected response back from tempfile precreation: ' \
+               f'{temp_fn}'
         raise OSError(memo)
 
     copyret = None
@@ -284,9 +284,9 @@ def hash_file(filename, system, logger=None):
     hash_cmd = sh_cmd(system, 'fasthash', filename)
     ret = _get_stdout_and_log(hash_cmd, logger)
     if len(ret[0]) != 0:
-        raise OSError("Error calculating hash: %s" % (ret[0]))
+        raise OSError("Error calculating hash: {ret[0]}")
     if logger is not None:
-        logger.info("fasthash returning: %s" % ret[1])
+        logger.info("fasthash returning: {ret[1]}")
     # return hash, strip off new line at end
     return ret[1].strip()
 
@@ -311,7 +311,7 @@ def transfer(system, image_path, metadata_path=None, logger=None,
         if image_path is None or copy_file(image_path, system, logger):
             return True
     if logger is not None:
-        logger.error("Transfer of %s failed" % image_path)
+        logger.error(f"Transfer of {image_path} failed")
     return False
 
 

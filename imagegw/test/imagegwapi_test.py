@@ -99,7 +99,7 @@ def api_ctx():
         'test_dir': os.path.dirname(os.path.abspath(__file__)) + "/../test/",
     }
     ctx['tag'] = urllib.parse.quote(ctx['itag'])
-    ctx['urlreq'] = "%s/%s/%s" % (ctx['system'], ctx['itype'], ctx['tag'])
+    ctx['urlreq'] = "/".join([ctx['system'], ctx['itype'], ctx['tag']])
 
     yield ctx
 
@@ -108,7 +108,7 @@ def time_wait(app, url, auth, urlreq, data=None, state='READY', op='pull', TIMEO
     poll_interval = 0.5
     count = TIMEOUT / poll_interval
     cstate = 'UNKNOWN'
-    uri = '%s/%s/%s' % (url, op, urlreq)
+    uri = '/'.join([url, op, urlreq])
     while (cstate != state and count > 0):
         if op == 'pull':
             response = app.post(uri, json=data, headers={AUTH_HEADER: auth})
@@ -124,7 +124,7 @@ def time_wait(app, url, auth, urlreq, data=None, state='READY', op='pull', TIMEO
         if r['status'] == 'FAILURE':
             break
         if DEBUG:
-            print('  %s...' % (r['status']))
+            print(f'  {r["status"]}')
         time.sleep(1)
         count = count - 1
     return response
@@ -147,7 +147,7 @@ def good_record(ctx):
 
 def test_pull1(api_ctx):
     with TestClient(api.app) as client:
-        uri = '%s/pull/%s' % (api_ctx['url'], api_ctx['urlreq'])
+        uri = f'{api_ctx["url"]}/pull/{api_ctx["urlreq"]}'
         data = {'allowed_uids': '1000,1001',
                 'allowed_gids': '1002,1003'}
         response = client.post(uri, json=data, headers={AUTH_HEADER: api_ctx['auth']})
@@ -164,22 +164,22 @@ def test_pull1(api_ctx):
 
 def test_list(api_ctx):
     with TestClient(api.app) as client:
-        uri = '%s/list/%s' % (api_ctx['url'], 'systemc')
+        uri = "/".join([api_ctx["url"], 'list', 'systemc'])
         response = client.get(uri, headers={AUTH_HEADER: api_ctx['auth']})
         assert response.status_code == 404
         rv = time_wait(client, api_ctx['url'], api_ctx['auth'], api_ctx['urlreq'])
         assert rv.status_code == 200
-        uri = '%s/list/%s' % (api_ctx['url'], api_ctx['system'])
+        uri = "/".join([api_ctx["url"], 'list', api_ctx['system']])
         response = client.get(uri, headers={AUTH_HEADER: api_ctx['auth']})
         assert response.status_code == 200
 
 
 def test_queue(api_ctx):
     with TestClient(api.app) as client:
-        uri = '%s/pull/%s' % (api_ctx['url'], api_ctx['urlreq'])
+        uri = "/".join([api_ctx["url"], 'pull', api_ctx['urlreq']])
         response = client.post(uri, headers={AUTH_HEADER: api_ctx['auth']})
         assert response.status_code == 200
-        uri = '%s/queue/%s' % (api_ctx['url'], api_ctx['system'])
+        uri = "/".join([api_ctx["url"], 'queue', api_ctx['system']])
         response = client.get(uri, headers={AUTH_HEADER: api_ctx['auth']})
         assert response.status_code == 200
 
@@ -187,10 +187,10 @@ def test_queue(api_ctx):
 def test_pulllookup(api_ctx):
     with TestClient(api.app) as client:
         time_wait(client, api_ctx['url'], api_ctx['auth'], api_ctx['urlreq'])
-        uri = '%s/lookup/%s' % (api_ctx['url'], api_ctx['urlreq'])
+        uri = "/".join([api_ctx["url"], 'lookup', api_ctx['urlreq']])
         response = client.get(uri, headers={AUTH_HEADER: api_ctx['auth']})
         assert response.status_code == 200
-        uri = '%s/lookup/%s/%s/%s' % (api_ctx['url'], api_ctx['system'], api_ctx['itype'], 'bogus')
+        uri = "/".join([api_ctx["url"], 'lookup', api_ctx['system'], api_ctx['itype'], 'bogus'])
         response = client.get(uri, headers={AUTH_HEADER: api_ctx['auth']})
         assert response.status_code == 404
 
@@ -200,15 +200,15 @@ def test_lookup(api_ctx):
         record = good_record(api_ctx)
         id = api_ctx['images'].insert_one(record).inserted_id
         assert id is not None
-        uri = '%s/lookup/%s' % (api_ctx['url'], api_ctx['urlreq'])
+        uri = "/".join([api_ctx["url"], 'lookup', api_ctx['urlreq']])
         response = client.get(uri, headers={AUTH_HEADER: api_ctx['auth']})
         assert response.status_code == 200
 
 
 def test_expire(api_ctx):
     with TestClient(api.app) as client:
-        uri = '%s/expire/%s/%s/%s' % (api_ctx['url'], api_ctx['system'], api_ctx['itype'],
-                                      api_ctx['tag'])
+        uri = '/'.join([api_ctx['url'], 'expire', api_ctx['system'], api_ctx['itype'],
+                                      api_ctx['tag']])
         response = client.get(uri, headers={AUTH_HEADER: api_ctx['auth']})
         assert response.status_code == 200
 
@@ -218,7 +218,7 @@ def test_autoexpire(api_ctx):
         record = good_record(api_ctx)
         record['expiration'] = time.time() - 100
         id = api_ctx['images'].insert_one(record).inserted_id
-        uri = '%s/autoexpire/%s' % (api_ctx['url'], api_ctx['system'])
+        uri = '/'.join([api_ctx['url'], 'autoexpire', api_ctx['system']])
         response = client.get(uri, headers={AUTH_HEADER: api_ctx['authadmin']})
         assert response.status_code == 200
 
@@ -251,7 +251,7 @@ def test_metrics(api_ctx):
         last_time = rec['time']
         api_ctx['metrics'].insert_one(rec.copy()).inserted_id
     with TestClient(api.app) as client:
-        uri = '%s/metrics/%s?limit=20' % (api_ctx['url'], api_ctx['system'])
+        uri = f'{api_ctx["url"]}/metrics/{api_ctx["system"]}?limit=20'
         response = client.get(uri, headers={AUTH_HEADER: api_ctx['authadmin']})
         assert response.status_code == 200
         data = response.json()
@@ -262,7 +262,7 @@ def test_metrics(api_ctx):
 def test_import(api_ctx):
     with TestClient(api.app) as client:
         api_ctx['config'].ImportUsers = "all"
-        uri = '%s/doimport/%s' % (api_ctx['url'], api_ctx['urlreq'])
+        uri = '/'.join([api_ctx['url'], 'doimport', api_ctx['urlreq']])
         ifile = os.path.join(api_ctx['test_dir'], 'test.squashfs')
         data = {'filepath': ifile,
                 'format': 'squashfs'}
@@ -278,12 +278,12 @@ def test_import(api_ctx):
 def test_labels(api_ctx):
     os.environ['ENABLE_LABELS'] = "1"
     with TestClient(api.app) as client:
-        uri = '%s/pull/%s' % (api_ctx['url'], api_ctx['urlreq'])
+        uri = f'{api_ctx["url"]}/pull/{api_ctx["urlreq"]}'
         client.post(uri, headers={AUTH_HEADER: api_ctx['auth']})
         time.sleep(1)
         response = client.post(uri, headers={AUTH_HEADER: api_ctx['auth']})
         assert response.json()['status'] == 'READY'
-        uri = '%s/lookup/%s' % (api_ctx['url'], api_ctx['urlreq'])
+        uri = "/".join([api_ctx["url"], 'lookup', api_ctx['urlreq']])
         response = client.get(uri, headers={AUTH_HEADER: api_ctx['auth']})
         assert response.status_code == 200
         resp = response.json()

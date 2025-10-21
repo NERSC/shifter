@@ -85,7 +85,7 @@ class ImageMngr(object):
             self.logger.addHandler(log_handler)
         elif logname is not None:
             self.logger = logging.getLogger(logname)
-            self.logger.info('ImageMngr using logname %s' % (logname))
+            self.logger.info(f'ImageMngr using logname {logname}')
         else:
             print("Using upstream logger")
             self.logger = logger
@@ -147,9 +147,8 @@ class ImageMngr(object):
             meta = message['meta']
             # TODO: Handle a failed expire
             if state == "FAILURE":
-                self.logger.warning("Operation failed for %s", ident)
+                self.logger.warning(f"Operation failed for {ident}")
 
-            # print "Status: %s" % (state)
             # A response message
             if state != 'READY':
                 self.update_mongo_state(ident, state, meta)
@@ -162,7 +161,7 @@ class ImageMngr(object):
                     self.update_acls(ident, response)
                 else:
                     self.complete_pull(ident, response)
-                self.logger.debug('meta=%s', str(response))
+                self.logger.debug('meta={str(response)}')
 
     def check_session(self, session, system=None):
         """Check if this is a valid session
@@ -172,12 +171,12 @@ class ImageMngr(object):
             self.logger.warning("request recieved with no magic")
             return False
         elif session['magic'] is not self.magic:
-            self.logger.warning("request received with bad magic %s",
-                                session['magic'])
+            self.logger.warning("request received with bad magic "
+                                f"{session['magic']}")
             return False
         if system is not None and session['system'] != system:
-            self.logger.warning("request received with a bad system %s!=%s",
-                                session['system'], system)
+            self.logger.warning("request received with a bad system "
+                                f"{session['system']}!={system}")
             return False
         return True
 
@@ -191,7 +190,7 @@ class ImageMngr(object):
         admins = self.platforms[system].admins
         user = session['user']
         if user in admins:
-            self.logger.info('user %s is an admin', user)
+            self.logger.debug('user {user} is an admin')
             return True
         return False
 
@@ -201,7 +200,7 @@ class ImageMngr(object):
 
     def _get_groups(self, uid, gid):
         """Look up auxilary groups. """
-        proc = Popen(['id', '-G', '%d' % (uid)], stdout=PIPE, stderr=PIPE)
+        proc = Popen(['id', '-G', str(uid)], stdout=PIPE, stderr=PIPE)
         if proc is None:
             self.logger.warning("Group lookup failed")
             return []
@@ -231,7 +230,7 @@ class ImageMngr(object):
             return True
         uid = session['uid']
         gid = session['gid']
-        self.logger.debug('uid=%s iUACL=%s' % (uid, str(iUACL)))
+        self.logger.debug(f'uid={uid} iUACL={str(iUACL)}')
         self.logger.debug('sessions = ' + str(session))
         groups = self._get_groups(uid, gid)
         if iUACL is not None and uid in iUACL:
@@ -575,12 +574,12 @@ class ImageMngr(object):
             self.update_mongo_state(ident, 'PENDING')
             request['tag'] = request['pulltag']
             request['session'] = session
-            self.logger.debug("Calling do pull with queue=%s",
-                              request['system'])
+            self.logger.debug("Calling do pull with queue="
+                              f"{request['system']}")
             self.workers.dopull(ident, request)
 
-            memo = "pull request queued s=%s t=%s" \
-                % (request['system'], request['tag'])
+            memo = "pull request queued " \
+                   f"s={request['system']} tag={request['tag']}"
             self.logger.info(memo)
 
             self.update_mongo(ident, {'last_pull': time()})
@@ -603,8 +602,7 @@ class ImageMngr(object):
             'format': image['format'],
             'meta': meta
         }
-        self.logger.debug('mngrmport called for file %s' % (fp))
-        # self.logger.debug(image)
+        self.logger.debug(f'mngrmport called for file {fp}')
         if not self.check_session(session, request['system']):
             msg = f'Invalid session on system {request["system"]}'
             self.logger.warning(msg)
@@ -643,20 +641,18 @@ class ImageMngr(object):
         # new_pull_record works for import too
         rec = self.new_pull_record(request)
         ident = rec['_id']
-        self.logger.debug("PENDING Request, ident %s" % (ident))
+        self.logger.debug(f"PENDING Request, ident {ident}")
         self.update_mongo_state(ident, 'PENDING')
         request['tag'] = request['pulltag']
         request['session'] = session
-        self.logger.debug("Calling wrkimport with queue=%s",
-                          request['system'])
+        self.logger.debug("Calling wrkimport with queue="
+                          f"{request['system']}")
         self.workers.dowrkimport(ident, request)
 
-        memo = "import request queued s=%s t=%s" \
-            % (request['system'], request['tag'])
+        memo = "import request queued " \
+               f"s={request['system']} tag={request['tag']}"
         self.logger.info(memo)
-
         self.update_mongo(ident, {'last_pull': time()})
-
         return rec
 
     def update_mongo_state(self, ident, state, info=None):
@@ -685,7 +681,7 @@ class ImageMngr(object):
         rec = self._images_find_one({'_id': ident})
         if rec is not None and 'tag' in rec and \
                 not isinstance(rec['tag'], (list)):
-            memo = 'Fixing tag for non-list %s %s' % (ident, str(rec['tag']))
+            memo = f'Fixing tag for non-list {ident} {str(rec["tag"])}'
             self.logger.info(memo)
             curtag = rec['tag']
             self._images_update({'_id': ident}, {'$set': {'tag': [curtag]}})
@@ -701,11 +697,11 @@ class ImageMngr(object):
         return True
 
     def update_acls(self, ident, response):
-        self.logger.debug("Update ACLs called for %s %s", ident, str(response))
+        self.logger.debug(f"Update ACLs called for {ident} {str(response)}")
         pullrec = self._images_find_one({'_id': ident})
         if pullrec is None:
-            self.logger.error('ERROR: Missing pull request (r=%s)',
-                              str(response))
+            self.logger.error('ERROR: Missing pull request resp=',
+                              f'{str(response)}')
             return
         # Check that this image ident doesn't already exist for this system
         rec = self._images_find_one({'id': response['id'], 'status': 'READY',
@@ -739,10 +735,10 @@ class ImageMngr(object):
         Transition a completed pull request to an available image.
         """
 
-        self.logger.debug("Complete called for %s %s", ident, str(response))
+        self.logger.debug(f"Complete called for {ident} {str(response)}")
         pullrec = self._images_find_one({'_id': ident})
         if pullrec is None:
-            self.logger.warning('Missing pull request (r=%s)', str(response))
+            self.logger.warning(f'Missing pull request resp={str(response)}')
             return
         # Check that this image ident doesn't already exist for this system
         rec = self._images_find_one({'id': response['id'],
@@ -850,7 +846,7 @@ class ImageMngr(object):
             if 'expiration' not in rec:
                 continue
             elif rec['expiration'] < time():
-                self.logger.debug("expiring %s", rec['id'])
+                self.logger.debug(f"expiring {rec['id']}")
                 ident = rec.pop('_id')
                 self.expire_id(rec, ident)
                 if 'id' in rec:
@@ -862,13 +858,12 @@ class ImageMngr(object):
 
     def expire_id(self, rec, ident):
         """ Helper function to expire by id """
-        memo = "Calling do expire id=%s" \
-            % (ident)
+        memo = f"Calling do expire id={ident}"
         self.logger.debug(memo)
 
         self.workers.doexpire(ident, rec)
-        self.logger.info("expire request queued s=%s t=%s",
-                         rec['system'], ident)
+        self.logger.info("expire request queued "
+                         f"s={rec['system']} tag={ident}")
 
     def expire(self, session, image):
         """Expire an image.  (Not Implemented)"""
@@ -883,13 +878,13 @@ class ImageMngr(object):
         if rec is None:
             return None
         ident = rec.pop('_id')
-        memo = "Calling do expire with queue=%s id=%s" \
-            % (image['system'], ident)
+        memo = "Calling do expire with " \
+               f"queue={image['system']} id={ident}"
         self.logger.debug(memo)
         self.workers.doexpire(ident, rec)
 
-        memo = "expire request queued s=%s t=%s" \
-            % (image['system'], image['tag'])
+        memo = "expire request queued " \
+               f"s={image['system']} tag={image['tag']}"
         self.logger.info(memo)
 
         return True
@@ -976,7 +971,7 @@ def main():
         (req['system'], req['itype'], req['tag']) = sys.argv[0:3]
         mgr.pull('good', req)
     else:
-        print("Unknown command %s" % (command))
+        print("Unknown command {command}")
         usage()
 
 

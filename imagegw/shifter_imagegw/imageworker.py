@@ -457,7 +457,7 @@ class ImageRequest(object):
                     raise OSError('Metadata creation failed')
                 # Step 4 - TRANSFER
                 self.updater.update_status('TRANSFER', 'Transferring image')
-                logging.debug("Worker: transferring image %s", tag)
+                logging.debug(F"Worker: transferring image {tag}")
                 if not self._transfer_image():
                     raise OSError('Transfer failed')
             else:
@@ -467,8 +467,7 @@ class ImageRequest(object):
                 if not self._write_metadata():
                     raise OSError('Metadata creation failed')
                 self.updater.update_status('TRANSFER', 'Transferring metadata')
-                logging.debug("Worker: transferring metadata %s",
-                              self.tag)
+                logging.debug(f"Worker: transferring metadata {self.tag}")
                 if not self._transfer_image():
                     raise OSError('Transfer failed')
 
