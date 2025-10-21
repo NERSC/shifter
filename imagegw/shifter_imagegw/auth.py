@@ -100,7 +100,7 @@ class Authentication(object):
             raise OSError('Bad AuthString')
 
         if status != 'good':
-            raise OSError('Auth Failed st=%s' % status)
+            raise OSError(f'Auth Failed st={status}')
 
         return ret
 

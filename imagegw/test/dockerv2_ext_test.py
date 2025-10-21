@@ -28,7 +28,7 @@ import pytest
 class update():
 
     def update_status(self, state, message):
-        print(("%s: %s" % (state, message)))
+        print(f"{state}: {message}")
 
 
 @pytest.fixture(autouse=True)

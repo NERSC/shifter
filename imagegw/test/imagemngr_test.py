@@ -159,7 +159,7 @@ def time_wait(ctx, id, wstate='READY', TIMEOUT=30):
 def get_metafile(self, system, id):
     idir = self.config.Platforms[system].imageDir
 
-    metafile = os.path.join(idir, '%s.meta' % (id))
+    metafile = os.path.join(idir, f'{id}.meta')
     return metafile
 
 
@@ -168,10 +168,10 @@ def create_fakeimage(ctx, system, id, format):
 
     if os.path.exists(idir) is False:
         os.makedirs(idir)
-    file = os.path.join(idir, '%s.%s' % (id, format))
+    file = os.path.join(idir, f'{id}.{format}')
     with open(file, 'w') as f:
         f.write('')
-    metafile = os.path.join(idir, '%s.meta' % (id))
+    metafile = os.path.join(idir, f'{id}.meta')
     with open(metafile, 'w') as f:
         f.write('')
     return file, metafile

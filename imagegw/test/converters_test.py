@@ -59,7 +59,7 @@ def test_convert(converters_env):
     Test convert function using a mock format
     """
     opts = dict()
-    output = '%s/test.squashfs' % (converters_env['outdir'])
+    output = f'{converters_env["outdir"]}/test.squashfs'
     resp = converters.convert('mock', '', output)
     assert resp is True
     assert os.path.exists(output)
@@ -88,7 +88,7 @@ def test_convert_options(converters_env):
         'mock': [' blah']
     }
     path = converters_env['make_fake']()
-    output = '%s/test.mock' % (converters_env['outdir'])
+    output = f'{converters_env["outdir"]}/test.mock'
     if os.path.exists(output):
         os.remove(output)
     resp = converters.convert('mock', path, output, options=opts)
@@ -120,7 +120,7 @@ def test_writemeta(converters_env):
             'userACL': [1000, 1001],
             'groupACL': [1002, 1003],
             }
-    output = '%s/test.meta' % (converters_env['outdir'])
+    output = f'{converters_env["outdir"]}/test.meta'
     resp = converters.writemeta('squashfs', meta, output)
     assert resp is not None
     meta = {'ENV': []}
@@ -149,7 +149,7 @@ def test_ext4():
 
 def test_cramfs():
     with pytest.raises(NotImplementedError):
-	    converters.generate_cramfs_image('/tmp/b', '/tmp/blah', None)
+        converters.generate_cramfs_image('/tmp/b', '/tmp/blah', None)
 
 
 def test_squashfs():
