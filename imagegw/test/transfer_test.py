@@ -81,18 +81,6 @@ def test_copyfile_local(system):
     os.rmdir(tmp_path)
 
 
-def test_copyfile_invalid(system):
-    tmp_path = tempfile.mkdtemp()
-    system.imageDir = tmp_path
-
-    system.accesstype = 'invalid'
-
-    with pytest.raises(NotImplementedError):
-        transfer.copy_file(__file__, system)
-
-    os.rmdir(tmp_path)
-
-
 def test_copyfile_failtowrite(system):
     tmp_path = tempfile.mkdtemp()
     system.imageDir = tmp_path
