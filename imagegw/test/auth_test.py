@@ -20,6 +20,8 @@ import os
 import pytest
 from shifter_imagegw.auth import Authentication
 from shifter_imagegw.errors import AuthenticationError
+from shifter_imagegw.config import Config
+
 
 @pytest.fixture(autouse=True)
 def set_path(monkeypatch):
@@ -32,10 +34,17 @@ def auth_env():
     test_dir = os.path.dirname(os.path.abspath(__file__)) + "/../test/"
     encoded = "xxxx\n"
     system = 'systema'
-    config = {
+    data = {
         "Authentication": "munge",
-        "Platforms": {system: {"mungeSocketPath": "/tmp/munge.s"}}
+        "Platforms": {system: {
+                "mungeSocketPath": "/tmp/munge.s",
+                "accesstype": "local",
+                "local": {}
+                }
+        },
+        "Locations": []
     }
+    config = Config(data)
 
     # setup
     with open(test_dir + "munge.test", 'w') as f:
@@ -52,13 +61,15 @@ def auth_env():
 
 
 def test_auth(auth_env):
-    resp = auth_env['auth'].authenticate(auth_env['encoded'], auth_env['system'])
+    resp = auth_env['auth'].authenticate(auth_env['encoded'],
+                                         auth_env['system'])
     assert resp is not None
     assert isinstance(resp, dict)
 
 
 def test_auth_replay(auth_env):
-    resp = auth_env['auth'].authenticate(auth_env['encoded'], auth_env['system'])
+    resp = auth_env['auth'].authenticate(auth_env['encoded'],
+                                         auth_env['system'])
     assert resp is not None
     with pytest.raises(AuthenticationError):
         auth_env['auth'].authenticate(auth_env['encoded'], auth_env['system'])

@@ -38,7 +38,11 @@ def setup_files():
         f.write(encoded)
     with open(test_dir + "munge.expired", 'w') as f:
         f.write('')
-    return {"test_dir": test_dir, "encoded": encoded, "message": message, "expired": expired}
+    return {"test_dir": test_dir,
+            "encoded": encoded,
+            "message": message,
+            "expired": expired
+            }
 
 
 def test_munge(setup_files):

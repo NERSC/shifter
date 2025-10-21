@@ -25,7 +25,6 @@ format for shifter.
 
 import os
 import subprocess
-import shutil
 import tempfile
 from shifter_imagegw.util import program_exists, rmtree
 
@@ -43,21 +42,8 @@ def generate_cramfs_image(expand_path, image_path, options):
     """
     Creates a CramFS based image
     """
-    program_exists('mkfs.cramfs')
-    cmd = ["mkfs.cramfs", expand_path, image_path]
-    if options is not None:
-        cmd.extend(options)
-    ret = subprocess.call(cmd)
-    if ret != 0:
-        # error handling
-        pass
-    try:
-        rmtree(expand_path)
-    except:
-        # error handling
-        pass
-
-    return True
+    message = 'cramfs support is not supported'
+    raise NotImplementedError(message)
 
 
 def generate_squashfs_image(expand_path, image_path, options):
@@ -80,7 +66,7 @@ def generate_squashfs_image(expand_path, image_path, options):
         pass
     try:
         rmtree(expand_path)
-    except:
+    except Exception:
         pass
 
     return True
@@ -121,7 +107,7 @@ def convert(fmt, expand_path, image_path, options=None):
             success = True
         else:
             raise NotImplementedError("%s not a supported format" % fmt)
-    except:
+    except Exception:
         if os.path.exists(temp_path):
             os.unlink(temp_path)
         raise
@@ -130,7 +116,7 @@ def convert(fmt, expand_path, image_path, options=None):
         return False
     try:
         os.rename(temp_path, image_path)
-    except:
+    except Exception:
         return False
 
     # Some error must have occurred

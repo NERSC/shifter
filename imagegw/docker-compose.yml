@@ -1,40 +1,46 @@
-api:
-  image: imagegwapi
-  ports:
-   - 5555:8000
-  links:
-   - mongo
-  volumes:
-   - imagegw:/images
-   - munge:/var/run/munge/
-   - ./test/config:/config
-  command: api
-munge:
-  image: munge
-  volumes:
-   - munge:/var/run/munge/
-mongo:
-  image: mongo:3
-  volumes:
-    - /data/db
-  command: --smallfiles
-systema:
-  container_name: systema
-  image: shifter-test
-  extra_hosts:
-   - "api:172.17.0.1"
-   - "registry:172.17.0.1"
-  ports:
-   - "2222:22"
-  volumes:
-  - /images
-  - ./test/config/:/config
-  privileged: true
-  environment:
-  - ADDUSER=canon
-registry:
-  image: registry
-  ports:
-   - "5000:5000"
-  volumes:
-  - registry:/var/lib/registry
+services:
+  api:
+    image: imagegwapi
+    ports:
+     - 5555:8000
+    links:
+     - mongo
+    volumes:
+     - imagegw:/images
+     - munge:/var/run/munge/
+     - ./test/config:/config
+    command: api
+  munge:
+    image: munge
+    volumes:
+     - munge:/var/run/munge/
+     - ./test/config:/config
+    command: munge
+  mongo:
+    image: mongo:3
+    volumes:
+      - /data/db
+    command: --smallfiles
+  systema:
+    container_name: systema
+    image: shifter-test
+    extra_hosts:
+     - "api:172.17.0.1"
+     - "registry:172.17.0.1"
+    ports:
+     - "2222:22"
+    volumes:
+    - /images
+    - ./test/config/:/config
+    privileged: true
+    environment:
+    - ADDUSER=canon
+#  registry:
+#    image: registry
+#    ports:
+#     - "5000:5000"
+#    volumes:
+#    - registry:/var/lib/registry
+volumes:
+  imagegw:
+  munge:

@@ -1,14 +1,15 @@
 import os
 import time
-import urllib.request, urllib.parse, urllib.error
+import urllib.request
+import urllib.parse
+import urllib.error
 import json
-from copy import deepcopy
 from shifter_imagegw.fasthash import fast_hash
-from shifter_imagegw.imagemngr import ImageMngr
 from pymongo import MongoClient
 import pytest
 from fastapi.testclient import TestClient
 import shifter_imagegw.api as api
+from shifter_imagegw.config import Config
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
@@ -50,7 +51,7 @@ def set_gwconfig(monkeypatch):
     monkeypatch.setenv('CONFIG', configfile)
 
 
-@pytest.fixture() #scope='module')
+@pytest.fixture()
 def api_ctx():
     # Resolve config file, prefer test.json if present else fallback
     base_dir = os.path.dirname(os.path.abspath(__file__)) + "/.."
@@ -60,22 +61,22 @@ def api_ctx():
 
     # Import after setting env so api reads correct config
     from shifter_imagegw import api
-    api.config['TESTING'] = True
 
     # Prepare filesystem locations referenced by config
     with open(configfile) as f:
-        config = json.load(f)
-    mongouri = config['MongoDBURI']
+        data = json.load(f)
+    config = Config(data)
+    mongouri = config.MongoDBURI
     client = MongoClient(mongouri)
-    dbname = config['MongoDB']
+    dbname = config.MongoDB
     images = client[dbname].images
     metrics = client[dbname].metrics
     images.drop()
     metrics.delete_many({})
 
-    if not os.path.exists(config['CacheDirectory']):
-        os.makedirs(config['CacheDirectory'], exist_ok=True)
-    p = config['Platforms']['systema']['ssh']['imageDir']
+    if not os.path.exists(config.CacheDirectory):
+        os.makedirs(config.CacheDirectory, exist_ok=True)
+    p = config.Platforms['systema'].imageDir
     if not os.path.exists(p):
         os.makedirs(p, exist_ok=True)
     ctx = {
@@ -113,7 +114,6 @@ def time_wait(app, url, auth, urlreq, data=None, state='READY', op='pull', TIMEO
             response = app.post(uri, json=data, headers={AUTH_HEADER: auth})
         else:  # doimport
             response = app.post(uri, json=data, headers={AUTH_HEADER: auth})
-        
         if response.status_code != 200:
             time.sleep(1)
             continue
@@ -162,7 +162,6 @@ def test_pull1(api_ctx):
         assert rv.status_code == 200
 
 
-
 def test_list(api_ctx):
     with TestClient(api.app) as client:
         uri = '%s/list/%s' % (api_ctx['url'], 'systemc')
@@ -187,7 +186,7 @@ def test_queue(api_ctx):
 
 def test_pulllookup(api_ctx):
     with TestClient(api.app) as client:
-        rv = time_wait(client, api_ctx['url'], api_ctx['auth'], api_ctx['urlreq'])
+        time_wait(client, api_ctx['url'], api_ctx['auth'], api_ctx['urlreq'])
         uri = '%s/lookup/%s' % (api_ctx['url'], api_ctx['urlreq'])
         response = client.get(uri, headers={AUTH_HEADER: api_ctx['auth']})
         assert response.status_code == 200
@@ -209,7 +208,7 @@ def test_lookup(api_ctx):
 def test_expire(api_ctx):
     with TestClient(api.app) as client:
         uri = '%s/expire/%s/%s/%s' % (api_ctx['url'], api_ctx['system'], api_ctx['itype'],
-                                    api_ctx['tag'])
+                                      api_ctx['tag'])
         response = client.get(uri, headers={AUTH_HEADER: api_ctx['auth']})
         assert response.status_code == 200
 
@@ -262,7 +261,7 @@ def test_metrics(api_ctx):
 
 def test_import(api_ctx):
     with TestClient(api.app) as client:
-        api_ctx['config']["ImportUsers"] = "all"
+        api_ctx['config'].ImportUsers = "all"
         uri = '%s/doimport/%s' % (api_ctx['url'], api_ctx['urlreq'])
         ifile = os.path.join(api_ctx['test_dir'], 'test.squashfs')
         data = {'filepath': ifile,
@@ -279,7 +278,6 @@ def test_import(api_ctx):
 def test_labels(api_ctx):
     os.environ['ENABLE_LABELS'] = "1"
     with TestClient(api.app) as client:
-        c = deepcopy(api_ctx['config'])
         uri = '%s/pull/%s' % (api_ctx['url'], api_ctx['urlreq'])
         client.post(uri, headers={AUTH_HEADER: api_ctx['auth']})
         time.sleep(1)

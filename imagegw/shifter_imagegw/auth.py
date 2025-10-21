@@ -23,6 +23,7 @@ Module to abstract authentication.  Currently just wraps munge.
 
 import json
 from shifter_imagegw import munge
+from shifter_imagegw.config import Config
 
 
 class Authentication(object):
@@ -30,25 +31,23 @@ class Authentication(object):
     Authentication Class to authenticate user requests
     """
 
-    def __init__(self, config):
+    def __init__(self, config: Config):
         """
         Initializes authenication handle.
         config is a dictionary.  It must define 'Authentication' and it must
         be a supported type (currently munge).
         Different auth mechanisms may require additional key value pairs
         """
-        if 'Authentication' not in config:
-            raise KeyError('Authentication not specified')
         self.sockets = dict()
-        if config['Authentication'] == "munge":
-            for system in config['Platforms']:
+        if config.Authentication == "munge":
+            for system in config.Platforms:
                 self.sockets[system] = \
-                        config['Platforms'][system]['mungeSocketPath']
+                        config.Platforms[system].mungeSocketPath
             self.type = 'munge'
-        elif config['Authentication'] == "mock":
+        elif config.Authentication == "mock":
             self.type = 'mock'
         else:
-            memo = 'Unsupported auth type %s' % (config['Authentication'])
+            memo = f'Unsupported auth type {config.Authentication}'
             raise NotImplementedError(memo)
 
     def _authenticate_munge(self, authstr, system=None):
@@ -75,7 +74,7 @@ class Authentication(object):
         message_json = response['MESSAGE']
         try:
             ret['tokens'] = json.loads(message_json)['authorized_locations']
-        except:
+        except Exception:
             pass
         return ret
 

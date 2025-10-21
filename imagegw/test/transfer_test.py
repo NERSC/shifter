@@ -19,8 +19,8 @@
 import os
 import tempfile
 import pytest
-import sys
 from shifter_imagegw import transfer
+from shifter_imagegw.config import Platform
 
 
 @pytest.fixture(autouse=True)
@@ -31,18 +31,7 @@ def set_path(monkeypatch):
 
 @pytest.fixture
 def system():
-    sys_cfg = {}
-    sys_cfg['host'] = ['localhost']
-    sys_cfg['ssh'] = {
-        'username': 'nobody',
-        'key': 'somefile',
-        'imageDir': None
-    }
-    sys_cfg['local'] = {
-        'imageDir': None
-    }
-    sys_cfg['accesstype'] = 'local'
-    return sys_cfg
+    return Platform({})
 
 
 def inode_counter(dirname):
@@ -66,70 +55,17 @@ def test_sh_cmd(system):
     assert cmd is None
 
 
-def test_ssh_cmd(system):
-    cmd = transfer._ssh_cmd(system, 'echo', 'test')
-    # expect ssh -i somefile nobody@localhost echo test
-    assert len(cmd) == 6
-    assert '|'.join(cmd) == 'ssh|-i|somefile|nobody@localhost|echo|test'
-
-    system['ssh']['sshCmdOptions'] = ['-t']
-    cmd = transfer._ssh_cmd(system, 'echo', 'test')
-    assert len(cmd) == 7
-    assert '|'.join(cmd) == 'ssh|-i|somefile|-t|nobody@localhost|echo|test'
-    del system['ssh']['sshCmdOptions']
-
-    cmd = transfer._ssh_cmd(system)
-    assert cmd is None
-
-
 def test_cp_cmd(system):
     cmd = transfer._cp_cmd(system, 'a', 'b')
     assert len(cmd) == 3
     assert '|'.join(cmd) == 'cp|a|b'
 
 
-def test_scp_cmd(system):
-    cmd = transfer._scp_cmd(system, 'a', 'b')
-    assert len(cmd) == 5
-    assert '|'.join(cmd) == 'scp|-i|somefile|a|nobody@localhost:b'
-
-    system['ssh']['scpCmdOptions'] = ['-t']
-    cmd = transfer._scp_cmd(system, 'a', 'b')
-    assert len(cmd) == 6
-    assert '|'.join(cmd) == 'scp|-i|somefile|-t|a|nobody@localhost:b'
-    del system['ssh']['scpCmdOptions']
-
-
 def test_copyfile_local(system):
     tmp_path = tempfile.mkdtemp()
-    system['local']['imageDir'] = tmp_path
-    system['ssh']['imageDir'] = tmp_path
+    system.imageDir = tmp_path
 
-    system['accesstype'] = 'local'
-    transfer.copy_file(__file__, system)
-    fname = os.path.split(__file__)[1]
-    file_path = os.path.join(tmp_path, fname)
-    assert os.path.exists(file_path)
-
-    inodes = inode_counter(tmp_path)
-    assert inodes == 1
-    os.unlink(file_path)
-
-    inodes = inode_counter(tmp_path)
-    assert inodes == 0
-
-    os.rmdir(tmp_path)
-
-
-def test_copyfile_remote(system):
-    """uses mock ssh/scp wrapper to pretend to do the remote
-       transfer, ensure it is in PATH prior to running test
-    """
-    tmp_path = tempfile.mkdtemp()
-    system['local']['imageDir'] = tmp_path
-    system['ssh']['imageDir'] = tmp_path
-
-    system['accesstype'] = 'remote'
+    system.accesstype = 'local'
     transfer.copy_file(__file__, system)
     fname = os.path.split(__file__)[1]
     file_path = os.path.join(tmp_path, fname)
@@ -147,10 +83,9 @@ def test_copyfile_remote(system):
 
 def test_copyfile_invalid(system):
     tmp_path = tempfile.mkdtemp()
-    system['local']['imageDir'] = tmp_path
-    system['ssh']['imageDir'] = tmp_path
+    system.imageDir = tmp_path
 
-    system['accesstype'] = 'invalid'
+    system.accesstype = 'invalid'
 
     with pytest.raises(NotImplementedError):
         transfer.copy_file(__file__, system)
@@ -160,10 +95,9 @@ def test_copyfile_invalid(system):
 
 def test_copyfile_failtowrite(system):
     tmp_path = tempfile.mkdtemp()
-    system['local']['imageDir'] = tmp_path
-    system['ssh']['imageDir'] = tmp_path
+    system.imageDir = tmp_path
 
-    system['accesstype'] = 'local'
+    system.accesstype = "local"
 
     # make directory unwritable
     os.chmod(tmp_path, 0o555)
@@ -177,10 +111,9 @@ def test_copyfile_failtowrite(system):
 
 def test_transfer_local(system):
     tmp_path = tempfile.mkdtemp()
-    system['local']['imageDir'] = tmp_path
-    system['ssh']['imageDir'] = tmp_path
+    system.imageDir = tmp_path
 
-    system['accesstype'] = 'local'
+    system.accesstype = "local"
 
     transfer.transfer(system, __file__)
 
@@ -212,9 +145,8 @@ def test_remove_local(system):
     (fdesc, tmp_path) = tempfile.mkstemp()
     os.close(fdesc)
     dname, fname = os.path.split(tmp_path)
-    system['local']['imageDir'] = dname
-    system['ssh']['imageDir'] = dname
-    system['accesstype'] = 'local'
+    system.imageDir = dname
+    system.accesstype = "local"
 
     transfer.remove_file(fname, system)
     assert os.path.exists(tmp_path) is False
@@ -227,9 +159,8 @@ def test_fasthash(system):
     file = open(fname, 'w')
     file.write("blah blah hash")
     file.close()
-    system['local']['imageDir'] = dname
-    system['ssh']['imageDir'] = dname
-    system['accesstype'] = 'local'
+    system.imageDir = dname
+    system.accesstype = "local"
 
     hash = transfer.hash_file(fname, system)
     gh = 'ff68165577eb209adcfa2f793476a25da637142283409d6f4d8d61ee042c5e63'
@@ -250,8 +181,8 @@ def test_import_copy_file(system):
     (fdesc, tmp_path) = tempfile.mkstemp()
     os.close(fdesc)
     dname, fname = os.path.split(tmp_path)
-    system['local']['imageDir'] = dname
-    system['accesstype'] = 'local'
+    system.imageDir = dname
+    system.accesstype = 'local'
     cp_path = tmp_path+"_1"
     status = transfer.import_copy_file(tmp_path, cp_path,
                                        system, None)

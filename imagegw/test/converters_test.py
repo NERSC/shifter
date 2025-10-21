@@ -20,6 +20,7 @@ import os
 import pytest
 from shifter_imagegw import converters
 
+
 @pytest.fixture(autouse=True)
 def set_path(monkeypatch):
     test_dir = os.path.dirname(os.path.abspath(__file__)) + "/../test/"
@@ -28,26 +29,25 @@ def set_path(monkeypatch):
 
 @pytest.fixture
 def converters_env():
-	# os.environ['PATH']=os.environ['PATH']+":./test"
-	test_dir = os.path.dirname(os.path.abspath(__file__)) + "/../test/"
-	if 'TMPDIR' in os.environ:
-		outdir = os.environ['TMPDIR']
-	else:
-		outdir = '/tmp/'
+    test_dir = os.path.dirname(os.path.abspath(__file__)) + "/../test/"
+    if 'TMPDIR' in os.environ:
+        outdir = os.environ['TMPDIR']
+    else:
+        outdir = '/tmp/'
 
-	def make_fake():
-		path = outdir + "/fakeimage"
-		if os.path.exists(path) is False:
-			os.makedirs(path)
-		with open(path + '/a', "w") as f:
-			f.write('blah')
-		return path
+    def make_fake():
+        path = outdir + "/fakeimage"
+        if os.path.exists(path) is False:
+            os.makedirs(path)
+        with open(path + '/a', "w") as f:
+            f.write('blah')
+        return path
 
-	return {
-		'test_dir': test_dir,
-		'outdir': outdir,
-		'make_fake': make_fake,
-	}
+    return {
+        'test_dir': test_dir,
+        'outdir': outdir,
+        'make_fake': make_fake,
+    }
 
 
 # generate_ext4_image(expand_path, image_path):
@@ -55,105 +55,104 @@ def converters_env():
 # generate_squashfs_image(expand_path, image_path):
 
 def test_convert(converters_env):
-	"""
-	Test convert function using a mock format
-	"""
-	opts = dict()
-	output = '%s/test.squashfs' % (converters_env['outdir'])
-	resp = converters.convert('mock', '', output)
-	assert resp is True
-	assert os.path.exists(output)
-	os.remove(output)
+    """
+    Test convert function using a mock format
+    """
+    opts = dict()
+    output = '%s/test.squashfs' % (converters_env['outdir'])
+    resp = converters.convert('mock', '', output)
+    assert resp is True
+    assert os.path.exists(output)
+    os.remove(output)
 
-	path = converters_env['make_fake']()
+    path = converters_env['make_fake']()
 
-	resp = converters.convert('cramfs', path, '/tmp/blah.cramfs')
-	assert resp
+    resp = converters.convert('cramfs', path, '/tmp/blah.cramfs')
+    assert resp
 
-	with pytest.raises(NotImplementedError):
-		converters.convert('ext4', path, '/tmp/blah.ext4')
+    with pytest.raises(NotImplementedError):
+        converters.convert('ext4', path, '/tmp/blah.ext4')
 
-	resp = converters.convert('squashfs', path, output, options=opts)
-	assert resp
-	with open(output) as f:
-		line = f.read()
-		assert '-no-xattrs' in line
+    resp = converters.convert('squashfs', path, output, options=opts)
+    assert resp
+    with open(output) as f:
+        line = f.read()
+        assert '-no-xattrs' in line
 
 
 def test_convert_options(converters_env):
-	"""
-	Test option handling
-	"""
-	opts = {
-		'mock': [' blah']
-	}
-	path = converters_env['make_fake']()
-	output = '%s/test.mock' % (converters_env['outdir'])
-	if os.path.exists(output):
-		os.remove(output)
-	resp = converters.convert('mock', path, output, options=opts)
-	assert resp
-	with open(output) as f:
-		v = f.read()
-		assert v == 'bogus blah'
+    """
+    Test option handling
+    """
+    opts = {
+        'mock': [' blah']
+    }
+    path = converters_env['make_fake']()
+    output = '%s/test.mock' % (converters_env['outdir'])
+    if os.path.exists(output):
+        os.remove(output)
+    resp = converters.convert('mock', path, output, options=opts)
+    assert resp
+    with open(output) as f:
+        v = f.read()
+        assert v == 'bogus blah'
 
-	os.remove(output)
-	opts['mock'] = ' blah'
-	resp = converters.convert('mock', path, output, options=opts)
-	assert resp
-	with open(output) as f:
-		v = f.read()
-		assert v == 'bogus blah'
-	os.remove(output)
+    os.remove(output)
+    opts['mock'] = ' blah'
+    resp = converters.convert('mock', path, output, options=opts)
+    assert resp
+    with open(output) as f:
+        v = f.read()
+        assert v == 'bogus blah'
+    os.remove(output)
 
 
 def test_writemeta(converters_env):
-	"""
-	Test Write meta function
-	"""
+    """
+    Test Write meta function
+    """
 
-	meta = {'workdir': "/tmp/",
-			'entrypoint': '/bin/sh',
-			'cmd': '/script',
-			'env': ['a=b', 'c=d'],
-			'private': True,
-			'userACL': [1000, 1001],
-			'groupACL': [1002, 1003],
-			}
-	output = '%s/test.meta' % (converters_env['outdir'])
-	resp = converters.writemeta('squashfs', meta, output)
-	assert resp is not None
-	meta = {'ENV': []}
-	with open(output) as f:
-		for line in f:
-			(k, v) = line.strip().split(": ", 2)
-			if k == 'ENV':
-				meta['ENV'].append(v)
-			else:
-				meta[k] = v
-	keys = ['WORKDIR', 'FORMAT', 'ENTRY', 'CMD']
-	if 'DISABLE_ACL_METADATA' not in os.environ:
-		keys.extend(['USERACL', 'GROUPACL'])
-	for key in keys:
-		assert key in meta
-	if 'DISABLE_ACL_METADATA' not in os.environ:
-		assert meta['USERACL'].find("[") == -1
-		assert meta['USERACL'].find("]") == -1
-	assert len(meta['ENV']) > 0
+    meta = {'workdir': "/tmp/",
+            'entrypoint': '/bin/sh',
+            'cmd': '/script',
+            'env': ['a=b', 'c=d'],
+            'private': True,
+            'userACL': [1000, 1001],
+            'groupACL': [1002, 1003],
+            }
+    output = '%s/test.meta' % (converters_env['outdir'])
+    resp = converters.writemeta('squashfs', meta, output)
+    assert resp is not None
+    meta = {'ENV': []}
+    with open(output) as f:
+        for line in f:
+            (k, v) = line.strip().split(": ", 2)
+            if k == 'ENV':
+                meta['ENV'].append(v)
+            else:
+                meta[k] = v
+    keys = ['WORKDIR', 'FORMAT', 'ENTRY', 'CMD']
+    if 'DISABLE_ACL_METADATA' not in os.environ:
+        keys.extend(['USERACL', 'GROUPACL'])
+    for key in keys:
+        assert key in meta
+    if 'DISABLE_ACL_METADATA' not in os.environ:
+        assert meta['USERACL'].find("[") == -1
+        assert meta['USERACL'].find("]") == -1
+    assert len(meta['ENV']) > 0
 
 
 def test_ext4():
-	with pytest.raises(NotImplementedError):
-		converters.generate_ext4_image('/tmp', '/tmp', None)
+    with pytest.raises(NotImplementedError):
+        converters.generate_ext4_image('/tmp', '/tmp', None)
 
 
 def test_cramfs():
-	converters.generate_cramfs_image('/tmp/b', '/tmp/blah', None)
-	assert os.path.exists('/tmp/blah')
-	os.remove('/tmp/blah')
+    with pytest.raises(NotImplementedError):
+	    converters.generate_cramfs_image('/tmp/b', '/tmp/blah', None)
 
 
 def test_squashfs():
-	converters.generate_squashfs_image('/tmp/b', '/tmp/blah', None)
-	assert os.path.exists('/tmp/blah')
-	os.remove('/tmp/blah')
+    converters.generate_squashfs_image('/tmp/b', '/tmp/blah', None)
+    assert os.path.exists('/tmp/blah')
+    os.remove('/tmp/blah')

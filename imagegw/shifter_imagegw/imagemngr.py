@@ -37,9 +37,11 @@ import pymongo.errors
 from shifter_imagegw.auth import Authentication
 from shifter_imagegw.errors import AuthenticationError
 from shifter_imagegw.imageworker import WorkerThreads
+from shifter_imagegw.config import Config
+
 try:
     from multiprocessing import Process
-except:
+except ModuleNotFoundError:
     from multiprocessing.process import Process
 
 import atexit
@@ -59,7 +61,7 @@ def mongo_reconnect_reattempt(call):
                 self.logger.warning("Error: mongo reconnect attmempt")
                 sleep(2)
         self.logger.warning("Error: Failed to deal with mongo auto-reconnect!")
-        raise AuthenticationError('Reconnect to mongo failed')
+        raise ConnectionError('Reconnect to mongo failed')
     return _mongo_reconnect_safe
 
 
@@ -70,7 +72,7 @@ class ImageMngr(object):
     and has public functions to lookup, pull and expire images.
     """
 
-    def __init__(self, config, logger=None, logname='imagemngr'):
+    def __init__(self, config: Config, logger=None, logname='imagemngr'):
         """
         Create an instance of the image manager.
         """
@@ -91,60 +93,50 @@ class ImageMngr(object):
             self.logger.info('ImageMngr using upstream logger')
 
         self.logger.debug('Initializing image manager')
-        self.config = config
-        if 'Platforms' not in self.config:
-            raise NameError('Platforms not defined')
-        self.systems = []
         # Time before another pull can be attempted
         self.pullupdatetimeout = 300
-        if 'PullUpdateTime' in self.config:
-            self.pullupdatetimeout = self.config['PullUpdateTimeout']
+        self.pullupdatetimeout = config.PullUpdateTimeout
         # Max amount of time to allow for a pull
         self.pulltimeout = self.pullupdatetimeout
         # This is not intended to provide security, but just
         # provide a basic check that a session object is correct
         self.magic = 'imagemngrmagic'
-        if 'Authentication' not in self.config:
-            self.config['Authentication'] = "munge"
-        self.auth = Authentication(self.config)
-        self.platforms = self.config['Platforms']
+        self.auth = Authentication(config)
 
-        for system in self.config['Platforms']:
-            self.systems.append(system)
         # Connect to database
-        if 'MongoDBURI' not in self.config:
-            raise NameError('MongoDBURI not defined')
-        threads = 1
-        if 'WorkerThreads' in self.config:
-            threads = int(self.config['WorkerThreads'])
-        self.workers = WorkerThreads(self.config, threads=threads)
+        threads = config.WorkerThreads
+        self.workers = WorkerThreads(config, threads=threads)
         self.status_queue = self.workers.get_updater_queue()
         self.status_proc = Process(target=self.status_thread,
+                                   kwargs={"config": config},
                                    name='StatusThread')
         self.status_proc.start()
         atexit.register(self.shutdown)
-        self.mongo_init()
+        self.mongo_init(config)
         # Cleanup any pending requests
         self._images_remove_many({'status': 'PENDING'})
+        self.platforms = config.Platforms
+        self.systems = config.Platforms.keys()
+        self.config = config
 
     def shutdown(self):
         logging.info("Shutdown called")
         self.status_queue.put('stop')
         self.status_proc.terminate()
 
-    def mongo_init(self):
-        client = MongoClient(self.config['MongoDBURI'])
-        db_ = self.config['MongoDB']
+    def mongo_init(self, config: Config):
+        client = MongoClient(config.MongoDBURI)
+        db_ = config.MongoDB
         self.images = client[db_].images
         self.metrics = None
-        if 'Metrics' in self.config and self.config['Metrics'] is True:
+        if config.Metrics:
             self.metrics = client[db_].metrics
 
-    def status_thread(self):
+    def status_thread(self, config=None):
         """
         This listens for update messages from a queue.
         """
-        self.mongo_init()
+        self.mongo_init(config)
         while True:
             message = self.status_queue.get()
             if message == 'stop':
@@ -181,11 +173,11 @@ class ImageMngr(object):
             return False
         elif session['magic'] is not self.magic:
             self.logger.warning("request received with bad magic %s",
-                             session['magic'])
+                                session['magic'])
             return False
         if system is not None and session['system'] != system:
             self.logger.warning("request received with a bad system %s!=%s",
-                             session['system'], system)
+                                session['system'], system)
             return False
         return True
 
@@ -194,9 +186,9 @@ class ImageMngr(object):
         Check if this is an admin user.
         Returns true if is an admin or false if not.
         """
-        if 'admins' not in self.platforms[system]:
+        if not self.platforms[system].admins:
             return False
-        admins = self.platforms[system]['admins']
+        admins = self.platforms[system].admins
         user = session['user']
         if user in admins:
             self.logger.info('user %s is an admin', user)
@@ -255,7 +247,7 @@ class ImageMngr(object):
         """Reset the expire time.  (Not fully implemented)."""
         # Change expire time for image
         # TODO shore up expire-time parsing
-        expire_timeout = self.config['ImageExpirationTimeout']
+        expire_timeout = self.config.ImageExpirationTimeout
         (days, hours, minutes, secs) = expire_timeout.split(':')
         expire = time() + int(secs) + 60 * (int(minutes) +
                                             60 * (int(hours) + 24 * int(days)))
@@ -284,7 +276,7 @@ class ImageMngr(object):
                 return False
             if key not in b:
                 return False
-        except:
+        except Exception:
             return True
         aitems = a[key]
         bitems = b[key]
@@ -310,7 +302,7 @@ class ImageMngr(object):
                 'time': time()
             }
             self._metrics_insert(r)
-        except Exception as e:
+        except Exception:
             self.logger.warning('Failed to log lookup.')
 
     def get_metrics(self, session, system, limit):
@@ -344,7 +336,8 @@ class ImageMngr(object):
             raise AuthenticationError("Authenication returned None")
         else:
             if 'user' not in arec:
-                raise AuthenticationError("Authentication returned invalid response")
+                msg = "Authentication returned invalid response"
+                raise AuthenticationError(msg)
             session = arec
             session['magic'] = self.magic
             session['system'] = system
@@ -496,8 +489,7 @@ class ImageMngr(object):
             'tag': [],
             'status': 'INIT'
         }
-        if 'DefaultImageFormat' in self.config:
-            newimage['format'] = self.config['DefaultImageFormat']
+        newimage['format'] = self.config.DefaultImageFormat
         for param in image:
             if param == 'tag':
                 continue
@@ -516,7 +508,8 @@ class ImageMngr(object):
             'pulltag': image['tag']
         }
         if not self.check_session(session, request['system']):
-            self.logger.warning('Invalid session on system %s', request['system'])
+            msg = f'Invalid session on system {request["system"]}'
+            self.logger.warning(msg)
             raise OSError("Invalid Session")
         # If a pull request exist for this tag
         #  check to see if it is expired or a failure, if so remove it
@@ -613,7 +606,8 @@ class ImageMngr(object):
         self.logger.debug('mngrmport called for file %s' % (fp))
         # self.logger.debug(image)
         if not self.check_session(session, request['system']):
-            self.logger.warning('Invalid session on system %s', request['system'])
+            msg = f'Invalid session on system {request["system"]}'
+            self.logger.warning(msg)
             raise OSError("Invalid Session")
         # Skip checks about previous requests for now
         # Future work could check the fasthash and
@@ -703,7 +697,7 @@ class ImageMngr(object):
         Helper function to remove a tag to an image.
         """
         self._images_update_many({'system': system, 'tag': {'$in': [tag]}},
-                            {'$pull': {'tag': tag}})
+                                 {'$pull': {'tag': tag}})
         return True
 
     def update_acls(self, ident, response):
@@ -769,7 +763,7 @@ class ImageMngr(object):
             # However it could be a new tag.  So let's update the tag
             try:
                 rec['tag'].index(response['tag'])
-            except:
+            except ValueError:
                 self.add_tag(rec['_id'], pullrec['system'], tag)
             return True
         else:

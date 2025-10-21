@@ -21,49 +21,25 @@
 This module provides the REST API for the image gateway.
 """
 
-import json
-import os
 import logging
-import shifter_imagegw
 from shifter_imagegw.errors import AuthenticationError
 from shifter_imagegw.imagemngr import ImageMngr
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request, Header, Query
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
+from shifter_imagegw.config import Config
 
 
 mgr = None
-logger = logging.getLogger("fastapi.root")
+logger = logging.getLogger("imagegwapi")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global config
-    if 'GWCONFIG' in os.environ:
-        CONFIG_FILE = os.environ['GWCONFIG']
-    else:
-        CONFIG_FILE = f'{shifter_imagegw.CONFIG_PATH}/imagemanager.json'
-    # Configure logging
-    logger.debug('Initializing api image manager')
-
-    logger.info(f"initializing with {CONFIG_FILE}")
-    with open(CONFIG_FILE) as config_file:
-        config = json.load(config_file)
-        if 'LogLevel' in config:
-            LOG_STRING = config['LogLevel'].lower()
-            if LOG_STRING == 'debug':
-                logger.setLevel(logging.DEBUG)
-            elif LOG_STRING == 'info':
-                logger.setLevel(logging.INFO)
-            elif LOG_STRING == 'warn':
-                logger.setLevel(logging.WARN)
-            elif LOG_STRING == 'error':
-                logger.setLevel(logging.ERROR)
-            elif LOG_STRING == 'critical':
-                logger.setLevel(logging.CRITICAL)
-            else:
-                logger.critical('Unrecongnized Log Level specified')
+    config = Config()
+    logger.setLevel(config.LogLevel)
     global mgr
     mgr = ImageMngr(config, logname="fastapi.root")
     yield
@@ -264,10 +240,10 @@ async def doimport(system: str, imgtype: str, tag: str, data: ImportImage,
         # Convert to integers
         i['groupACL'] = list(map(lambda x: int(x),
                              data.allowed_gids.split(',')))
-    if 'ImportUsers' not in config:
+    if not config.ImportUsers:
         raise HTTPException(status_code=403, detail="User image import from file disabled.")
 
-    iusers = config['ImportUsers']
+    iusers = config.ImportUsers
     # If ImportUsers is None, no one can do this
     if iusers.lower() == "none":
         raise HTTPException(status_code=403, detail="User image import from file disabled.")

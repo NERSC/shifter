@@ -38,7 +38,7 @@ def munge(text, socket=None):
         proc = Popen(com, stdout=PIPE, stderr=PIPE)
         stdout = str(proc.communicate()[0])
         return stdout.replace('\n', '')
-    except:
+    except Exception:
         return None
 
 
@@ -84,7 +84,7 @@ def unmunge(encoded, socket=None):
         return resp
     except Exception as ex:
         if debug:
-            print(sys.exc_info()[1])
+            print(str(ex))
         raise
 
 
