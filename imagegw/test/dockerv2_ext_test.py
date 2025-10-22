@@ -143,8 +143,7 @@ def test_pull_private2(tokens, updater):
 
 def test_base_url():
     image = 'scanon/alpine'
-    opt = {'baseUrl': 'https://foo.bar/'}
-    dock = DockerV2ext(image, options=opt)
+    dock = DockerV2ext(image, baseurl='https://foo.bar')
     assert dock.registry == 'foo.bar'
 
 
@@ -153,8 +152,7 @@ def test_authfile(tmp_path):
     dock = DockerV2ext(image)
     with pytest.raises(OSError):
         dock._auth_file()
-    opt = {'username': 'foo', 'password': 'bar'}
-    dock = DockerV2ext(image, options=opt)
+    dock = DockerV2ext(image, username='foo', password='bar')
     dock._auth_file()
     fn = str(dock.auth_file)
     with open(fn) as f:
@@ -169,11 +167,11 @@ def test_private(test_dir):
     dock = DockerV2ext(image)
     with pytest.raises(OSError):
         dock._auth_file()
-    opt = {'username': 'foo',
-           'password': 'bar',
-           'policy_file': test_dir + 'policy.json'
-           }
-    dock = DockerV2ext(image, options=opt)
+    dock = DockerV2ext(image,
+                       username='foo',
+                       password='bar',
+                       policy_file=f"{test_dir}/policy.json"
+                       )
     dock._auth_file()
     fn = str(dock.auth_file)
     with open(fn) as f:
@@ -185,6 +183,6 @@ def test_private(test_dir):
 def test_policyfile(test_dir):
     image = 'alpine'
     pf = test_dir + 'policy.json'
-    opt = {'policy_file': pf}
-    dock = DockerV2ext(image, options=opt)
+    dock = DockerV2ext(image,
+                       policy_file=pf)
     assert pf == dock.policy_file

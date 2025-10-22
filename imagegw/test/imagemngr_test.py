@@ -1,5 +1,3 @@
-import warnings
-warnings.filterwarnings('ignore', category=UserWarning, module='pymunge.raw')
 from shifter_imagegw.imageworker import WorkerThreads
 import os
 import pytest
@@ -14,7 +12,9 @@ from shifter_imagegw.imagemngr import ImageMngr
 from multiprocessing.pool import ThreadPool
 from random import randint
 from shifter_imagegw.config import Config
-from shifter_imagegw.auth import _authenticate_mock
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning, module='pymunge.raw')
+from shifter_imagegw.auth import Session  # noqa
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
@@ -114,10 +114,10 @@ def ctx():
             self.images = client[db].images
             self.metrics = client[db].metrics
             self.images.drop()
-            self.logger = logging.getLogger("imagemngr")
-            self.m = ImageMngr(self.config, logger=self.logger)
+            logger = logging.getLogger("imagemngr")
+            self.m = ImageMngr(self.config, logger=logger)
             # Manager with mocked worker
-            self.mtm = ImageMngr(self.config, logger=self.logger)
+            self.mtm = ImageMngr(self.config, logger=logger)
             self.mtm.workers = mock_worker(self.mtm.status_queue)
             self.system = 'systema'
             self.itype = 'docker'
@@ -127,21 +127,19 @@ def ctx():
             self.public = 'index.docker.io/busybox:latest'
             self.private = 'index.docker.io/scanon/shaneprivate:latest'
             self.format = 'squashfs'
-            self.auth = 'good:user:user::100:100'
-            self.authadmin = 'good:root:root::0:0'
-            self.badauth = 'bad:user:user::100:100'
-            self.logfile = '/tmp/worker.log'
             self.pid = 0
-            self.query = {'system': self.system, 'itype': self.itype,
+            self.query = {'system': self.system,
+                          'itype': self.itype,
                           'tag': self.tag}
-            self.pull = {'system': self.system, 'itype': self.itype,
-                         'tag': self.tag, 'remotetype': 'dockerv2',
+            self.pull = {'system': self.system,
+                         'itype': self.itype,
+                         'tag': self.tag,
+                         'remotetype': 'dockerv2',
                          'userACL': [], 'groupACL': []}
-            self.session = _authenticate_mock(self.auth, self.system)
-            self.admin_session = _authenticate_mock(self.authadmin, self.system)
-
-            if os.path.exists(self.logfile):
-                pass  # os.unlink(self.logfile)
+            self.session = Session(uid=100, gid=100, system=self.system,
+                                   user="user", group="user")
+            self.admin_session = Session(uid=0, gid=0, system=self.system,
+                                         user="root", group="root")
             # Cleanup Mongo
             self.images.delete_many({})
     conf = Conf()
@@ -183,11 +181,11 @@ def create_fakeimage(ctx, system, id, format):
     return file, metafile
 
 
-def good_pullrecord(self):
-    return {'system': self.system,
-            'itype': self.itype,
-            'id': self.id,
-            'pulltag': self.tag,
+def good_pullrecord(ctx):
+    return {'system': ctx.system,
+            'itype': ctx.itype,
+            'id': ctx.id,
+            'pulltag': ctx.tag,
             'status': 'READY',
             'userACL': [],
             'groupACL': [],
@@ -213,7 +211,7 @@ def good_record(ctx):
     }
 
 
-def read_metafile(self, metafile):
+def read_metafile(metafile):
     kv = {}
     with open(metafile) as mf:
         for line in mf:
@@ -230,8 +228,8 @@ def read_metafile(self, metafile):
     return kv
 
 
-def set_last_pull(self, id, t):
-    self.m.images.update({'_id': id}, {'$set': {'last_pull': t}})
+def set_last_pull(ctx, id, t):
+    ctx.m.images.update({'_id': id}, {'$set': {'last_pull': t}})
 
 
 def read_tokens():
@@ -897,7 +895,7 @@ def test_pull_acl(ctx):
     assert 'ENTRY' in imagerec
     assert 'ENV' in imagerec
     mf = ctx.get_metafile(ctx.system, imagerec['id'])
-    kv = ctx.read_metafile(mf)
+    kv = read_metafile(mf)
     assert 'USERACL' in kv
     assert 1001 in kv['USERACL']
     assert 1003 not in kv['USERACL']
@@ -917,7 +915,7 @@ def test_pull_acl(ctx):
     assert 'ENTRY' in imagerec
     assert 'ENV' in imagerec
     assert 1003 in imagerec['userACL']
-    kv = ctx.read_metafile(mf)
+    kv = read_metafile(mf)
     assert 1003 in kv['USERACL']
     # Try pulling the same ACLs in a different order
     ctx.set_last_pull(id, time.time() - 36000)
@@ -928,7 +926,7 @@ def test_pull_acl(ctx):
     assert rec
     # Don't wait because it should immediately finish
     assert rec['status'] == 'READY'
-    kv = ctx.read_metafile(mf)
+    kv = read_metafile(mf)
     ctx.images.delete_many({})
 
 
@@ -1224,7 +1222,7 @@ def test_labels(ctx):
     # Need use_external
     conf = deepcopy(ctx.config)
     os.environ['ENABLE_LABELS'] = "1"
-    m = ImageMngr(conf, logger=ctx.logger)
+    m = ImageMngr(conf)
     # Use defaults for format, arch, os, ostcount, replication
     pr = ctx.pull
     # Do the pull

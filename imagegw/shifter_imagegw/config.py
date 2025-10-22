@@ -9,7 +9,6 @@ class Location():
         self.remotetype = data['remotetype']
         self.authentication = data['authentication']
         self.url = data.get('url')
-        self.sslcacert = None
 
 
 class Platform():

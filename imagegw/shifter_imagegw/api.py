@@ -22,7 +22,6 @@ This module provides the REST API for the image gateway.
 """
 
 import logging
-import sys
 from shifter_imagegw.errors import AuthenticationError
 from shifter_imagegw.imagemngr import ImageMngr
 from contextlib import asynccontextmanager

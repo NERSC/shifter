@@ -30,14 +30,12 @@ import json
 import sys
 import os
 import logging
-from subprocess import Popen, PIPE
 from time import time, sleep
 from pymongo import MongoClient
 import pymongo.errors
-from shifter_imagegw.auth import Authentication
-from shifter_imagegw.errors import AuthenticationError
 from shifter_imagegw.imageworker import WorkerThreads
 from shifter_imagegw.config import Config
+import grp
 
 try:
     from multiprocessing import Process
@@ -101,7 +99,6 @@ class ImageMngr(object):
         # This is not intended to provide security, but just
         # provide a basic check that a session object is correct
         self.magic = 'imagemngrmagic'
-        self.auth = Authentication(config)
 
         # Connect to database
         threads = config.WorkerThreads
@@ -181,18 +178,6 @@ class ImageMngr(object):
         """Check if system is a valid platform."""
         return bool(system in self.systems)
 
-    def _get_groups(self, uid, gid):
-        """Look up auxilary groups. """
-        proc = Popen(['id', '-G', str(uid)], stdout=PIPE, stderr=PIPE)
-        if proc is None:
-            self.logger.warning("Group lookup failed")
-            return []
-        stdout, stderr = proc.communicate()
-        groups = []
-        for group in stdout.split():
-            groups.append(int(group))
-        return groups
-
     def _checkread(self, session, rec):
         """
         Checks if the user has read permissions to the image.
@@ -215,14 +200,15 @@ class ImageMngr(object):
         gid = session.gid
         self.logger.debug(f'uid={uid} iUACL={str(iUACL)}')
         self.logger.debug('sessions = ' + str(session))
-        groups = self._get_groups(uid, gid)
         if iUACL is not None and uid in iUACL:
             return True
         if iGACL is not None and gid in iGACL:
             return True
-        for group in groups:
-            if iGACL is not None and group in iGACL:
-                return True
+        if iGACL:
+            for group in iGACL:
+                members = grp.getgrgid(group).gr_mem
+                if session.user in members:
+                    return True
         return False
 
     def _resetexpire(self, ident):
@@ -818,6 +804,9 @@ class ImageMngr(object):
         return True
 
     def __getstate__(self):
+        """
+        This is so the state can be serialized
+        """
         self_dict = self.__dict__.copy()
         del self_dict['workers']
         return self_dict

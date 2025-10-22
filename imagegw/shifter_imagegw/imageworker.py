@@ -137,8 +137,6 @@ class ImageRequest(object):
         self.conf = conf
         self.updater = updater
         self.fmt = self.conf.DefaultImageFormat
-        if 'format' in request:
-            self.fmt = request['format']
         self.system = request['system']
         if self.system not in self.conf.Platforms:
             raise KeyError(f'{self.system} is not in the configuration')
@@ -162,50 +160,30 @@ class ImageRequest(object):
         self.userACL = request.get('userACL')
         self.groupACL = request.get('groupACL')
 
-    def _get_cacert(self, location):
-        """ Private method to get the cert location """
-        loc = self.conf.Locations[location]
-        cacert = None
-        currdir = os.getcwd()
-        if loc.sslcacert:
-            if loc.sslcacert.startswith('/'):
-                cacert = loc.sslcacert
-            else:
-                cacert = f'{currdir}/{loc.sslcacert}'
-            if not os.path.exists(cacert):
-                raise OSError(f'{cacert} does not exist')
-        return cacert
-
     def _pull_dockerv2(self, location, repo, tag):
         """ Private method to pull a docker images. """
         cdir = self.conf.CacheDirectory
         edir = self.conf.ExpandDirectory
         loc = self.conf.Locations[location]
-        cacert = self._get_cacert(location)
+        username = None
+        password = None
 
-        url = f'https://{location}'
-        if loc.url:
-            url = loc.url
+        url = loc.url if loc.url else f'https://{location}'
+        if self.tokens:
+            if location in self.tokens:
+                userpass = self.tokens[location]
+            elif 'default' in self.tokens:
+                userpass = self.tokens['default']
+            username, password = userpass.split(":", maxsplit=1)
+        imgid = f'{repo}:{tag}'
+
         try:
-            options = {}
-            if cacert is not None:
-                options['cacert'] = cacert
-            options['baseUrl'] = url
-            # if loc.authMethod:
-            #     options['authMethod'] = loc.authMethod
-
-            if (self.tokens):
-                if location in self.tokens:
-                    userpass = self.tokens[location]
-                    options['username'] = userpass.split(':')[0]
-                    options['password'] = ''.join(userpass.split(':')[1:])
-                elif ('default' in self.tokens):
-                    userpass = self.tokens['default']
-                    options['username'] = userpass.split(':')[0]
-                    options['password'] = ''.join(userpass.split(':')[1:])
-            imgid = f'{repo}:{tag}'
-            options['policy_file'] = self.sysconf.policy_file
-            dock = DockerV2ext(imgid, options, updater=self.updater,
+            dock = DockerV2ext(imgid,
+                               updater=self.updater,
+                               baseurl=url,
+                               username=username,
+                               password=password,
+                               policy_file=self.sysconf.policy_file,
                                cachedir=cdir)
             self.updater.update_status("PULLING", 'Getting manifest')
             self.meta = dock.examine_manifest()
@@ -228,8 +206,6 @@ class ImageRequest(object):
             logging.warning(str(e))
             traceback.print_exc()
             raise e
-
-        return False
 
     def _pull_image(self):
         """
@@ -271,7 +247,6 @@ class ImageRequest(object):
             raise NotImplementedError(msg)
         else:
             raise NotImplementedError(f'Unsupported remote type {rtype}')
-        return False
 
     def _examine_image(self):
         """

@@ -36,27 +36,27 @@ class DockerV2ext(object):
     This class is a client of the Docker Registry V2 protocol.
     """
 
-    def __init__(self, imageIdent, options={}, updater=None, cachedir=None):
+    def __init__(self, imageIdent: str,
+                 username: str = None,
+                 password: str = None,
+                 baseurl: str = None,
+                 policy_file: str = None,
+                 updater=None,
+                 cachedir: str = None):
         """
         Initialize an instance of the DockerV2 class.
         imageIdent is a tagged repo (e.g., ubuntu:14.04)
-        options is a dictionary.  Valid options include:
-            baseUrl to specify a URL other than dockerhub
-            username/password to specify a login
         """
         # attempt to parse image identifier
         self.imageId = imageIdent
-        self.options = options
         self.updater = updater
-        self.tokens = None
-        self.policy_file = options.get('policy_file')
+        self.username = username
+        self.password = password
+        self.policy_file = policy_file
         registry = 'index.docker.io'
-        if options and 'baseUrl' in options:
-            registry = options['baseUrl']
-            if registry.startswith('https:'):
-                registry = registry[8:]
-            elif registry.startswith('http:'):
-                registry = registry[7:]
+        if baseurl:
+            registry = baseurl.replace('https://', '')
+            registry = registry.replace('http://', '')
             registry = registry.rstrip('/')
         self.registry = registry
         self.url = f'docker://{registry}/{imageIdent}'
@@ -78,10 +78,10 @@ class DockerV2ext(object):
             self.updater.update_status(state, message)
 
     def _auth_file(self):
-        if 'username' not in self.options:
+        if not self.username:
             raise OSError("No authentication")
-        user = self.options['username']
-        pwd = self.options['password']
+        user = self.username
+        pwd = self.password
         pstr = f'{user}:{pwd}'
         token = base64.b64encode(pstr.encode("utf-8")).decode("utf-8")
         afile = tempfile.mkstemp()[1]
