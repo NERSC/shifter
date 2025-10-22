@@ -22,6 +22,7 @@ This module provides the REST API for the image gateway.
 """
 
 import logging
+import sys
 from shifter_imagegw.errors import AuthenticationError
 from shifter_imagegw.imagemngr import ImageMngr
 from contextlib import asynccontextmanager
@@ -29,6 +30,7 @@ from fastapi import FastAPI, HTTPException, Request, Header, Query
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 from shifter_imagegw.config import Config
+from shifter_imagegw.auth import authenticate
 
 
 mgr = None
@@ -100,7 +102,7 @@ async def imglist(system: str, authentication: str = Header(None)):
     auth = authentication
     logger.debug(f"list system={system}")
     try:
-        session = mgr.new_session(auth, system)
+        session = authenticate(config, auth, system)
         records = mgr.imglist(session, system)
         if records is None:
             raise HTTPException(status_code=404, detail='image not found')
@@ -130,7 +132,7 @@ async def lookup(system: str, imgtype: str, tag: str,
     memo = f'lookup system={system} imgtype={imgtype} tag={tag} auth={auth}'
     logger.debug(memo)
     try:
-        session = mgr.new_session(auth, system)
+        session = authenticate(config, auth, system)
         i = {'system': system, 'itype': imgtype, 'tag': tag}
         rec = mgr.lookup(session, i)
     except AuthenticationError as ex:
@@ -153,7 +155,7 @@ async def metrics(system: str, limit: int = Query(10),
     memo = f'metrics system={system} auth={auth}'
     logger.debug(memo)
     try:
-        session = mgr.new_session(auth, system)
+        session = authenticate(config, auth, system)
         recs = mgr.get_metrics(session, system, limit)
     except AuthenticationError as ex:
         logger.warning(f"Auth error {str(ex)}")
@@ -178,7 +180,7 @@ async def pull(system: str, imgtype: str, tag: str, data: PullRequest | None = N
         tag = f'{tag}:latest'
 
     auth = authentication
-    logger.debug(data)
+    logger.debug(f'data: {str(data)}')
 
     logger.debug(f"pull system={system} imgtype={imgtype} tag={tag}")
     i = {'system': system, 'itype': imgtype, 'tag': tag}
@@ -192,7 +194,7 @@ async def pull(system: str, imgtype: str, tag: str, data: PullRequest | None = N
                              data.allowed_gids.split(',')))
     try:
         logger.debug(i)
-        session = mgr.new_session(auth, system)
+        session = authenticate(config, auth, system)
         logger.debug(session)
         rec = mgr.pull(session, i)
         logger.debug(rec)
@@ -250,9 +252,9 @@ async def doimport(system: str, imgtype: str, tag: str, data: ImportImage,
         raise HTTPException(status_code=403, detail="User image import from file disabled.")
 
     try:
-        session = mgr.new_session(auth, system)
+        session = authenticate(config, auth, system)
         # only allowed users can import images
-        user = session['user']
+        user = session.user
 
         # Check if user on approved list
         if len(iusers) > 0 and iusers != "all":
@@ -278,7 +280,7 @@ async def autoexpire(system: str, authentication: str = Header(None)):
     auth = authentication
     logger.debug(f"autoexpire system={system}")
     try:
-        session = mgr.new_session(auth, system)
+        session = authenticate(config, auth, system)
         logger.debug(session)
         resp = mgr.autoexpire(session, system)
     except AuthenticationError as ex:
@@ -304,7 +306,7 @@ async def expire(system: str, imgtype: str, tag: str, authentication: str = Head
     logger.debug(memo)
     resp = None
     try:
-        session = mgr.new_session(auth, system)
+        session = authenticate(config, auth, system)
         resp = mgr.expire(session, i)
     except AuthenticationError as ex:
         logger.warning(f"Auth error {str(ex)}")
@@ -318,11 +320,12 @@ async def expire(system: str, imgtype: str, tag: str, authentication: str = Head
 # Show queue
 # This will list pull requests and their state
 @app.get('/api/queue/{system}')
-async def queue(system: str):
+async def queue(system: str, authentication: str = Header(None)):
     """ List images for a specific system. """
     logger.debug(f"show queue system={system}")
+    auth = authentication
     try:
-        session = mgr.new_session(None, system)
+        session = authenticate(config, auth, system)
         records = mgr.show_queue(session, system)
     except Exception as ex:
         logger.exception('Exception in queue')
