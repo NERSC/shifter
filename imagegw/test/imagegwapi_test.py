@@ -8,6 +8,8 @@ from shifter_imagegw.fasthash import fast_hash
 from pymongo import MongoClient
 import pytest
 from fastapi.testclient import TestClient
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning, module='pymunge.raw') 
 import shifter_imagegw.api as api
 from shifter_imagegw.config import Config
 

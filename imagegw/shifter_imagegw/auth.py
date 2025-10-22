@@ -24,6 +24,55 @@ Module to abstract authentication.  Currently just wraps munge.
 import json
 from shifter_imagegw import munge
 from shifter_imagegw.config import Config
+from pymunge import decode
+from shifter_imagegw.models import Session
+import pwd
+import grp
+
+
+def authenticate(conf: Config, authstr: str, system: str):
+    if conf.Authentication == 'mock':
+        return _authenticate_mock(authstr, system)
+    elif conf.Authentication != 'munge':
+        raise NotImplementedError(f'{conf.Authentication} is not supported')
+    token, uid, gid, _ = decode(authstr)
+    user = "unknown"
+    group = "unknown"
+    try:
+        user = pwd.getpwuid(uid).pw_name
+    except KeyError:
+        pass
+    try:
+        group = grp.getgrgid(gid).gr_name
+    except KeyError:
+        pass
+    return Session(uid=uid, gid=gid, tokens=token,
+                   system=system, user=user, group=group)
+
+
+
+def _authenticate_mock(authstr: str, system: str):
+    ret = dict()
+    if authstr is None:
+        raise KeyError("No Auth String Provided")
+    auth = authstr.split(':')
+    if len(auth) == 3:
+        (status, user, group) = auth
+        ret = {'user': user, 'group': group, 'tokens': ''}
+    elif len(auth) == 4:
+        (status, user, group, token) = auth
+        ret = {'user': user, 'group': group, 'tokens': token}
+    elif len(auth) == 6:
+        (status, user, group, token, uid, gid) = auth
+        ret = {'user': user, 'group': group, 'tokens': token,
+                'uid': int(uid), 'gid': int(gid)}
+    else:
+        raise OSError('Bad AuthString')
+
+    if status != 'good':
+        raise OSError(f'Auth Failed st={status}')
+    return Session(uid=int(uid), gid=int(gid), user=user, group=group,
+                    tokens=ret['tokens'], system=system)
 
 
 class Authentication(object):
@@ -76,6 +125,8 @@ class Authentication(object):
             ret['tokens'] = json.loads(message_json)['authorized_locations']
         except Exception:
             pass
+        return Session(uid=int(uid), gid=int(gid), user=user, group=group,
+                       token=ret['tokens'], system=system)
         return ret
 
     def _authenticate_mock(self, authstr, system=None):
@@ -101,6 +152,8 @@ class Authentication(object):
 
         if status != 'good':
             raise OSError(f'Auth Failed st={status}')
+        return Session(uid=int(uid), gid=int(gid), user=user, group=group,
+                       token=ret['tokens'], system=system)
 
         return ret
 

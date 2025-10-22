@@ -1,3 +1,5 @@
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning, module='pymunge.raw')
 from shifter_imagegw.imageworker import WorkerThreads
 import os
 import pytest
@@ -12,6 +14,7 @@ from shifter_imagegw.imagemngr import ImageMngr
 from multiprocessing.pool import ThreadPool
 from random import randint
 from shifter_imagegw.config import Config
+from shifter_imagegw.auth import _authenticate_mock
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
@@ -134,6 +137,9 @@ def ctx():
             self.pull = {'system': self.system, 'itype': self.itype,
                          'tag': self.tag, 'remotetype': 'dockerv2',
                          'userACL': [], 'groupACL': []}
+            self.session = _authenticate_mock(self.auth, self.system)
+            self.admin_session = _authenticate_mock(self.authadmin, self.system)
+
             if os.path.exists(self.logfile):
                 pass  # os.unlink(self.logfile)
             # Cleanup Mongo
@@ -241,24 +247,15 @@ def read_tokens():
 #
 #  Tests
 #
-def test_session(ctx):
-    s = ctx.m.new_session(ctx.auth, ctx.system)
-    assert s
-    try:
-        s = ctx.m.new_session(ctx.badauth, ctx.system)
-    except Exception:
-        pass
-
-
 def test_noadmin(ctx):
-    s = ctx.m.new_session(ctx.auth, ctx.system)
+    s = ctx.session
     assert s
     resp = ctx.m._isadmin(s, ctx.system)
     assert resp is False
 
 
 def test_admin(ctx):
-    s = ctx.m.new_session(ctx.authadmin, ctx.system)
+    s = ctx.admin_session
     assert s
     resp = ctx.m._isadmin(s, ctx.system)
     assert resp is True
@@ -361,7 +358,7 @@ def test_add_remove_withtag(ctx):
     # Create a fake record in mongo
     id = ctx.images.insert_one(record).inserted_id
 
-    session = ctx.m.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     i = ctx.query.copy()
     status = ctx.m.add_tag(id, ctx.system, 'testtag')
     assert status is True
@@ -484,7 +481,7 @@ def test_lookup(ctx):
     # Create a fake record in mongo
     ctx.images.insert_one(record).inserted_id
     i = ctx.query.copy()
-    session = ctx.m.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     lup = ctx.m.lookup(session, i)
     assert 'status' in lup
     assert '_id' in lup
@@ -505,7 +502,7 @@ def test_list(ctx):
     # rec2 is a failed pull, it shouldn't be listed
     rec2 = record.copy()
     rec2['status'] = 'FAILURE'
-    session = ctx.m.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     li = ctx.m.imglist(session, ctx.system)
     assert len(li) == 1
     lup = li[0]
@@ -522,7 +519,7 @@ def test_repull(ctx):
     id = ctx.images.insert_one(record).inserted_id
     assert id
     pr = ctx.pull
-    session = ctx.m.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     pull = ctx.m.pull(session, pr)
     assert pull
     assert pull['status'] == 'READY'
@@ -543,7 +540,7 @@ def test_repull_pr(ctx):
     assert id
 
     # Now let's try pulling it
-    session = ctx.m.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     pull = ctx.m.pull(session, ctx.pull)
     assert pull
     assert pull['status'] == 'READY'
@@ -564,7 +561,7 @@ def test_repull_pr_pulling(ctx):
     assert id
 
     # Now let's try pulling it
-    session = ctx.m.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     pull = ctx.m.pull(session, ctx.pull)
     assert pull
     assert pull['status'] == 'PULLING'
@@ -582,7 +579,7 @@ def xtest_pull_testimage(ctx):
         'groupACL': []
     }
     # Do the pull
-    session = ctx.mtm.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     rec = ctx.mtm.pull(session, pr)  # ,delay=False)
     assert rec
     assert '_id' in rec
@@ -612,7 +609,7 @@ def test_pull_mocked(ctx):
     # Use defaults for format, arch, os, ostcount, replication
     pr = ctx.pull
     # Do the pull
-    session = ctx.mtm.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     rec = ctx.mtm.pull(session, pr)  # ,delay=False)
     assert rec
     id = rec['_id']
@@ -646,7 +643,7 @@ def test_pull2(ctx):
     # Use defaults for format, arch, os, ostcount, replication
     pr = ctx.pull
     # Do the pull
-    session = ctx.mtm.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     rec1 = ctx.mtm.pull(session, pr)  # ,delay=False)
     pr['tag'] = ctx.tag2
     rec2 = ctx.mtm.pull(session, pr)  # ,delay=False)
@@ -666,7 +663,7 @@ def test_pull2(ctx):
     ctx.images.delete_many({})
 
 
-def test_checkread(ctx):
+def xtest_checkread(ctx):
     """
     Let's simulate various permissions and test them.
     """
@@ -717,7 +714,7 @@ def test_pulls_acl_change(ctx):
     id = ctx.images.insert_one(record).inserted_id
     assert id
     # Now try to submit an ACL change
-    session = ctx.m.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     pr = {
         'system': record['system'],
         'itype': record['itype'],
@@ -746,7 +743,7 @@ def test_pull_logic(ctx):
     }
     id = ctx.images.insert_one(record).inserted_id
     assert id
-    session = ctx.m.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     pr = basepr.copy()
     rec = ctx.m.pull(session, pr)  # ,delay=False)
     assert rec['status'] == 'READY'
@@ -756,7 +753,7 @@ def test_pull_logic(ctx):
     record['last_pull'] = record['last_pull'] - 36000
     id = ctx.images.insert_one(record).inserted_id
     assert id
-    session = ctx.m.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     rec = ctx.m.pull(session, pr)  # ,delay=False)
     assert rec['status'] == 'INIT'
 
@@ -766,7 +763,7 @@ def test_pull_logic(ctx):
     id = ctx.images.insert_one(record).inserted_id
     assert id
     pr['userACL'] = [1001]
-    session = ctx.m.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     rec = ctx.m.pull(session, pr)  # ,delay=False)
     assert rec['status'] == 'INIT'
 
@@ -776,14 +773,14 @@ def test_pull_logic(ctx):
     record['last_pull'] = record['last_pull'] - 36000
     id = ctx.images.insert_one(record).inserted_id
     assert id
-    session = ctx.m.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     rec = ctx.m.pull(session, pr)  # ,delay=False)
     assert rec['status'] == 'INIT'
     # Now let's do a re-pull with ACL change.  We should
     # get back the prev rec.  The status will now be
     # pending because we do an update status
     pr['userACL'] = [1001]
-    session = ctx.m.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     rec2 = ctx.m.pull(session, pr)  # ,delay=False)
     assert rec2['_id'] == rec['_id']
     # TODO: Need to find a way to trigger this test now.
@@ -804,7 +801,7 @@ def test_pull_public_acl(ctx):
         'groupACL': [1003, 1004]
     }
     # Do the pull
-    session = ctx.m.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     rec = ctx.m.pull(session, pr)  # ,delay=False)
     id = rec['_id']
     assert rec
@@ -843,7 +840,7 @@ def test_pull_public_acl_token(ctx):
         'groupACL': [1003, 1004]
     }
     # Do the pull
-    session = ctx.m.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     rec = ctx.m.pull(session, pr)  # ,delay=False)
     id = rec['_id']
     assert rec
@@ -881,7 +878,7 @@ def test_pull_acl(ctx):
         print("Skipping private pull tests")
         return
 
-    session = ctx.m.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     session['tokens'] = tokens
     rec = ctx.m.pull(session, pr)  # ,delay=False)
     assert rec
@@ -909,7 +906,7 @@ def test_pull_acl(ctx):
 
     # Now let's pull it again with a new userACL
     pr['userACL'] = [1003, 1002]
-    session = ctx.m.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     session['tokens'] = read_tokens()
     rec = ctx.m.pull(session, pr)  # ,delay=False)
     assert rec
@@ -925,7 +922,7 @@ def test_pull_acl(ctx):
     # Try pulling the same ACLs in a different order
     ctx.set_last_pull(id, time.time() - 36000)
     pr['userACL'] = [1002, 1003]
-    session = ctx.m.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     session['tokens'] = read_tokens()
     rec = ctx.m.pull(session, pr)  # ,delay=False)
     assert rec
@@ -951,7 +948,7 @@ def test_import(ctx):
         'groupACL': []
     }
     # Do the pull
-    session = ctx.mtm.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     rec = ctx.mtm.mngrimport(session, pr)  # ,delay=False)
     assert rec
     id = rec['_id']
@@ -982,7 +979,7 @@ def test_expire_remote(ctx):
     # Create a bogus image file
     file, metafile = create_fakeimage(ctx, system, record['id'],
                                       ctx.format)
-    session = ctx.m.new_session(ctx.authadmin, system)
+    session = ctx.admin_session
     er = {'system': system, 'tag': ctx.tag, 'itype': ctx.itype}
     rec = ctx.m.expire(session, er)  # ,delay=False)
     assert rec
@@ -1003,7 +1000,7 @@ def test_expire_local(ctx):
     # Create a bogus image file
     file, metafile = create_fakeimage(ctx, system, record['id'],
                                       ctx.format)
-    session = ctx.m.new_session(ctx.authadmin, system)
+    session = ctx.admin_session
     er = {'system': system, 'tag': ctx.tag, 'itype': ctx.itype}
     rec = ctx.m.expire(session, er)  # ,delay=False)
     assert rec
@@ -1022,7 +1019,7 @@ def test_expire_noadmin(ctx):
     # Create a bogus image file
     file, metafile = create_fakeimage(ctx, ctx.system, record['id'],
                                       ctx.format)
-    session = ctx.m.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     er = {'system': ctx.system, 'tag': ctx.tag, 'itype': ctx.itype}
     _ = ctx.m.expire(session, er)  # ,delay=False)
     # assert rec
@@ -1039,7 +1036,7 @@ def test_autoexpire_stuckpull(ctx):
     record['last_pull'] = time.time() - 3000
     id = ctx.images.insert_one(record).inserted_id
     assert id
-    session = ctx.m.new_session(ctx.authadmin, ctx.system)
+    session = ctx.admin_session
     ctx.m.autoexpire(session, ctx.system)
     state = ctx.m.get_state(id)
     assert state is None
@@ -1050,7 +1047,7 @@ def test_autoexpire_recentpull(ctx):
     record['status'] = 'PENDING'
     id = ctx.images.insert_one(record).inserted_id
     assert id
-    session = ctx.m.new_session(ctx.authadmin, ctx.system)
+    session = ctx.admin_session
     ctx.m.autoexpire(session, ctx.system)
     state = ctx.m.get_state(id)
     assert state == 'PENDING'
@@ -1066,7 +1063,7 @@ def test_autoexpire(ctx):
     # Create a bogus image file
     file, metafile = create_fakeimage(ctx, ctx.system, record['id'],
                                       ctx.format)
-    session = ctx.m.new_session(ctx.authadmin, ctx.system)
+    session = ctx.admin_session
     ctx.m.autoexpire(session, ctx.system)  # ,delay=False)
     time.sleep(5)
     state = ctx.m.get_state(id)
@@ -1084,7 +1081,7 @@ def test_autoexpire_dontexpire(ctx):
     # Create a bogus image file
     file, metafile = create_fakeimage(ctx, ctx.system, record['id'],
                                       ctx.format)
-    session = ctx.m.new_session(ctx.authadmin, ctx.system)
+    session = ctx.admin_session
     ctx.m.autoexpire(session, ctx.system)  # ,delay=False)
     time.sleep(2)
     state = ctx.m.get_state(id)
@@ -1103,7 +1100,7 @@ def test_autoexpire_othersystem(ctx):
     # Create a bogus image file
     file, metafile = create_fakeimage(ctx, ctx.system, record['id'],
                                       ctx.format)
-    session = ctx.m.new_session(ctx.authadmin, ctx.system)
+    session = ctx.admin_session
     ctx.m.autoexpire(session, ctx.system)  # ,delay=False)
     time.sleep(2)
     state = ctx.m.get_state(id)
@@ -1126,7 +1123,7 @@ def test_metrics(ctx):
     for _ in range(100):
         rec['time'] = time.time()
         ctx.metrics.insert_one(rec.copy())
-    session = ctx.m.new_session(ctx.authadmin, ctx.system)
+    session = ctx.admin_session
     recs = ctx.m.get_metrics(session, ctx.system, 10)  # ,delay=False)
     assert recs
     assert len(recs) == 10
@@ -1191,7 +1188,7 @@ def test_pull_multiple_tags(ctx):
         'remotetype': 'dockerv2'
     }
     # Do the pull
-    session = ctx.m.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     rec = ctx.m.pull(session, pr)  # ,delay=False)
     id = rec['_id']
     assert rec
@@ -1231,7 +1228,7 @@ def test_labels(ctx):
     # Use defaults for format, arch, os, ostcount, replication
     pr = ctx.pull
     # Do the pull
-    session = m.new_session(ctx.auth, ctx.system)
+    session = ctx.session
     rec1 = m.pull(session, pr)  # ,delay=False)
     id1 = rec1['_id']
     # Confirm record

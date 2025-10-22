@@ -156,8 +156,8 @@ class ImageRequest(object):
         self.tokens = None
         self.user = None
         if self.session:
-            self.user = self.session.get('user')
-            self.tokens = self.session.get('tokens')
+            self.user = self.session.user
+            self.tokens = self.session.tokens
 
         self.userACL = request.get('userACL')
         self.groupACL = request.get('groupACL')
