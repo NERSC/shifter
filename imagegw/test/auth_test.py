@@ -16,72 +16,10 @@
 #
 # See LICENSE for full text.
 
-from asyncio import shield
-import os
-import pytest
-import warnings
-warnings.filterwarnings('ignore', category=UserWarning, module='pymunge.raw') 
-from shifter_imagegw.auth import Authentication, authenticate
-from shifter_imagegw.errors import AuthenticationError
 from shifter_imagegw.config import Config
-from shifter_imagegw.models import Session
-
-
-@pytest.fixture(autouse=True)
-def set_path(monkeypatch):
-    test_dir = os.path.dirname(os.path.abspath(__file__)) + "/../test/"
-    monkeypatch.setenv("PATH", f"{os.environ['PATH']}:{test_dir}")
-
-
-@pytest.fixture
-def auth_env():
-    test_dir = os.path.dirname(os.path.abspath(__file__)) + "/../test/"
-    encoded = "xxxx\n"
-    system = 'systema'
-    data = {
-        "Authentication": "munge",
-        "Platforms": {system: {
-                "mungeSocketPath": "/tmp/munge.s",
-                "accesstype": "local",
-                "local": {}
-                }
-        },
-        "Locations": []
-    }
-    config = Config(data)
-
-    # setup
-    with open(test_dir + "munge.test", 'w') as f:
-        f.write(encoded)
-
-    auth = Authentication(config)
-
-    yield {
-        'test_dir': test_dir,
-        'encoded': encoded,
-        'system': system,
-        'auth': auth,
-    }
-
-
-def test_auth(auth_env):
-    resp = auth_env['auth'].authenticate(auth_env['encoded'],
-                                         auth_env['system'])
-    assert resp is not None
-    assert isinstance(resp, Session)
-
-
-def test_auth_replay(auth_env):
-    resp = auth_env['auth'].authenticate(auth_env['encoded'],
-                                         auth_env['system'])
-    assert resp is not None
-    with pytest.raises(AuthenticationError):
-        auth_env['auth'].authenticate(auth_env['encoded'], auth_env['system'])
-
-
-def test_auth_bad(auth_env):
-    with pytest.raises(AuthenticationError):
-        auth_env['auth'].authenticate("bad", auth_env['system'])
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning, module='pymunge.raw')
+from shifter_imagegw.auth import authenticate
 
 
 def test_authenticate(mocker):

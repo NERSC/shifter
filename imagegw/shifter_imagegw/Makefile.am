@@ -1,9 +1,9 @@
 shifter_imagegw_PYTHON = auth.py \
 				api.py \
+				errors.py \
+				models.py \
 				converters.py \
-				dockerv2.py \
 				dockerv2_ext.py \
-				tarfilemp.py \
 				imagemngr.py \
 				imageworker.py \
 				__init__.py \

@@ -21,23 +21,31 @@
 Module to abstract authentication.  Currently just wraps munge.
 """
 
-import json
-from shifter_imagegw import munge
 from shifter_imagegw.config import Config
-from pymunge import decode
+from pymunge import decode, MungeError
 from shifter_imagegw.models import Session
+from shifter_imagegw.errors import AuthenticationError
 import pwd
 import grp
 
 
 def authenticate(conf: Config, authstr: str, system: str):
-    if conf.Authentication == 'mock':
-        return _authenticate_mock(authstr, system)
-    elif conf.Authentication != 'munge':
+    """
+    Authenticate a user using a munge token.
+
+    Throws AuthenticationError on a failure
+    """
+
+    if conf.Authentication != 'munge':
         raise NotImplementedError(f'{conf.Authentication} is not supported')
-    token, uid, gid, _ = decode(authstr)
+    try:
+        token, uid, gid, _ = decode(authstr)
+    except MungeError as e:
+        raise AuthenticationError(e)
     user = "unknown"
     group = "unknown"
+
+    # Ignore lookup errors for now
     try:
         user = pwd.getpwuid(uid).pw_name
     except KeyError:
@@ -48,124 +56,3 @@ def authenticate(conf: Config, authstr: str, system: str):
         pass
     return Session(uid=uid, gid=gid, tokens=token,
                    system=system, user=user, group=group)
-
-
-
-def _authenticate_mock(authstr: str, system: str):
-    ret = dict()
-    if authstr is None:
-        raise KeyError("No Auth String Provided")
-    auth = authstr.split(':')
-    if len(auth) == 3:
-        (status, user, group) = auth
-        ret = {'user': user, 'group': group, 'tokens': ''}
-    elif len(auth) == 4:
-        (status, user, group, token) = auth
-        ret = {'user': user, 'group': group, 'tokens': token}
-    elif len(auth) == 6:
-        (status, user, group, token, uid, gid) = auth
-        ret = {'user': user, 'group': group, 'tokens': token,
-                'uid': int(uid), 'gid': int(gid)}
-    else:
-        raise OSError('Bad AuthString')
-
-    if status != 'good':
-        raise OSError(f'Auth Failed st={status}')
-    return Session(uid=int(uid), gid=int(gid), user=user, group=group,
-                    tokens=ret['tokens'], system=system)
-
-
-class Authentication(object):
-    """
-    Authentication Class to authenticate user requests
-    """
-
-    def __init__(self, config: Config):
-        """
-        Initializes authenication handle.
-        config is a dictionary.  It must define 'Authentication' and it must
-        be a supported type (currently munge).
-        Different auth mechanisms may require additional key value pairs
-        """
-        self.sockets = dict()
-        if config.Authentication == "munge":
-            for system in config.Platforms:
-                self.sockets[system] = \
-                        config.Platforms[system].mungeSocketPath
-            self.type = 'munge'
-        elif config.Authentication == "mock":
-            self.type = 'mock'
-        else:
-            memo = f'Unsupported auth type {config.Authentication}'
-            raise NotImplementedError(memo)
-
-    def _authenticate_munge(self, authstr, system=None):
-        if self.type != 'munge':
-            raise ValueError('incorrect authenticate type!')
-
-        if authstr is None:
-            raise KeyError("No Auth String Provided")
-        if system is None:
-            raise KeyError('System must be specified for munge')
-        response = munge.unmunge(authstr, socket=self.sockets[system])
-        if response is None:
-            raise OSError('Authentication Failed')
-        ret = dict()
-        uids = response['UID']
-        gids = response['GID']
-        (user, uid) = uids.replace(' ', '').rstrip(')').split('(')
-        (group, gid) = gids.replace(' ', '').rstrip(')').split('(')
-        ret = {
-            'user': user, 'uid': int(uid),
-            'group': group, 'gid': int(gid),
-            'tokens': ''
-        }
-        message_json = response['MESSAGE']
-        try:
-            ret['tokens'] = json.loads(message_json)['authorized_locations']
-        except Exception:
-            pass
-        return Session(uid=int(uid), gid=int(gid), user=user, group=group,
-                       token=ret['tokens'], system=system)
-        return ret
-
-    def _authenticate_mock(self, authstr, system=None):
-        if self.type != 'mock':
-            raise ValueError('incorrect authenticate type!')
-
-        ret = dict()
-        if authstr is None:
-            raise KeyError("No Auth String Provided")
-        auth = authstr.split(':')
-        if len(auth) == 3:
-            (status, user, group) = auth
-            ret = {'user': user, 'group': group, 'tokens': ''}
-        elif len(auth) == 4:
-            (status, user, group, token) = auth
-            ret = {'user': user, 'group': group, 'tokens': token}
-        elif len(auth) == 6:
-            (status, user, group, token, uid, gid) = auth
-            ret = {'user': user, 'group': group, 'tokens': token,
-                   'uid': int(uid), 'gid': int(gid)}
-        else:
-            raise OSError('Bad AuthString')
-
-        if status != 'good':
-            raise OSError(f'Auth Failed st={status}')
-        return Session(uid=int(uid), gid=int(gid), user=user, group=group,
-                       token=ret['tokens'], system=system)
-
-        return ret
-
-    def authenticate(self, authstr, system=None):
-        """
-        authenticate a message
-        authstr is the message to be validated.
-        system is required for munge.
-        """
-        if self.type == 'munge':
-            return self._authenticate_munge(authstr, system)
-        elif self.type == 'mock':
-            return self._authenticate_mock(authstr, system)
-        else:
-            raise OSError('Unsupported auth type')
