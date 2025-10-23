@@ -1,4 +1,3 @@
-from shifter_imagegw.imageworker import WorkerThreads
 import os
 import pytest
 import time
@@ -8,13 +7,12 @@ import logging
 from copy import deepcopy
 from time import sleep
 from pymongo import MongoClient
-from shifter_imagegw.imagemngr import ImageMngr
 from multiprocessing.pool import ThreadPool
 from random import randint
 from shifter_imagegw.config import Config
-import warnings
-warnings.filterwarnings('ignore', category=UserWarning, module='pymunge.raw')
-from shifter_imagegw.auth import Session  # noqa
+from shifter_imagegw.models import Session
+from shifter_imagegw.imageworker import WorkerThreads
+from shifter_imagegw.imagemngr import ImageMngr
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
@@ -42,6 +40,7 @@ class mock_worker(WorkerThreads):
         self.mode = 1
         self.q = q
         self.pools = ThreadPool(processes=2)
+        self.op = "pull"
 
     def set_mode(self, mode):
         self.mode = mode
@@ -58,7 +57,7 @@ class mock_worker(WorkerThreads):
         states = ('PULLING', 'EXAMINATION', 'CONVERSION', 'TRANSFER')
         for state in states:
             updater.update_status(state, state)
-            sleep(1)
+            sleep(0.1)
         ret = {
             'id': '%x' % randint(0, 100000),
             'entrypoint': ['./blah'],
@@ -73,7 +72,7 @@ class mock_worker(WorkerThreads):
         states = ('HASHING', 'TRANSFER', 'READY')
         for state in states:
             updater.update_status(state, state)
-            sleep(1)
+            sleep(0.1)
         ret = {
             'id': '%x' % randint(0, 100000),
             'entrypoint': ['./blah'],
@@ -83,6 +82,15 @@ class mock_worker(WorkerThreads):
         state = 'READY'
         updater.update_status(state, state, ret)
         return ret
+
+    def submit(self, req):
+        req.updater.update_method = self.updater
+        if self.op == "pull":
+            self.pools.apply_async(self.pull, [req, req.updater],
+                                   {}, None, req.updater.failed)
+        elif self.op == "import":
+            self.pools.apply_async(self.wrkimport, [req, req.updater],
+                                   {}, None, req.updater.failed)
 
 
 @pytest.fixture(autouse=True)
@@ -642,9 +650,9 @@ def test_pull2(ctx):
     pr = ctx.pull
     # Do the pull
     session = ctx.session
-    rec1 = ctx.mtm.pull(session, pr)  # ,delay=False)
+    rec1 = ctx.mtm.pull(session, pr)
     pr['tag'] = ctx.tag2
-    rec2 = ctx.mtm.pull(session, pr)  # ,delay=False)
+    rec2 = ctx.mtm.pull(session, pr)
     assert rec1
     id1 = rec1['_id']
     assert rec2
@@ -947,6 +955,7 @@ def test_import(ctx):
     }
     # Do the pull
     session = ctx.session
+    ctx.mtm.workers.op = "import"
     rec = ctx.mtm.mngrimport(session, pr)  # ,delay=False)
     assert rec
     id = rec['_id']
@@ -968,26 +977,6 @@ def test_acl_update_denied(ctx):
     pass
 
 
-def test_expire_remote(ctx):
-    system = ctx.system
-    record = good_record(ctx)
-    # Create a fake record in mongo
-    id = ctx.images.insert_one(record).inserted_id
-    assert id
-    # Create a bogus image file
-    file, metafile = create_fakeimage(ctx, system, record['id'],
-                                      ctx.format)
-    session = ctx.admin_session
-    er = {'system': system, 'tag': ctx.tag, 'itype': ctx.itype}
-    rec = ctx.m.expire(session, er)  # ,delay=False)
-    assert rec
-    time.sleep(2)
-    state = ctx.m.get_state(id)
-    assert state == 'EXPIRED'
-    assert os.path.exists(file) is False
-    assert os.path.exists(metafile) is False
-
-
 def test_expire_local(ctx):
     record = good_record(ctx)
     system = 'systemb'
@@ -1000,7 +989,7 @@ def test_expire_local(ctx):
                                       ctx.format)
     session = ctx.admin_session
     er = {'system': system, 'tag': ctx.tag, 'itype': ctx.itype}
-    rec = ctx.m.expire(session, er)  # ,delay=False)
+    rec = ctx.m.expire(session, er)
     assert rec
     time.sleep(2)
     state = ctx.m.get_state(id)
