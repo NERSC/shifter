@@ -33,18 +33,19 @@ from time import time
 from shifter_imagegw import converters, transfer
 from shifter_imagegw.dockerv2_ext import DockerV2ext
 from shifter_imagegw.config import Config
+from shifter_imagegw.models import Session
 
 
 class Updater(object):
     """
     This is a helper class to update the status for the request.
     """
-    def __init__(self, ident, update_method):
+    def __init__(self, ident: str = None, update_method=None):
         """ init the updater. """
         self.ident = ident
         self.update_method = update_method
 
-    def update_status(self, state, message, response=None):
+    def update_status(self, state: str, message: str, response=None):
         """ update the status including the heartbeat and message """
         if self.update_method:
             metadata = {'heartbeat': time(),
@@ -53,6 +54,7 @@ class Updater(object):
             self.update_method(ident=self.ident, state=state, meta=metadata)
 
     def failed(self, e):
+        logging.error(f"Failure: {e}")
         if self.update_method:
             metadata = {'heartbeat': time(),
                         'message': "Operation Failed",
@@ -62,6 +64,10 @@ class Updater(object):
 
 
 class WorkerThreads(object):
+    """
+    This class handles creating a thread pool and 
+    submitting async work to these threads.
+    """
     def __init__(self, conf, threads=1):
         """
         Initialize the thread pool and queues.
@@ -83,82 +89,117 @@ class WorkerThreads(object):
         """
         self.updater_queue.put({'id': ident, 'state': state, 'meta': meta})
 
-    def pull(self, request, updater):
+    def submit(self, req: object):
+        # We have to override the updater method here since we
+        # didn't have the method when it was initialized.
+        req.updater.update_method = self.updater
         try:
-            req = ImageRequest(self.conf, request, updater)
-            req.pull()
-        except Exception as err:
-            resp = {'error_type': str(type(err)),
-                    'message': str(err)}
+            self.pools.apply_async(req.run, [], {}, None, req.updater.failed)
+        except Exception as ex:
+            logging.error(str(ex))
+            raise ex
 
-            updater.update_status('FAILURE', 'FAILURE', response=resp)
 
-    def expire(self, request, updater):
-        try:
-            req = ImageRequest(self.conf, request, updater)
-            req.remove_image()
-        except Exception as err:
-            resp = {'error_type': str(type(err)),
-                    'message': str(err)}
-            updater.update_status('FAILURE', 'FAILURE', response=resp)
+class AsyncRequest(object):
+    """
+    Basea async request class
+    """
+    clean_items = []
 
-    def wrkimport(self, request, updater):
-        try:
-            req = ImageRequest(self.conf, request, updater)
-            req.img_import()
-        except Exception as err:
-            resp = {'error_type': str(type(err)),
-                    'message': str(err)}
-            updater.update_status('FAILURE', 'FAILURE', response=resp)
+    def _null_func(self, **kwargs):
+        pass
 
-    def dopull(self, ident, request):
+    def _cleanup_temporary(self):
         """
-        Kick off a pull operation.
+        Helper function to cleanup any temporary files or directories.
         """
-        logging.debug("dopull called")
-        updater = Updater(ident, self.updater)
-        self.pools.apply_async(self.pull, [request, updater],
-                               {}, None, updater.failed)
+        for cleanitem in self.clean_items:
+            logging.debug(f"Cleaning {cleanitem}")
+            if cleanitem is None:
+                continue
 
-    def doexpire(self, ident, request):
-        updater = Updater(ident, self.updater)
-        self.pools.apply_async(self.expire, [request, updater],
-                               {}, None, updater.failed)
+            if not isinstance(cleanitem, str):
+                raise ValueError(f'Invalid type for {cleanitem},{type(cleanitem)}')
+            if cleanitem == '' or cleanitem == '/':
+                raise ValueError(f'Invalid value for {cleanitem}: {cleanitem}')
+            if not cleanitem.startswith(self.conf.ExpandDirectory):
+                raise ValueError(f'Invalid location for {cleanitem}: {cleanitem}')
+            if os.path.exists(cleanitem):
+                logging.info(f"Worker: removing {cleanitem}")
+                try:
+                    subprocess.call(['chmod', '-R', 'u+w', cleanitem])
+                    if os.path.isdir(cleanitem):
+                        logging.debug(f"rmtree on {cleanitem}")
+                        shutil.rmtree(cleanitem, ignore_errors=True)
+                    else:
+                        os.unlink(cleanitem)
+                except Exception:
+                    logging.error("Worker: caught exception while trying to "
+                                  f"clean up {cleanitem}")
 
-    def dowrkimport(self, ident, request):
-        logging.debug("wrkimport starting")
-        updater = Updater(ident, self.updater)
-        self.pools.apply_async(self.wrkimport, [request, updater],
-                               {}, None, updater.failed)
+    def _write_metadata(self):
+        """
+        Write out the metadata file
+
+        Returns True on success
+        """
+        self.meta['userACL'] = self.userACL
+        self.meta['groupACL'] = self.groupACL
+
+        edir = self.conf.ExpandDirectory
+
+        # initially write metadata to tempfile
+        (fdesc, metafile) = tempfile.mkstemp(prefix=self.id,
+                                             suffix='meta',
+                                             dir=edir)
+        os.close(fdesc)
+        self.metafile = metafile
+        self.clean_items.append(self.metafile)
+
+        status = converters.writemeta(self.fmt, self.meta, metafile)
+
+        # after success move to final name
+        final_metafile = os.path.join(edir, f'{self.id}.meta')
+        shutil.move(metafile, final_metafile)
+        self.metafile = final_metafile
+
+        return status
 
 
-class ImageRequest(object):
-    def __init__(self, conf: Config, request, updater):
+class PullRequest(AsyncRequest):
+    """
+    Class to process a pull request.  This handles the entire
+    workflow from pulling, converting and transferring
+    """
+    def __init__(self,
+                 conf: Config,
+                 system: str,
+                 tag: str,
+                 ident: str,
+                 session: Session,
+                 useracl=None,
+                 groupacl=None):
         self.conf = conf
-        self.updater = updater
         self.fmt = self.conf.DefaultImageFormat
-        self.system = request['system']
-        if self.system not in self.conf.Platforms:
-            raise KeyError(f'{self.system} is not in the configuration')
+        self.system = system
         self.sysconf = self.conf.Platforms[self.system]
-        self.tag = request.get('tag')
-        self.id = request.get('id')
+        self.tag = tag
+        self.ident = ident
+        self.id = None
         self.meta = None
         self.meta_only = False
-        self.import_image = False
         self.metafile = None
         self.expandedpath = None
         self.imagefile = None
-        self.filepath = request.get('filepath')
-        self.session = request.get('session')
+        self.session = session
         self.tokens = None
         self.user = None
         if self.session:
             self.user = self.session.user
             self.tokens = self.session.tokens
-
-        self.userACL = request.get('userACL')
-        self.groupACL = request.get('groupACL')
+        self.userACL = useracl
+        self.groupACL = groupacl
+        self.updater = Updater(ident, self._null_func)
 
     def _pull_dockerv2(self, location, repo, tag):
         """ Private method to pull a docker images. """
@@ -198,13 +239,13 @@ class ImageRequest(object):
             self.expandedpath = tempfile.mkdtemp(suffix='extract',
                                                  prefix=self.id,
                                                  dir=edir)
+            self.clean_items.append(self.expandedpath)
 
             self.updater.update_status("PULLING", 'Extracting Layers')
             dock.extract_docker_layers(self.expandedpath)
             return True
         except Exception as e:
             logging.warning(str(e))
-            traceback.print_exc()
             raise e
 
     def _pull_image(self):
@@ -239,14 +280,10 @@ class ImageRequest(object):
         else:
             raise KeyError(f'{location} not found in configuration')
 
-        if rtype == 'dockerv2':
-            return self._pull_dockerv2(location, repo, tag)
-        elif rtype == 'dockerhub':
-            logging.warning("Use of depcreated dockerhub type")
-            msg = 'dockerhub type is depcreated. Use dockerv2'
-            raise NotImplementedError(msg)
-        else:
+        if rtype != 'dockerv2':
             raise NotImplementedError(f'Unsupported remote type {rtype}')
+
+        return self._pull_dockerv2(location, repo, tag)
 
     def _examine_image(self):
         """
@@ -278,37 +315,11 @@ class ImageRequest(object):
 
         imagefile = os.path.join(edir, f'{self.id}.{self.fmt}')
         self.imagefile = imagefile
+        self.clean_items.append(self.imagefile)
 
         status = converters.convert(self.fmt,
                                     self.expandedpath,
                                     imagefile, options=opts)
-        return status
-
-    def _write_metadata(self):
-        """
-        Write out the metadata file
-
-        Returns True on success
-        """
-        self.meta['userACL'] = self.userACL
-        self.meta['groupACL'] = self.groupACL
-
-        edir = self.conf.ExpandDirectory
-
-        # initially write metadata to tempfile
-        (fdesc, metafile) = tempfile.mkstemp(prefix=self.id,
-                                             suffix='meta',
-                                             dir=edir)
-        os.close(fdesc)
-        self.metafile = metafile
-
-        status = converters.writemeta(self.fmt, self.meta, metafile)
-
-        # after success move to final name
-        final_metafile = os.path.join(edir, f'{self.id}.meta')
-        shutil.move(metafile, final_metafile)
-        self.metafile = final_metafile
-
         return status
 
     def _check_image(self):
@@ -333,74 +344,12 @@ class ImageRequest(object):
             return transfer.transfer(self.sysconf, None,
                                      self.metafile, logging)
         else:
-            if not self.import_image:
-                return transfer.transfer(self.sysconf,
-                                         self.imagefile,
-                                         self.metafile,
-                                         logging, self.import_image)
-            else:
-                return transfer.transfer(self.sysconf,
-                                         self.filepath,
-                                         self.metafile,
-                                         logging,
-                                         self.import_image,
-                                         self.imagefile)
+            return transfer.transfer(self.sysconf,
+                                     self.imagefile,
+                                     self.metafile,
+                                     logging)
 
-    def remove_image(self):
-        """
-        Remove the image to the target system based on the configuration.
-
-        Returns True on success
-        """
-        logging.debug(f"do expire system={self.system} tag={self.tag}")
-        self.updater.update_status('EXPIRING', 'EXPIRING')
-
-        imagefile = f'{self.id}.{self.fmt}'
-        meta = f'{self.id}.meta'
-        if self.metafile:
-            meta = self.metafile
-        if transfer.remove(self.sysconf, imagefile, meta, logging):
-            self.updater.update_status('EXPIRED', 'EXPIRED')
-        else:
-            logging.warn("Worker: Expire failed")
-            raise OSError('Expire failed')
-
-    def _cleanup_temporary(self):
-        """
-        Helper function to cleanup any temporary files or directories.
-        """
-        if not self.import_image:
-            items = (self.expandedpath,
-                     self.imagefile,
-                     self.metafile)
-        else:
-            items = (self.expandedpath,
-                     self.metafile)
-        for cleanitem in items:
-            if cleanitem is None:
-                continue
-            if isinstance(cleanitem, str):
-                cleanitem = str(cleanitem)
-
-            if not isinstance(cleanitem, str):
-                raise ValueError(f'Invalid type for {cleanitem},{type(cleanitem)}')
-            if cleanitem == '' or cleanitem == '/':
-                raise ValueError(f'Invalid value for {cleanitem}: {cleanitem}')
-            if not cleanitem.startswith(self.conf.ExpandDirectory):
-                raise ValueError(f'Invalid location for {cleanitem}: {cleanitem}')
-            if os.path.exists(cleanitem):
-                logging.info(f"Worker: removing {cleanitem}")
-                try:
-                    subprocess.call(['chmod', '-R', 'u+w', cleanitem])
-                    if os.path.isdir(cleanitem):
-                        shutil.rmtree(cleanitem, ignore_errors=True)
-                    else:
-                        os.unlink(cleanitem)
-                except Exception:
-                    logging.error("Worker: caught exception while trying to "
-                                  f"clean up {cleanitem}")
-
-    def pull(self):
+    def run(self):
         """
         Main task to do the full workflow of pulling an image and transferring
         it
@@ -453,20 +402,48 @@ class ImageRequest(object):
             return self.meta
 
         except Exception as e:
-            logging.error(f"ERROR: dopull failed system={self.system} tag={self.tag}")
-            print(sys.exc_info()[1])
+            logging.error(f"ERROR: Dopull failed system={self.system} tag={self.tag}")
             self.updater.update_status('FAILURE', 'FAILED')
 
             # TODO: add a debugging flag and only disable cleanup if debugging
             self._cleanup_temporary()
             raise e
 
-    def img_import(self):
+
+class ImportRequest(AsyncRequest):
+    def __init__(self,
+                 conf: Config,
+                 system: str,
+                 tag: str,
+                 id: str,
+                 session: Session,
+                 filepath: str,
+                 useracl=None,
+                 groupacl=None):
+
+        self.conf = conf
+        self.fmt = conf.DefaultImageFormat
+        self.system = system
+        self.sysconf = conf.Platforms[self.system]
+        self.tag = tag
+        self.id = id
+        self.meta = None
+        self.import_image = True
+        self.metafile = None
+        self.expandedpath = None
+        self.imagefile = None
+        self.filepath = filepath
+        self.session = session
+        self.user = session.user
+        self.userACL = None
+        self.groupACL = None
+        self.updater = Updater(id, self._null_func)
+
+    def run(self):
         """
         Task to do the full workflow of copying an image and processing it
         """
         tag = self.tag
-        self.import_image = True
         logging.debug(f"img_import system={self.system} tag={tag}")
         try:
             # Step 0 - Check if path is valid
@@ -476,14 +453,12 @@ class ImageRequest(object):
                                        import_image=self.import_image):
                 raise OSError('Path not valid')
             # Step 1 - Calculate the hash of the file
-            logging.debug("starting import hashing")
+            logging.debug("Starting import hashing")
             self.updater.update_status('HASHING', 'HASHING')
             self.id = transfer.hash_file(self.filepath,
                                          self.sysconf, logging)
             # Step 2 - Populate the metadata file
             logging.debug("starting writing metadata")
-            # if not self.meta:
-            #     raise OSError('Metadata not populated')
             self.meta = {
                 'format': self.fmt,
                 'user': self.user
@@ -507,11 +482,61 @@ class ImageRequest(object):
             self._cleanup_temporary()
             return self.meta
 
-        except Exception:
+        except Exception as ex:
             logging.error(f"ERROR: img_import failed system={self.system} tag={self.tag}")
-            print(sys.exc_info()[1])
+            logging.error(f"{str(e)}")
             self.updater.update_status('FAILURE', 'FAILED')
 
             # TODO: add a debugging flag and only disable cleanup if debugging
             self._cleanup_temporary()
             raise
+
+    def _transfer_image(self):
+        """
+        Transfers the image to the target system based on the configuration.
+
+        Returns True on success
+        """
+        return transfer.transfer(self.sysconf,
+                                 self.filepath,
+                                 self.metafile,
+                                 logging,
+                                 self.import_image,
+                                 self.imagefile)
+
+
+class ExpireRequest(AsyncRequest):
+    def __init__(self,
+                 conf: Config,
+                 system: str,
+                 tag: str,
+                 id: str,
+                 ident: str):
+
+        self.conf = conf
+        self.fmt = conf.DefaultImageFormat
+        self.system = system
+        self.sysconf = conf.Platforms[self.system]
+        self.tag = tag
+        self.id = id
+        self.metafile = None
+        self.updater = Updater(ident, self._null_func)
+
+    def run(self):
+        """
+        Remove the image to the target system based on the configuration.
+
+        Returns True on success
+        """
+        logging.debug(f"do expire system={self.system} tag={self.tag}")
+        self.updater.update_status('EXPIRING', 'EXPIRING')
+
+        imagefile = f'{self.id}.{self.fmt}'
+        meta = f'{self.id}.meta'
+        if self.metafile:
+            meta = self.metafile
+        if transfer.remove(self.sysconf, imagefile, meta, logging):
+            self.updater.update_status('EXPIRED', 'EXPIRED')
+        else:
+            logging.warning("Worker: Expire failed")
+            raise OSError('Expire failed')
