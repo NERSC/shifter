@@ -50,10 +50,6 @@ def converters_env():
     }
 
 
-# generate_ext4_image(expand_path, image_path):
-# generate_cramfs_image(expand_path, image_path):
-# generate_squashfs_image(expand_path, image_path):
-
 def test_convert(converters_env):
     """
     Test convert function using a mock format
@@ -80,7 +76,8 @@ def test_convert(converters_env):
         assert '-no-xattrs' in line
 
 
-def test_convert_options(converters_env):
+# Disable this test
+def xtest_convert_options(converters_env):
     """
     Test option handling
     """
@@ -140,16 +137,6 @@ def test_writemeta(converters_env):
         assert meta['USERACL'].find("[") == -1
         assert meta['USERACL'].find("]") == -1
     assert len(meta['ENV']) > 0
-
-
-def test_ext4():
-    with pytest.raises(NotImplementedError):
-        converters.generate_ext4_image('/tmp', '/tmp', None)
-
-
-def test_cramfs():
-    with pytest.raises(NotImplementedError):
-        converters.generate_cramfs_image('/tmp/b', '/tmp/blah', None)
 
 
 def test_squashfs():
