@@ -71,9 +71,6 @@ class Config():
             data = config['Platforms'][platform]
             self.Platforms[platform] = Platform(data)
 
-        self.Locations = config['Locations']
-        self.Platofrms = config['Platforms']
-
         loglevel = config.get('LogLevel', 'info').lower()
         loglevel_map = {
             'debug': logging.DEBUG,

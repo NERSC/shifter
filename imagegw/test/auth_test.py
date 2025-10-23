@@ -19,7 +19,7 @@
 from shifter_imagegw.config import Config
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning, module='pymunge.raw')
-from shifter_imagegw.auth import authenticate
+from shifter_imagegw.auth import authenticate  # noqa
 
 
 def test_authenticate(mocker):

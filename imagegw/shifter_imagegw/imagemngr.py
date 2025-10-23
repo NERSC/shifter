@@ -34,6 +34,9 @@ from time import time, sleep
 from pymongo import MongoClient
 import pymongo.errors
 from shifter_imagegw.imageworker import WorkerThreads
+from shifter_imagegw.imageworker import PullRequest
+from shifter_imagegw.imageworker import ImportRequest
+from shifter_imagegw.imageworker import ExpireRequest
 from shifter_imagegw.config import Config
 import grp
 
@@ -170,7 +173,7 @@ class ImageMngr(object):
         admins = self.platforms[system].admins
         user = session.user
         if user in admins:
-            self.logger.debug('user {user} is an admin')
+            self.logger.debug(f'user {user} is an admin')
             return True
         return False
 
@@ -509,7 +512,14 @@ class ImageMngr(object):
             request['session'] = session
             self.logger.debug("Calling do pull with queue="
                               f"{request['system']}")
-            self.workers.dopull(ident, request)
+            pr = PullRequest(self.config,
+                             session.system,
+                             request['tag'],
+                             ident,
+                             session,
+                             useracl=request['userACL'],
+                             groupacl=request['groupACL'])
+            self.workers.submit(pr)
 
             memo = "pull request queued " \
                    f"s={request['system']} tag={request['tag']}"
@@ -561,7 +571,13 @@ class ImageMngr(object):
         request['session'] = session
         self.logger.debug("Calling wrkimport with queue="
                           f"{request['system']}")
-        self.workers.dowrkimport(ident, request)
+        ir = ImportRequest(self.config,
+                           session.system,
+                           image['tag'],
+                           ident,
+                           session,
+                           image['filepath'])
+        self.workers.submit(ir)
 
         memo = "import request queued " \
                f"s={request['system']} tag={request['tag']}"
@@ -774,8 +790,13 @@ class ImageMngr(object):
         """ Helper function to expire by id """
         memo = f"Calling do expire id={ident}"
         self.logger.debug(memo)
+        er = ExpireRequest(self.config,
+                           rec['system'],
+                           rec['tag'],
+                           rec['id'],
+                           ident)
 
-        self.workers.doexpire(ident, rec)
+        self.workers.submit(er)
         self.logger.info("expire request queued "
                          f"s={rec['system']} tag={ident}")
 
@@ -795,7 +816,13 @@ class ImageMngr(object):
         memo = "Calling do expire with " \
                f"queue={image['system']} id={ident}"
         self.logger.debug(memo)
-        self.workers.doexpire(ident, rec)
+        er = ExpireRequest(self.config,
+                           rec['system'],
+                           rec['tag'],
+                           rec['id'],
+                           ident)
+
+        self.workers.submit(er)
 
         memo = "expire request queued " \
                f"s={image['system']} tag={image['tag']}"

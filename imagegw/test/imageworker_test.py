@@ -20,9 +20,10 @@ import os
 import pytest
 import json
 import shutil
-from copy import deepcopy
-from shifter_imagegw import imageworker
 from shifter_imagegw.config import Config
+from shifter_imagegw.models import Session
+from shifter_imagegw.imageworker import PullRequest
+from shifter_imagegw import imageworker
 DEBUG = False
 
 
@@ -64,6 +65,7 @@ def test_setup():
     if not os.path.exists(idir):
         os.makedirs(idir)
     imageDir = idir
+    session = Session(uid=100, gid=100, user="user", group="user", system=system)
 
     return {
         'updater': updater,
@@ -73,8 +75,21 @@ def test_setup():
         'tag': tag,
         'request': request,
         'expandedpath': expandedpath,
-        'imageDir': imageDir
+        'imageDir': imageDir,
+        'session': session
     }
+
+
+@pytest.fixture
+def pull_request(test_setup):
+    ctx = test_setup
+    cleanup_cache(ctx)
+    req = PullRequest(test_setup['config'],
+                      ctx['system'],
+                      ctx['tag'],
+                      'foo',
+                      ctx['session'])
+    return req
 
 
 def cleanup_cache(test_setup):
@@ -111,182 +126,139 @@ def read_metafile(metafile):
     return kv
 
 
-def test_pull_image_basic(test_setup):
-    cleanup_cache(test_setup)
-    request = {'system': test_setup['system'], 'itype': test_setup['itype'], 'tag': test_setup['tag']}
-    req = imageworker.ImageRequest(test_setup['config'], request, test_setup['updater'])
-    status = req._pull_image()
+def test_pull_image_basic(pull_request):
+    status = pull_request._pull_image()
     assert status
-    assert req.meta
-    assert 'id' in req.meta
-    assert 'workdir' in req.meta
-    assert req.meta['entrypoint'][0] == "/bin/sh"
-    assert req.meta['cmd'][0] == "/app.sh"
-    assert os.path.exists(req.expandedpath)
+    assert pull_request.meta
+    assert 'id' in pull_request.meta
+    assert 'workdir' in pull_request.meta
+    assert pull_request.meta['entrypoint'][0] == "/bin/sh"
+    assert pull_request.meta['cmd'][0] == "/app.sh"
+    assert os.path.exists(pull_request.expandedpath)
 
 
 # Pull the image but explicitly specify dockerhub
-def test_pull_image_dockerhub(test_setup):
-    request = {
-        'system': test_setup['system'],
-        'itype': test_setup['itype'],
-        'tag': 'index.docker.io/ubuntu:latest'
-    }
-    req = imageworker.ImageRequest(test_setup['config'], request, test_setup['updater'])
-    status = req._pull_image()
+def test_pull_image_dockerhub(pull_request):
+    pull_request.tag = 'index.docker.io/ubuntu:latest'
+    status = pull_request._pull_image()
     assert status
-    assert req.meta
-    assert 'id' in req.meta
-    assert os.path.exists(req.expandedpath)
+    assert pull_request.meta
+    assert 'id' in pull_request.meta
+    assert os.path.exists(pull_request.expandedpath)
 
 
 # Use the URL format of the location, like an alias
-def test_pull_image_url(test_setup):
-    cleanup_cache(test_setup)
-    request = {
-        'system': test_setup['system'],
-        'itype': test_setup['itype'],
-        'tag': 'urltest/ubuntu:latest'
-    }
-    req = imageworker.ImageRequest(test_setup['config'], request, test_setup['updater'])
-    status = req._pull_image()
+def test_pull_image_url(pull_request):
+    pull_request.tag = 'urltest/ubuntu:latest'
+    status = pull_request._pull_image()
     assert status
-    assert req.meta
-    assert 'id' in req.meta
-    assert os.path.exists(req.expandedpath)
+    assert pull_request.meta
+    assert 'id' in pull_request.meta
+    assert os.path.exists(pull_request.expandedpath)
 
 
 # Use the URL format of the location and pull a nested image
 # (e.g. with an org)
-def test_pull_image_url_org(test_setup):
-    cleanup_cache(test_setup)
-    request = {
-        'system': test_setup['system'],
-        'itype': test_setup['itype'],
-        'tag': f'urltest/{test_setup["tag"]}'
-    }
-    req = imageworker.ImageRequest(test_setup['config'], request, test_setup['updater'])
-    status = req._pull_image()
+def test_pull_image_url_org(test_setup, pull_request):
+    pull_request.tag = f'urltest/{test_setup["tag"]}'
+    status = pull_request._pull_image()
     assert status
-    assert req.meta
-    assert 'id' in req.meta
-    assert os.path.exists(req.expandedpath)
+    assert pull_request.meta
+    assert 'id' in pull_request.meta
+    assert os.path.exists(pull_request.expandedpath)
 
 
-def test_convert_image(test_setup):
+def test_convert_image(test_setup, pull_request):
     # Create a bogus tree
-    cleanup_cache(test_setup)
+    # cleanup_cache(test_setup)
     base = f"{test_setup['imageDir']}/image"
     if os.path.exists(base):
         shutil.rmtree(base)
     os.makedirs(f'{base}/a/b/c')
-    request = test_setup['request']
-    req = imageworker.ImageRequest(test_setup['config'], request, test_setup['updater'])
-    req.id = 'bogus'
-    req.expandedpath = base
-    status = req._convert_image()
+    pull_request.id = 'bogus'
+    pull_request.expandedpath = base
+    status = pull_request._convert_image()
     assert status
     # Cleanup
     if os.path.exists(base):
         shutil.rmtree(base)
 
 
-def test_transfer_image(test_setup):
+def test_transfer_image(test_setup, pull_request):
     hash = 'bogus'
     imagefile = os.path.join(test_setup['config'].ExpandDirectory,
                              f'{hash}.squashfs')
-    request = test_setup['request']
-    request['imagefile'] = imagefile
+    pull_request.imagefile = imagefile
     with open(imagefile, 'w') as f:
         f.write('bogus')
     assert os.path.exists(imagefile)
-    req = imageworker.ImageRequest(test_setup['config'], request, test_setup['updater'])
-    status = req._transfer_image()
+    status = pull_request._transfer_image()
     assert status
 
 
-def test_bad_pull_docker(test_setup):
-    cleanup_cache(test_setup)
-    request = test_setup['request']
-    conf = deepcopy(test_setup['config'])
+def test_bad_pull_docker(test_setup, pull_request):
     os.environ['UMOCI_FAIL'] = '1'
-    req = imageworker.ImageRequest(conf, request, test_setup['updater'])
     with pytest.raises(OSError):
-        req._pull_dockerv2('index.docker.io',
+        pull_request._pull_dockerv2('index.docker.io',
                            'scanon/shanetest', 'latest')
     os.environ.pop('UMOCI_FAIL')
 
 
-def test_pull_docker(test_setup):
-    cleanup_cache(test_setup)
-    request = test_setup['request']
-    req = imageworker.ImageRequest(test_setup['config'], request, test_setup['updater'])
-    resp = req._pull_dockerv2('index.docker.io',
-                              'scanon/shanetest', 'latest')
-    assert resp
-
-# def test_pull_docker_unicode(self):
-#     request = {
-#         'system': test_setup['system'],
-#         'itype': test_setup['itype'],
-#         'tag': 'index.docker.io/scanon/unicode:latest'
-#     }
-#     req = imageworker.ImageRequest(test_setup['config'], request, test_setup['updater'])
-#     status = req._pull_image()
-#     assert status
-#     assert req.meta
-#     assert 'id' in req.meta
-#     assert os.path.exists(req.expandedpath)
-#     tfile = os.path.join(req.expandedpath, '\ua000')
-#     assert os.path.exists(tfile)
-#     return
-
-
-def test_pull_image(test_setup):
-    request = test_setup['request']
-    req = imageworker.ImageRequest(test_setup['config'], request, test_setup['updater'])
-    resp = req._pull_image()
+def test_pull_docker(pull_request):
+    resp = pull_request._pull_dockerv2('index.docker.io',
+                                      'scanon/shanetest', 'latest')
     assert resp
 
 
-def test_puller_real(test_setup):
-    request = test_setup['request']
-    req = imageworker.ImageRequest(test_setup['config'], request, test_setup['updater'])
-    result = req.pull()
+def test_pull_image(pull_request):
+    resp = pull_request._pull_image()
+    assert resp
+
+
+def test_puller_real(test_setup, pull_request):
+    result = pull_request.run()
     mf = get_metafile(test_setup, result['id'])
     mfdata = read_metafile(mf)
-    print(mfdata)
+
     assert 'WORKDIR' in mfdata
-    request['userACL'] = [1001]
-    req = imageworker.ImageRequest(test_setup['config'], request, test_setup['updater'])
-    result = req.pull()
-    req.remove_image()
+    pull_request.userACL = [1001]
+    result = pull_request.run()
 
 
-def test_examine(test_setup):
-    conf = deepcopy(test_setup['config'])
-    conf.examiner = 'exam.sh'
+def test_examine(test_setup, pull_request):
     base = f"{test_setup['imageDir']}/image"
-    request = {
-               'system': test_setup['system'],
-               }
-    req = imageworker.ImageRequest(conf, request, test_setup['updater'])
-    req.id = 'bogus'
-    req.expandedpath = base
-    result = req._examine_image()
+    pull_request.conf.examiner = "exam.sh"
+    pull_request.id = 'bogus'
+    pull_request.expandedpath = base
+    result = pull_request._examine_image()
     assert result
-    req = imageworker.ImageRequest(conf, request, test_setup['updater'])
-    req.id = 'bad'
-    req.expandedpath = base
-    result = req._examine_image()
+    pull_request.id = 'bad'
+    pull_request.expandedpath = base
+    result = pull_request._examine_image()
     assert not result
 
 
-def test_labels(test_setup):
-    cleanup_cache(test_setup)
-    request = test_setup['request']
-    conf = deepcopy(test_setup['config'])
-    req = imageworker.ImageRequest(conf, request, test_setup['updater'])
-    resp = req.pull()
+def test_labels(pull_request):
+    resp = pull_request.run()
     assert 'labels' in resp
     assert 'alabel' in resp['labels']
+
+
+def test_pull_image_new(test_setup):
+    cleanup_cache(test_setup)
+    system = test_setup['system']
+    req = imageworker.PullRequest(test_setup['config'],
+                                  test_setup['system'],
+                                  test_setup['tag'],
+                                  "foo",
+                                  test_setup['session'])
+    status = req.run()
+    assert status
+    assert req.meta
+    assert 'id' in req.meta
+    assert 'workdir' in req.meta
+    assert req.meta['entrypoint'][0] == "/bin/sh"
+    assert req.meta['cmd'][0] == "/app.sh"
+    id = "468b48e3864f5489a6fa4a35843292b101ac73c31e3272688fa3220ff485f549"
+    fn = f"{test_setup['config'].Platforms[system].imageDir}/{id}.squashfs"
+    assert os.path.exists(fn)

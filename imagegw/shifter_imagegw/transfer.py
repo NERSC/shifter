@@ -60,9 +60,9 @@ def _exec_and_log(cmd, logger):
     stderr = bstderr.decode("utf-8")
     if logger is not None:
         if stdout is not None and len(stdout) > 0:
-            logger.debug("{cmd[0]} stdout: {stdout.strip()}")
+            logger.debug(f"{cmd[0]} stdout: {stdout.strip()}")
         if stderr is not None and len(stderr) > 0:
-            logger.error("{cmd[0]} stdout: {stdoerr.strip()}")
+            logger.error(f"{cmd[0]} stderr: {stderr.strip()}")
     return proc.returncode
 
 
@@ -84,9 +84,9 @@ def _get_stdout_and_log(cmd, logger=None):
     stderr = bstderr.decode("utf-8")
     if logger is not None:
         if stdout is not None and len(stdout) > 0:
-            logger.debug("{cmd[0]} stdout: {stdout.strip()}")
+            logger.debug(f"{cmd[0]} stdout: {stdout.strip()}")
         if stderr is not None and len(stderr) > 0:
-            logger.error("{cmd[0]} stdout: {stdoerr.strip()}")
+            logger.error(f"{cmd[0]} stdout: {stderr.strip()}")
             # push this error back to calling function so
             # it can be reported sensibly
             rerror = "%s %s" % (cmd[0], stderr.strip())
