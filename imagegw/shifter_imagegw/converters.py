@@ -29,22 +29,6 @@ import tempfile
 from shifter_imagegw.util import program_exists, rmtree
 
 
-def generate_ext4_image(expand_path, image_path, options):
-    """
-    Creates an ext4 based image
-    """
-    message = f'ext4 support is not supported {expand_path} {image_path}'
-    raise NotImplementedError(message)
-
-
-def generate_cramfs_image(expand_path, image_path, options):
-    """
-    Creates a CramFS based image
-    """
-    message = 'cramfs support is not supported'
-    raise NotImplementedError(message)
-
-
 def generate_squashfs_image(expand_path, image_path, options):
     """
     Creates a SquashFS based image
@@ -89,27 +73,25 @@ def convert(fmt, expand_path, image_path, options=None):
         else:
             raise ValueError("options for format should be a string or list")
 
+    if fmt != 'squashfs':
+        raise NotImplementedError(f"Format {fmt} is not a supported format")
+
+    if fmt != 'squashfs':
+        raise NotImplementedError(f"{fmt} not a supported format")
+    success = False
     try:
-        success = False
-        if fmt == 'squashfs':
-            success = generate_squashfs_image(expand_path, temp_path, opts)
-        elif fmt == 'cramfs':
-            success = generate_cramfs_image(expand_path, temp_path, opts)
-        elif fmt == 'ext4':
-            success = generate_ext4_image(expand_path, temp_path, opts)
-        elif fmt == 'mock':
-            with open(temp_path, 'w') as f:
-                line = 'bogus'
-                if options is not None:
-                    line += ' '.join(opts)
-                f.write(line)
-            success = True
-        else:
-            raise NotImplementedError(f"{fmt} not a supported format")
-    except Exception:
+        success = generate_squashfs_image(expand_path, temp_path, opts)
+        # elif fmt == 'mock':
+        #     with open(temp_path, 'w') as f:
+        #         line = 'bogus'
+        #         if options is not None:
+        #             line += ' '.join(opts)
+        #         f.write(line)
+        #     success = True
+    except Exception as e:
         if os.path.exists(temp_path):
             os.unlink(temp_path)
-        raise
+        raise e
 
     if not success:
         return False
