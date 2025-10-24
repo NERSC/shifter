@@ -20,12 +20,7 @@ import os
 import pytest
 from shifter_imagegw import converters
 from shifter_imagegw.util import program_exists
-
-
-@pytest.fixture(autouse=True)
-def set_path(monkeypatch):
-    test_dir = os.path.dirname(os.path.abspath(__file__)) + "/../test/"
-    monkeypatch.setenv("PATH", f"{os.environ['PATH']}:{test_dir}")
+from test.utils import set_path
 
 
 @pytest.fixture
@@ -77,7 +72,7 @@ def test_failure():
         program_exists('/bin/shouldnotexist')
 
 
-def test_convert_options(converters_env):
+def test_convert_options(set_path, converters_env):
     """
     Test option handling
     """
@@ -138,7 +133,7 @@ def test_writemeta(converters_env):
     assert len(meta['ENV']) > 0
 
 
-def test_squashfs(converters_env):
+def test_squashfs(set_path, converters_env):
     path = converters_env['make_fake']()
     output = f'{converters_env["outdir"]}/test.squashfs'
     resp = converters.convert('squashfs', path, output)
