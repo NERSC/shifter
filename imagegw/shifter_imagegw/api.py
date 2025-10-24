@@ -33,16 +33,15 @@ from shifter_imagegw.auth import authenticate
 
 
 mgr = None
-logger = logging.getLogger("imagegwapi")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global config
     config = Config()
-    logger.setLevel(config.LogLevel)
+    logging.basicConfig(level=config.LogLevel)
     global mgr
-    mgr = ImageMngr(config, logname="fastapi.root")
+    mgr = ImageMngr(config)
     yield
     mgr.shutdown()
 
@@ -56,7 +55,7 @@ app = FastAPI(title="Shifter Image Gateway", version="1.0.0",
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc: HTTPException):
     """ Standard error function to return a 404. """
-    logger.info("404 return")
+    logging.info("404 return")
     message = {
         'status': 404,
         'error': str(exc.detail),
@@ -92,17 +91,17 @@ def create_response(rec):
 async def imglist(system: str, authentication: str = Header(None)):
     """ List images for a specific system. """
     auth = authentication
-    logger.debug(f"list system={system}")
+    logging.debug(f"list system={system}")
     try:
         session = authenticate(config, auth, system)
         records = mgr.imglist(session, system)
         if records is None:
             raise HTTPException(status_code=404, detail='image not found')
     except AuthenticationError as ex:
-        logger.warning(f"Auth error {str(ex)}")
+        logging.warning(f"Auth error {str(ex)}")
         raise HTTPException(status_code=401, detail='Authentication Error')
     except Exception as ex:
-        logger.exception('Unknown Exception in List')
+        logging.exception('Unknown Exception in List')
         raise HTTPException(status_code=404, detail=str(ex))
     images = []
     for rec in records:
@@ -122,20 +121,20 @@ async def lookup(system: str, imgtype: str, tag: str,
 
     auth = authentication
     memo = f'lookup system={system} imgtype={imgtype} tag={tag} auth={auth}'
-    logger.debug(memo)
+    logging.debug(memo)
     try:
         session = authenticate(config, auth, system)
         i = {'system': system, 'itype': imgtype, 'tag': tag}
         rec = mgr.lookup(session, i)
     except AuthenticationError as ex:
-        logger.warning(f"Auth error {str(ex)}")
+        logging.warning(f"Auth error {str(ex)}")
         raise HTTPException(status_code=401, detail='Authentication Error')
     except Exception as ex:
-        logger.exception('Unknown Exception in List')
+        logging.exception('Unknown Exception in List')
         raise HTTPException(status_code=404, detail=str(ex))
 
     if rec is None:
-        logger.debug("Image lookup failed.")
+        logging.debug("Image lookup failed.")
         raise HTTPException(status_code=404, detail='image not found')
     logger.info(f"Image lookup {imgtype}:{tag} by user:{session.uid}")
     return create_response(rec)
@@ -149,15 +148,15 @@ async def metrics(system: str, limit: int = Query(10),
     """ Lookup an image for a system and return its record """
     auth = authentication
     memo = f'metrics system={system} auth={auth}'
-    logger.debug(memo)
+    logging.debug(memo)
     try:
         session = authenticate(config, auth, system)
         recs = mgr.get_metrics(session, system, limit)
     except AuthenticationError as ex:
-        logger.warning(f"Auth error {str(ex)}")
+        logging.warning(f"Auth error {str(ex)}")
         raise HTTPException(status_code=401, detail='Authentication Error')
     except Exception as ex:
-        logger.exception('Exception in metrics')
+        logging.exception('Exception in metrics')
         raise HTTPException(status_code=404, detail=str(ex))
     return recs
 
@@ -176,9 +175,9 @@ async def pull(system: str, imgtype: str, tag: str, data: PullRequest | None = N
         tag = f'{tag}:latest'
 
     auth = authentication
-    logger.debug(f'data: {str(data)}')
+    logging.debug(f'data: {str(data)}')
 
-    logger.debug(f"pull system={system} imgtype={imgtype} tag={tag}")
+    logging.debug(f"pull system={system} imgtype={imgtype} tag={tag}")
     i = {'system': system, 'itype': imgtype, 'tag': tag}
     if data and data.allowed_uids:
         # Convert to integers
@@ -189,16 +188,16 @@ async def pull(system: str, imgtype: str, tag: str, data: PullRequest | None = N
         i['groupACL'] = list(map(lambda x: int(x),
                              data.allowed_gids.split(',')))
     try:
-        logger.debug(i)
+        logging.debug(i)
         session = authenticate(config, auth, system)
-        logger.debug(session)
+        logging.debug(session)
         rec = mgr.pull(session, i)
-        logger.debug(rec)
+        logging.debug(rec)
     except AuthenticationError as ex:
-        logger.warning(f"Auth error {str(ex)}")
+        logging.warning(f"Auth error {str(ex)}")
         raise HTTPException(status_code=401, detail='Authentication Error')
     except Exception as ex:
-        logger.exception('Exception in pull')
+        logging.exception('Exception in pull')
         raise HTTPException(status_code=404, detail=str(ex))
     return create_response(rec)
 
@@ -224,7 +223,7 @@ async def doimport(system: str, imgtype: str, tag: str, data: ImportImage,
     auth = authentication
 
     memo = f"import system={system} imgtype={imgtype} tag={tag}"
-    logger.debug(memo)
+    logging.debug(memo)
     i = {'system': system, 'itype': imgtype, 'tag': tag}
     # Check for path to import file
     i['filepath'] = data.filepath
@@ -255,10 +254,10 @@ async def doimport(system: str, imgtype: str, tag: str, data: ImportImage,
                 raise AuthenticationError(msg)
         rec = mgr.mngrimport(session, i)
     except AuthenticationError as ex:
-        logger.warning(f"Auth error {str(ex)}")
+        logging.warning(f"Auth error {str(ex)}")
         raise HTTPException(status_code=401, detail='Authentication Error')
     except Exception as ex:
-        logger.exception('Exception in import')
+        logging.exception('Exception in import')
         raise HTTPException(status_code=404, detail=str(ex))
     return create_response(rec)
 
@@ -269,16 +268,16 @@ async def doimport(system: str, imgtype: str, tag: str, data: ImportImage,
 async def autoexpire(system: str, authentication: str = Header(None)):
     """ Run the autoexpire handler to purge old images """
     auth = authentication
-    logger.debug(f"autoexpire system={system}")
+    logging.debug(f"autoexpire system={system}")
     try:
         session = authenticate(config, auth, system)
-        logger.debug(session)
+        logging.debug(session)
         resp = mgr.autoexpire(session, system)
     except AuthenticationError as ex:
-        logger.warning(f"Auth error {str(ex)}")
+        logging.warning(f"Auth error {str(ex)}")
         raise HTTPException(status_code=401, detail='Authentication Error')
     except Exception as ex:
-        logger.exception('Exception in autoexpire')
+        logging.exception('Exception in autoexpire')
         raise HTTPException(status_code=404, detail=str(ex))
     return {'status': resp}
 
@@ -294,16 +293,16 @@ async def expire(system: str, imgtype: str, tag: str, authentication: str = Head
     auth = authentication
     i = {'system': system, 'itype': imgtype, 'tag': tag}
     memo = f"expire system={system} imgtype={imgtype} tag={tag}"
-    logger.debug(memo)
+    logging.debug(memo)
     resp = None
     try:
         session = authenticate(config, auth, system)
         resp = mgr.expire(session, i)
     except AuthenticationError as ex:
-        logger.warning(f"Auth error {str(ex)}")
+        logging.warning(f"Auth error {str(ex)}")
         raise HTTPException(status_code=401, detail='Authentication Error')
     except Exception as ex:
-        logger.exception('Exception in expire')
+        logging.exception('Exception in expire')
         raise HTTPException(status_code=404, detail=str(ex))
     return {'status': resp}
 
@@ -313,13 +312,13 @@ async def expire(system: str, imgtype: str, tag: str, authentication: str = Head
 @app.get('/api/queue/{system}')
 async def queue(system: str, authentication: str = Header(None)):
     """ List images for a specific system. """
-    logger.debug(f"show queue system={system}")
+    logging.debug(f"show queue system={system}")
     auth = authentication
     try:
         session = authenticate(config, auth, system)
         records = mgr.show_queue(session, system)
     except Exception as ex:
-        logger.exception('Exception in queue')
+        logging.exception('Exception in queue')
         raise HTTPException(status_code=404, detail=str(ex))
     resp = {'list': records}
     return resp

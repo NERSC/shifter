@@ -123,9 +123,9 @@ def ctx():
             self.metrics = client[db].metrics
             self.images.drop()
             logger = logging.getLogger("imagemngr")
-            self.m = ImageMngr(self.config, logger=logger)
+            self.m = ImageMngr(self.config)
             # Manager with mocked worker
-            self.mtm = ImageMngr(self.config, logger=logger)
+            self.mtm = ImageMngr(self.config)
             self.mtm.workers = mock_worker(self.mtm.status_queue)
             self.system = 'systema'
             self.itype = 'docker'
@@ -499,6 +499,78 @@ def test_lookup(ctx):
     i['tag'] = 'bogus'
     lup = ctx.m.lookup(session, i)
     assert lup is None
+
+
+def test_lookup_acl(ctx):
+    # Image is protected and user isn't in list
+    record = good_record(ctx)
+    record['userACL'] = [10]
+    record['groupACL'] = [10]
+    id = ctx.images.insert_one(record).inserted_id
+    i = ctx.query.copy()
+    session = ctx.session
+    lup = ctx.m.lookup(session, i)
+    assert not lup
+    ctx.images.delete_one({'_id': id})
+
+    # Image isn't private
+    record['private'] = False
+    record['groupACL'] = [10]
+    session = ctx.session
+    session.uid = 1
+    id = ctx.images.insert_one(record).inserted_id
+    i = ctx.query.copy()
+    session = ctx.session
+    lup = ctx.m.lookup(session, i)
+    assert lup
+    ctx.images.delete_one({'_id': id})
+
+    # User in user list
+    record = good_record(ctx)
+    record['userACL'] = [1]
+    record['groupACL'] = [10]
+    session = ctx.session
+    session.uid = 1
+    id = ctx.images.insert_one(record).inserted_id
+    i = ctx.query.copy()
+    session = ctx.session
+    lup = ctx.m.lookup(session, i)
+    assert lup
+    ctx.images.delete_one({'_id': id})
+
+    # User group in group list
+    record = good_record(ctx)
+    record['userACL'] = [1]
+    record['groupACL'] = [10]
+    session = ctx.session
+    session.uid = 10
+    session.gid = 10
+    id = ctx.images.insert_one(record).inserted_id
+    i = ctx.query.copy()
+    session = ctx.session
+    lup = ctx.m.lookup(session, i)
+    assert lup
+    ctx.images.delete_one({'_id': id})
+
+    # ACL are none or empty
+    record = good_record(ctx)
+    record['userACL'] = None
+    record['groupACL'] = None
+    session = ctx.session
+    id = ctx.images.insert_one(record).inserted_id
+    i = ctx.query.copy()
+    session = ctx.session
+    lup = ctx.m.lookup(session, i)
+    assert lup
+    ctx.images.delete_one({'_id': id})
+    record['userACL'] = []
+    record['groupACL'] = []
+    id = ctx.images.insert_one(record).inserted_id
+    i = ctx.query.copy()
+    session = ctx.session
+    lup = ctx.m.lookup(session, i)
+    assert lup
+    ctx.images.delete_one({'_id': id})
 
 
 def test_list(ctx):
@@ -1052,11 +1124,27 @@ def test_autoexpire(ctx):
                                       ctx.format)
     session = ctx.admin_session
     ctx.m.autoexpire(session, ctx.system)  # ,delay=False)
-    time.sleep(5)
+    time.sleep(1)
     state = ctx.m.get_state(id)
     assert state == 'EXPIRED'
     assert os.path.exists(file) is False
     assert os.path.exists(metafile) is False
+
+
+def test_autoexpire_missing(ctx):
+    record = good_record(ctx)
+
+    # Make it a candidate for expiration (10 secs too old)
+    record.pop('last_pull')
+    record['status'] = 'PULLING'
+    record['pulltag'] = 'foo'
+    record['expiration'] = time.time() - 10
+    id = ctx.images.insert_one(record).inserted_id
+    assert id
+    session = ctx.admin_session
+    ctx.m.autoexpire(session, ctx.system)  # ,delay=False)
+    state = ctx.m.get_state(id)
+    assert state == 'PULLING'
 
 
 def test_autoexpire_dontexpire(ctx):
@@ -1118,6 +1206,16 @@ def test_metrics(ctx):
     recs = ctx.m.get_metrics(session, ctx.system, 101)  # ,delay=False)
     assert recs
     assert len(recs) == 100
+
+    session = ctx.session
+    recs = ctx.m.get_metrics(session, ctx.system, 10)  # ,delay=False)
+    assert recs == []
+
+    session = ctx.admin_session
+    ctx.m.metrics = None
+    recs = ctx.m.get_metrics(session, ctx.system, 10)  # ,delay=False)
+    assert recs == []
+    ctx.m.metrics = True
 
 
 def test_status_thread(ctx):
