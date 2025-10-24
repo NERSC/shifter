@@ -274,12 +274,8 @@ class PullRequest(AsyncRequest):
 
         if location in self.conf.Locations:
             params = self.conf.Locations[location]
-            rtype = params.remotetype
         else:
             raise KeyError(f'{location} not found in configuration')
-
-        if rtype != 'dockerv2':
-            raise NotImplementedError(f'Unsupported remote type {rtype}')
 
         return self._pull_dockerv2(location, repo, tag)
 
