@@ -39,7 +39,7 @@ def authenticate(conf: Config, authstr: str, system: str):
     if conf.Authentication != 'munge':
         raise NotImplementedError(f'{conf.Authentication} is not supported')
     try:
-        token, uid, gid, _ = decode(authstr)
+        token, uid, gid, _ = decode(authstr.encode('utf-8'))
     except MungeError as e:
         raise AuthenticationError(e)
     user = "unknown"
