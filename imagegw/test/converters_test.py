@@ -19,6 +19,7 @@
 import os
 import pytest
 from shifter_imagegw import converters
+from shifter_imagegw.util import program_exists
 
 
 @pytest.fixture(autouse=True)
@@ -50,59 +51,58 @@ def converters_env():
     }
 
 
-def test_convert(converters_env):
+def test_unsupported(converters_env):
     """
     Test convert function using a mock format
     """
-    opts = dict()
-    output = f'{converters_env["outdir"]}/test.squashfs'
-    resp = converters.convert('mock', '', output)
-    assert resp is True
-    assert os.path.exists(output)
-    os.remove(output)
-
-    path = converters_env['make_fake']()
-
-    resp = converters.convert('cramfs', path, '/tmp/blah.cramfs')
-    assert resp
 
     with pytest.raises(NotImplementedError):
-        converters.convert('ext4', path, '/tmp/blah.ext4')
+        resp = converters.convert('cramfs', None, '/tmp/blah.cramfs')
 
-    resp = converters.convert('squashfs', path, output, options=opts)
-    assert resp
-    with open(output) as f:
-        line = f.read()
-        assert '-no-xattrs' in line
+    with pytest.raises(NotImplementedError):
+        converters.convert('ext4', None, '/tmp/blah.ext4')
 
 
-# Disable this test
-def xtest_convert_options(converters_env):
+def test_failure():
+    out = '/tmp/fakeout'
+    if os.path.exists(out):
+        os.unlink(out)
+    with pytest.raises(OSError):
+        converters.convert('squashfs', '/tmp/foo', out, options='fail')
+
+    with pytest.raises(FileExistsError):
+        converters.convert('squashfs', '/tmp/foo', '/', options='fail')
+
+    with pytest.raises(IOError):
+        program_exists('/bin/shouldnotexist')
+
+
+def test_convert_options(converters_env):
     """
     Test option handling
     """
-    opts = {
-        'mock': [' blah']
-    }
+    opts = ['-fake-opt']
+
     path = converters_env['make_fake']()
     output = f'{converters_env["outdir"]}/test.mock'
     if os.path.exists(output):
         os.remove(output)
-    resp = converters.convert('mock', path, output, options=opts)
+    resp = converters.convert('squashfs', path, output, options=opts)
     assert resp
     with open(output) as f:
         v = f.read()
-        assert v == 'bogus blah'
-
+        assert opts[0] in v
     os.remove(output)
-    opts['mock'] = ' blah'
-    resp = converters.convert('mock', path, output, options=opts)
+
+    resp = converters.convert('squashfs', path, output, options=opts[0])
     assert resp
     with open(output) as f:
         v = f.read()
-        assert v == 'bogus blah'
+        assert opts[0] in v
     os.remove(output)
 
+    with pytest.raises(ValueError):
+        resp = converters.convert('squashfs', path, output, options={'foo': 'bar'})
 
 def test_writemeta(converters_env):
     """
@@ -116,6 +116,7 @@ def test_writemeta(converters_env):
             'private': True,
             'userACL': [1000, 1001],
             'groupACL': [1002, 1003],
+            'user': 'user'
             }
     output = f'{converters_env["outdir"]}/test.meta'
     resp = converters.writemeta('squashfs', meta, output)
@@ -128,18 +129,22 @@ def test_writemeta(converters_env):
                 meta['ENV'].append(v)
             else:
                 meta[k] = v
-    keys = ['WORKDIR', 'FORMAT', 'ENTRY', 'CMD']
-    if 'DISABLE_ACL_METADATA' not in os.environ:
-        keys.extend(['USERACL', 'GROUPACL'])
+    keys = ['WORKDIR', 'FORMAT', 'ENTRY', 'CMD', 'USER']
+    keys.extend(['USERACL', 'GROUPACL'])
     for key in keys:
         assert key in meta
-    if 'DISABLE_ACL_METADATA' not in os.environ:
-        assert meta['USERACL'].find("[") == -1
-        assert meta['USERACL'].find("]") == -1
+    assert meta['USERACL'] == '1000,1001'
+    assert meta['GROUPACL'] == '1002,1003'
     assert len(meta['ENV']) > 0
 
 
-def test_squashfs():
-    converters.generate_squashfs_image('/tmp/b', '/tmp/blah', None)
-    assert os.path.exists('/tmp/blah')
-    os.remove('/tmp/blah')
+def test_squashfs(converters_env):
+    path = converters_env['make_fake']()
+    output = f'{converters_env["outdir"]}/test.squashfs'
+    resp = converters.convert('squashfs', path, output)
+    assert resp
+    with open(output) as f:
+        line = f.read()
+        assert '-no-xattrs' in line
+    os.remove(output)
+
