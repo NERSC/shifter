@@ -22,11 +22,9 @@ This module provides the worker function for the image gateway.
 
 import os
 import shutil
-import sys
 import subprocess
 import logging
 import tempfile
-import traceback
 from multiprocessing import Queue
 from multiprocessing.pool import ThreadPool
 from time import time
@@ -332,7 +330,7 @@ class PullRequest(AsyncRequest):
         image_metadata = f"{self.id}.meta"
 
         return transfer.imagevalid(self.sysconf, image_filename,
-                                   image_metadata, logging)
+                                   image_metadata)
 
     def _transfer_image(self):
         """
@@ -451,14 +449,13 @@ class ImportRequest(AsyncRequest):
             # Step 0 - Check if path is valid
             if not transfer.check_file(self.filepath,
                                        self.sysconf,
-                                       logging,
                                        import_image=self.import_image):
                 raise OSError('Path not valid')
             # Step 1 - Calculate the hash of the file
             logging.debug("Starting import hashing")
             self.updater.update_status('HASHING', 'HASHING')
             self.id = transfer.hash_file(self.filepath,
-                                         self.sysconf, logging)
+                                         self.sysconf)
             # Step 2 - Populate the metadata file
             logging.debug("starting writing metadata")
             self.meta = {
@@ -537,5 +534,5 @@ class ExpireRequest(AsyncRequest):
         meta = f'{self.id}.meta'
         if self.metafile:
             meta = self.metafile
-        transfer.remove(self.sysconf, imagefile, meta, logging)
+        transfer.remove(self.sysconf, imagefile, meta)
         self.updater.update_status('EXPIRED', 'EXPIRED')

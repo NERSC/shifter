@@ -19,7 +19,7 @@ def fast_hash(infile):
     return m.hexdigest()
 
 
-if __name__ == '__main__':
+def main(): # pragma: no cover
     parser = argparse.ArgumentParser(description='Calculate file hash')
     parser.add_argument('infile', nargs=1, type=str)
 
@@ -27,3 +27,7 @@ if __name__ == '__main__':
     infile = args.infile[0]
 
     print(fast_hash(infile))
+
+
+if __name__ == '__main__':  # pragma: no cover
+    main()

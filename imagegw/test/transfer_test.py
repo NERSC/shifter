@@ -19,7 +19,6 @@
 import os
 import tempfile
 import pytest
-import logging
 from shifter_imagegw import transfer
 from shifter_imagegw.config import Platform
 
@@ -86,7 +85,7 @@ def test_remove(system):
     system.imageDir = dname
     system.accesstype = "local"
 
-    status = transfer.remove(system, fname, fname2, logging)
+    status = transfer.remove(system, fname, fname2)
 
     assert status
     # transfer.remove_file(fname, system)
@@ -111,7 +110,7 @@ def test_fasthash(system):
 
 def test_check_file(system):
     fn = "foo"
-    status = transfer.check_file(fn, system, logging)
+    status = transfer.check_file(fn, system)
     assert not status
 
     (fdesc, tmp_path) = tempfile.mkstemp()
@@ -125,7 +124,7 @@ def test_check_file(system):
 
 def test_imgvalid(system):
     fn = "foo"
-    status = transfer.check_file(fn, system, logging)
+    status = transfer.check_file(fn, system)
     assert not status
 
     (fdesc, tmp_path) = tempfile.mkstemp()
@@ -137,7 +136,7 @@ def test_imgvalid(system):
     os.close(fdesc2)
     _, fname2 = os.path.split(tmp_path2)
 
-    status = transfer.imagevalid(system, fname, fname2, logging)
+    status = transfer.imagevalid(system, fname, fname2)
     assert status
     os.unlink(tmp_path)
     os.unlink(tmp_path2)

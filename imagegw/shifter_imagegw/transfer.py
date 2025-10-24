@@ -30,7 +30,7 @@ import logging
 from shifter_imagegw.fasthash import fast_hash
 
 
-def remove_file(filename, system, logger=None):
+def remove_file(filename, system):
     """
     Remove the specified file from the system
     """
@@ -41,7 +41,7 @@ def remove_file(filename, system, logger=None):
         os.unlink(target_fn)
 
 
-def check_file(filename, system, logger=None, import_image=False):
+def check_file(filename, system, import_image=False):
     """
     check the validatity of a file on the system
     """
@@ -55,7 +55,7 @@ def check_file(filename, system, logger=None, import_image=False):
         return os.path.exists(target_fn)
 
 
-def hash_file(filename, system, logger=None):
+def hash_file(filename, system):
     """
     Calculate a hash of the image file.
     """
@@ -78,25 +78,24 @@ def transfer(system, image_path, metadata_path=None,
         shutil.copyfile(fn, dst)
         
 
-def remove(system, image_path, metadata_path=None, logger=None):
+def remove(system, image_path, metadata_path=None):
     """
     remove an image and its metadata from the system
     """
-    if logger:
-        logging.debug(f"remove: {system.imageDir} {image_path} {metadata_path}")
+    logging.debug(f"remove: {system.imageDir} {image_path} {metadata_path}")
     if metadata_path:
-        remove_file(metadata_path, system, logger)
-    remove_file(image_path, system, logger)
+        remove_file(metadata_path, system)
+    remove_file(image_path, system)
     return True
 
 
-def imagevalid(system, image_path, metadata_path=None, logger=None):
+def imagevalid(system, image_path, metadata_path=None):
     """
     check if image exists on the system
     """
     metadata_ok = True
     if metadata_path is not None:
-        metadata_ok = check_file(metadata_path, system, logger)
-    image_ok = check_file(image_path, system, logger)
+        metadata_ok = check_file(metadata_path, system)
+    image_ok = check_file(image_path, system)
 
     return metadata_ok and image_ok
