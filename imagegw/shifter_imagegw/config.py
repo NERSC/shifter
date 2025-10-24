@@ -5,12 +5,19 @@ from shifter_imagegw import CONFIG_PATH
 
 
 class Location():
-    remotetype: str  = 'dockerv2'
-    authentication: str  = 'http'
+    # Used to override the location as the URL
+    # This is not typically required.
     url: str  = None
+    # Note this is deprecated but left for reference
+    remotetype: str  = 'dockerv2'
+
+    # Note this is deprecated but left for reference
+    authentication: str  = 'http'
 
     def __init__(self, data: dict):
-        self.remotetype = data['remotetype']
+        rtype = data.get('remotetype', 'dockerv2')
+        if rtype != 'dockerv2':
+            raise NotImplementedError(f'Unsupported remote type {rtype}')
         self.authentication = data['authentication']
         self.url = data.get('url')
 

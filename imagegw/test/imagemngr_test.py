@@ -142,7 +142,6 @@ def ctx():
             self.pull = {'system': self.system,
                          'itype': self.itype,
                          'tag': self.tag,
-                         'remotetype': 'dockerv2',
                          'userACL': [], 'groupACL': []}
             self.session = Session(uid=100, gid=100, system=self.system,
                                    user="user", group="user")
@@ -652,7 +651,6 @@ def xtest_pull_testimage(ctx):
         'system': ctx.system,
         'itype': ctx.itype,
         'tag': 'scanon/shanetest:latest',
-        'remotetype': 'dockerv2',
         'userACL': [],
         'groupACL': []
     }
@@ -797,7 +795,6 @@ def test_pulls_acl_change(ctx):
         'system': record['system'],
         'itype': record['itype'],
         'tag': record['pulltag'],
-        'remotetype': 'dockerv2',
         'userACL': [1001, 1002],
         'groupACL': [1003, 1004]
     }
@@ -817,7 +814,6 @@ def test_pull_logic(ctx):
         'system': record['system'],
         'itype': record['itype'],
         'tag': tag,
-        'remotetype': 'dockerv2',
     }
     id = ctx.images.insert_one(record).inserted_id
     assert id
@@ -874,7 +870,6 @@ def test_pull_public_acl(ctx):
         'system': ctx.system,
         'itype': ctx.itype,
         'tag': ctx.tag,
-        'remotetype': 'dockerv2',
         'userACL': [1001, 1002],
         'groupACL': [1003, 1004]
     }
@@ -913,7 +908,6 @@ def test_pull_public_acl_token(ctx):
         'system': ctx.system,
         'itype': ctx.itype,
         'tag': ctx.public,
-        'remotetype': 'dockerv2',
         'userACL': [1001, 1002],
         'groupACL': [1003, 1004]
     }
@@ -946,7 +940,6 @@ def test_pull_acl(ctx):
         'system': ctx.system,
         'itype': ctx.itype,
         'tag': ctx.private,
-        'remotetype': 'dockerv2',
         'userACL': [1001, 1002],
         'groupACL': [1003, 1004]
     }
@@ -1019,7 +1012,6 @@ def test_import(ctx):
         'system': ctx.system,
         'itype': ctx.itype,
         'tag': ctx.tag,
-        'remotetype': 'dockerv2',
         'filepath': '/images/test/test.squashfs',
         'format': 'squashfs',
         'userACL': [],
@@ -1270,7 +1262,6 @@ def test_pull_multiple_tags(ctx):
         'system': ctx.system,
         'itype': ctx.itype,
         'tag': ctx.public,
-        'remotetype': 'dockerv2'
     }
     # Do the pull
     session = ctx.session
@@ -1292,7 +1283,6 @@ def test_pull_multiple_tags(ctx):
         'system': ctx.system,
         'itype': ctx.itype,
         'tag': newtag,
-        'remotetype': 'dockerv2'
     }
     rec = ctx.m.pull(session, pr)  # ,delay=False)
     id = rec['_id']
