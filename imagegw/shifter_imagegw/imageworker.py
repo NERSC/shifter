@@ -342,12 +342,11 @@ class PullRequest(AsyncRequest):
         """
         if self.meta_only:
             return transfer.transfer(self.sysconf, None,
-                                     self.metafile, logging)
+                                     self.metafile)
         else:
             return transfer.transfer(self.sysconf,
                                      self.imagefile,
-                                     self.metafile,
-                                     logging)
+                                     self.metafile)
 
     def run(self):
         """
@@ -382,8 +381,9 @@ class PullRequest(AsyncRequest):
                 # Step 4 - TRANSFER
                 self.updater.update_status('TRANSFER', 'Transferring image')
                 logging.debug(F"Worker: transferring image {tag}")
-                if not self._transfer_image():
-                    raise OSError('Transfer failed')
+                self._transfer_image()
+                # if not self._transfer_image():
+                #     raise OSError('Transfer failed')
             else:
                 self.meta_only = True
                 self.meta['meta_only'] = True
@@ -392,8 +392,9 @@ class PullRequest(AsyncRequest):
                     raise OSError('Metadata creation failed')
                 self.updater.update_status('TRANSFER', 'Transferring metadata')
                 logging.debug(f"Worker: transferring metadata {self.tag}")
-                if not self._transfer_image():
-                    raise OSError('Transfer failed')
+                self._transfer_image()
+                # if not self._transfer_image():
+                #     raise OSError('Transfer failed')
 
             # Done
             self.updater.update_status('READY', 'Image ready',
@@ -407,6 +408,7 @@ class PullRequest(AsyncRequest):
 
             # TODO: add a debugging flag and only disable cleanup if debugging
             self._cleanup_temporary()
+            logging.error(f"{str(e)}")
             raise e
 
 
@@ -472,9 +474,10 @@ class ImportRequest(AsyncRequest):
             self.imagefile = imgfile
             self.meta['id'] = self.id
             self.updater.update_status('TRANSFER', 'TRANSFER')
-            if not self._transfer_image():
-                logging.warning("Worker: Import copy failed")
-                raise OSError("Import copy failed")
+            self._transfer_image()
+            # if not self._transfer_image():
+            #     logging.warning("Worker: Import copy failed")
+            #     raise OSError("Import copy failed")
 
             # Done
             self.updater.update_status('READY', 'Image ready',
@@ -482,7 +485,7 @@ class ImportRequest(AsyncRequest):
             self._cleanup_temporary()
             return self.meta
 
-        except Exception as ex:
+        except Exception as e:
             logging.error(f"ERROR: img_import failed system={self.system} tag={self.tag}")
             logging.error(f"{str(e)}")
             self.updater.update_status('FAILURE', 'FAILED')
@@ -500,7 +503,6 @@ class ImportRequest(AsyncRequest):
         return transfer.transfer(self.sysconf,
                                  self.filepath,
                                  self.metafile,
-                                 logging,
                                  self.import_image,
                                  self.imagefile)
 
@@ -535,8 +537,5 @@ class ExpireRequest(AsyncRequest):
         meta = f'{self.id}.meta'
         if self.metafile:
             meta = self.metafile
-        if transfer.remove(self.sysconf, imagefile, meta, logging):
-            self.updater.update_status('EXPIRED', 'EXPIRED')
-        else:
-            logging.warning("Worker: Expire failed")
-            raise OSError('Expire failed')
+        transfer.remove(self.sysconf, imagefile, meta, logging)
+        self.updater.update_status('EXPIRED', 'EXPIRED')
