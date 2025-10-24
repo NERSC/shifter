@@ -1,3 +1,4 @@
+from shifter_imagegw.errors import AuthenticationError
 import os
 import time
 from shifter_imagegw.fasthash import fast_hash
@@ -134,6 +135,16 @@ def good_record(ctx):
             }
 
 
+def test_basics(api_ctx):
+    with TestClient(api.app) as client:
+        uri = f'{api_ctx["url"]}/status'
+        response = client.get(uri)
+        assert response.json()['status'] == "up"
+
+        response = client.get('/')
+        assert response.status_code == 200
+
+
 def test_pull1(api_ctx, user):
     with TestClient(api.app) as client:
         uri = f'{api_ctx["url"]}/pull/{api_ctx["urlreq"]}'
@@ -248,13 +259,16 @@ def test_metrics(api_ctx, admin):
         assert data[19]['time'] == last_time
 
 
-def test_import(api_ctx, user):
+def test_import(api_ctx, admin):
     with TestClient(api.app) as client:
         api_ctx['config'].ImportUsers = "all"
         uri = '/'.join([api_ctx['url'], 'doimport', api_ctx['urlreq']])
         ifile = os.path.join(api_ctx['test_dir'], 'test.squashfs')
         data = {'filepath': ifile,
-                'format': 'squashfs'}
+                'format': 'squashfs',
+                'allowed_uids': '100',
+                'allowed_gids': '100'
+                }
         hash = fast_hash(ifile)
         response = client.post(uri, json=data, headers={AUTH_HEADER: 'bogus'})
         assert response.status_code == 200
@@ -262,6 +276,17 @@ def test_import(api_ctx, user):
         data = rv.json()
         assert data['status'] == 'READY'
         assert data['id'] == hash
+
+
+# TODO: need to hack the config
+def test_import_fail(api_ctx, user):
+    with TestClient(api.app) as client:
+        uri = '/'.join([api_ctx['url'], 'doimport', api_ctx['urlreq']])
+        data = {'filepath': 'foo',
+                'format': 'squashfs'
+                }
+        response = client.post(uri, json=data, headers={AUTH_HEADER: 'bogus'})
+        assert response.status_code == 401
 
 
 def test_labels(api_ctx, user):
@@ -279,3 +304,75 @@ def test_labels(api_ctx, user):
         assert 'LABELS' in resp
         assert 'alabel' in resp['LABELS']
         assert resp['LABELS']['alabel'] == 'avalue'
+
+
+def test_auth_errors(api_ctx, user):
+    with TestClient(api.app) as client:
+        user.side_effect = AuthenticationError()
+        uri = f'{api_ctx["url"]}/pull/systema/docker/foo'
+        response = client.post(uri, headers={AUTH_HEADER: 'bogus'})
+        assert response.status_code == 401
+
+        uri = f'{api_ctx["url"]}/lookup/systema/foo'
+        response = client.get(uri, headers={AUTH_HEADER: 'bogus'})
+        assert response.status_code == 401
+
+        uri = f'{api_ctx["url"]}/doimport/systema/docker/foo'
+        data = {'filepath': 'foo',
+                'format': 'squashfs'}
+        response = client.post(uri, json=data, headers={AUTH_HEADER: 'bogus'})
+        assert response.status_code == 401
+
+        uri = f'{api_ctx["url"]}/autoexpire/systema'
+        response = client.get(uri, headers={AUTH_HEADER: 'bogus'})
+        assert response.status_code == 401
+
+        uri = f'{api_ctx["url"]}/list/systemc'
+        response = client.get(uri, headers={AUTH_HEADER: 'bogus'})
+        assert response.status_code == 401
+
+        uri = f'{api_ctx["url"]}/metrics/{api_ctx["system"]}?limit=20'
+        response = client.get(uri, headers={AUTH_HEADER: 'bogus'})
+        assert response.status_code == 401
+
+        uri = f'{api_ctx["url"]}/expire/system/docker/foo'
+        response = client.get(uri, headers={AUTH_HEADER: 'bogus'})
+        assert response.status_code == 401
+
+
+def test_other_errors(api_ctx, user):
+    with TestClient(api.app) as client:
+        user.side_effect = ValueError()
+        uri = f'{api_ctx["url"]}/pull/systema/docker/foo'
+        response = client.post(uri, headers={AUTH_HEADER: 'bogus'})
+        assert response.status_code == 404
+
+        uri = f'{api_ctx["url"]}/lookup/systema/foo'
+        response = client.get(uri, headers={AUTH_HEADER: 'bogus'})
+        assert response.status_code == 404
+
+        uri = f'{api_ctx["url"]}/doimport/systema/docker/foo'
+        data = {'filepath': 'foo',
+                'format': 'squashfs'}
+        response = client.post(uri, json=data, headers={AUTH_HEADER: 'bogus'})
+        assert response.status_code == 404
+
+        uri = f'{api_ctx["url"]}/autoexpire/systema'
+        response = client.get(uri, headers={AUTH_HEADER: 'bogus'})
+        assert response.status_code == 404
+
+        uri = f'{api_ctx["url"]}/list/systemc'
+        response = client.get(uri, headers={AUTH_HEADER: 'bogus'})
+        assert response.status_code == 404
+
+        uri = f'{api_ctx["url"]}/metrics/{api_ctx["system"]}?limit=20'
+        response = client.get(uri, headers={AUTH_HEADER: 'bogus'})
+        assert response.status_code == 404
+
+        uri = f'{api_ctx["url"]}/expire/system/docker/foo'
+        response = client.get(uri, headers={AUTH_HEADER: 'bogus'})
+        assert response.status_code == 404
+
+        uri = f'{api_ctx["url"]}/queue/system'
+        response = client.get(uri, headers={AUTH_HEADER: 'bogus'})
+        assert response.status_code == 404

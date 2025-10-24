@@ -51,13 +51,6 @@ app = FastAPI(title="Shifter Image Gateway", version="1.0.0",
               lifespan=lifespan)
 
 
-def getmgr():
-    """
-    This is intended just for the testing layer so it can shutdown the
-    updater thread in the manager.
-    """
-    return mgr
-
 
 # For RESTful Service
 @app.exception_handler(404)
@@ -137,6 +130,10 @@ async def lookup(system: str, imgtype: str, tag: str,
     except AuthenticationError as ex:
         logger.warning(f"Auth error {str(ex)}")
         raise HTTPException(status_code=401, detail='Authentication Error')
+    except Exception as ex:
+        logger.exception('Unknown Exception in List')
+        raise HTTPException(status_code=404, detail=str(ex))
+
     if rec is None:
         logger.debug("Image lookup failed.")
         raise HTTPException(status_code=404, detail='image not found')
@@ -241,13 +238,9 @@ async def doimport(system: str, imgtype: str, tag: str, data: ImportImage,
         # Convert to integers
         i['groupACL'] = list(map(lambda x: int(x),
                              data.allowed_gids.split(',')))
-    if not config.ImportUsers:
+    if not config.ImportUsers or config.ImportUsers.lower() == "none":
         raise HTTPException(status_code=403, detail="User image import from file disabled.")
-
     iusers = config.ImportUsers
-    # If ImportUsers is None, no one can do this
-    if iusers.lower() == "none":
-        raise HTTPException(status_code=403, detail="User image import from file disabled.")
 
     try:
         session = authenticate(config, auth, system)
@@ -260,7 +253,6 @@ async def doimport(system: str, imgtype: str, tag: str, data: ImportImage,
                 msg = f"User {user} not allowed to import image from file."
                 raise AuthenticationError(msg)
         rec = mgr.mngrimport(session, i)
-        logger.debug(rec)
     except AuthenticationError as ex:
         logger.warning(f"Auth error {str(ex)}")
         raise HTTPException(status_code=401, detail='Authentication Error')
@@ -334,4 +326,4 @@ async def queue(system: str, authentication: str = Header(None)):
 
 @app.get('/api/status')
 def status():
-    return "Up"
+    return {"status": "up"}
