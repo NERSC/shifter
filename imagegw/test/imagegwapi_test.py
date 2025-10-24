@@ -219,10 +219,16 @@ def test_autoexpire(api_ctx, admin):
         record['expiration'] = time.time() - 100
         id = api_ctx['images'].insert_one(record).inserted_id
         uri = '/'.join([api_ctx['url'], 'autoexpire', api_ctx['system']])
+        squash_fn = f"/tmp/systema/images/{record['id']}.squashfs"
+        meta_fn = f"/tmp/systema/images/{record['id']}.meta"
+        with open(meta_fn, 'w') as f:
+            f.write("bogus")
+        with open(squash_fn, 'w') as f:
+            f.write("bogus")
         response = client.get(uri, headers={AUTH_HEADER: 'bogusadmin'})
         assert response.status_code == 200
 
-        count = 20
+        count = 5
         while count > 0:
             response = client.get(uri, headers={AUTH_HEADER: 'bogusadmin'})
             r = api_ctx['images'].find_one({'_id': id})
@@ -234,6 +240,8 @@ def test_autoexpire(api_ctx, admin):
         assert response.status_code == 200
         r = api_ctx['images'].find_one({'_id': id})
         assert r['status'] == 'EXPIRED'
+        assert not os.path.exists(meta_fn)
+        assert not os.path.exists(squash_fn)
 
 
 def test_metrics(api_ctx, admin):

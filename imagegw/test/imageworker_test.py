@@ -192,8 +192,7 @@ def test_transfer_image(test_setup, pull_request):
     with open(imagefile, 'w') as f:
         f.write('bogus')
     assert os.path.exists(imagefile)
-    status = pull_request._transfer_image()
-    assert status
+    pull_request._transfer_image()
 
 
 def test_bad_pull_docker(test_setup, pull_request):

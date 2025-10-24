@@ -19,6 +19,7 @@
 import os
 import tempfile
 import pytest
+import logging
 from shifter_imagegw import transfer
 from shifter_imagegw.config import Platform
 
@@ -39,62 +40,6 @@ def inode_counter(dirname):
     for root, dirs, files in os.walk(dirname):
         inodes += len(files)
     return inodes
-
-
-def test_sh_cmd(system):
-    cmd = transfer._sh_cmd(system, 'echo', 'test')
-    assert len(cmd) == 2
-    assert cmd[0] == 'echo'
-    assert cmd[1] == 'test'
-
-    cmd = transfer._sh_cmd(system, 'anotherCommand')
-    assert len(cmd) == 1
-    assert cmd[0] == 'anotherCommand'
-
-    cmd = transfer._sh_cmd(system)
-    assert cmd is None
-
-
-def test_cp_cmd(system):
-    cmd = transfer._cp_cmd(system, 'a', 'b')
-    assert len(cmd) == 3
-    assert '|'.join(cmd) == 'cp|a|b'
-
-
-def test_copyfile_local(system):
-    tmp_path = tempfile.mkdtemp()
-    system.imageDir = tmp_path
-
-    system.accesstype = 'local'
-    transfer.copy_file(__file__, system)
-    fname = os.path.split(__file__)[1]
-    file_path = os.path.join(tmp_path, fname)
-    assert os.path.exists(file_path)
-
-    inodes = inode_counter(tmp_path)
-    assert inodes == 1
-    os.unlink(file_path)
-
-    inodes = inode_counter(tmp_path)
-    assert inodes == 0
-
-    os.rmdir(tmp_path)
-
-
-def test_copyfile_failtowrite(system):
-    tmp_path = tempfile.mkdtemp()
-    system.imageDir = tmp_path
-
-    system.accesstype = "local"
-
-    # make directory unwritable
-    os.chmod(tmp_path, 0o555)
-    with pytest.raises(OSError):
-        transfer.copy_file(__file__, system)
-
-    inodes = inode_counter(tmp_path)
-    assert inodes == 0
-    os.rmdir(tmp_path)
 
 
 def test_transfer_local(system):
@@ -129,15 +74,24 @@ def test_transfer_local(system):
     os.rmdir(tmp_path)
 
 
-def test_remove_local(system):
+def test_remove(system):
     (fdesc, tmp_path) = tempfile.mkstemp()
     os.close(fdesc)
-    dname, fname = os.path.split(tmp_path)
+    dname, fname = os.path.split(tmp_path)  
+
+    (fdesc2, tmp_path2) = tempfile.mkstemp()
+    os.close(fdesc2)
+    dname, fname2 = os.path.split(tmp_path2)
+
     system.imageDir = dname
     system.accesstype = "local"
 
-    transfer.remove_file(fname, system)
+    status = transfer.remove(system, fname, fname2, logging)
+
+    assert status
+    # transfer.remove_file(fname, system)
     assert os.path.exists(tmp_path) is False
+    assert os.path.exists(tmp_path2) is False
 
 
 def test_fasthash(system):
@@ -155,23 +109,35 @@ def test_fasthash(system):
     assert hash == gh
     transfer.remove_file(fname, system)
 
+def test_check_file(system):
+    fn = "foo"
+    status = transfer.check_file(fn, system, logging)
+    assert not status
 
-def test_get_stdout_and_log():
-    cmd = "ls"
-    stderr, stdout = transfer._get_stdout_and_log(cmd, None)
-    assert stderr == ""
-    assert stderr is not None
-    assert stdout is not None
-    assert len(stdout) > 0
-
-
-def test_import_copy_file(system):
     (fdesc, tmp_path) = tempfile.mkstemp()
     os.close(fdesc)
     dname, fname = os.path.split(tmp_path)
     system.imageDir = dname
-    system.accesstype = 'local'
-    cp_path = tmp_path+"_1"
-    status = transfer.import_copy_file(tmp_path, cp_path,
-                                       system, None)
+
+    status = transfer.check_file(fname, system)
     assert status
+
+
+def test_imgvalid(system):
+    fn = "foo"
+    status = transfer.check_file(fn, system, logging)
+    assert not status
+
+    (fdesc, tmp_path) = tempfile.mkstemp()
+    os.close(fdesc)
+    dname, fname = os.path.split(tmp_path)
+    system.imageDir = dname
+
+    (fdesc2, tmp_path2) = tempfile.mkstemp()
+    os.close(fdesc2)
+    _, fname2 = os.path.split(tmp_path2)
+
+    status = transfer.imagevalid(system, fname, fname2, logging)
+    assert status
+    os.unlink(tmp_path)
+    os.unlink(tmp_path2)
