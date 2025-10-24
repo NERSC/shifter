@@ -95,8 +95,8 @@ class mock_worker(WorkerThreads):
 
 @pytest.fixture(autouse=True)
 def set_path(monkeypatch):
-    test_dir = os.path.dirname(os.path.abspath(__file__)) + "/../test/"
-    monkeypatch.setenv("PATH", f"{test_dir}:{os.environ['PATH']}")
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    monkeypatch.setenv("PATH", f"{test_dir}/fakebin:{os.environ['PATH']}")
 
 
 @pytest.fixture()

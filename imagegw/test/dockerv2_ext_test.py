@@ -23,6 +23,7 @@ import tempfile
 import json
 import base64
 import pytest
+from test.utils import set_path
 
 
 class update():
@@ -31,19 +32,13 @@ class update():
         print(f"{state}: {message}")
 
 
-@pytest.fixture(autouse=True)
-def set_path(monkeypatch):
-    cwd = os.path.dirname(os.path.realpath(__file__))
-    monkeypatch.setenv('PATH', cwd + ':' + os.environ['PATH'])
-
-
 @pytest.fixture
 def test_dir():
-    return os.path.dirname(os.path.realpath(__file__)) + '/'
+    return os.path.dirname(os.path.realpath(__file__))
 
 
 @pytest.fixture
-def updater():
+def updater(set_path):
     return update()
 
 
@@ -141,13 +136,13 @@ def test_pull_private2(tokens, updater):
         rmtree(cache)
 
 
-def test_base_url():
+def test_base_url(set_path):
     image = 'scanon/alpine'
     dock = DockerV2ext(image, baseurl='https://foo.bar')
     assert dock.registry == 'foo.bar'
 
 
-def test_authfile(tmp_path):
+def test_authfile(set_path, tmp_path):
     image = 'alpine'
     dock = DockerV2ext(image)
     with pytest.raises(OSError):
@@ -162,7 +157,7 @@ def test_authfile(tmp_path):
     os.unlink(fn)
 
 
-def test_private(test_dir):
+def test_private(set_path, test_dir):
     image = 'private'
     dock = DockerV2ext(image)
     with pytest.raises(OSError):
@@ -180,7 +175,7 @@ def test_private(test_dir):
     assert 'auths' in js
 
 
-def test_policyfile(test_dir):
+def test_policyfile(set_path, test_dir):
     image = 'alpine'
     pf = test_dir + 'policy.json'
     dock = DockerV2ext(image,

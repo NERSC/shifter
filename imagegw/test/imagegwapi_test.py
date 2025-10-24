@@ -37,14 +37,14 @@ AUTH_HEADER = 'authentication'
 
 @pytest.fixture(autouse=True)
 def set_path(monkeypatch):
-    test_dir = os.path.dirname(os.path.abspath(__file__)) + "/../test/"
-    monkeypatch.setenv("PATH", f"{test_dir}:{os.environ['PATH']}")
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    monkeypatch.setenv("PATH", f"{test_dir}/fakebin:{os.environ['PATH']}")
 
 
 @pytest.fixture(autouse=True)
 def set_gwconfig(monkeypatch):
-    base_dir = os.path.dirname(os.path.abspath(__file__)) + "/.."
-    configfile = os.path.abspath(os.path.join(base_dir, 'test.json'))
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    configfile = os.path.abspath(os.path.join(base_dir, '../test.json'))
     monkeypatch.setenv('GWCONFIG', configfile)
     monkeypatch.setenv('CONFIG', configfile)
 
@@ -73,7 +73,7 @@ def api_ctx():
         'system': 'systema',
         'itype': 'docker',
         'tag': 'alpine:latest',
-        'test_dir': os.path.dirname(os.path.abspath(__file__)) + "/../test/",
+        'test_dir': os.path.dirname(os.path.abspath(__file__)),
     }
     ctx['urlreq'] = "/".join([ctx['system'], ctx['itype'], ctx['tag']])
 
@@ -97,6 +97,10 @@ def admin(mocker):
 
 
 def time_wait(app, url, auth, urlreq, data=None, state='READY', op='pull', TIMEOUT=10):
+    """
+    Helper function to poll with a timeout for a pull or import
+    to complete
+    """
     poll_interval = 0.5
     count = TIMEOUT / poll_interval
     cstate = 'UNKNOWN'
@@ -136,6 +140,9 @@ def good_record(ctx):
 
 
 def test_basics(api_ctx):
+    """
+    Basic client test against status and /
+    """
     with TestClient(api.app) as client:
         uri = f'{api_ctx["url"]}/status'
         response = client.get(uri)

@@ -1,3 +1,0 @@
-#!/bin/sh
-
-exec shasum -a 256 $*

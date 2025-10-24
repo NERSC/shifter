@@ -36,7 +36,7 @@ def update_status(ident, state, meta=None):
 def test_setup():
     """Setup test environment similar to unittest setUp"""
     cwd = os.path.dirname(os.path.realpath(__file__))
-    os.environ['PATH'] = f'{cwd}:{os.environ["PATH"]}'
+    os.environ['PATH'] = f'{cwd}/fakebin:{os.environ["PATH"]}'
     updater = imageworker.Updater('bogusid', update_status)
     configfile = 'test.json'
     with open(configfile) as config_file:
