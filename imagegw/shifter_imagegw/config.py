@@ -5,6 +5,10 @@ from shifter_imagegw import CONFIG_PATH
 
 
 class Location():
+    remotetype: str  = 'dockerv2'
+    authentication: str  = 'http'
+    url: str  = None
+
     def __init__(self, data: dict):
         self.remotetype = data['remotetype']
         self.authentication = data['authentication']
@@ -12,15 +16,20 @@ class Location():
 
 
 class Platform():
+    accesstype = 'local'
+    mungeSocketPath: str | None = None
+    admins = ['root']
+    imageDir = '/tmp'
+    policy_file: str | None = None
+    
     def __init__(self, data):
         if data.get('accesstype') != 'local':
             return None
-        self.mungeSocketPath = data.get('mungeSocketPath',
-                                        "/var/run/munge/munge.socket.2")
+        self.mungeSocketPath = data.get('mungeSocketPath')
         self.accesstype = "local"
         self.admins = data.get('admins', ['root'])
         self.imageDir = data['local'].get('imageDir', "/tmp")
-        self.policy_file = None
+        self.policy_file = data.get('policy_file')
 
 
 class Config():
