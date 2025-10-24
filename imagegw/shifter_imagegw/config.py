@@ -49,7 +49,7 @@ class Config():
     Locations = {}
     Platforms = {}
     examiner = None
-    ConverterOptions = None
+    ConverterOptions: str | list | None  = None
 
     def __init__(self, data=None):
         if data:
