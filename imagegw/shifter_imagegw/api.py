@@ -167,7 +167,9 @@ class PullRequest(BaseModel):
 # Pull image
 # This will pull the requested image.
 @app.post('/api/pull/{system}/{imgtype}/{tag:path}')
-async def pull(system: str, imgtype: str, tag: str, data: PullRequest | None = None, authentication: str = Header(None)):
+async def pull(system: str, imgtype: str, tag: str,
+               data: PullRequest | None = None,
+               authentication: str = Header(None)):
     """ Pull a specific image and tag for a systems. """
     if imgtype == "docker" and tag.find(':') == -1:
         tag = f'{tag}:latest'
@@ -237,7 +239,8 @@ async def doimport(system: str, imgtype: str, tag: str, data: ImportImage,
         i['groupACL'] = list(map(lambda x: int(x),
                              data.allowed_gids.split(',')))
     if not config.ImportUsers or config.ImportUsers.lower() == "none":
-        raise HTTPException(status_code=403, detail="User image import from file disabled.")
+        raise HTTPException(status_code=403,
+                            detail="User image import from file disabled.")
     iusers = config.ImportUsers
 
     try:
@@ -283,7 +286,8 @@ async def autoexpire(system: str, authentication: str = Header(None)):
 # expire image
 # This will expire an image which removes it from the cache.
 @app.get('/api/expire/{system}/{imgtype}/{tag:path}')
-async def expire(system: str, imgtype: str, tag: str, authentication: str = Header(None)):
+async def expire(system: str, imgtype: str, tag: str,
+                 authentication: str = Header(None)):
     """ Expire a sepcific image for a system """
     if imgtype == "docker" and tag.find(':') == -1:
         tag = f'{tag}:latest'

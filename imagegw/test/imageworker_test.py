@@ -65,7 +65,9 @@ def test_setup():
     if not os.path.exists(idir):
         os.makedirs(idir)
     imageDir = idir
-    session = Session(uid=100, gid=100, user="user", group="user", system=system)
+    session = Session(uid=100, gid=100,
+                      user="user", group="user",
+                      system=system)
 
     return {
         'updater': updater,
