@@ -20,7 +20,12 @@ import os
 import pytest
 from shifter_imagegw import converters
 from shifter_imagegw.util import program_exists
-from test.utils import set_path
+
+
+@pytest.fixture(autouse=True)
+def set_path(monkeypatch):
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    monkeypatch.setenv("PATH", f"{os.environ['PATH']}:{test_dir}/fakebin")
 
 
 @pytest.fixture
@@ -52,7 +57,7 @@ def test_unsupported(converters_env):
     """
 
     with pytest.raises(NotImplementedError):
-        resp = converters.convert('cramfs', None, '/tmp/blah.cramfs')
+        converters.convert('cramfs', None, '/tmp/blah.cramfs')
 
     with pytest.raises(NotImplementedError):
         converters.convert('ext4', None, '/tmp/blah.ext4')
@@ -72,7 +77,7 @@ def test_failure():
         program_exists('/bin/shouldnotexist')
 
 
-def test_convert_options(set_path, converters_env):
+def test_convert_options(converters_env):
     """
     Test option handling
     """
@@ -97,7 +102,9 @@ def test_convert_options(set_path, converters_env):
     os.remove(output)
 
     with pytest.raises(ValueError):
-        resp = converters.convert('squashfs', path, output, options={'foo': 'bar'})
+        resp = converters.convert('squashfs', path, output,
+                                  options={'foo': 'bar'})
+
 
 def test_writemeta(converters_env):
     """
@@ -142,4 +149,3 @@ def test_squashfs(set_path, converters_env):
         line = f.read()
         assert '-no-xattrs' in line
     os.remove(output)
-

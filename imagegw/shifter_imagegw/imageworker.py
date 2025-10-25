@@ -63,9 +63,10 @@ class Updater(object):
 
 class WorkerThreads(object):
     """
-    This class handles creating a thread pool and 
+    This class handles creating a thread pool and
     submitting async work to these threads.
     """
+
     def __init__(self, conf, threads=1):
         """
         Initialize the thread pool and queues.
@@ -252,9 +253,6 @@ class PullRequest(AsyncRequest):
 
         Returns True on success
         """
-        params = None
-        rtype = None
-
         # See if there is a location specified
         location = self.conf.DefaultImageLocation
         tag = self.tag
@@ -271,11 +269,6 @@ class PullRequest(AsyncRequest):
         else:
             raise OSError(f'Unable to parse tag {self.tag}')
         logging.debug(f"doing image pull for loc={location} repo={repo} tag={tag}")
-
-        if location in self.conf.Locations:
-            params = self.conf.Locations[location]
-        else:
-            raise KeyError(f'{location} not found in configuration')
 
         return self._pull_dockerv2(location, repo, tag)
 

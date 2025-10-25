@@ -23,13 +23,17 @@ import tempfile
 import json
 import base64
 import pytest
-from test.utils import set_path
 
 
 class update():
-
     def update_status(self, state, message):
         print(f"{state}: {message}")
+
+
+@pytest.fixture(autouse=True)
+def set_path(monkeypatch):
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    monkeypatch.setenv("PATH", f"{os.environ['PATH']}:{test_dir}/fakebin")
 
 
 @pytest.fixture
@@ -38,7 +42,7 @@ def test_dir():
 
 
 @pytest.fixture
-def updater(set_path):
+def updater():
     return update()
 
 
@@ -115,7 +119,8 @@ def test_pull_private(tokens, updater):
 def test_pull_private2(tokens, updater):
     if tokens is None:
         pytest.skip("no tokens.cfg available")
-    tok = base64.b64decode(tokens['registry.services.nersc.gov']).decode('utf-8')
+    reg = 'registry.services.nersc.gov'
+    tok = base64.b64decode(tokens[reg]).decode('utf-8')
     username, password = tok.split(':')
     image = 'scanon/alpine'
     options = {'baseUrl': 'https://registry.services.nersc.gov',
@@ -136,13 +141,13 @@ def test_pull_private2(tokens, updater):
         rmtree(cache)
 
 
-def test_base_url(set_path):
+def test_base_url():
     image = 'scanon/alpine'
     dock = DockerV2ext(image, baseurl='https://foo.bar')
     assert dock.registry == 'foo.bar'
 
 
-def test_authfile(set_path, tmp_path):
+def test_authfile(tmp_path):
     image = 'alpine'
     dock = DockerV2ext(image)
     with pytest.raises(OSError):
@@ -157,7 +162,7 @@ def test_authfile(set_path, tmp_path):
     os.unlink(fn)
 
 
-def test_private(set_path, test_dir):
+def test_private(test_dir):
     image = 'private'
     dock = DockerV2ext(image)
     with pytest.raises(OSError):
@@ -175,7 +180,7 @@ def test_private(set_path, test_dir):
     assert 'auths' in js
 
 
-def test_policyfile(set_path, test_dir):
+def test_policyfile(test_dir):
     image = 'alpine'
     pf = test_dir + 'policy.json'
     dock = DockerV2ext(image,

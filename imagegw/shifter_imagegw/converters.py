@@ -76,7 +76,6 @@ def convert(fmt, expand_path, image_path, options=None):
         else:
             raise ValueError("options should be a string or list")
 
-
     try:
         _generate_squashfs_image(expand_path, temp_path, opts)
     except Exception as e:

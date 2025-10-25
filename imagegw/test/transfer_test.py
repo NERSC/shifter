@@ -76,7 +76,7 @@ def test_transfer_local(system):
 def test_remove(system):
     (fdesc, tmp_path) = tempfile.mkstemp()
     os.close(fdesc)
-    dname, fname = os.path.split(tmp_path)  
+    dname, fname = os.path.split(tmp_path)
 
     (fdesc2, tmp_path2) = tempfile.mkstemp()
     os.close(fdesc2)
@@ -107,6 +107,7 @@ def test_fasthash(system):
     gh = 'ff68165577eb209adcfa2f793476a25da637142283409d6f4d8d61ee042c5e63'
     assert hash == gh
     transfer.remove_file(fname, system)
+
 
 def test_check_file(system):
     fn = "foo"
