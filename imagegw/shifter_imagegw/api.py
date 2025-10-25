@@ -50,7 +50,6 @@ app = FastAPI(title="Shifter Image Gateway", version="1.0.0",
               lifespan=lifespan)
 
 
-
 # For RESTful Service
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc: HTTPException):
@@ -124,8 +123,7 @@ async def lookup(system: str, imgtype: str, tag: str,
     logging.debug(memo)
     try:
         session = authenticate(config, auth, system)
-        i = {'system': system, 'itype': imgtype, 'tag': tag}
-        rec = mgr.lookup(session, i)
+        rec = mgr.lookup(session, system, imgtype, tag)
     except AuthenticationError as ex:
         logging.warning(f"Auth error {str(ex)}")
         raise HTTPException(status_code=401, detail='Authentication Error')

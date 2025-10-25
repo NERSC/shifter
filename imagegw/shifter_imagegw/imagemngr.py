@@ -35,10 +35,12 @@ from shifter_imagegw.imageworker import WorkerThreads
 from shifter_imagegw.imageworker import PullRequest
 from shifter_imagegw.imageworker import ImportRequest
 from shifter_imagegw.imageworker import ExpireRequest
+from shifter_imagegw.models import Session
 from shifter_imagegw.config import Config
 import grp
 from multiprocessing import Process
 import atexit
+from cachetools import cached, TTLCache
 
 
 # decorator function to re-attempt any mongo operation that may have failed
@@ -236,7 +238,12 @@ class ImageMngr(object):
                 return False
         return True
 
-    def _add_metrics(self, session, request, record):
+    def _add_metrics(self,
+                     session: Session,
+                     system: str,
+                     itype: str,
+                     tag: str,
+                     id: str):
         """
         Add a row to mongo for this lookup request.
         """
@@ -244,10 +251,10 @@ class ImageMngr(object):
             r = {
                 'user': session.user,
                 'uid': session.uid,
-                'system': request['system'],
-                'type': request['itype'],
-                'tag': request['tag'],
-                'id': record['id'],
+                'system': system,
+                'type': itype,
+                'tag': tag,
+                'id': id,
                 'time': time()
             }
             self._metrics_insert(r)
@@ -272,16 +279,22 @@ class ImageMngr(object):
             recs.append(r)
         return recs
 
-    def lookup(self, session, image):
+    @cached(cache=TTLCache(maxsize=100, ttl=60), info=True)
+    def lookup(self,
+               session: Session,
+               system: str,
+               itype: str,
+               tag: str
+               ):
         """
         Lookup an image.
         Image is dictionary with system,itype and tag defined.
         """
         query = {
             'status': 'READY',
-            'system': image['system'],
-            'itype': image['itype'],
-            'tag': {'$in': [image['tag']]}
+            'system': system,
+            'itype': itype,
+            'tag': {'$in': [tag]}
         }
         self.update_states()
         rec = self._images_find_one(query)
@@ -291,7 +304,11 @@ class ImageMngr(object):
             self._resetexpire(rec['_id'])
 
         if rec and self.metrics is not None:
-            self._add_metrics(session, image, rec)
+            self._add_metrics(session,
+                              system,
+                              itype,
+                              tag,
+                              rec['id'])
         return rec
 
     def imglist(self, session, system):
@@ -476,7 +493,7 @@ class ImageMngr(object):
             request['tag'] = request['pulltag']
             request['session'] = session
             logging.debug("Calling do pull with queue="
-                              f"{request['system']}")
+                          f"{request['system']}")
             pr = PullRequest(self.config,
                              session.system,
                              request['tag'],
@@ -535,7 +552,7 @@ class ImageMngr(object):
         request['tag'] = request['pulltag']
         request['session'] = session
         logging.debug("Calling wrkimport with queue="
-                          f"{request['system']}")
+                      "{request['system']}")
         ir = ImportRequest(self.config,
                            session.system,
                            image['tag'],
@@ -596,7 +613,7 @@ class ImageMngr(object):
         pullrec = self._images_find_one({'_id': ident})
         if pullrec is None:
             logging.error('ERROR: Missing pull request resp=',
-                              f'{str(response)}')
+                          f'{str(response)}')
             return
         # Check that this image ident doesn't already exist for this system
         rec = self._images_find_one({'id': response['id'], 'status': 'READY',
@@ -729,7 +746,7 @@ class ImageMngr(object):
                                      'system': system}):
             if 'last_pull' not in rec:
                 logging.warning('Image missing last_pull for pulltag:' +
-                                    rec['pulltag'])
+                                rec['pulltag'])
                 continue
             if time() > rec['last_pull'] + self.pulltimeout:
                 removed.append(rec['_id'])
@@ -764,7 +781,7 @@ class ImageMngr(object):
 
         self.workers.submit(er)
         logging.info("expire request queued "
-                         f"s={rec['system']} tag={ident}")
+                     f"s={rec['system']} tag={ident}")
 
     def expire(self, session, image):
         """Expire an image.  (Not Implemented)"""

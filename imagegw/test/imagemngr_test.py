@@ -3,7 +3,6 @@ import pytest
 import time
 import json
 import base64
-import logging
 from copy import deepcopy
 from time import sleep
 from pymongo import MongoClient
@@ -122,7 +121,6 @@ def ctx():
             self.images = client[db].images
             self.metrics = client[db].metrics
             self.images.drop()
-            logger = logging.getLogger("imagemngr")
             self.m = ImageMngr(self.config)
             # Manager with mocked worker
             self.mtm = ImageMngr(self.config)
@@ -367,7 +365,7 @@ def test_add_remove_withtag(ctx):
     i = ctx.query.copy()
     status = ctx.m.add_tag(id, ctx.system, 'testtag')
     assert status is True
-    rec = ctx.m.lookup(session, i)
+    rec = ctx.m.lookup(session, i['system'], i['itype'], i['tag'])
     assert rec
     assert ctx.tag in rec['tag']
     assert 'testtag' in rec['tag']
@@ -487,7 +485,7 @@ def test_lookup(ctx):
     ctx.images.insert_one(record).inserted_id
     i = ctx.query.copy()
     session = ctx.session
-    lup = ctx.m.lookup(session, i)
+    lup = ctx.m.lookup(session, i['system'], i['itype'], i['tag'])
     assert 'status' in lup
     assert '_id' in lup
     assert ctx.m.get_state(lup['_id']) == 'READY'
@@ -496,7 +494,7 @@ def test_lookup(ctx):
     assert 'expiration' in r
     assert r['expiration'] > time.time()
     i['tag'] = 'bogus'
-    lup = ctx.m.lookup(session, i)
+    lup = ctx.m.lookup(session, i['system'], i['itype'], i['tag'])
     assert lup is None
 
 
@@ -508,7 +506,7 @@ def test_lookup_acl(ctx):
     id = ctx.images.insert_one(record).inserted_id
     i = ctx.query.copy()
     session = ctx.session
-    lup = ctx.m.lookup(session, i)
+    lup = ctx.m.lookup(session, i['system'], i['itype'], i['tag'])
     assert not lup
     ctx.images.delete_one({'_id': id})
 
@@ -520,7 +518,7 @@ def test_lookup_acl(ctx):
     id = ctx.images.insert_one(record).inserted_id
     i = ctx.query.copy()
     session = ctx.session
-    lup = ctx.m.lookup(session, i)
+    lup = ctx.m.lookup(session, i['system'], i['itype'], i['tag'])
     assert lup
     ctx.images.delete_one({'_id': id})
 
@@ -533,7 +531,7 @@ def test_lookup_acl(ctx):
     id = ctx.images.insert_one(record).inserted_id
     i = ctx.query.copy()
     session = ctx.session
-    lup = ctx.m.lookup(session, i)
+    lup = ctx.m.lookup(session, i['system'], i['itype'], i['tag'])
     assert lup
     ctx.images.delete_one({'_id': id})
 
@@ -547,7 +545,7 @@ def test_lookup_acl(ctx):
     id = ctx.images.insert_one(record).inserted_id
     i = ctx.query.copy()
     session = ctx.session
-    lup = ctx.m.lookup(session, i)
+    lup = ctx.m.lookup(session, i['system'], i['itype'], i['tag'])
     assert lup
     ctx.images.delete_one({'_id': id})
 
@@ -559,7 +557,7 @@ def test_lookup_acl(ctx):
     id = ctx.images.insert_one(record).inserted_id
     i = ctx.query.copy()
     session = ctx.session
-    lup = ctx.m.lookup(session, i)
+    lup = ctx.m.lookup(session, i['system'], i['itype'], i['tag'])
     assert lup
     ctx.images.delete_one({'_id': id})
     record['userACL'] = []
@@ -567,7 +565,7 @@ def test_lookup_acl(ctx):
     id = ctx.images.insert_one(record).inserted_id
     i = ctx.query.copy()
     session = ctx.session
-    lup = ctx.m.lookup(session, i)
+    lup = ctx.m.lookup(session, i['system'], i['itype'], i['tag'])
     assert lup
     ctx.images.delete_one({'_id': id})
 
@@ -696,7 +694,7 @@ def test_pull_mocked(ctx):
     # Track through transistions
     state = time_wait(ctx, id)
     assert state == 'READY'
-    imagerec = ctx.mtm.lookup(session, ctx.pull)
+    imagerec = ctx.mtm.lookup(session, pr['system'], pr['itype'], pr['tag'])
     assert 'ENTRY' in imagerec
     assert 'ENV' in imagerec
     # Cause a failure
@@ -964,7 +962,7 @@ def test_pull_acl(ctx):
     # Track through transistions
     state = time_wait(ctx, id)
     assert state == 'READY'
-    imagerec = ctx.m.lookup(session, pr)
+    imagerec = ctx.m.lookup(session, pr['system'], pr['itype'], pr['tag'])
     assert 'ENTRY' in imagerec
     assert 'ENV' in imagerec
     mf = ctx.get_metafile(ctx.system, imagerec['id'])
@@ -984,7 +982,7 @@ def test_pull_acl(ctx):
     id = rec['_id']
     state = time_wait(ctx, id)
     assert state is None
-    imagerec = ctx.m.lookup(session, pr)
+    imagerec = ctx.m.lookup(session, pr['system'], pr['itype'], pr['tag'])
     assert 'ENTRY' in imagerec
     assert 'ENV' in imagerec
     assert 1003 in imagerec['userACL']
@@ -1030,7 +1028,7 @@ def test_import(ctx):
     # Track through transistions
     state = time_wait(ctx, id)
     assert state == 'READY'
-    imagerec = ctx.mtm.lookup(session, pr)
+    imagerec = ctx.mtm.lookup(session, pr['system'], pr['itype'], pr['tag'])
     assert 'ENTRY' in imagerec
     assert 'ENV' in imagerec
 
@@ -1313,8 +1311,8 @@ def test_labels(ctx):
     mrec = ctx.images.find_one(q)
     assert 'LABELS' in mrec
     assert 'alabel' in mrec['LABELS']
-    look_req = ctx.query.copy()
-    look = m.lookup(session, look_req)
+    pr = ctx.query.copy()
+    look = m.lookup(session, pr['system'], pr['itype'], pr['tag'])
     assert 'LABELS' in look
     assert 'alabel' in look['LABELS']
     ctx.images.drop()
