@@ -40,7 +40,7 @@ from shifter_imagegw.config import Config
 import grp
 from multiprocessing import Process
 import atexit
-from cachetools import cached, TTLCache
+from cachetools import cached, TTLCache, LFUCache
 
 
 # decorator function to re-attempt any mongo operation that may have failed
@@ -104,6 +104,7 @@ class ImageMngr(object):
         self.status_queue.put('stop')
         self.status_proc.terminate()
 
+    @func.lfu_cache()
     def mongo_init(self, config: Config):
         client = MongoClient(config.MongoDBURI)
         db_ = config.MongoDB
@@ -238,6 +239,7 @@ class ImageMngr(object):
                 return False
         return True
 
+    @cached(cache=LFUCache(maxsize=128), info=True)
     def _add_metrics(self,
                      session: Session,
                      system: str,
@@ -245,7 +247,10 @@ class ImageMngr(object):
                      tag: str,
                      id: str):
         """
-        Add a row to mongo for this lookup request.
+        Adds a metric record for a lookup.  The caching
+        avoids recording the same information reqpeatedly,
+        since we don't care about the number of lookups
+        for the same image and person.
         """
         try:
             r = {
