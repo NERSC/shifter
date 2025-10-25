@@ -104,7 +104,6 @@ class ImageMngr(object):
         self.status_queue.put('stop')
         self.status_proc.terminate()
 
-    @func.lfu_cache()
     def mongo_init(self, config: Config):
         client = MongoClient(config.MongoDBURI)
         db_ = config.MongoDB
