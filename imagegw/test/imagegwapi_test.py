@@ -96,7 +96,8 @@ def admin(mocker):
     yield f
 
 
-def time_wait(app, url, auth, urlreq, data=None, state='READY', op='pull', TIMEOUT=10):
+def time_wait(app, url, auth, urlreq, data=None, state='READY',
+              op='pull', TIMEOUT=10):
     """
     Helper function to poll with a timeout for a pull or import
     to complete
@@ -197,7 +198,8 @@ def test_pulllookup(api_ctx, user):
         uri = "/".join([api_ctx["url"], 'lookup', api_ctx['urlreq']])
         response = client.get(uri, headers={AUTH_HEADER: 'bogus'})
         assert response.status_code == 200
-        uri = "/".join([api_ctx["url"], 'lookup', api_ctx['system'], api_ctx['itype'], 'bogus'])
+        uri = "/".join([api_ctx["url"], 'lookup', api_ctx['system'],
+                       api_ctx['itype'], 'bogus'])
         response = client.get(uri, headers={AUTH_HEADER: 'bogus'})
         assert response.status_code == 404
 
@@ -229,7 +231,8 @@ def test_lookup(api_ctx, user):
 
 def test_expire(api_ctx, user):
     with TestClient(api.app) as client:
-        uri = '/'.join([api_ctx['url'], 'expire', api_ctx['system'], api_ctx['itype'],
+        uri = '/'.join([api_ctx['url'], 'expire', api_ctx['system'],
+                        api_ctx['itype'],
                        api_ctx['tag']])
         response = client.get(uri, headers={AUTH_HEADER: 'bogus'})
         assert response.status_code == 200
@@ -302,7 +305,8 @@ def test_import(api_ctx, admin):
         hash = fast_hash(ifile)
         response = client.post(uri, json=data, headers={AUTH_HEADER: 'bogus'})
         assert response.status_code == 200
-        rv = time_wait(client, api_ctx['url'], 'bogus', api_ctx['urlreq'], op='doimport', data=data)
+        rv = time_wait(client, api_ctx['url'], 'bogus', api_ctx['urlreq'],
+                       op='doimport', data=data)
         data = rv.json()
         assert data['status'] == 'READY'
         assert data['id'] == hash

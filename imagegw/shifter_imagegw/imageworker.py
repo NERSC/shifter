@@ -118,11 +118,13 @@ class AsyncRequest(object):
                 continue
 
             if not isinstance(cleanitem, str):
-                raise ValueError(f'Invalid type for {cleanitem},{type(cleanitem)}')
+                err_msg = f'Invalid type for {cleanitem},{type(cleanitem)}'
+                raise ValueError(err_msg)
             if cleanitem == '' or cleanitem == '/':
                 raise ValueError(f'Invalid value for {cleanitem}: {cleanitem}')
             if not cleanitem.startswith(self.conf.ExpandDirectory):
-                raise ValueError(f'Invalid location for {cleanitem}: {cleanitem}')
+                err_msg = f'Invalid location for {cleanitem}: {cleanitem}'
+                raise ValueError(err_msg)
             if os.path.exists(cleanitem):
                 logging.info(f"Worker: removing {cleanitem}")
                 try:
@@ -268,7 +270,7 @@ class PullRequest(AsyncRequest):
             (repo, tag) = parts
         else:
             raise OSError(f'Unable to parse tag {self.tag}')
-        logging.debug(f"doing image pull for loc={location} repo={repo} tag={tag}")
+        logging.debug(f"Doing image pull for repo={repo} tag={tag}")
 
         return self._pull_dockerv2(location, repo, tag)
 
@@ -390,7 +392,8 @@ class PullRequest(AsyncRequest):
             return self.meta
 
         except Exception as e:
-            logging.error(f"ERROR: Dopull failed system={self.system} tag={self.tag}")
+            err_msg = f"ERROR: Dopull failed sys={self.system} tag={self.tag}"
+            logging.error(err_msg)
             self.updater.update_status('FAILURE', 'FAILED')
 
             # TODO: add a debugging flag and only disable cleanup if debugging
@@ -472,7 +475,8 @@ class ImportRequest(AsyncRequest):
             return self.meta
 
         except Exception as e:
-            logging.error(f"ERROR: img_import failed system={self.system} tag={self.tag}")
+            err_msg = f"img_import failed sys={self.system} tag={self.tag}"
+            logging.error(err_msg)
             logging.error(f"{str(e)}")
             self.updater.update_status('FAILURE', 'FAILED')
 

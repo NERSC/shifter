@@ -10,4 +10,5 @@ class Session(BaseModel):
     tokens: str = ""
 
     def __hash__(self):
-        return hash((self.uid, self.gid, self.system, self.user, self.group, self.tokens))
+        return hash((self.uid, self.gid, self.system,
+                    self.user, self.group, self.tokens))
