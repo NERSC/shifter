@@ -19,7 +19,7 @@ def fast_hash(infile):
     return m.hexdigest()
 
 
-def main(): # pragma: no cover
+def main():  # pragma: no cover
     parser = argparse.ArgumentParser(description='Calculate file hash')
     parser.add_argument('infile', nargs=1, type=str)
 

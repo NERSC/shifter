@@ -7,12 +7,12 @@ from shifter_imagegw import CONFIG_PATH
 class Location():
     # Used to override the location as the URL
     # This is not typically required.
-    url: str  = None
+    url: str = None
     # Note this is deprecated but left for reference
-    remotetype: str  = 'dockerv2'
+    remotetype: str = 'dockerv2'
 
     # Note this is deprecated but left for reference
-    authentication: str  = 'http'
+    authentication: str = 'http'
 
     def __init__(self, data: dict):
         rtype = data.get('remotetype', 'dockerv2')
@@ -28,7 +28,7 @@ class Platform():
     admins = ['root']
     imageDir = '/tmp'
     policy_file: str | None = None
-    
+
     def __init__(self, data):
         if data.get('accesstype') != 'local':
             return None
@@ -56,7 +56,7 @@ class Config():
     Locations = {}
     Platforms = {}
     examiner = None
-    ConverterOptions: str | list | None  = None
+    ConverterOptions: str | list | None = None
 
     def __init__(self, data=None):
         if data:

@@ -66,7 +66,8 @@ def transfer(system, image_path, metadata_path=None,
              import_image=False, dest_path=None):
     """
     transfer an image and its metadata to the system
-    """        
+    """
+
     for fn in [image_path, metadata_path]:
         if not fn:
             continue
@@ -76,7 +77,7 @@ def transfer(system, image_path, metadata_path=None,
             dstfn = dest_path
         dst = os.path.join(system.imageDir, dstfn)
         shutil.copyfile(fn, dst)
-        
+
 
 def remove(system, image_path, metadata_path=None):
     """

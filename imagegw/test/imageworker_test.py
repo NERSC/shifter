@@ -199,13 +199,13 @@ def test_bad_pull_docker(test_setup, pull_request):
     os.environ['UMOCI_FAIL'] = '1'
     with pytest.raises(OSError):
         pull_request._pull_dockerv2('index.docker.io',
-                           'scanon/shanetest', 'latest')
+                                    'scanon/shanetest', 'latest')
     os.environ.pop('UMOCI_FAIL')
 
 
 def test_pull_docker(pull_request):
     resp = pull_request._pull_dockerv2('index.docker.io',
-                                      'scanon/shanetest', 'latest')
+                                       'scanon/shanetest', 'latest')
     assert resp
 
 
