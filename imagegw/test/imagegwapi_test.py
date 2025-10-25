@@ -7,9 +7,9 @@ import pytest
 from fastapi.testclient import TestClient
 from shifter_imagegw.config import Config
 import warnings
+from shifter_imagegw.models import Session  # noqa
 warnings.filterwarnings('ignore', category=UserWarning, module='pymunge.raw')
 import shifter_imagegw.api as api  # noqa
-from shifter_imagegw.auth import Session  # noqa
 
 
 """
@@ -66,15 +66,15 @@ def api_ctx():
     if not os.path.exists(p):
         os.makedirs(p, exist_ok=True)
     ctx = {
-        'config': config,
-        'images': images,
-        'metrics': metrics,
-        'url': '/api',
-        'system': 'systema',
-        'itype': 'docker',
-        'tag': 'alpine:latest',
-        'test_dir': os.path.dirname(os.path.abspath(__file__)),
-    }
+          'config': config,
+          'images': images,
+          'metrics': metrics,
+          'url': '/api',
+          'system': 'systema',
+          'itype': 'docker',
+          'tag': 'alpine:latest',
+          'test_dir': os.path.dirname(os.path.abspath(__file__)),
+          }
     ctx['urlreq'] = "/".join([ctx['system'], ctx['itype'], ctx['tag']])
 
     yield ctx
@@ -210,6 +210,21 @@ def test_lookup(api_ctx, user):
         uri = "/".join([api_ctx["url"], 'lookup', api_ctx['urlreq']])
         response = client.get(uri, headers={AUTH_HEADER: 'bogus'})
         assert response.status_code == 200
+
+        # Test cachine
+        for _ in range(1, 10):
+            response = client.get(uri, headers={AUTH_HEADER: 'bogus'})
+            assert response.status_code == 200
+
+        hits = api.mgr.lookup.cache_info().hits
+        user.return_value = Session(uid=501, gid=500, system='systema',
+                                    user="user2", group="user")
+        response = client.get(uri, headers={AUTH_HEADER: 'bogus'})
+        hits2 = api.mgr.lookup.cache_info().hits
+        assert hits == hits2
+        response = client.get(uri, headers={AUTH_HEADER: 'bogus'})
+        hits2 = api.mgr.lookup.cache_info().hits
+        assert hits + 1 == hits2
 
 
 def test_expire(api_ctx, user):
