@@ -112,7 +112,7 @@ class ImageMngr(object):
         if config.Metrics:
             self.metrics = client[db_].metrics
 
-    def status_thread(self, config=None):
+    def status_thread(self, config: Config | None = None):
         """
         This listens for update messages from a queue.
         """
@@ -143,7 +143,7 @@ class ImageMngr(object):
                     self.complete_pull(ident, response)
                 logging.debug('meta={str(response)}')
 
-    def _isadmin(self, session, system=None):
+    def _isadmin(self, session: Session, system: str | None = None):
         """
         Check if this is an admin user.
         Returns true if is an admin or false if not.
@@ -157,11 +157,11 @@ class ImageMngr(object):
             return True
         return False
 
-    def _isasystem(self, system):
+    def _isasystem(self, system: str):
         """Check if system is a valid platform."""
         return bool(system in self.systems)
 
-    def _checkread(self, session, rec):
+    def _checkread(self, session: Session, rec: dict):
         """
         Checks if the user has read permissions to the image.
         """
@@ -194,7 +194,7 @@ class ImageMngr(object):
                     return True
         return False
 
-    def _resetexpire(self, ident):
+    def _resetexpire(self, ident: str):
         """Reset the expire time.  (Not fully implemented)."""
         # Change expire time for image
         # TODO shore up expire-time parsing
@@ -205,12 +205,12 @@ class ImageMngr(object):
         self._images_update({'_id': ident}, {'$set': {'expiration': expire}})
         return expire
 
-    def _make_acl(self, acllist, id):
+    def _make_acl(self, acllist: dict, id: str):
         if id not in acllist:
             acllist.append(id)
         return acllist
 
-    def _compare_list(self, a, b, key):
+    def _compare_list(self, a: dict, b: dict, key: str):
         """"
         look at the key element of two objects
         and compare the list of ids.
@@ -265,7 +265,7 @@ class ImageMngr(object):
         except Exception:
             logging.warning('Failed to log lookup.')
 
-    def get_metrics(self, session, system, limit):
+    def get_metrics(self, session: Session, system: str, limit: int):
         """
         Return the last <limit> lookup records.
         """
@@ -315,7 +315,7 @@ class ImageMngr(object):
                               rec['id'])
         return rec
 
-    def imglist(self, session, system):
+    def imglist(self, session: Session, system: str):
         """
         list images for a system.
         Image is dictionary with system defined.
@@ -332,7 +332,7 @@ class ImageMngr(object):
         # verify access
         return resp
 
-    def show_queue(self, session, system):
+    def show_queue(self, session: Session, system: str):
         """
         list queue for a system.
         Image is dictionary with system defined.
@@ -350,7 +350,7 @@ class ImageMngr(object):
                         'image': record['pulltag']})
         return resp
 
-    def _pullable(self, rec):
+    def _pullable(self, rec: dict):
         """
         An image is pullable when:
         -There is no existing record
@@ -395,7 +395,7 @@ class ImageMngr(object):
 
         return False
 
-    def new_pull_record(self, image):
+    def new_pull_record(self, image: dict):
         """
         Creates a new image in mongo.  If the pull already exist it removes
         it first.
@@ -422,7 +422,7 @@ class ImageMngr(object):
         self._images_insert(newimage)
         return newimage
 
-    def pull(self, session, image):
+    def pull(self, session: Session, image: dict):
         """
         pull the image
         Takes an auth token, a request object
@@ -515,7 +515,7 @@ class ImageMngr(object):
 
         return rec
 
-    def mngrimport(self, session, image):
+    def mngrimport(self, session: Session, image: dict):
         """
         import the image directly from a file
         Only for allowed users
@@ -571,7 +571,7 @@ class ImageMngr(object):
         self.update_mongo(ident, {'last_pull': time()})
         return rec
 
-    def update_mongo_state(self, ident, state, info=None):
+    def update_mongo_state(self, ident: str, state: str, info: dict | None = None):
         """
         Helper function to set the mongo state for an image with _id==ident
         to state=state.
@@ -586,7 +586,7 @@ class ImageMngr(object):
                 set_list['status_message'] = info['message']
         self._images_update({'_id': ident}, {'$set': set_list})
 
-    def add_tag(self, ident, system, tag):
+    def add_tag(self, ident: str, system: str, tag):
         """
         Helper function to add a tag to an image.
         ident is the mongo id (not image id)
@@ -604,7 +604,7 @@ class ImageMngr(object):
         self._images_update({'_id': ident}, {'$addToSet': {'tag': tag}})
         return True
 
-    def remove_tag(self, system, tag):
+    def remove_tag(self, system: str, tag: str):
         """
         Helper function to remove a tag to an image.
         """
@@ -612,7 +612,7 @@ class ImageMngr(object):
                                  {'$pull': {'tag': tag}})
         return True
 
-    def update_acls(self, ident, response):
+    def update_acls(self, ident: str, response: dict):
         logging.debug(f"Update ACLs called for {ident} {str(response)}")
         pullrec = self._images_find_one({'_id': ident})
         if pullrec is None:
@@ -646,7 +646,7 @@ class ImageMngr(object):
             self.update_mongo(rec['_id'], updates)
             self._images_remove({'_id': ident})
 
-    def complete_pull(self, ident, response):
+    def complete_pull(self, ident: str, response: dict):
         """
         Transition a completed pull request to an available image.
         """
@@ -684,7 +684,7 @@ class ImageMngr(object):
             self.update_mongo(ident, response)
             self.add_tag(ident, pullrec['system'], tag)
 
-    def update_mongo(self, ident, resp):
+    def update_mongo(self, ident: str, resp: dict):
         """
         Helper function to set the mongo values for an image with _id==ident.
         """
@@ -715,7 +715,7 @@ class ImageMngr(object):
 
         self._images_update({'_id': ident}, {'$set': setline})
 
-    def get_state(self, ident):
+    def get_state(self, ident: str):
         """
         Lookup the state of the image with _id==ident in Mongo.
         Returns the state.
@@ -738,7 +738,7 @@ class ImageMngr(object):
             if time() > nextpull:
                 self._images_remove({'_id': rec['_id']})
 
-    def autoexpire(self, session, system):
+    def autoexpire(self, session: Session, system: str):
         """Auto expire images and do cleanup"""
         # While this should be safe, let's restrict this to admins
         if not self._isadmin(session, system):
@@ -772,7 +772,7 @@ class ImageMngr(object):
             logging.debug(f"expired: {rec['expiration'] > time()}")
         return expired
 
-    def expire_id(self, rec, ident):
+    def expire_id(self, rec: dict, ident: str):
         """ Helper function to expire by id """
         memo = f"Calling do expire id={ident}"
         logging.debug(memo)
@@ -787,7 +787,7 @@ class ImageMngr(object):
         logging.info("expire request queued "
                      f"s={rec['system']} tag={ident}")
 
-    def expire(self, session, image):
+    def expire(self, session: Session, image: dict):
         """Expire an image.  (Not Implemented)"""
         if not self._isadmin(session, image['system']):
             return False
@@ -825,7 +825,7 @@ class ImageMngr(object):
         del self_dict['workers']
         return self_dict
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: str):
         self.__dict__.update(state)
 
     @mongo_reconnect_reattempt
