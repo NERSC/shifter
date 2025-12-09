@@ -336,6 +336,7 @@ size_t handleResponseHeader(char *ptr, size_t sz, size_t nmemb, void *data) {
 
 size_t handleResponseData(char *ptr, size_t sz, size_t nmemb, void *data) {
     ImageGwState *imageGw = (ImageGwState *) data;
+    char *ptr2;
     if (imageGw == NULL || imageGw->messageComplete) {
         return 0;
     }
@@ -344,7 +345,13 @@ size_t handleResponseData(char *ptr, size_t sz, size_t nmemb, void *data) {
     }
 
     size_t before = imageGw->messageCurr;
-    imageGw->message = alloc_strcatf(imageGw->message, &(imageGw->messageCurr), &(imageGw->messageLen), "%s", ptr);
+    ptr2 = strndup(ptr, nmemb);
+    if (!ptr2)
+    {
+	    perror("strndup failed");
+	    return 0;
+    }
+    imageGw->message = alloc_strcatf(imageGw->message, &(imageGw->messageCurr), &(imageGw->messageLen), "%s", ptr2);
     if (before + nmemb != imageGw->messageCurr) {
         /* error */
         return 0;
