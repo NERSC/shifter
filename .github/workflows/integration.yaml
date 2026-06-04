@@ -46,8 +46,7 @@ jobs:
           rm imagegw/test/sha256sum
           export ORIGPATH=$PATH
           export PATH=$PWD/imagegw/test:$PWD/imagegw:$PATH
-          which oci-image-tool
-          which umoci
+          sed -i 's|/usr/bin/oci-image-tool|oci-image-tool|' ./imagegw/oci-image-tool-wrapper
           PYTHONPATH=$PWD/imagegw nosetests -s --with-coverage imagegw/test
           export PATH=$ORIGPATH
 
