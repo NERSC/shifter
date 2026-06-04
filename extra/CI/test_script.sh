@@ -21,8 +21,8 @@ set -ex
 
 function runTest() {
    test=$1
-   source=$2
-   sources="$test-$test"
+   source=$1
+   sources="$test-$source"
    echo "Running $test"
    timeout 90 ./$test -v
    if [[ "x$DO_ROOT_TESTS" == "x1" && -x ${test}_AsRoot ]]; then
