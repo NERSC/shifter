@@ -41,6 +41,9 @@ jobs:
 
       - name: Python Tests
         run: |
+          cp imagegw/test.json.example test.json
+          mkdir /tmp/imagegw /tmp/systema /tmp/systemb
+          rm imagegw/test/sha256sum
           export ORIGPATH=$PATH
           export PATH=$PWD/imagegw/test:$PWD/imagegw:$PATH
           which oci-image-tool
@@ -63,9 +66,6 @@ jobs:
       - name: C Unit Tests
         run: |
           exit
-          cp imagegw/test.json.example test.json
-          mkdir /tmp/imagegw /tmp/systema /tmp/systemb
-          rm imagegw/test/sha256sum
           cd src/test
           export DO_ROOT_TESTS=1
           export DO_ROOT_DANGEROUS_TESTS=1
