@@ -48,24 +48,24 @@ jobs:
           ./configure --prefix=/usr --sysconfdir=/etc/shifter --disable-staticsshd
           MAKEFLAGS="-j$PROC_COUNT" make
           echo "Running Checks"
-#          MAKEFLAGS="-j$PROC_COUNT" make check
+          echo "skip" #          MAKEFLAGS="-j$PROC_COUNT" make check
           sudo make install 
 
-#      - name: C Unit Tests
-#        run: |
-#          cp imagegw/test.json.example test.json
-#          mkdir /tmp/imagegw /tmp/systema /tmp/systemb
-#          rm imagegw/test/sha256sum
-#          cd src/test
-#          export DO_ROOT_TESTS=1
-#          export DO_ROOT_DANGEROUS_TESTS=1
-#          ../../extra/CI/test_script.sh
-#          cd ../..
+      - name: C Unit Tests
+        run: |
+          cp imagegw/test.json.example test.json
+          mkdir /tmp/imagegw /tmp/systema /tmp/systemb
+          rm imagegw/test/sha256sum
+          cd src/test
+          export DO_ROOT_TESTS=1
+          export DO_ROOT_DANGEROUS_TESTS=1
+          ../../extra/CI/test_script.sh
+          cd ../..
 
       - name: Python Tests
         run: |
           export ORIGPATH=$PATH
-          export PATH=$PWD/imagegw/test:$PATH
+          export PATH=$PWD/imagegw/test:$PWD/imagegw:$PATH
           PYTHONPATH=$PWD/imagegw nosetests -s --with-coverage imagegw/test
           export PATH=$ORIGPATH
 
