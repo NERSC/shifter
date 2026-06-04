@@ -48,11 +48,12 @@ jobs:
           ./configure --prefix=/usr --sysconfdir=/etc/shifter --disable-staticsshd
           MAKEFLAGS="-j$PROC_COUNT" make
           echo "Running Checks"
-          echo "skip" #          MAKEFLAGS="-j$PROC_COUNT" make check
+          MAKEFLAGS="-j$PROC_COUNT" make check
           sudo make install 
 
       - name: C Unit Tests
         run: |
+          exit
           cp imagegw/test.json.example test.json
           mkdir /tmp/imagegw /tmp/systema /tmp/systemb
           rm imagegw/test/sha256sum
