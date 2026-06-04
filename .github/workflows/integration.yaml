@@ -46,6 +46,7 @@ jobs:
           ./autogen.sh
           ./configure --prefix=/usr --sysconfdir=/etc/shifter --disable-staticsshd
           MAKEFLAGS="-j$PROC_COUNT" make
+          MAKEFLAGS="-j$PROC_COUNT" make check ; cat src/test/test_shifter_core.log
           MAKEFLAGS="-j$PROC_COUNT" make check
           sudo make install 
 
