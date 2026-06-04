@@ -22,6 +22,7 @@ jobs:
            sudo chmod 755 /var/log
            sudo add-apt-repository "deb http://us.archive.ubuntu.com/ubuntu/ bionic universe multiverse"
            sudo apt-get update -qq
+           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 3B4FE6ACC0B21F32
            sudo apt-get install -qq libjson-c-dev munge libmunge2 libmunge-dev libcurl4-openssl-dev autoconf automake libtool curl make valgrind xfsprogs squashfs-tools libcap-dev
            sudo modprobe squashfs
            sudo modprobe xfs
