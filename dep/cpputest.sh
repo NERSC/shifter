@@ -18,7 +18,9 @@ mkdir -p cpputest_src
 tar xf "cpputest-${CPPUTEST_VERSION}.tar.gz" -C cpputest_src --strip-components=1
 cd cpputest_src
 # make sure we have the last config.guess available, this helps when building on openpower
-curl  -m 10 --retry 5 -L 'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD' -o config.guess
+# this source is no longer reliable.
+#curl  -m 10 --retry 5 -L 'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD' -o config.guess
+curl -o config.guess https://raw.githubusercontent.com/gcc-mirror/gcc/refs/heads/master/config.guess
 ./configure --prefix="${baseDir}/cpputest"
 make
 make install
