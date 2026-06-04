@@ -39,6 +39,15 @@ jobs:
         with:
           mongodb-version: 4.2
 
+      - name: Python Tests
+        run: |
+          export ORIGPATH=$PATH
+          export PATH=$PWD/imagegw/test:$PWD/imagegw:$PATH
+          which oci-image-tool
+          which umoci
+          PYTHONPATH=$PWD/imagegw nosetests -s --with-coverage imagegw/test
+          export PATH=$ORIGPATH
+
       - name: Build shifter
         run: |
           echo "Disabling autoclear for Travis and Kernel 5.4"
@@ -62,13 +71,6 @@ jobs:
           export DO_ROOT_DANGEROUS_TESTS=1
           ../../extra/CI/test_script.sh
           cd ../..
-
-      - name: Python Tests
-        run: |
-          export ORIGPATH=$PATH
-          export PATH=$PWD/imagegw/test:$PWD/imagegw:$PATH
-          PYTHONPATH=$PWD/imagegw nosetests -s --with-coverage imagegw/test
-          export PATH=$ORIGPATH
 
       - name: Run Integration Test
         run: |
