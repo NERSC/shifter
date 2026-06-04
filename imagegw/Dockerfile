@@ -1,7 +1,7 @@
 FROM python:3.8-slim as tools
 
 RUN \
-    apt-get -y update && apt-get -y install curl gnupg golang git make go-md2man
+    apt-get -y update && apt-get -y install curl gnupg git make wget
 
 RUN \
     echo 'deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/Debian_10/ /' > /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list  && \
@@ -10,25 +10,11 @@ RUN \
     apt-get -y install umoci
 
 RUN \
-    go get -d  github.com/opencontainers/image-tools/cmd/oci-image-tool && \
-    cd ~/go/src/github.com/opencontainers/image-tools/ && \
-    make && make install
-
-# Need newer version of skopeo then what is available from kubic
-#FROM debian:sid as skopeo
-#RUN apt-get -y update && apt-get -y install skopeo
-
-FROM debian:bullseye as skopeo
-RUN \
-    apt-get -y update && \
-    apt-get -y install golang wget go-md2man git make libgpgme-dev libdevmapper-dev
-
-RUN \
-    git clone https://github.com/containers/skopeo $GOPATH/src/github.com/containers/skopeo && \
-    cd $GOPATH/src/github.com/containers/skopeo && \
-    git checkout v1.4.1 && make bin/skopeo && \
-    DISABLE_DOCS=1 make
-
+    cd /tmp && \
+    wget -q https://go.dev/dl/go1.26.4.linux-amd64.tar.gz && \
+    tar xzf go1.26.4.linux-amd64.tar.gz && \
+    PATH=/tmp/go/bin:$PATH && \
+    ./go/bin/go install github.com/opencontainers/image-tools/cmd/oci-image-tool@v1.0.0-rc3
 
 
 FROM python:3.8-slim
@@ -37,10 +23,9 @@ RUN apt-get -y update && apt-get -y install squashfs-tools munge libassuan0 libg
 
 RUN mkdir /var/run/munge && chown munge /var/run/munge
 
-COPY --from=tools /usr/bin/umoci /usr/bin/oci-image-tool /usr/bin/
+COPY --from=tools /usr/bin/umoci /root/go/bin/oci-image-tool /usr/bin/
 
 RUN apt-get -y install skopeo
-COPY --from=skopeo /src/github.com/containers/skopeo/bin/skopeo /usr/bin/
 
 WORKDIR /usr/src/app
 
@@ -58,8 +43,7 @@ RUN cp /usr/src/app/oci-image-tool-wrapper /usr/local/bin/oci-image-tool-wrapper
 
 # Test that the tools work
 RUN \
-    skopeo && umoci && /usr/bin/oci-image-tool
-
+    skopeo --version && umoci --version && /usr/bin/oci-image-tool --version
 
 ENTRYPOINT [ "./entrypoint.sh" ]
 CMD [ ]
