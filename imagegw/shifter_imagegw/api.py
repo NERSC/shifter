@@ -154,6 +154,7 @@ def lookup(request, system, imgtype, tag):
         if rec is None:
             logger.debug("Image lookup failed.")
             return not_found(request, 'image not found')
+        logger.info(f"Image lookup {imgtype}:{tag} by user:{session.get('uid')}")
     except:
         logger.exception('Exception in lookup')
         return not_found(request, '%s %s' % (sys.exc_type, sys.exc_value))

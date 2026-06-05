@@ -37,6 +37,7 @@ export PYTHONPATH="$LIBEXECDIR:$PYDIR"
 
 echo "Setting up imagegw configuration"
 sudo cp "$CIDIR/imagemanager.json" /etc/shifter
+sudo cp "$BUILDDIR/imagegw/oci-image-tool-wrapper" /usr/bin/oci-image-tool-wrapper
 
 me=$(whoami)
 for i in /var/log/shifter_imagegw /images; do
