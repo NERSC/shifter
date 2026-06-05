@@ -134,6 +134,7 @@ async def lookup(system: str, imgtype: str, tag: str,
     if rec is None:
         logging.debug("Image lookup failed.")
         raise HTTPException(status_code=404, detail='image not found')
+    logging.info(f"Image lookup {imgtype}:{tag} by user:{session.uid}")
     return create_response(rec)
 
 

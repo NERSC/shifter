@@ -21,7 +21,7 @@ set -ex
 
 function runTest() {
    test=$1
-   source=$2
+   source=$1
    sources="$test-$source"
    echo "Running $test"
    timeout 90 ./$test -v
