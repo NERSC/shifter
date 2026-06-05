@@ -39,8 +39,9 @@ jobs:
         run: |
           cp imagegw/test.json.example test.json
           mkdir /tmp/imagegw /tmp/systema /tmp/systemb
-          cd imagegw pytest --cov test
-          PYTHONPATH=$PWD/imagegw nosetests -s --with-coverage imagegw/test
+          cd imagegw
+          pytest --cov test
+          cd ..
 
       - name: Build shifter
         run: |
