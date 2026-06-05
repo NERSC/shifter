@@ -2,7 +2,7 @@
     "WorkerThreads":8,
     "DefaultLustreReplication": 1,
     "DefaultOstCount": 16,
-    "DefaultImageLocation": "registry-1.docker.io",
+    "DefaultImageLocation": "docker.io",
     "DefaultImageFormat": "squashfs",
     "PullUpdateTimeout": 300,
     "ImageExpirationTimeout": "90:00:00:00",
@@ -11,7 +11,7 @@
     "CacheDirectory": "/images/cache/",
     "ExpandDirectory": "/images/expand/",
     "Locations": {
-        "registry-1.docker.io": {
+        "docker.io": {
             "remotetype": "dockerv2",
             "authentication": "http"
         }
