@@ -28,7 +28,7 @@ jobs:
            # install packages for tests
            pip install pytest pytest-cov pytest-cover pytest-coverage pytest-mock
            # Not sure why this is needed
-           pip install coveralls coveralls-merge
+           pip install coveralls coveralls-merge httpx
 
       - name: Start MongoDB
         uses: supercharge/mongodb-github-action@1.6.0
@@ -40,6 +40,8 @@ jobs:
           cp imagegw/test.json.example test.json
           mkdir /tmp/imagegw /tmp/systema /tmp/systemb
           cd imagegw
+          ls shifter_imagegw
+          pip freeze
           PYTHONPATH=`pwd` pytest --cov test
           cd ..
 
