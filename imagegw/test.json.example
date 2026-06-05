@@ -30,6 +30,7 @@
     "Platforms": {
         "systema": {
             "mungeSocketPath": "/tmp/systema/munge.socket",
+            "use_external": true,
             "accesstype": "remote",
             "mountCommand": "/bin/mount",
             "admins": ["root"],
@@ -44,6 +45,7 @@
         },
         "systemb": {
             "mungeSocketPath": "/tmp/systemb/munge.socket",
+            "use_external": true,
             "accesstype": "local",
             "usergroupService": "local",
             "admins": "root",
