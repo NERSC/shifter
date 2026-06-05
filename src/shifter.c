@@ -664,7 +664,7 @@ static void _usage(int status) {
 "\n"
 "Environmental Transfer: All the environment variables defined in the\n"
 "calling processes's environment will be transferred into the container,\n"
-"however, any environment variables defined in the container desription,\n"
+"however, any environment variables defined in the container description,\n"
 "e.g., Docker ENV-defined variables, will be sourced and override those.\n"
 "If \"--clearenv\" is specified the external environment will be ignored.\n"
 "If \"--env-file=/path/to/env/file\" is specified, then environmental variables\n"
