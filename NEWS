@@ -1,3 +1,10 @@
+26.06.01
+=======
+* Added logging
+* Various minor fixes to documentation
+* Add wrapper for oci tool 
+* Updates to imagegw Dockerfile to address bit rot
+
 22.02.1
 =======
 * Minor fixes and updates to run on CLE 6.X

@@ -19,8 +19,8 @@
 
 Summary:   NERSC Shifter -- Containers for HPC
 Name:      shifter
-Version:   22.02.1
-Release: 20220218
+Version:   26.06.1
+Release: 20260605
 License:   BSD (LBNL-modified)
 Group:     System Environment/Base
 URL:       https://github.com/NERSC/shifter
@@ -164,6 +164,7 @@ MAKEFLAGS=%{?_smp_mflags} %{__make}
 %make_install
 # Yes, this is a bit of hack.
 install -m 755 imagegw/shifter_imagegw/fasthash.py %{buildroot}/%{_bindir}/fasthash
+install -m 755 imagegw/shifter_imagegw/oci-image-tool-wrapper %{buildroot}/%{_bindir}/oci-image-tool-wrapper
 
 # Create directory for ImageGW API logs
 %{__mkdir_p} $RPM_BUILD_ROOT%{_localstatedir}/log/%{name}_imagegw
@@ -240,6 +241,7 @@ getent group > %{_sysconfdir}/shifter_etc_files/group
 %{_libexecdir}/shifter/imagegwapi.py*
 %{_libexecdir}/shifter/sitecustomize.py*
 %{_datadir}/shifter/requirements.txt
+%{_bindir}/oci-image-tool-wrapper
 %{_sysconfdir}/imagemanager.json.example
 %if 0%{!?_without_systemd:1}
 %{_unitdir}/shifter_imagegw*
