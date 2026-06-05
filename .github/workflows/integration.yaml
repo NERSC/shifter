@@ -40,6 +40,7 @@ jobs:
           cp imagegw/test.json.example test.json
           mkdir /tmp/imagegw /tmp/systema /tmp/systemb
           cd imagegw
+          cp test.json.example test.json
           cp shifter_imagegw/__init__.py.in shifter_imagegw/__init__.py
           PYTHONPATH=`pwd` pytest --cov test
           rm shifter_imagegw/__init__.py
