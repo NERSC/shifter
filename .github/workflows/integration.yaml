@@ -40,7 +40,7 @@ jobs:
           cp imagegw/test.json.example test.json
           mkdir /tmp/imagegw /tmp/systema /tmp/systemb
           cd imagegw
-          pytest --cov test
+          PYTHONPATH=`pwd` pytest --cov test
           cd ..
 
       - name: Build shifter
