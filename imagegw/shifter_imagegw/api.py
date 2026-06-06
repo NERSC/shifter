@@ -115,6 +115,7 @@ async def imglist(system: str, authentication: str = Header(None)):
 async def lookup(system: str, imgtype: str, tag: str,
                  authentication: str = Header(None)):
     """ Lookup an image for a system and return its record """
+    tag = tag.rstrip("/")
     if (imgtype == "docker" or imgtype == "custom") and tag.find(':') == -1:
         tag = f'{tag}:latest'
 
@@ -219,6 +220,7 @@ async def doimport(system: str, imgtype: str, tag: str, data: ImportImage,
     """
     Pull a specific image and tag for a systems.
     """
+    tag = tag.rstrip("/")
     if imgtype == "docker" and tag.find(':') == -1:
         tag = f'{tag}:latest'
 
@@ -291,6 +293,7 @@ async def autoexpire(system: str, authentication: str = Header(None)):
 async def expire(system: str, imgtype: str, tag: str,
                  authentication: str = Header(None)):
     """ Expire a sepcific image for a system """
+    tag = tag.rstrip("/")
     if imgtype == "docker" and tag.find(':') == -1:
         tag = f'{tag}:latest'
 
