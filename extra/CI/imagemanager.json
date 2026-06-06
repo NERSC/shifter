@@ -1,7 +1,5 @@
 {
     "WorkerThreads":8,
-    "DefaultLustreReplication": 1,
-    "DefaultOstCount": 16,
     "DefaultImageLocation": "docker.io",
     "DefaultImageFormat": "squashfs",
     "PullUpdateTimeout": 300,
@@ -20,7 +18,6 @@
     "Platforms": {
         "mycluster": {
             "mungeSocketPath": "/var/run/munge/munge.socket.2",
-            "use_external": true,
             "accesstype": "local",
             "usergroupService": "local",
             "local": {
