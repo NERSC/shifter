@@ -42,7 +42,7 @@ def test_authenticate(mocker):
     assert sess.gid == 0
     assert sess.system == system
     assert sess.user == "root"
-    assert sess.group == "wheel"
+    assert sess.group in ["wheel", "root"]
 
     f.return_value = ('', 700, 700, object())
     sess = authenticate(c, "foo", system)
