@@ -442,6 +442,10 @@ class ImportRequest(AsyncRequest):
             if not transfer.check_file(self.filepath,
                                        self.sysconf,
                                        import_image=self.import_image):
+                if self.import_image:
+                    logging.warning("Import path missing {sel.import_image}")
+                else:
+                    logging.warning("Invalid Path: {self.filepath} {self.syscon.imageDirf}")
                 raise OSError('Path not valid')
             # Step 1 - Calculate the hash of the file
             logging.debug("Starting import hashing")
