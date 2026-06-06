@@ -102,5 +102,6 @@ jobs:
       - name: Failure Logging
         if: failure()
         run: |
-          find /tmp
           find .
+          cat imagegw/test.json
+          find /tmp
