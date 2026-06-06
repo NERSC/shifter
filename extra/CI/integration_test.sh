@@ -52,7 +52,7 @@ fi
 sudo service munge start
 
 echo "Starting imagegw api"
-uvicorn --host 0.0.0.0 shifter_imagegw.api:app
+uvicorn --host 0.0.0.0 shifter_imagegw.api:app &
 
 
 echo "setting up base config"
