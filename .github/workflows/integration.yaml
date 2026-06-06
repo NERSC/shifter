@@ -98,3 +98,9 @@ jobs:
           SLACK_TITLE: Integration Test
           SLACK_USERNAME: rtCamp
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+
+      - name: Failure Logging
+        if: failure()
+        run: |
+          find /tmp
+          find .
