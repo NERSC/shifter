@@ -1,4 +1,4 @@
-shifter_imagegw_PYTHON = auth.py \
+shifter_imagegw_PYTHON = \
 				__init__.py \
 				api.py \
 				auth.py \
