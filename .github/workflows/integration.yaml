@@ -38,7 +38,7 @@ jobs:
       - name: Python Tests
         run: |
           cp imagegw/test.json.example test.json
-          mkdir /tmp/imagegw /tmp/systema /tmp/systemb
+          mkdir /tmp/imagegw /tmp/systema /tmp/systemb /tmp/systema/images
           cd imagegw
           cp test.json.example test.json
           cp shifter_imagegw/__init__.py.in shifter_imagegw/__init__.py
