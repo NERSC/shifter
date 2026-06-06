@@ -37,9 +37,10 @@ def remove_file(filename, system):
     basepath = system.imageDir
     image_fn = os.path.basename(filename)
     target_fn = os.path.join(basepath, image_fn)
-    logging.info(f"Removing: {target_fn}")
     if os.path.exists(target_fn):
         os.unlink(target_fn)
+    else:
+        logging.warning(f"Removing unknown file: {target_fn}")
 
 
 def check_file(filename, system, import_image=False):
