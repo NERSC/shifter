@@ -37,6 +37,7 @@ def remove_file(filename, system):
     basepath = system.imageDir
     image_fn = os.path.basename(filename)
     target_fn = os.path.join(basepath, image_fn)
+    logging.info(f"Removing: {target_fn}")
     if os.path.exists(target_fn):
         os.unlink(target_fn)
 
@@ -50,7 +51,6 @@ def check_file(filename, system, import_image=False):
     target_fn = os.path.join(basepath, image_fn)
     if import_image:
         return os.path.exists(filename)
-        # ls_cmd = sh_cmd(system, 'ls', filename)
     else:
         return os.path.exists(target_fn)
 
@@ -83,7 +83,7 @@ def remove(system, image_path, metadata_path=None):
     """
     remove an image and its metadata from the system
     """
-    logging.debug(f"remove: {system.imageDir} {image_path} {metadata_path}")
+    logging.info(f"remove: {system.imageDir} {image_path} {metadata_path}")
     if metadata_path:
         remove_file(metadata_path, system)
     remove_file(image_path, system)
