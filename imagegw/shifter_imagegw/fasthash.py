@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python3
 
 import hashlib
 import argparse
@@ -11,15 +11,15 @@ def fast_hash(infile):
 
     m = hashlib.sha256()
     with open(infile, 'rb', 1024 * 1024) as f:
-        l = f.read(1024 * 1024)
-        while (len(l) > 0):
-            m.update(l)
+        line = f.read(1024 * 1024)
+        while (len(line) > 0):
+            m.update(line)
             f.seek(1024 * 1024 * (512 - 1), 1)
-            l = f.read(1024 * 1024)
+            line = f.read(1024 * 1024)
     return m.hexdigest()
 
 
-if __name__ == '__main__':
+def main():  # pragma: no cover
     parser = argparse.ArgumentParser(description='Calculate file hash')
     parser.add_argument('infile', nargs=1, type=str)
 
@@ -27,3 +27,7 @@ if __name__ == '__main__':
     infile = args.infile[0]
 
     print(fast_hash(infile))
+
+
+if __name__ == '__main__':  # pragma: no cover
+    main()

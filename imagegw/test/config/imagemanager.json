@@ -11,6 +11,7 @@
     "MongoDB":"Shifter",
     "CacheDirectory": "/images/cache/",
     "ExpandDirectory": "/images/expand/",
+    "ImportUsers":"all",
     "Locations": {
         "index.docker.io": {
             "remotetype": "dockerv2",

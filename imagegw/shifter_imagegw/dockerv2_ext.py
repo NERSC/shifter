@@ -36,30 +36,30 @@ class DockerV2ext(object):
     This class is a client of the Docker Registry V2 protocol.
     """
 
-    def __init__(self, imageIdent, options={}, updater=None, cachedir=None):
+    def __init__(self, imageIdent: str,
+                 username: str = None,
+                 password: str = None,
+                 baseurl: str = None,
+                 policy_file: str = None,
+                 updater=None,
+                 cachedir: str = None):
         """
         Initialize an instance of the DockerV2 class.
         imageIdent is a tagged repo (e.g., ubuntu:14.04)
-        options is a dictionary.  Valid options include:
-            baseUrl to specify a URL other than dockerhub
-            username/password to specify a login
         """
         # attempt to parse image identifier
         self.imageId = imageIdent
-        self.options = options
         self.updater = updater
-        self.tokens = None
-        self.policy_file = options.get('policy_file')
+        self.username = username
+        self.password = password
+        self.policy_file = policy_file
         registry = 'index.docker.io'
-        if options and 'baseUrl' in options:
-            registry = options['baseUrl']
-            if registry.startswith('https:'):
-                registry = registry[8:]
-            elif registry.startswith('http:'):
-                registry = registry[7:]
+        if baseurl:
+            registry = baseurl.replace('https://', '')
+            registry = registry.replace('http://', '')
             registry = registry.rstrip('/')
         self.registry = registry
-        self.url = 'docker://%s/%s' % (registry, imageIdent)
+        self.url = f'docker://{registry}/{imageIdent}'
         self.private = False
         self.meta = self._inspect()
         self.meta['id'] = self.meta['Digest'].replace('sha256:', '')
@@ -78,11 +78,11 @@ class DockerV2ext(object):
             self.updater.update_status(state, message)
 
     def _auth_file(self):
-        if 'username' not in self.options:
+        if not self.username:
             raise OSError("No authentication")
-        user = self.options['username']
-        pwd = self.options['password']
-        pstr =  '%s:%s' % (user, pwd)
+        user = self.username
+        pwd = self.password
+        pstr = f'{user}:{pwd}'
         token = base64.b64encode(pstr.encode("utf-8")).decode("utf-8")
         afile = tempfile.mkstemp()[1]
         auth = {'auths': {
@@ -110,7 +110,7 @@ class DockerV2ext(object):
         if not any(a_err in stderr_str.lower() for a_err in auth_errors):
             # See if it exited with an error
             if process.returncode:
-                raise OSError("Skopeo inspect failed: %s" % (stderr_str))
+                raise OSError(f"Skopeo inspect failed: {stderr_str}")
             return json.loads(stdout.decode("utf-8"))
 
         # Private Image
@@ -199,7 +199,7 @@ class DockerV2ext(object):
         cmd.extend(['copy', '--dest-shared-blob-dir', self.cache_dir])
         if self.private:
             cmd.extend(['--authfile', self.auth_file])
-        cmd.extend([self.url, 'oci://%s:image' % outdir])
+        cmd.extend([self.url, f'oci://{outdir}:image'])
         process = Popen(cmd, stdout=PIPE, stderr=PIPE)
         stdout, stderr = process.communicate()
 
@@ -236,7 +236,7 @@ class DockerV2ext(object):
         rootfs = os.path.join(idir, 'rootfs')
         os.rmdir(base_path)
         perm = os.stat(rootfs).st_mode
-        os.chmod(rootfs, perm|stat.S_IEXEC|stat.S_IWRITE|stat.S_IREAD)
+        os.chmod(rootfs, perm | stat.S_IEXEC | stat.S_IWRITE | stat.S_IREAD)
         os.rename(rootfs, base_path)
         shutil.rmtree(idir)
         return True

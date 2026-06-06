@@ -16,48 +16,38 @@
 #
 # See LICENSE for full text.
 
-import os
-import unittest
-from shifter_imagegw.auth import Authentication
+from shifter_imagegw.config import Config
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning, module='pymunge.raw')
+from shifter_imagegw.auth import authenticate  # noqa
 
 
-class AuthTestCase(unittest.TestCase):
+def test_authenticate(mocker):
+    system = "systema"
+    data = {
+        "Authentication": "munge",
+        "Platforms": {system: {
+                "mungeSocketPath": "/tmp/munge.s",
+                "accesstype": "local",
+                "local": {}
+                }
+        },
+        "Locations": []
+    }
+    c = Config(data)
+    f = mocker.patch("shifter_imagegw.auth.decode")
+    f.return_value = ('', 0, 0, object())
+    sess = authenticate(c, "foo", system)
+    assert sess.uid == 0
+    assert sess.gid == 0
+    assert sess.system == system
+    assert sess.user == "root"
+    assert sess.group in ["wheel", "root"]
 
-    def setUp(self):
-        self.test_dir = os.path.dirname(os.path.abspath(__file__)) + \
-                        "/../test/"
-        self.encoded = "xxxx\n"
-        self.message = "test"
-        self.expired = "expired"
-        with open(self.test_dir + "munge.test", 'w') as f:
-            f.write(self.encoded)
-        self.system = 'systema'
-        self.config = {
-            "Authentication": "munge",
-            "Platforms": {self.system: {"mungeSocketPath": "/tmp/munge.s"}}
-        }
-        self.auth = Authentication(self.config)
-
-    def tearDown(self):
-        with open(self.test_dir + "munge.expired", 'w') as f:
-            f.write('')
-
-    def test_auth(self):
-        """ Test success """
-        resp = self.auth.authenticate(self.encoded, self.system)
-        assert resp is not None
-        self.assertIsInstance(resp, dict)
-
-    def test_auth_replay(self):
-        resp = self.auth.authenticate(self.encoded, self.system)
-        assert resp is not None
-        with self.assertRaises(OSError):
-            resp = self.auth.authenticate(self.encoded, self.system)
-
-    def test_auth_bad(self):
-        with self.assertRaises(OSError):
-            self.auth.authenticate("bad", self.system)
-
-
-if __name__ == '__main__':
-    unittest.main()
+    f.return_value = ('', 700, 700, object())
+    sess = authenticate(c, "foo", system)
+    assert sess.uid == 700
+    assert sess.gid == 700
+    assert sess.system == system
+    assert sess.user == "unknown"
+    assert sess.group == "unknown"

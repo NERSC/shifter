@@ -25,42 +25,12 @@ format for shifter.
 
 import os
 import subprocess
-import shutil
 import tempfile
+import logging
 from shifter_imagegw.util import program_exists, rmtree
 
 
-def generate_ext4_image(expand_path, image_path, options):
-    """
-    Creates an ext4 based image
-    """
-    message = 'ext4 support is not supported %s %s' % \
-              (expand_path, image_path)
-    raise NotImplementedError(message)
-
-
-def generate_cramfs_image(expand_path, image_path, options):
-    """
-    Creates a CramFS based image
-    """
-    program_exists('mkfs.cramfs')
-    cmd = ["mkfs.cramfs", expand_path, image_path]
-    if options is not None:
-        cmd.extend(options)
-    ret = subprocess.call(cmd)
-    if ret != 0:
-        # error handling
-        pass
-    try:
-        rmtree(expand_path)
-    except:
-        # error handling
-        pass
-
-    return True
-
-
-def generate_squashfs_image(expand_path, image_path, options):
+def _generate_squashfs_image(expand_path, image_path, options):
     """
     Creates a SquashFS based image
     """
@@ -70,67 +40,52 @@ def generate_squashfs_image(expand_path, image_path, options):
 
     cmd = ["mksquashfs", expand_path, image_path, "-all-root"]
 
-    if options is not None:
+    if options:
         cmd.extend(options)
     else:
         cmd.append('-no-xattrs')
+    logging.debug(' '.join(cmd))
     ret = subprocess.call(cmd)
     if ret != 0:
         # error handling
-        pass
+        raise OSError("mksquashfs failed")
     try:
         rmtree(expand_path)
-    except:
+    except Exception:
         pass
-
-    return True
 
 
 def convert(fmt, expand_path, image_path, options=None):
     """ do the conversion """
+    if fmt != 'squashfs':
+        raise NotImplementedError(f"Format {fmt} is not a supported format")
+
     if os.path.exists(image_path):
-        return True
+        raise FileExistsError
 
     (dirname, fname) = os.path.split(image_path)
     (temp_fd, temp_path) = tempfile.mkstemp('.partial', fname, dirname)
     os.close(temp_fd)
     os.unlink(temp_path)
     opts = None
-    if options is not None and fmt in options:
-        if isinstance(options[fmt], str):
-            opts = [options[fmt]]
-        elif isinstance(options[fmt], list):
-            opts = options[fmt]
+    if options:
+        if isinstance(options, str):
+            opts = [options]
+        elif isinstance(options, list):
+            opts = options
         else:
-            raise ValueError("options for format should be a string or list")
+            raise ValueError("options should be a string or list")
 
     try:
-        success = False
-        if fmt == 'squashfs':
-            success = generate_squashfs_image(expand_path, temp_path, opts)
-        elif fmt == 'cramfs':
-            success = generate_cramfs_image(expand_path, temp_path, opts)
-        elif fmt == 'ext4':
-            success = generate_ext4_image(expand_path, temp_path, opts)
-        elif fmt == 'mock':
-            with open(temp_path, 'w') as f:
-                line = 'bogus'
-                if options is not None:
-                    line += ' '.join(opts)
-                f.write(line)
-            success = True
-        else:
-            raise NotImplementedError("%s not a supported format" % fmt)
-    except:
+        _generate_squashfs_image(expand_path, temp_path, opts)
+    except Exception as e:
         if os.path.exists(temp_path):
             os.unlink(temp_path)
-        raise
+        raise e
 
-    if not success:
-        return False
     try:
         os.rename(temp_path, image_path)
-    except:
+    except Exception:
         return False
 
     # Some error must have occurred
@@ -141,31 +96,22 @@ def writemeta(fmt, meta, metafile):
     """ write the metadata file """
     with open(metafile, 'w') as meta_fd:
         # write out ENV, ENTRYPOINT, WORKDIR and format
-        private = False
-        if 'private' in meta:
-            private = meta['private']
-        # Disable saving private image info for backwards support
-        # This can be deprecated in the future.
-        if 'DISABLE_ACL_METADATA' in os.environ:
-            private = False
-        meta_fd.write("FORMAT: %s\n" % (fmt))
+        private = meta.get('private', False)
+        meta_fd.write(f"FORMAT: {fmt}\n")
         if meta.get('entrypoint'):
-            meta_fd.write("ENTRY: %s\n" % (meta['entrypoint']))
-        if meta.get('cmd'):
-            meta_fd.write("CMD: %s\n" % (meta['cmd']))
-        if meta.get('workdir'):
-            meta_fd.write("WORKDIR: %s\n" % (meta['workdir']))
-        if private and 'userACL' in meta and meta['userACL'] is not None:
-            acls = ','.join(map(lambda x: str(x), meta['userACL']))
-            meta_fd.write("USERACL: %s\n" % (acls))
-        if private and 'groupACL' in meta and meta['groupACL'] is not None:
-            acls = ','.join(map(lambda x: str(x), meta['groupACL']))
-            meta_fd.write("GROUPACL: %s\n" % (acls))
-        if 'env' in meta and meta['env'] is not None:
+            meta_fd.write(f"ENTRY: {meta['entrypoint']}\n")
+        for item in ['cmd', 'workdir', 'user']:
+            if item in meta:
+                meta_fd.write(f"{item.upper()}: {meta[item]}\n")
+        if private:
+            for item in ['userACL', 'groupACL']:
+                if item in meta and meta[item]:
+                    acls = ','.join(map(lambda x: str(x), meta[item]))
+                    meta_fd.write(f"{item.upper()}: {acls}\n")
+
+        if 'env' in meta and meta['env']:
             for keyval in meta['env']:
-                meta_fd.write("ENV: %s\n" % (keyval))
-        if 'user' in meta:
-            meta_fd.write("USER: %s\n" % meta['user'])
+                meta_fd.write(f"ENV: {keyval}\n")
         meta_fd.close()
     # Some error must have occurred
     return True

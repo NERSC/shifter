@@ -1,15 +1,16 @@
-shifter_imagegw_PYTHON = auth.py \
+shifter_imagegw_PYTHON = \
+				__init__.py \
 				api.py \
+				auth.py \
+				config.py \
 				converters.py \
-				dockerv2.py \
 				dockerv2_ext.py \
-				tarfilemp.py \
+				errors.py \
+				fasthash.py \
 				imagemngr.py \
 				imageworker.py \
-				__init__.py \
-				munge.py \
+				models.py \
 				transfer.py \
-				fasthash.py \
 				util.py 
 
 shifter_imagegwdir = $(pyexecdir)/shifter_imagegw

@@ -21,78 +21,52 @@
 This module provides the REST API for the image gateway.
 """
 
-import json
-import os
-import sys
 import logging
-import shifter_imagegw
+from shifter_imagegw.errors import AuthenticationError
 from shifter_imagegw.imagemngr import ImageMngr
-from sanic import Sanic
-from sanic.log import logger
-from sanic import response
-from sanic.response import json as jsonify
-from sanic.exceptions import NotFound
-
-app = Sanic("shifter")
-config = {}
-AUTH_HEADER = 'authentication'
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, Request, Header, Query
+from fastapi.responses import JSONResponse, PlainTextResponse
+from pydantic import BaseModel
+from shifter_imagegw.config import Config
+from shifter_imagegw.auth import authenticate
 
 
-if 'GWCONFIG' in os.environ:
-    CONFIG_FILE = os.environ['GWCONFIG']
-else:
-    CONFIG_FILE = '%s/imagemanager.json' % (shifter_imagegw.CONFIG_PATH)
-
-logger.debug('Initializing api image manager')
-
-logger.info("initializing with %s" % (CONFIG_FILE))
-with open(CONFIG_FILE) as config_file:
-    config = json.load(config_file)
-    if 'LogLevel' in config:
-        LOG_STRING = config['LogLevel'].lower()
-        if LOG_STRING == 'debug':
-            logger.setLevel(logging.DEBUG)
-        elif LOG_STRING == 'info':
-            logger.setLevel(logging.INFO)
-        elif LOG_STRING == 'warn':
-            logger.setLevel(logging.WARN)
-        elif LOG_STRING == 'error':
-            logger.setLevel(logging.ERROR)
-        elif LOG_STRING == 'critical':
-            logger.setLevel(logging.CRITICAL)
-        else:
-            logger.critical('Unrecongnized Log Level specified')
-mgr = ImageMngr(config, logname="sanic.root")
+mgr = None
 
 
-def getmgr():
-    """
-    This is intended just for the testing layer so it can shutdown the
-    updater thread in the manager.
-    """
-    return mgr
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global config
+    config = Config()
+    logging.basicConfig(level=config.LogLevel)
+    global mgr
+    mgr = ImageMngr(config)
+    yield
+    mgr.shutdown()
+
+
+app = FastAPI(title="Shifter Image Gateway", version="1.0.0",
+              lifespan=lifespan)
 
 
 # For RESTful Service
-# @app.errorhandler(404)
-@app.exception(NotFound)
-def not_found(request, error=None):
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc: HTTPException):
     """ Standard error function to return a 404. """
-    logger.warning("404 return")
+    logging.info("404 return")
     message = {
         'status': 404,
-        'error': str(error),
-        'message': 'Not Found: ' + request.url,
+        'error': str(exc.detail),
+        'message': f'Not Found: {str(request.url)}',
     }
-    resp = jsonify(message, status=404)
-    # resp.status_code = 404
-    return resp
+    return JSONResponse(content=message, status_code=404)
 
 
-@app.route('/')
-def apihelp(request):
+@app.get('/')
+async def apihelp():
     """ API helper return """
-    return response.text("{lookup,pull,expire,list}")
+    return PlainTextResponse("{lookup,pull,expire,list}")
 
 
 def create_response(rec):
@@ -112,239 +86,251 @@ def create_response(rec):
 
 # List images
 # This will list the images for a system
-@app.route('/api/list/<system>/', methods=["GET"])
-def imglist(request, system):
+@app.get('/api/list/{system}')
+async def imglist(system: str, authentication: str = Header(None)):
     """ List images for a specific system. """
-    auth = request.headers.get(AUTH_HEADER)
-    logger.debug("list system=%s" % (system))
+    auth = authentication
+    logging.debug(f"list system={system}")
     try:
-        session = mgr.new_session(auth, system)
+        session = authenticate(config, auth, system)
         records = mgr.imglist(session, system)
         if records is None:
-            return not_found(request, 'image not found')
-    except OSError:
-        logger.warning('Bad session or system')
-        return not_found(request, 'Bad session or system')
-    except:
-        logger.exception('Unknown Exception in List')
-        return not_found(request, '%s' % (sys.exc_value))
+            raise HTTPException(status_code=404, detail='image not found')
+    except AuthenticationError as ex:
+        logging.warning(f"Auth error {str(ex)}")
+        raise HTTPException(status_code=401, detail='Authentication Error')
+    except Exception as ex:
+        logging.exception('Unknown Exception in List')
+        raise HTTPException(status_code=404, detail=str(ex))
     images = []
     for rec in records:
         images.append(create_response(rec))
     resp = {'list': images}
-    return jsonify(resp)
+    return resp
 
 
 # Lookup image
 # This will lookup the status of the requested image.
-@app.route('/api/lookup/<system>/<imgtype>/<tag:path>/', methods=["GET"])
-def lookup(request, system, imgtype, tag):
+@app.get('/api/lookup/{system}/{imgtype}/{tag:path}')
+async def lookup(system: str, imgtype: str, tag: str,
+                 authentication: str = Header(None)):
     """ Lookup an image for a system and return its record """
+    tag = tag.rstrip("/")
     if (imgtype == "docker" or imgtype == "custom") and tag.find(':') == -1:
-        tag = '%s:latest' % (tag)
+        tag = f'{tag}:latest'
 
-    auth = request.headers.get(AUTH_HEADER)
-    memo = 'lookup system=%s imgtype=%s tag=%s auth=%s' \
-           % (system, imgtype, tag, auth)
-    logger.debug(memo)
-    i = {'system': system, 'itype': imgtype, 'tag': tag}
+    auth = authentication
+    memo = f'lookup system={system} imgtype={imgtype} tag={tag} auth={auth}'
+    logging.debug(memo)
     try:
-        session = mgr.new_session(auth, system)
-        rec = mgr.lookup(session, i)
-        if rec is None:
-            logger.debug("Image lookup failed.")
-            return not_found(request, 'image not found')
-        logger.info(f"Image lookup {imgtype}:{tag} by user:{session.get('uid')}")
-    except:
-        logger.exception('Exception in lookup')
-        return not_found(request, '%s %s' % (sys.exc_type, sys.exc_value))
-    return jsonify(create_response(rec))
+        session = authenticate(config, auth, system)
+        rec = mgr.lookup(session, system, imgtype, tag)
+    except AuthenticationError as ex:
+        logging.warning(f"Auth error {str(ex)}")
+        raise HTTPException(status_code=401, detail='Authentication Error')
+    except Exception as ex:
+        logging.exception('Unknown Exception in List')
+        raise HTTPException(status_code=404, detail=str(ex))
+
+    if rec is None:
+        logging.debug("Image lookup failed.")
+        raise HTTPException(status_code=404, detail='image not found')
+    logging.info(f"Image lookup {imgtype}:{tag} by user:{session.uid}")
+    return create_response(rec)
 
 
 # Get Metrics
 # This will return the most recent XX lookup records.
-@app.route('/api/metrics/<system>/', methods=["GET"])
-def metrics(request, system):
+@app.get('/api/metrics/{system}')
+async def metrics(system: str, limit: int = Query(10),
+                  authentication: str = Header(None)):
     """ Lookup an image for a system and return its record """
-    auth = request.headers.get(AUTH_HEADER)
-    memo = 'metrics system=%s auth=%s' \
-           % (system, auth)
-    logger.debug(memo)
-    limit = int(request.args.get('limit', '10'))
+    auth = authentication
+    memo = f'metrics system={system} auth={auth}'
+    logging.debug(memo)
     try:
-        session = mgr.new_session(auth, system)
+        session = authenticate(config, auth, system)
         recs = mgr.get_metrics(session, system, limit)
-    except:
-        logger.exception('Exception in metrics')
-        return not_found(request, '%s %s' % (sys.exc_type, sys.exc_value))
-    return jsonify(recs)
+    except AuthenticationError as ex:
+        logging.warning(f"Auth error {str(ex)}")
+        raise HTTPException(status_code=401, detail='Authentication Error')
+    except Exception as ex:
+        logging.exception('Exception in metrics')
+        raise HTTPException(status_code=404, detail=str(ex))
+    return recs
+
+
+class PullRequest(BaseModel):
+    allowed_uids: str | None = None
+    allowed_gids: str | None = None
 
 
 # Pull image
 # This will pull the requested image.
-@app.route('/api/pull/<system>/<imgtype>/<tag:path>/', methods=["POST"])
-def pull(request, system, imgtype, tag):
+@app.post('/api/pull/{system}/{imgtype}/{tag:path}')
+async def pull(system: str, imgtype: str, tag: str,
+               data: PullRequest | None = None,
+               authentication: str = Header(None)):
     """ Pull a specific image and tag for a systems. """
+    # Remove trailing slashes
+    tag = tag.rstrip("/")
     if imgtype == "docker" and tag.find(':') == -1:
-        tag = '%s:latest' % (tag)
+        tag = f'{tag}:latest'
 
-    auth = request.headers.get(AUTH_HEADER)
-    data = {}
-    try:
-        data = request.json
-        if data is None:
-            data = {}
-    except:
-        logger.warn("Unable to parse pull data '%s'" %
-                        (request.get_data()))
-        pass
+    auth = authentication
+    logging.debug(f'data: {str(data)}')
 
-    memo = "pull system=%s imgtype=%s tag=%s" % (system, imgtype, tag)
-    logger.debug(memo)
+    logging.debug(f"pull system={system} imgtype={imgtype} tag={tag}")
     i = {'system': system, 'itype': imgtype, 'tag': tag}
-    if 'allowed_uids' in data:
+    if data and data.allowed_uids:
         # Convert to integers
         i['userACL'] = list(map(lambda x: int(x),
-                           data['allowed_uids'].split(',')))
-    if 'allowed_gids' in data:
+                            data.allowed_uids.split(',')))
+    if data and data.allowed_gids:
         # Convert to integers
         i['groupACL'] = list(map(lambda x: int(x),
-                            data['allowed_gids'].split(',')))
+                             data.allowed_gids.split(',')))
     try:
-        logger.debug(i)
-        session = mgr.new_session(auth, system)
-        logger.debug(session)
+        logging.debug(i)
+        session = authenticate(config, auth, system)
+        logging.debug(session)
         rec = mgr.pull(session, i)
-        logger.debug(rec)
-    except:
-        logger.exception('Exception in pull')
-        return not_found(request, '%s %s' % (sys.exc_type, sys.exc_value))
-    return jsonify(create_response(rec))
+        logging.debug(rec)
+    except AuthenticationError as ex:
+        logging.warning(f"Auth error {str(ex)}")
+        raise HTTPException(status_code=401, detail='Authentication Error')
+    except Exception as ex:
+        logging.exception('Exception in pull')
+        raise HTTPException(status_code=404, detail=str(ex))
+    return create_response(rec)
+
+
+class ImportImage(BaseModel):
+    filepath: str
+    format: str
+    allowed_uids: str | None = None
+    allowed_gids: str | None = None
 
 
 # Import image
 # This will import the requested image from a file path on the system.
-@app.route('/api/doimport/<system>/<imgtype>/<tag:path>/', methods=["POST"])
-def doimport(request, system, imgtype, tag):
+@app.post('/api/doimport/{system}/{imgtype}/{tag:path}')
+async def doimport(system: str, imgtype: str, tag: str, data: ImportImage,
+                   authentication: str = Header(None)):
     """
     Pull a specific image and tag for a systems.
     """
+    tag = tag.rstrip("/")
     if imgtype == "docker" and tag.find(':') == -1:
-        tag = '%s:latest' % (tag)
+        tag = f'{tag}:latest'
 
-    auth = request.headers.get(AUTH_HEADER)
-    data = {}
-    try:
-        data = request.json
-        if data is None:
-            data = {}
-    except:
-        logger.warn("Unable to parse doimport data '%s'" %
-                        (request.text))
-        pass
+    auth = authentication
 
-    memo = "import system=%s imgtype=%s tag=%s" % (system, imgtype, tag)
-    logger.debug(memo)
+    memo = f"import system={system} imgtype={imgtype} tag={tag}"
+    logging.debug(memo)
     i = {'system': system, 'itype': imgtype, 'tag': tag}
     # Check for path to import file
-    if 'filepath' in data:
-        i['filepath'] = data['filepath']
-    else:
-        raise OSError("filepath required for direct image import")
-    if 'format' in data:
-        i['format'] = data['format']
-    else:
-        msg = "file type (e.g. squashfs) required for direct image import"
-        raise OSError(msg)
+    i['filepath'] = data.filepath
+    i['format'] = data.format
+
     # Check for list of allowed users or groups
-    if 'allowed_uids' in data:
+    if data.allowed_uids:
         # Convert to integers
         i['userACL'] = list(map(lambda x: int(x),
-                           data['allowed_uids'].split(',')))
-    if 'allowed_gids' in data:
+                            data.allowed_uids.split(',')))
+    if data.allowed_gids:
         # Convert to integers
         i['groupACL'] = list(map(lambda x: int(x),
-                            data['allowed_gids'].split(',')))
+                             data.allowed_gids.split(',')))
+    if not config.ImportUsers or config.ImportUsers.lower() == "none":
+        raise HTTPException(status_code=403,
+                            detail="User image import from file disabled.")
+    iusers = config.ImportUsers
+
     try:
-        session = mgr.new_session(auth, system)
+        session = authenticate(config, auth, system)
         # only allowed users can import images
-        user = session['user']
-        if 'ImportUsers' not in config.keys():
-            raise OSError("User image import from file disabled.")
-        iusers = config['ImportUsers']
-        # If ImportUsers is None, no one can do this
-        if iusers == "None" or iusers == "none":
-            raise OSError("User image import from file disabled.")
+        user = session.user
 
         # Check if user on approved list
         if len(iusers) > 0 and iusers != "all":
             if user not in iusers:
-                msg = "User %s not allowed to import image from file." % (user)
-                raise OSError(msg)
+                msg = f"User {user} not allowed to import image from file."
+                raise AuthenticationError(msg)
         rec = mgr.mngrimport(session, i)
-        logger.debug(rec)
-    except:
-        logger.exception('Exception in import')
-        return not_found(request, '%s %s' % (sys.exc_type, sys.exc_value))
-    return jsonify(create_response(rec))
+    except AuthenticationError as ex:
+        logging.warning(f"Auth error {str(ex)}")
+        raise HTTPException(status_code=401, detail='Authentication Error')
+    except Exception as ex:
+        logging.exception('Exception in import')
+        raise HTTPException(status_code=404, detail=str(ex))
+    return create_response(rec)
 
 
 # auto expire
 # This will autoexpire images and cleanup stuck pulls
-@app.route('/api/autoexpire/<system>/', methods=["GET"])
-def autoexpire(request, system):
+@app.get('/api/autoexpire/{system}')
+async def autoexpire(system: str, authentication: str = Header(None)):
     """ Run the autoexpire handler to purge old images """
-    auth = request.headers.get(AUTH_HEADER)
-    logger.debug("autoexpire system=%s" % (system))
+    auth = authentication
+    logging.debug(f"autoexpire system={system}")
     try:
-        session = mgr.new_session(auth, system)
+        session = authenticate(config, auth, system)
+        logging.debug(session)
         resp = mgr.autoexpire(session, system)
-    except:
-        logger.exception('Exception in autoexpire')
-        return not_found(request)
-    return jsonify({'status': resp})
+    except AuthenticationError as ex:
+        logging.warning(f"Auth error {str(ex)}")
+        raise HTTPException(status_code=401, detail='Authentication Error')
+    except Exception as ex:
+        logging.exception('Exception in autoexpire')
+        raise HTTPException(status_code=404, detail=str(ex))
+    return {'status': resp}
 
 
 # expire image
 # This will expire an image which removes it from the cache.
-@app.route('/api/expire/<system>/<imgtype>/<tag:path>/', methods=["GET"])
-def expire(request, system, imgtype, tag):
+@app.get('/api/expire/{system}/{imgtype}/{tag:path}')
+async def expire(system: str, imgtype: str, tag: str,
+                 authentication: str = Header(None)):
     """ Expire a sepcific image for a system """
+    tag = tag.rstrip("/")
     if imgtype == "docker" and tag.find(':') == -1:
-        tag = '%s:latest' % (tag)
+        tag = f'{tag}:latest'
 
-    auth = request.headers.get(AUTH_HEADER)
+    auth = authentication
     i = {'system': system, 'itype': imgtype, 'tag': tag}
-    memo = "expire system=%s imgtype=%s tag=%s" % (system, imgtype, tag)
-    logger.debug(memo)
+    memo = f"expire system={system} imgtype={imgtype} tag={tag}"
+    logging.debug(memo)
     resp = None
     try:
-        session = mgr.new_session(auth, system)
+        session = authenticate(config, auth, system)
         resp = mgr.expire(session, i)
-    except:
-        logger.exception('Exception in expire')
-        return not_found(request)
-    return jsonify({'status': resp})
+    except AuthenticationError as ex:
+        logging.warning(f"Auth error {str(ex)}")
+        raise HTTPException(status_code=401, detail='Authentication Error')
+    except Exception as ex:
+        logging.exception('Exception in expire')
+        raise HTTPException(status_code=404, detail=str(ex))
+    return {'status': resp}
 
 
 # Show queue
 # This will list pull requests and their state
-@app.route('/api/queue/<system>/', methods=["GET"])
-def queue(request, system):
+@app.get('/api/queue/{system}')
+async def queue(system: str, authentication: str = Header(None)):
     """ List images for a specific system. """
-    # auth = request.headers.get(AUTH_HEADER)
-    logger.debug("show queue system=%s" % (system))
+    logging.debug(f"show queue system={system}")
+    auth = authentication
     try:
-        session = mgr.new_session(None, system)
+        session = authenticate(config, auth, system)
         records = mgr.show_queue(session, system)
-    except:
-        logger.exception('Exception in queue')
-        return not_found(request, '%s' % (sys.exc_value))
+    except Exception as ex:
+        logging.exception('Exception in queue')
+        raise HTTPException(status_code=404, detail=str(ex))
     resp = {'list': records}
-    return jsonify(resp)
+    return resp
 
 
-if __name__ == "__main__":
-  workers = int(os.environ.get("WORKERS", 1))
-  app.run(host="0.0.0.0", port=8000, workers=workers)
-
+@app.get('/api/status')
+def status():
+    return {"status": "up"}

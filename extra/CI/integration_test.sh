@@ -9,7 +9,7 @@ fi
 
 PYDIR=
 for libpath in lib lib64; do
-    for pypath in python2.6 python2.7 python3.7 python3.8; do
+    for pypath in python3.7 python3.8 python3.10; do
         for packagepath in site-packages dist-packages; do
             if [[ -e "/usr/$libpath/$pypath/$packagepath/shifter_imagegw" ]]; then
                 PYDIR="/usr/$libpath/$pypath/$packagepath"
@@ -52,7 +52,8 @@ fi
 sudo service munge start
 
 echo "Starting imagegw api"
-python -m shifter_imagegw.api &
+uvicorn --host 0.0.0.0 shifter_imagegw.api:app &
+
 
 echo "setting up base config"
 sudo /bin/bash -c "cat /etc/shifter/udiRoot.conf.example | \

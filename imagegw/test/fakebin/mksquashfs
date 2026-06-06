@@ -1,5 +1,8 @@
 #!/bin/sh
 
 # For test purposes on a mac
+if [ $(echo "$@"|grep -c fail) -gt 0 ] ; then
+    touch $2
+    exit 1
+fi
 (echo "mock mksquahfs called with $@";date) > $2
-#    ret = subprocess.call(["mksquashfs", expandedPath, imageTempPath, "-all-root"])
