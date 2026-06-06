@@ -171,6 +171,8 @@ async def pull(system: str, imgtype: str, tag: str,
                data: PullRequest | None = None,
                authentication: str = Header(None)):
     """ Pull a specific image and tag for a systems. """
+    # Remove trailing slashes
+    tag = tag.rstrip("/")
     if imgtype == "docker" and tag.find(':') == -1:
         tag = f'{tag}:latest'
 
