@@ -12,8 +12,8 @@
     "MongoDBURI":"mongodb://localhost/",
     "MongoDB":"ShifterTest",
     "Metrics":true,
-    "Authentication":"mock",
-    "ImportUsers":"all",
+    "Authentication":"munge",
+    "ImportUsers":"root",
 
     "Locations": {
         "index.docker.io": {
@@ -30,25 +30,17 @@
     "Platforms": {
         "systema": {
             "mungeSocketPath": "/tmp/systema/munge.socket",
-            "use_external": true,
-            "accesstype": "remote",
-            "mountCommand": "/bin/mount",
+            "accesstype": "local",
             "admins": ["root"],
-            "host": [
-                "localhost"
-            ],
-            "ssh": {
-                "username": "user",
-                "key": "/tmp/ssh.key",
+            "local": {
                 "imageDir": "/tmp/systema/images"
             }
         },
         "systemb": {
             "mungeSocketPath": "/tmp/systemb/munge.socket",
-            "use_external": true,
             "accesstype": "local",
             "usergroupService": "local",
-            "admins": "root",
+            "admins": ["root"],
             "local": {
                 "imageDir": "/tmp/systemb/images"
             }
