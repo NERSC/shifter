@@ -28,7 +28,7 @@ jobs:
            # install packages for tests
            pip install pytest pytest-cov pytest-cover pytest-coverage pytest-mock
            # Not sure why this is needed
-           pip install coveralls coveralls-merge httpx
+           pip install coveralls coveralls-merge httpx==0.28.1
 
       - name: Start MongoDB
         uses: supercharge/mongodb-github-action@1.6.0
