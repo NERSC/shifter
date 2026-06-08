@@ -157,10 +157,6 @@ class ImageMngr(object):
             return True
         return False
 
-    def _isasystem(self, system: str):
-        """Check if system is a valid platform."""
-        return bool(system in self.systems)
-
     def _checkread(self, session: Session, rec: dict):
         """
         Checks if the user has read permissions to the image.
@@ -319,8 +315,6 @@ class ImageMngr(object):
         list images for a system.
         Image is dictionary with system defined.
         """
-        if self._isasystem(session.system) is False:
-            raise OSError("Invalid System")
         query = {'status': 'READY', 'system': session.system}
         self.update_states()
         records = self._images_find(query)

@@ -87,10 +87,9 @@ def create_response(rec):
 @app.get('/api/list/{system}')
 async def imglist(system: str, authentication: str = Header(None)):
     """ List images for a specific system. """
-    auth = authentication
     logging.debug(f"list system={system}")
     try:
-        session = authenticate(config, auth, system)
+        session = authenticate(config, authentication, system)
         records = mgr.imglist(session)
         if records is None:
             raise HTTPException(status_code=404, detail='image not found')
@@ -116,12 +115,10 @@ async def lookup(system: str, imgtype: str, tag: str,
     tag = tag.rstrip("/")
     if (imgtype == "docker" or imgtype == "custom") and tag.find(':') == -1:
         tag = f'{tag}:latest'
-
-    auth = authentication
-    memo = f'lookup system={system} imgtype={imgtype} tag={tag} auth={auth}'
+    memo = f'lookup system={system} imgtype={imgtype} tag={tag}'
     logging.debug(memo)
     try:
-        session = authenticate(config, auth, system)
+        session = authenticate(config, authentication, system)
         rec = mgr.lookup(session, imgtype, tag)
     except AuthenticationError as ex:
         logging.warning(f"Auth error {str(ex)}")
@@ -143,11 +140,10 @@ async def lookup(system: str, imgtype: str, tag: str,
 async def metrics(system: str, limit: int = Query(10),
                   authentication: str = Header(None)):
     """ Lookup an image for a system and return its record """
-    auth = authentication
-    memo = f'metrics system={system} auth={auth}'
+    memo = f'metrics system={system} auth={authentication}'
     logging.debug(memo)
     try:
-        session = authenticate(config, auth, system)
+        session = authenticate(config, authentication, system)
         recs = mgr.get_metrics(session, limit)
     except AuthenticationError as ex:
         logging.warning(f"Auth error {str(ex)}")
@@ -175,7 +171,6 @@ async def pull(system: str, imgtype: str, tag: str,
     if imgtype == "docker" and tag.find(':') == -1:
         tag = f'{tag}:latest'
 
-    auth = authentication
     logging.debug(f'data: {str(data)}')
 
     logging.debug(f"pull system={system} imgtype={imgtype} tag={tag}")
@@ -190,7 +185,7 @@ async def pull(system: str, imgtype: str, tag: str,
         groupACL = list(map(lambda x: int(x),
                             data.allowed_gids.split(',')))
     try:
-        session = authenticate(config, auth, system)
+        session = authenticate(config, authentication, system)
         logging.debug(session)
         req = ImageRequest(system=system, itype=imgtype, tag=tag,
                            userACL=userACL, groupACL=groupACL)
@@ -224,8 +219,6 @@ async def doimport(system: str, imgtype: str, tag: str, data: ImportImage,
     if imgtype == "docker" and tag.find(':') == -1:
         tag = f'{tag}:latest'
 
-    auth = authentication
-
     memo = f"import system={system} imgtype={imgtype} tag={tag}"
     logging.debug(memo)
     i = {'system': system, 'itype': imgtype, 'tag': tag}
@@ -248,7 +241,7 @@ async def doimport(system: str, imgtype: str, tag: str, data: ImportImage,
     iusers = config.ImportUsers
 
     try:
-        session = authenticate(config, auth, system)
+        session = authenticate(config, authentication, system)
         # only allowed users can import images
         user = session.user
 
@@ -272,10 +265,9 @@ async def doimport(system: str, imgtype: str, tag: str, data: ImportImage,
 @app.get('/api/autoexpire/{system}')
 async def autoexpire(system: str, authentication: str = Header(None)):
     """ Run the autoexpire handler to purge old images """
-    auth = authentication
     logging.debug(f"autoexpire system={system}")
     try:
-        session = authenticate(config, auth, system)
+        session = authenticate(config, authentication, system)
         logging.debug(session)
         resp = mgr.autoexpire(session)
     except AuthenticationError as ex:
@@ -297,13 +289,12 @@ async def expire(system: str, imgtype: str, tag: str,
     if imgtype == "docker" and tag.find(':') == -1:
         tag = f'{tag}:latest'
 
-    auth = authentication
     i = {'system': system, 'itype': imgtype, 'tag': tag}
     memo = f"expire system={system} imgtype={imgtype} tag={tag}"
     logging.debug(memo)
     resp = None
     try:
-        session = authenticate(config, auth, system)
+        session = authenticate(config, authentication, system)
         resp = mgr.expire(session, i)
     except AuthenticationError as ex:
         logging.warning(f"Auth error {str(ex)}")
@@ -320,9 +311,8 @@ async def expire(system: str, imgtype: str, tag: str,
 async def queue(system: str, authentication: str = Header(None)):
     """ List images for a specific system. """
     logging.debug(f"show queue system={system}")
-    auth = authentication
     try:
-        session = authenticate(config, auth, system)
+        session = authenticate(config, authentication, system)
         records = mgr.show_queue(session)
     except Exception as ex:
         logging.exception('Exception in queue')

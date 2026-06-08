@@ -369,11 +369,6 @@ def test_add_remove_withtag(ctx):
     assert 'testtag' in rec['tag']
 
 
-def test_isasystem(ctx):
-    assert ctx.m._isasystem(ctx.system)
-    assert ctx.m._isasystem('bogus') is False
-
-
 def test_resetexp(ctx):
     record = {'system': ctx.system,
               'itype': ctx.itype,
