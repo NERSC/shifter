@@ -155,7 +155,7 @@ def time_wait(ctx, id, wstate='READY', TIMEOUT=30):
     count = TIMEOUT / poll_interval
     state = 'UNKNOWN'
     while (state != wstate and count > 0):
-        state = ctx.m.get_state(id)
+        state = ctx.m.db.get_state(id)
         if state is None:
             return None
         count -= 1
@@ -278,14 +278,14 @@ def test_add_remove_tag(ctx):
     assert before
 
     # Add a tag a make sure it worked
-    status = ctx.m.add_tag(id, ctx.system, 'testtag')
+    status = ctx.m.db.add_tag(id, ctx.system, 'testtag')
     assert status
     after = ctx.images.find_one({'_id': id})
     assert after
     assert 'testtag' in after['tag']
     assert ctx.tag in after['tag']
     # Remove a tag and make sure it worked
-    status = ctx.m.remove_tag(ctx.system, 'testtag')
+    status = ctx.m.db.remove_tag(ctx.system, 'testtag')
     assert status is True
     after = ctx.images.find_one({'_id': id})
     assert after
@@ -303,7 +303,7 @@ def test_add_remove_two(ctx):
     record['tag'] = []
     id2 = ctx.images.insert_one(record.copy()).inserted_id
 
-    status = ctx.m.add_tag(id2, ctx.system, ctx.tag)
+    status = ctx.m.db.add_tag(id2, ctx.system, ctx.tag)
     assert status
     rec1 = ctx.images.find_one({'_id': id1})
     rec2 = ctx.images.find_one({'_id': id2})
@@ -321,11 +321,11 @@ def test_add_same_image_two_system(ctx):
     # Create a fake record in mongo
     id1 = ctx.images.insert_one(record.copy()).inserted_id
     # add testtag for systema
-    status = ctx.m.add_tag(id1, ctx.system, 'testtag')
+    status = ctx.m.db.add_tag(id1, ctx.system, 'testtag')
     assert status
     record['system'] = 'systemb'
     id2 = ctx.images.insert_one(record.copy()).inserted_id
-    status = ctx.m.add_tag(id2, 'systemb', 'testtag')
+    status = ctx.m.db.add_tag(id2, 'systemb', 'testtag')
     assert status
     # Now make sure testtag for first system is still
     # present
@@ -343,7 +343,7 @@ def test_add_tagitem(ctx):
     # Create a fake record in mongo
     id = ctx.images.insert_one(record).inserted_id
 
-    status = ctx.m.add_tag(id, ctx.system, 'testtag')
+    status = ctx.m.db.add_tag(id, ctx.system, 'testtag')
     assert status is True
     rec = ctx.images.find_one({'_id': id})
     assert rec
@@ -361,7 +361,7 @@ def test_add_remove_withtag(ctx):
 
     session = ctx.session
     i = ctx.query.copy()
-    status = ctx.m.add_tag(id, ctx.system, 'testtag')
+    status = ctx.m.db.add_tag(id, ctx.system, 'testtag')
     assert status is True
     rec = ctx.m.lookup(session, i['itype'], i['tag'])
     assert rec
@@ -467,12 +467,13 @@ def test_update_states(ctx):
     # Create a fake record in mongo
     id = ctx.images.insert_one(record).inserted_id
     assert id
-    ctx.m.update_states()
+    ctx.m.db.update_states()
     rec = ctx.images.find_one({'_id': id})
     assert rec is None
 
 
 def test_lookup(ctx):
+    assert ctx.m.db.metrics
     record = good_record(ctx)
     # Create a fake record in mongo
     ctx.images.insert_one(record).inserted_id
@@ -481,7 +482,7 @@ def test_lookup(ctx):
     lup = ctx.m.lookup(session, i['itype'], i['tag'])
     assert 'status' in lup
     assert '_id' in lup
-    assert ctx.m.get_state(lup['_id']) == 'READY'
+    assert ctx.m.db.get_state(lup['_id']) == 'READY'
     i = ctx.query.copy()
     r = ctx.images.find_one({'_id': lup['_id']})
     assert 'expiration' in r
@@ -489,6 +490,7 @@ def test_lookup(ctx):
     i['tag'] = 'bogus'
     lup = ctx.m.lookup(session, i['itype'], i['tag'])
     assert lup is None
+    assert len(ctx.m.get_metrics(ctx.admin_session, 10)) > 0
 
 
 def test_lookup_acl(ctx):
@@ -575,7 +577,7 @@ def test_list(ctx):
     assert len(li) == 1
     lup = li[0]
     assert '_id' in lup
-    assert ctx.m.get_state(lup['_id']) == 'READY'
+    assert ctx.m.db.get_state(lup['_id']) == 'READY'
     assert lup['_id'] == id1
 
 
@@ -697,7 +699,7 @@ def test_pull_mocked(ctx):
     time.sleep(2)
     assert rec
     id = rec['_id']
-    state = ctx.mtm.get_state(id)
+    state = ctx.mtm.db.get_state(id)
     assert state == 'FAILURE'
     ctx.mtm.workers.set_mode(1)
 
@@ -1044,7 +1046,7 @@ def test_expire_local(ctx):
     rec = ctx.m.expire(session, er)
     assert rec
     time.sleep(2)
-    state = ctx.m.get_state(id)
+    state = ctx.m.db.get_state(id)
     assert state == 'EXPIRED'
     assert os.path.exists(file) is False
     assert os.path.exists(metafile) is False
@@ -1063,7 +1065,7 @@ def test_expire_noadmin(ctx):
     _ = ctx.m.expire(session, er)  # ,delay=False)
     # assert rec
     time.sleep(2)
-    state = ctx.m.get_state(id)
+    state = ctx.m.db.get_state(id)
     assert state == 'READY'
     assert os.path.exists(file)
     assert os.path.exists(metafile)
@@ -1077,7 +1079,7 @@ def test_autoexpire_stuckpull(ctx):
     assert id
     session = ctx.admin_session
     ctx.m.autoexpire(session)
-    state = ctx.m.get_state(id)
+    state = ctx.m.db.get_state(id)
     assert state is None
 
 
@@ -1088,7 +1090,7 @@ def test_autoexpire_recentpull(ctx):
     assert id
     session = ctx.admin_session
     ctx.m.autoexpire(session)
-    state = ctx.m.get_state(id)
+    state = ctx.m.db.get_state(id)
     assert state == 'PENDING'
 
 
@@ -1105,10 +1107,12 @@ def test_autoexpire(ctx):
     session = ctx.admin_session
     ctx.m.autoexpire(session)  # ,delay=False)
     time.sleep(1)
-    state = ctx.m.get_state(id)
+    state = ctx.m.db.get_state(id)
     assert state == 'EXPIRED'
     assert os.path.exists(file) is False
     assert os.path.exists(metafile) is False
+    resp = ctx.m.autoexpire(ctx.session)
+    assert resp is False
 
 
 def test_autoexpire_missing(ctx):
@@ -1123,7 +1127,7 @@ def test_autoexpire_missing(ctx):
     assert id
     session = ctx.admin_session
     ctx.m.autoexpire(session)  # ,delay=False)
-    state = ctx.m.get_state(id)
+    state = ctx.m.db.get_state(id)
     assert state == 'PULLING'
 
 
@@ -1139,7 +1143,7 @@ def test_autoexpire_dontexpire(ctx):
     session = ctx.admin_session
     ctx.m.autoexpire(session)  # ,delay=False)
     time.sleep(2)
-    state = ctx.m.get_state(id)
+    state = ctx.m.db.get_state(id)
     assert state == 'READY'
     assert os.path.exists(file) is True
     assert os.path.exists(metafile) is True
@@ -1158,7 +1162,7 @@ def test_autoexpire_othersystem(ctx):
     session = ctx.admin_session
     ctx.m.autoexpire(session)  # ,delay=False)
     time.sleep(2)
-    state = ctx.m.get_state(id)
+    state = ctx.m.db.get_state(id)
     assert state == 'READY'
     assert os.path.exists(file) is True
     assert os.path.exists(metafile) is True
@@ -1174,6 +1178,7 @@ def test_metrics(ctx):
         "type": ctx.itype
     }
     # Remove everything
+    assert ctx.metrics is not None
     ctx.metrics.delete_many({})
     for _ in range(100):
         rec['time'] = time.time()
@@ -1192,10 +1197,10 @@ def test_metrics(ctx):
     assert recs == []
 
     session = ctx.admin_session
-    ctx.m.metrics = None
+    ctx.m.db.metrics = None
     recs = ctx.m.get_metrics(session, 10)  # ,delay=False)
     assert recs == []
-    ctx.m.metrics = True
+    ctx.m.db.metrics = True
 
 
 def test_status_thread(ctx):
