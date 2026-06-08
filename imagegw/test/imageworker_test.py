@@ -87,7 +87,6 @@ def pull_request(test_setup):
     ctx = test_setup
     cleanup_cache(ctx)
     req = PullRequest(test_setup['config'],
-                      ctx['system'],
                       ctx['tag'],
                       'foo',
                       ctx['session'])
@@ -249,7 +248,6 @@ def test_pull_image_new(test_setup):
     cleanup_cache(test_setup)
     system = test_setup['system']
     req = imageworker.PullRequest(test_setup['config'],
-                                  test_setup['system'],
                                   test_setup['tag'],
                                   "foo",
                                   test_setup['session'])

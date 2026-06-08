@@ -35,7 +35,7 @@ from shifter_imagegw.imageworker import WorkerThreads
 from shifter_imagegw.imageworker import PullRequest
 from shifter_imagegw.imageworker import ImportRequest
 from shifter_imagegw.imageworker import ExpireRequest
-from shifter_imagegw.models import Session
+from shifter_imagegw.models import Session, Request
 from shifter_imagegw.config import Config
 import grp
 from multiprocessing import Process
@@ -143,14 +143,14 @@ class ImageMngr(object):
                     self.complete_pull(ident, response)
                 logging.debug('meta={str(response)}')
 
-    def _isadmin(self, session: Session, system: str | None = None):
+    def _isadmin(self, session: Session):
         """
         Check if this is an admin user.
         Returns true if is an admin or false if not.
         """
-        if not self.platforms[system].admins:
+        if not self.platforms[session.system].admins:
             return False
-        admins = self.platforms[system].admins
+        admins = self.platforms[session.system].admins
         user = session.user
         if user in admins:
             logging.debug(f'user {user} is an admin')
@@ -265,12 +265,12 @@ class ImageMngr(object):
         except Exception:
             logging.warning('Failed to log lookup.')
 
-    def get_metrics(self, session: Session, system: str, limit: int):
+    def get_metrics(self, session: Session, limit: int):
         """
         Return the last <limit> lookup records.
         """
         recs = []
-        if not self._isadmin(session, system):
+        if not self._isadmin(session):
             return recs
         if self.metrics is None:
             return recs
@@ -286,7 +286,6 @@ class ImageMngr(object):
     @cached(cache=TTLCache(maxsize=100, ttl=60), info=True)
     def lookup(self,
                session: Session,
-               system: str,
                itype: str,
                tag: str
                ):
@@ -296,7 +295,7 @@ class ImageMngr(object):
         """
         query = {
             'status': 'READY',
-            'system': system,
+            'system': session.system,
             'itype': itype,
             'tag': {'$in': [tag]}
         }
@@ -309,20 +308,20 @@ class ImageMngr(object):
 
         if rec and self.metrics is not None:
             self._add_metrics(session,
-                              system,
+                              session.system,
                               itype,
                               tag,
                               rec['id'])
         return rec
 
-    def imglist(self, session: Session, system: str):
+    def imglist(self, session: Session):
         """
         list images for a system.
         Image is dictionary with system defined.
         """
-        if self._isasystem(system) is False:
+        if self._isasystem(session.system) is False:
             raise OSError("Invalid System")
-        query = {'status': 'READY', 'system': system}
+        query = {'status': 'READY', 'system': session.system}
         self.update_states()
         records = self._images_find(query)
         resp = []
@@ -332,12 +331,12 @@ class ImageMngr(object):
         # verify access
         return resp
 
-    def show_queue(self, session: Session, system: str):
+    def show_queue(self, session: Session):
         """
         list queue for a system.
         Image is dictionary with system defined.
         """
-        query = {'status': {'$ne': 'READY'}, 'system': system}
+        query = {'status': {'$ne': 'READY'}, 'system': session.system}
         self.update_states()
         records = self._images_find(query)
         resp = []
@@ -422,16 +421,11 @@ class ImageMngr(object):
         self._images_insert(newimage)
         return newimage
 
-    def pull(self, session: Session, image: dict):
+    def pull(self, session: Session, req: Request):
         """
         pull the image
         Takes an auth token, a request object
         """
-        request = {
-            'system': image['system'],
-            'itype': image['itype'],
-            'pulltag': image['tag']
-        }
         # If a pull request exist for this tag
         #  check to see if it is expired or a failure, if so remove it
         # otherwise
@@ -440,16 +434,9 @@ class ImageMngr(object):
         # find any pull record
         self.update_states()
         # let's lookup the active image
-        query = {
-            'status': 'READY',
-            'system': image['system'],
-            'itype': image['itype'],
-            'tag': {'$in': [image['tag']]}
-        }
-        rec = self._images_find_one(query)
-        for record in self._images_find(request):
-            status = record['status']
-            if status == 'READY' or status == 'SUCCESS':
+        rec = self._images_find_one(req.query_ready())
+        for record in self._images_find(req.query_by_pull()):
+            if record['status'] in ['READY', 'SUCCESS']:
                 continue
             rec = record
             break
@@ -462,14 +449,8 @@ class ImageMngr(object):
             # let's consider that "recent"
             if (time() - rec['last_pull']) < 10:
                 recent = True
-        request['userACL'] = []
-        request['groupACL'] = []
-        if 'userACL' in image and image['userACL'] != []:
-            request['userACL'] = self._make_acl(image['userACL'],
-                                                session.uid)
-        if 'groupACL' in image and image['groupACL'] != []:
-            request['groupACL'] = self._make_acl(image['groupACL'],
-                                                 session.gid)
+        request = req.pull_record(session)
+        # TODO: refactor the compare to not require the dicitonary
         if self._compare_list(request, rec, 'userACL') and \
                 self._compare_list(request, rec, 'groupACL'):
             acl_changed = False
@@ -494,21 +475,17 @@ class ImageMngr(object):
             ident = rec['_id']
             logging.debug("PENDING Request")
             self.update_mongo_state(ident, 'PENDING')
-            request['tag'] = request['pulltag']
-            request['session'] = session
             logging.debug("Calling do pull with queue="
                           f"{request['system']}")
             pr = PullRequest(self.config,
-                             session.system,
-                             request['tag'],
+                             req.tag,
                              ident,
                              session,
                              useracl=request['userACL'],
                              groupacl=request['groupACL'])
             self.workers.submit(pr)
 
-            memo = "pull request queued " \
-                   f"s={request['system']} tag={request['tag']}"
+            memo = "pull request queued s={req.system} tag={req.tag}"
             logging.info(memo)
 
             self.update_mongo(ident, {'last_pull': time()})
@@ -738,16 +715,16 @@ class ImageMngr(object):
             if time() > nextpull:
                 self._images_remove({'_id': rec['_id']})
 
-    def autoexpire(self, session: Session, system: str):
+    def autoexpire(self, session: Session):
         """Auto expire images and do cleanup"""
         # While this should be safe, let's restrict this to admins
-        if not self._isadmin(session, system):
+        if not self._isadmin(session):
             return False
         # Cleanup - Lookup for things stuck in non-READY state
         self.update_states()
         removed = []
         for rec in self._images_find({'status': {'$ne': 'READY'},
-                                     'system': system}):
+                                     'system': session.system}):
             if 'last_pull' not in rec:
                 logging.warning('Image missing last_pull for pulltag:' +
                                 rec['pulltag'])
@@ -758,7 +735,8 @@ class ImageMngr(object):
 
         expired = []
         # Look for READY images that haven't been pulled recently
-        for rec in self._images_find({'status': 'READY', 'system': system}):
+        for rec in self._images_find({'status': 'READY',
+                                      'system': session.system}):
             if 'expiration' not in rec:
                 continue
             elif rec['expiration'] < time():
@@ -789,7 +767,7 @@ class ImageMngr(object):
 
     def expire(self, session: Session, image: dict):
         """Expire an image.  (Not Implemented)"""
-        if not self._isadmin(session, image['system']):
+        if not self._isadmin(session):
             return False
         query = {
             'system': image['system'],

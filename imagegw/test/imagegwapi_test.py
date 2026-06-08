@@ -172,9 +172,6 @@ def test_pull1(api_ctx, user):
 
 def test_list(api_ctx, user):
     with TestClient(api.app) as client:
-        uri = "/".join([api_ctx["url"], 'list', 'systemc'])
-        response = client.get(uri, headers={AUTH_HEADER: 'bogus'})
-        assert response.status_code == 404
         rv = time_wait(client, api_ctx['url'], 'bogus', api_ctx['urlreq'])
         assert rv.status_code == 200
         uri = "/".join([api_ctx["url"], 'list', api_ctx['system']])

@@ -174,7 +174,6 @@ class PullRequest(AsyncRequest):
     """
     def __init__(self,
                  conf: Config,
-                 system: str,
                  tag: str,
                  ident: str,
                  session: Session,
@@ -182,7 +181,7 @@ class PullRequest(AsyncRequest):
                  groupacl=None):
         self.conf = conf
         self.fmt = self.conf.DefaultImageFormat
-        self.system = system
+        self.system = session.system
         self.sysconf = self.conf.Platforms[self.system]
         self.tag = tag
         self.ident = ident
@@ -442,7 +441,7 @@ class ImportRequest(AsyncRequest):
             if not transfer.check_file(self.filepath,
                                        self.sysconf,
                                        import_image=self.import_image):
-                logging.warning(f"Check: import:{self.import_image}" +
+                logging.warning(f"Check: import:{self.import_image} " +
                                 f"{self.sysconf.imageDir} {self.filepath}")
                 raise OSError('Path not valid')
             # Step 1 - Calculate the hash of the file

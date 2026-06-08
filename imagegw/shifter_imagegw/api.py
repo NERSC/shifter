@@ -28,6 +28,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request, Header, Query
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
+from shifter_imagegw.models import Request as ImageRequest
 from shifter_imagegw.config import Config
 from shifter_imagegw.auth import authenticate
 
@@ -77,10 +78,7 @@ def create_response(rec):
         'ENV', 'ENTRY', 'WORKDIR', 'LABELS', 'last_pull', 'status_message',
     )
     for field in fields:
-        try:
-            resp[field] = rec[field]
-        except KeyError:
-            resp[field] = 'MISSING'
+        resp[field] = rec.get(field, "MISSING")
     return resp
 
 
@@ -93,7 +91,7 @@ async def imglist(system: str, authentication: str = Header(None)):
     logging.debug(f"list system={system}")
     try:
         session = authenticate(config, auth, system)
-        records = mgr.imglist(session, system)
+        records = mgr.imglist(session)
         if records is None:
             raise HTTPException(status_code=404, detail='image not found')
     except AuthenticationError as ex:
@@ -124,7 +122,7 @@ async def lookup(system: str, imgtype: str, tag: str,
     logging.debug(memo)
     try:
         session = authenticate(config, auth, system)
-        rec = mgr.lookup(session, system, imgtype, tag)
+        rec = mgr.lookup(session, imgtype, tag)
     except AuthenticationError as ex:
         logging.warning(f"Auth error {str(ex)}")
         raise HTTPException(status_code=401, detail='Authentication Error')
@@ -150,7 +148,7 @@ async def metrics(system: str, limit: int = Query(10),
     logging.debug(memo)
     try:
         session = authenticate(config, auth, system)
-        recs = mgr.get_metrics(session, system, limit)
+        recs = mgr.get_metrics(session, limit)
     except AuthenticationError as ex:
         logging.warning(f"Auth error {str(ex)}")
         raise HTTPException(status_code=401, detail='Authentication Error')
@@ -181,20 +179,22 @@ async def pull(system: str, imgtype: str, tag: str,
     logging.debug(f'data: {str(data)}')
 
     logging.debug(f"pull system={system} imgtype={imgtype} tag={tag}")
-    i = {'system': system, 'itype': imgtype, 'tag': tag}
+    userACL = None
+    groupACL = None
     if data and data.allowed_uids:
         # Convert to integers
-        i['userACL'] = list(map(lambda x: int(x),
-                            data.allowed_uids.split(',')))
+        userACL = list(map(lambda x: int(x),
+                           data.allowed_uids.split(',')))
     if data and data.allowed_gids:
         # Convert to integers
-        i['groupACL'] = list(map(lambda x: int(x),
-                             data.allowed_gids.split(',')))
+        groupACL = list(map(lambda x: int(x),
+                            data.allowed_gids.split(',')))
     try:
-        logging.debug(i)
         session = authenticate(config, auth, system)
         logging.debug(session)
-        rec = mgr.pull(session, i)
+        req = ImageRequest(system=system, itype=imgtype, tag=tag,
+                           userACL=userACL, groupACL=groupACL)
+        rec = mgr.pull(session, req)
         logging.debug(rec)
     except AuthenticationError as ex:
         logging.warning(f"Auth error {str(ex)}")
@@ -277,7 +277,7 @@ async def autoexpire(system: str, authentication: str = Header(None)):
     try:
         session = authenticate(config, auth, system)
         logging.debug(session)
-        resp = mgr.autoexpire(session, system)
+        resp = mgr.autoexpire(session)
     except AuthenticationError as ex:
         logging.warning(f"Auth error {str(ex)}")
         raise HTTPException(status_code=401, detail='Authentication Error')
@@ -323,7 +323,7 @@ async def queue(system: str, authentication: str = Header(None)):
     auth = authentication
     try:
         session = authenticate(config, auth, system)
-        records = mgr.show_queue(session, system)
+        records = mgr.show_queue(session)
     except Exception as ex:
         logging.exception('Exception in queue')
         raise HTTPException(status_code=404, detail=str(ex))
