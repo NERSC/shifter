@@ -23,7 +23,7 @@ Image Manager for the Shifter Gateway.
 This module is provides the interface layer for the image manager.  This
 compliments the api module which provides the REST interface.  This module
 does much of the heavy lifting for the image manager.  It handles all
-interactions with the Mongo Database and dispatches work through a thread pool.
+interactions with the DB interface and dispatches work through a thread pool.
 """
 
 import logging
@@ -99,7 +99,7 @@ class ImageMngr(object):
 
             # A response message
             if state != 'READY':
-                self.update_mongo_state(ident, state, meta)
+                self.db.update_image_state(ident, state, meta)
                 continue
             if 'response' in meta and meta['response']:
                 response = meta['response']
@@ -162,17 +162,9 @@ class ImageMngr(object):
         """Reset the expire time.  (Not fully implemented)."""
         # Change expire time for image
         # TODO shore up expire-time parsing
-        expire_timeout = self.config.ImageExpirationTimeout
-        (days, hours, minutes, secs) = expire_timeout.split(':')
-        expire = time() + int(secs) + 60 * (int(minutes) +
-                                            60 * (int(hours) + 24 * int(days)))
+        expire = time() + self.config.expire_secs
         self.db.images_update({'_id': ident}, {'$set': {'expiration': expire}})
         return expire
-
-    def _make_acl(self, acllist: dict, id: str):
-        if id not in acllist:
-            acllist.append(id)
-        return acllist
 
     def _compare_list(self, a: dict, b: dict, key: str):
         """"
@@ -365,7 +357,8 @@ class ImageMngr(object):
             'groupACL': [],
             'private': None,
             'tag': [],
-            'status': 'INIT'
+            'status': 'INIT',
+            'last_pull': time()
         }
         newimage['format'] = self.config.DefaultImageFormat
         for param in image:
@@ -428,7 +421,7 @@ class ImageMngr(object):
             rec = self.new_pull_record(request)
             ident = rec['_id']
             logging.debug("PENDING Request")
-            self.update_mongo_state(ident, 'PENDING')
+            self.db.update_image_state(ident, 'PENDING')
             logging.debug("Calling do pull with queue="
                           f"{request['system']}")
             pr = PullRequest(self.config,
@@ -441,8 +434,6 @@ class ImageMngr(object):
 
             memo = "pull request queued s={req.system} tag={req.tag}"
             logging.info(memo)
-
-            self.db.update_mongo(ident, {'last_pull': time()})
 
         return rec
 
@@ -483,7 +474,7 @@ class ImageMngr(object):
         rec = self.new_pull_record(request)
         ident = rec['_id']
         logging.debug(f"PENDING Request, ident {ident}")
-        self.update_mongo_state(ident, 'PENDING')
+        self.db.update_image_state(ident, 'PENDING')
         request['tag'] = request['pulltag']
         request['session'] = session
         logging.debug("Calling wrkimport with queue="
@@ -499,24 +490,8 @@ class ImageMngr(object):
         memo = "import request queued " \
                f"s={request['system']} tag={request['tag']}"
         logging.info(memo)
-        self.db.update_mongo(ident, {'last_pull': time()})
+        self.db.update_image(ident, {'last_pull': time()})
         return rec
-
-    def update_mongo_state(self, ident: str, state: str,
-                           info: dict | None = None):
-        """
-        Helper function to set the mongo state for an image with _id==ident
-        to state=state.
-        """
-        if state == 'SUCCESS':
-            state = 'READY'
-        set_list = {'status': state, 'status_message': ''}
-        if info is not None and isinstance(info, dict):
-            if 'heartbeat' in info:
-                set_list['last_heartbeat'] = info['heartbeat']
-            if 'message' in info:
-                set_list['status_message'] = info['message']
-        self.db.images_update({'_id': ident}, {'$set': set_list})
 
     def update_acls(self, ident: str, response: dict):
         logging.debug(f"Update ACLs called for {ident} {str(response)}")
@@ -536,7 +511,7 @@ class ImageMngr(object):
             logging.warning(msg)
             response['last_pull'] = time()
             response['status'] = 'READY'
-            self.db.update_mongo(ident, response)
+            self.db.update_image(ident, response)
             self.db.add_tag(ident, pullrec['system'], pullrec['pulltag'])
         else:
             self.db.add_tag(rec['_id'], pullrec['system'], pullrec['pulltag'])
@@ -549,7 +524,7 @@ class ImageMngr(object):
             logging.debug("Doing ACLs update")
             response['last_pull'] = time()
             response['status'] = 'READY'
-            self.db.update_mongo(rec['_id'], updates)
+            self.db.update_image(rec['_id'], updates)
             self.db.images_remove({'_id': ident})
 
     def complete_pull(self, ident: str, response: dict):
@@ -575,7 +550,7 @@ class ImageMngr(object):
             update_rec = {
                 'last_pull': time()
             }
-            self.db.update_mongo(rec['_id'], update_rec)
+            self.db.update_image(rec['_id'], update_rec)
 
             self.db.images_remove({'_id': ident})
             # However it could be a new tag.  So let's update the tag
@@ -587,7 +562,7 @@ class ImageMngr(object):
         else:
             response['last_pull'] = time()
             response['status'] = 'READY'
-            self.db.update_mongo(ident, response)
+            self.db.update_image(ident, response)
             self.db.add_tag(ident, pullrec['system'], tag)
 
     def autoexpire(self, session: Session):

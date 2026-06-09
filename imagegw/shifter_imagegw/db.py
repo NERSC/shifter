@@ -58,12 +58,12 @@ class DB(object):
         Create an instance of the db interface.
         """
         client = MongoClient(config.MongoDBURI)
-        db_ = config.MongoDB
-        self.images = client[db_].images
+        db = config.MongoDB
+        self.images = client[db].images
         self.metrics = None
         self.pullupdatetimeout = config.PullUpdateTimeout
         if config.Metrics:
-            self.metrics = client[db_].metrics
+            self.metrics = client[db].metrics
 
     def add_tag(self, ident: str, system: str, tag):
         """
@@ -91,7 +91,7 @@ class DB(object):
                                 {'$pull': {'tag': tag}})
         return True
 
-    def update_mongo(self, ident: str, resp: dict):
+    def update_image(self, ident: str, resp: dict):
         """
         Helper function to set the mongo values for an image with _id==ident.
         """
@@ -121,6 +121,22 @@ class DB(object):
                 setline[mappings[key]] = resp[key]
 
         self.images_update({'_id': ident}, {'$set': setline})
+
+    def update_image_state(self, ident: str, state: str,
+                           info: dict | None = None):
+        """
+        Helper function to set the mongo state for an image with _id==ident
+        to state=state.
+        """
+        if state == 'SUCCESS':
+            state = 'READY'
+        set_list = {'status': state, 'status_message': ''}
+        if info and isinstance(info, dict):
+            if 'heartbeat' in info:
+                set_list['last_heartbeat'] = info['heartbeat']
+            if 'message' in info:
+                set_list['status_message'] = info['message']
+        self.images_update({'_id': ident}, {'$set': set_list})
 
     def get_state(self, ident: str):
         """

@@ -97,3 +97,7 @@ class Config():
         }
         self.LogLevel = loglevel_map[loglevel]
         self.worker_threads = config.get('WorkerThreads')
+        (days, hours, minutes, secs) = \
+            list(map(lambda x: int(x), self.ImageExpirationTimeout.split(":")))
+
+        self.expire_secs = secs + 60 * (minutes + 60 * (hours + 24 * days))
