@@ -9,7 +9,7 @@ from pymongo import MongoClient
 from multiprocessing.pool import ThreadPool
 from random import randint
 from shifter_imagegw.config import Config
-from shifter_imagegw.models import Session, Request
+from shifter_imagegw.models import Session, Request, Operations
 from shifter_imagegw.imageworker import WorkerThreads
 from shifter_imagegw.imagemngr import ImageMngr
 
@@ -138,7 +138,8 @@ def ctx():
                           'itype': self.itype,
                           'tag': self.tag}
             self.pull = Request(system=self.system, itype=self.itype,
-                                tag=self.tag, userACL=[], groupACL=[])
+                                tag=self.tag, userACL=[], groupACL=[],
+                                op=Operations.PULL)
             self.session = Session(uid=100, gid=100, system=self.system,
                                    user="user", group="user")
             self.admin_session = Session(uid=0, gid=0, system=self.system,
@@ -788,7 +789,8 @@ def test_pulls_acl_change(ctx):
                  itype=record['itype'],
                  tag=record['pulltag'],
                  userACL=[1001, 1002],
-                 groupACL=[1003, 1004])
+                 groupACL=[1003, 1004],
+                 op=Operations.PULL)
     rec = ctx.m.pull(session, pr)  # ,delay=False)
     assert rec['status'] == 'PULLING'
 
@@ -808,7 +810,8 @@ def test_pull_logic(ctx):
     session = ctx.session
     pr = Request(system=system,
                  itype=itype,
-                 tag=tag)
+                 tag=tag,
+                 op=Operations.PULL)
     rec = ctx.m.pull(session, pr)  # ,delay=False)
     assert rec['status'] == 'READY'
 
@@ -827,7 +830,8 @@ def test_pull_logic(ctx):
     assert id
     pr = Request(system=system,
                  itype=itype,
-                 tag=tag)
+                 tag=tag,
+                 op=Operations.PULL)
     pr.userACL = [1001]
     session = ctx.session
     rec = ctx.m.pull(session, pr)  # ,delay=False)
@@ -837,7 +841,8 @@ def test_pull_logic(ctx):
     ctx.images.delete_many({})
     pr = Request(system=system,
                  itype=itype,
-                 tag=tag)
+                 tag=tag,
+                 op=Operations.PULL)
     record['last_pull'] = record['last_pull'] - 36000
     id = ctx.images.insert_one(record).inserted_id
     assert id
@@ -1251,7 +1256,8 @@ def test_pull_multiple_tags(ctx):
     """
     Test pulling an image with multiple tags.
     """
-    pr = Request(system=ctx.system, itype=ctx.itype, tag=ctx.public)
+    pr = Request(system=ctx.system, itype=ctx.itype, tag=ctx.public,
+                 op=Operations.PULL)
     # Do the pull
     session = ctx.session
     rec = ctx.m.pull(session, pr)  # ,delay=False)
@@ -1268,7 +1274,8 @@ def test_pull_multiple_tags(ctx):
 
     # Now reppull with a different tag for the same image
     newtag = ctx.public.replace('latest', '1')
-    pr = Request(system=ctx.system, itype=ctx.itype, tag=newtag)
+    pr = Request(system=ctx.system, itype=ctx.itype, tag=newtag,
+                 op=Operations.PULL)
     rec = ctx.m.pull(session, pr)  # ,delay=False)
     id = rec['_id']
     assert rec

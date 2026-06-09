@@ -28,7 +28,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request, Header, Query
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
-from shifter_imagegw.models import Request as ImageRequest
+from shifter_imagegw.models import Request as ImageRequest, Operations
 from shifter_imagegw.config import Config
 from shifter_imagegw.auth import authenticate
 
@@ -188,7 +188,8 @@ async def pull(system: str, imgtype: str, tag: str,
         session = authenticate(config, authentication, system)
         logging.debug(session)
         req = ImageRequest(system=system, itype=imgtype, tag=tag,
-                           userACL=userACL, groupACL=groupACL)
+                           userACL=userACL, groupACL=groupACL,
+                           op=Operations.PULL)
         rec = mgr.pull(session, req)
         logging.debug(rec)
     except AuthenticationError as ex:

@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from enum import Enum, auto
 
 
 class Session(BaseModel):
@@ -14,7 +15,13 @@ class Session(BaseModel):
                     self.user, self.group, self.tokens))
 
 
+class Operations(Enum):
+    PULL = auto()
+    IMPORT = auto()
+
+
 class Request(BaseModel):
+    op: Operations
     system: str
     itype: str
     tag: str
