@@ -57,7 +57,7 @@ def authenticate(conf: Config, authstr: str, system: str):
     admin = False
     if user in conf.Platforms[system].admins:
         admin = True
-    
+
     return Session(uid=uid, gid=gid, tokens=token,
                    system=system, user=user, group=group,
                    admin=admin)

@@ -88,7 +88,7 @@ class DB(object):
         Helper function to remove a tag to an image.
         """
         self._images_update_many({'system': system, 'tag': {'$in': [tag]}},
-                                {'$pull': {'tag': tag}})
+                                 {'$pull': {'tag': tag}})
         return True
 
     def update_image(self, ident: str, resp: dict):
