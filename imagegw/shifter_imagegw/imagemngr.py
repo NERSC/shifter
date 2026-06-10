@@ -70,7 +70,7 @@ class ImageMngr(object):
         atexit.register(self.shutdown)
         self.db = DB(config)
         # Cleanup any pending requests
-        self.db.images_remove_many({'status': 'PENDING'})
+        self.db.remove_pending_images()
         self.platforms = config.Platforms
         self.systems = config.Platforms.keys()
         self.config = config
@@ -111,20 +111,6 @@ class ImageMngr(object):
                     self.complete_pull(ident, response)
                 logging.debug('meta={str(response)}')
 
-    def _isadmin(self, session: Session):
-        """
-        Check if this is an admin user.
-        Returns true if is an admin or false if not.
-        """
-        if not self.platforms[session.system].admins:
-            return False
-        admins = self.platforms[session.system].admins
-        user = session.user
-        if user in admins:
-            logging.debug(f'user {user} is an admin')
-            return True
-        return False
-
     def _checkread(self, session: Session, rec: dict):
         """
         Checks if the user has read permissions to the image.
@@ -158,15 +144,7 @@ class ImageMngr(object):
                     return True
         return False
 
-    def _resetexpire(self, ident: str):
-        """Reset the expire time.  (Not fully implemented)."""
-        # Change expire time for image
-        # TODO shore up expire-time parsing
-        expire = time() + self.config.expire_secs
-        self.db.images_update({'_id': ident}, {'$set': {'expiration': expire}})
-        return expire
-
-    def _compare_list(self, a: dict, b: dict, key: str):
+    def _compare_list(self, a: list[int] | None, b: list[int] | None):
         """"
         look at the key element of two objects
         and compare the list of ids.
@@ -178,19 +156,15 @@ class ImageMngr(object):
         # If the key isn't in the objects or
         # something else fails, then it must
         # have changed.
-        try:
-            if key not in a:
-                return False
-            if key not in b:
-                return False
-        except Exception:
+        if a == b:
             return True
-        aitems = a[key]
-        bitems = b[key]
-        if len(aitems) != len(bitems):
+
+        if a is None or b is None:
             return False
-        for item in aitems:
-            if item not in bitems:
+        if len(a) != len(b):
+            return False
+        for item in a:
+            if item not in b:
                 return False
         return True
 
@@ -225,7 +199,7 @@ class ImageMngr(object):
         """
         Return the last <limit> lookup records.
         """
-        if not self._isadmin(session):
+        if not session.admin:
             return []
         if not self.db.metrics:
             return []
@@ -241,18 +215,15 @@ class ImageMngr(object):
         Lookup an image.
         Image is dictionary with system,itype and tag defined.
         """
-        query = {
-            'status': 'READY',
-            'system': session.system,
-            'itype': itype,
-            'tag': {'$in': [tag]}
-        }
         self.db.update_states()
-        rec = self.db.images_find_one(query)
+        rec = self.db.find_image_by(status='READY',
+                                    system=session.system,
+                                    image_type=itype,
+                                    tag=tag)
         if rec:
             if self._checkread(session, rec) is False:
                 return None
-            self._resetexpire(rec['_id'])
+            self.db.reset_expire(rec['_id'], self.config.expire_secs)
 
         if rec and self.db.metrics:
             self._add_metrics(session,
@@ -267,9 +238,9 @@ class ImageMngr(object):
         list images for a system.
         Image is dictionary with system defined.
         """
-        query = {'status': 'READY', 'system': session.system}
         self.db.update_states()
-        records = self.db.images_find(query)
+        records = self.db.find_many_images_by(status='READY',
+                                              system=session.system)
         resp = []
         for record in records:
             if self._checkread(session, record):
@@ -282,9 +253,9 @@ class ImageMngr(object):
         list queue for a system.
         Image is dictionary with system defined.
         """
-        query = {'status': {'$ne': 'READY'}, 'system': session.system}
         self.db.update_states()
-        records = self.db.images_find(query)
+        records = self.db.find_many_images_by(status='NOT_READY',
+                                              system=session.system)
         resp = []
         for record in records:
             if 'pulltag' not in record:
@@ -346,11 +317,13 @@ class ImageMngr(object):
         it first.
         """
         # Clean out any existing records
-        for rec in self.db.images_find(image):
-            if rec['status'] == 'READY':
-                continue
-            else:
-                self.db.images_remove({'_id': rec['_id']})
+        for rec in self.db.find_many_images_by(status='NOT_READY',
+                                               system=image['system'],
+                                               image_type=image['itype'],
+                                               pulltag=image['pulltag']):
+            self.db.remove_image_by_id(rec['_id'])
+
+        # TODO: replace this
         newimage = {
             'format': 'invalid',  # <ext4|squashfs|vfs>
             'userACL': [],
@@ -381,12 +354,20 @@ class ImageMngr(object):
         # find any pull record
         self.db.update_states()
         # let's lookup the active image
-        rec = self.db.images_find_one(req.query_ready())
-        for record in self.db.images_find(req.query_by_pull()):
+        rec = self.db.find_image_by(status="READY",
+                                    system=session.system,
+                                    image_type=req.itype,
+                                    tag=req.tag)
+        recs = self.db.find_many_images_by(system=req.system,
+                                           image_type=req.itype,
+                                           pulltag=req.tag)
+        for record in recs:
             if record['status'] in ['READY', 'SUCCESS']:
                 continue
             rec = record
             break
+
+        # TODO: Clean this up
         inflight = False
         recent = False
         if rec is not None and rec['status'] != 'READY':
@@ -394,15 +375,14 @@ class ImageMngr(object):
         elif rec is not None:
             # if an image has been pulled in the last 60 seconds
             # let's consider that "recent"
-            if (time() - rec['last_pull']) < 10:
+            if (time() - rec['last_pull']) < 60:
                 recent = True
-        request = req.pull_record(session)
         # TODO: refactor the compare to not require the dicitonary
-        if self._compare_list(request, rec, 'userACL') and \
-                self._compare_list(request, rec, 'groupACL'):
+        if rec and self._compare_list(req.userACL, rec.get('userACL')) and \
+                self._compare_list(req.groupACL, rec.get('groupACL')):
             acl_changed = False
         else:
-            logging.debug("No ACL change detected.")
+            logging.debug("ACL change detected.")
             acl_changed = True
 
         # We could hit a key error or some other edge case
@@ -418,6 +398,7 @@ class ImageMngr(object):
 
         if update:
             logging.debug("Creating New Pull Record")
+            request = req.pull_record(session)
             rec = self.new_pull_record(request)
             ident = rec['_id']
             logging.debug("PENDING Request")
@@ -457,12 +438,9 @@ class ImageMngr(object):
         # Skip checks about previous requests for now
         # Future work could check the fasthash and
         # not import if they're the same
-        q = {
-            'system': image['system'],
-            'itype': image['itype'],
-            'pulltag': image['tag']
-        }
-        rec = self.db.images_find_one(q)
+        rec = self.db.find_image_by(system=image['system'],
+                                    image_type=image['itype'],
+                                    pulltag=image['tag'])
         if not self._pullable(rec):
             return rec
 
@@ -495,14 +473,14 @@ class ImageMngr(object):
 
     def update_acls(self, ident: str, response: dict):
         logging.debug(f"Update ACLs called for {ident} {str(response)}")
-        pullrec = self.db.images_find_one({'_id': ident})
+        pullrec = self.db.find_image_by(id=ident)
         if pullrec is None:
             logging.error('ERROR: Missing pull request resp=',
                           f'{str(response)}')
             return
         # Check that this image ident doesn't already exist for this system
-        rec = self.db.images_find_one({'id': response['id'], 'status': 'READY',
-                                      'system': pullrec['system']})
+        rec = self.db.find_image_by(image_id=response['id'], status='READY',
+                                    system=pullrec['system'])
         if rec is None:
             # This means the image already existed, but we didn't have a
             # record of it.  That seems odd (it happens in tests).  Let's
@@ -525,7 +503,7 @@ class ImageMngr(object):
             response['last_pull'] = time()
             response['status'] = 'READY'
             self.db.update_image(rec['_id'], updates)
-            self.db.images_remove({'_id': ident})
+            self.db.remove_image_by_id(ident)
 
     def complete_pull(self, ident: str, response: dict):
         """
@@ -533,14 +511,14 @@ class ImageMngr(object):
         """
 
         logging.debug(f"Complete called for {ident} {str(response)}")
-        pullrec = self.db.images_find_one({'_id': ident})
+        pullrec = self.db.find_image_by(id=ident)
         if pullrec is None:
             logging.warning(f'Missing pull request resp={str(response)}')
             return
         # Check that this image ident doesn't already exist for this system
-        rec = self.db.images_find_one({'id': response['id'],
-                                       'system': pullrec['system'],
-                                       'status': 'READY'})
+        rec = self.db.find_image_by(image_id=response['id'],
+                                    system=pullrec['system'],
+                                    status='READY')
         tag = pullrec['pulltag']
         if rec is not None:
             # So we already had this image.
@@ -552,7 +530,7 @@ class ImageMngr(object):
             }
             self.db.update_image(rec['_id'], update_rec)
 
-            self.db.images_remove({'_id': ident})
+            self.db.remove_image_by_id(ident)
             # However it could be a new tag.  So let's update the tag
             try:
                 rec['tag'].index(response['tag'])
@@ -568,25 +546,25 @@ class ImageMngr(object):
     def autoexpire(self, session: Session):
         """Auto expire images and do cleanup"""
         # While this should be safe, let's restrict this to admins
-        if not self._isadmin(session):
+        if not session.admin:
             return False
         # Cleanup - Lookup for things stuck in non-READY state
         self.db.update_states()
         removed = []
-        for rec in self.db.images_find({'status': {'$ne': 'READY'},
-                                        'system': session.system}):
+        for rec in self.db.find_many_images_by(status='NOT_READY',
+                                               system=session.system):
             if 'last_pull' not in rec:
                 logging.warning('Image missing last_pull for pulltag:' +
                                 rec['pulltag'])
                 continue
             if time() > rec['last_pull'] + self.pulltimeout:
                 removed.append(rec['_id'])
-                self.db.images_remove({'_id': rec['_id']})
+                self.db.remove_image_by_id(rec['_id'])
 
         expired = []
         # Look for READY images that haven't been pulled recently
-        for rec in self.db.images_find({'status': 'READY',
-                                        'system': session.system}):
+        for rec in self.db.find_many_images_by(status='READY',
+                                               system=session.system):
             if 'expiration' not in rec:
                 continue
             elif rec['expiration'] < time():
@@ -617,14 +595,11 @@ class ImageMngr(object):
 
     def expire(self, session: Session, image: dict):
         """Expire an image.  (Not Implemented)"""
-        if not self._isadmin(session):
+        if not session.admin:
             return False
-        query = {
-            'system': image['system'],
-            'itype': image['itype'],
-            'tag': {'$in': [image['tag']]}
-        }
-        rec = self.db.images_find_one(query)
+        rec = self.db.find_image_by(system=image['system'],
+                                    image_type=image['itype'],
+                                    tag=image['tag'])
         if rec is None:
             return None
         ident = rec.pop('_id')

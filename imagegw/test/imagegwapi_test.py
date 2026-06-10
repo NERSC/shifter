@@ -92,7 +92,7 @@ def user(mocker):
 def admin(mocker):
     f = mocker.patch("shifter_imagegw.api.authenticate")
     f.return_value = Session(uid=0, gid=0, system='systema',
-                             user="root", group="root")
+                             user="root", group="root", admin=True)
     yield f
 
 

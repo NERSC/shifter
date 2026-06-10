@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from enum import Enum, auto
+from typing import Any
 
 
 class Session(BaseModel):
@@ -9,6 +10,7 @@ class Session(BaseModel):
     user: str
     group: str
     tokens: str = ""
+    admin: bool = False
 
     def __hash__(self):
         return hash((self.uid, self.gid, self.system,
@@ -22,27 +24,24 @@ class Operations(Enum):
 
 class Request(BaseModel):
     op: Operations
-    system: str
+    session: Session
     itype: str
     tag: str
     format: str = "squashfs"
     userACL: list[int] | None = []
     groupACL: list[int] | None = []
+    system: str | None = None
 
-    def query_ready(self):
-        return {
-            'status': 'READY',
-            'system': self.system,
-            'itype': self.itype,
-            'tag': {'$in': [self.tag]}
-        }
-
-    def query_by_pull(self):
-        return {
-            'system': self.system,
-            'itype': self.itype,
-            'pulltag': self.tag
-        }
+    def model_post_init(self, context: Any) -> None:
+        def _make_acl(acllist: dict, id: str):
+            if id not in acllist:
+                acllist.append(id)
+            return acllist
+        self.system = self.session.system
+        if self.userACL and self.userACL != []:
+            self.userACL = _make_acl(self.userACL, self.session.uid)
+        if self.groupACL and self.groupACL != []:
+            self.groupACL = _make_acl(self.groupACL, self.session.gid)
 
     def pull_record(self, session: Session):
 
@@ -63,3 +62,31 @@ class Request(BaseModel):
         if self.groupACL and self.groupACL != []:
             rec['groupACL'] = _make_acl(self.groupACL, session.gid)
         return rec
+
+
+class Image(BaseException):
+    id: str
+    system: str
+    itype: str
+    tag: list[str]
+    format: str
+    userACL: list[int] | None = []
+    groupACL: list[int] | None = []
+    private: bool
+    status: str
+    last_pull: int
+    status_message: str
+    last_heartbeat: int
+    pulltag: str
+    expiration: int
+    ENV: list[str] | None
+    ENTRY: list[str] | None
+    WORKDIR: str | None
+    LABELS: list[str] | None
+    # These aren't really used
+    arch: str
+    os: str
+    location: str = ""
+    remotetype: str = ""
+    ostcount: str = ""
+    replication: str = ""

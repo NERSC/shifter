@@ -187,7 +187,7 @@ async def pull(system: str, imgtype: str, tag: str,
     try:
         session = authenticate(config, authentication, system)
         logging.debug(session)
-        req = ImageRequest(system=system, itype=imgtype, tag=tag,
+        req = ImageRequest(session=session, itype=imgtype, tag=tag,
                            userACL=userACL, groupACL=groupACL,
                            op=Operations.PULL)
         rec = mgr.pull(session, req)

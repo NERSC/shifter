@@ -73,21 +73,21 @@ class DB(object):
         # Remove the tag first
         self.remove_tag(system, tag)
         # see if tag isn't a list
-        rec = self.images_find_one({'_id': ident})
+        rec = self._images_find_one({'_id': ident})
         if rec is not None and 'tag' in rec and \
                 not isinstance(rec['tag'], (list)):
             memo = f'Fixing tag for non-list {ident} {str(rec["tag"])}'
             logging.info(memo)
             curtag = rec['tag']
-            self.images_update({'_id': ident}, {'$set': {'tag': [curtag]}})
-        self.images_update({'_id': ident}, {'$addToSet': {'tag': tag}})
+            self._images_update({'_id': ident}, {'$set': {'tag': [curtag]}})
+        self._images_update({'_id': ident}, {'$addToSet': {'tag': tag}})
         return True
 
     def remove_tag(self, system: str, tag: str):
         """
         Helper function to remove a tag to an image.
         """
-        self.images_update_many({'system': system, 'tag': {'$in': [tag]}},
+        self._images_update_many({'system': system, 'tag': {'$in': [tag]}},
                                 {'$pull': {'tag': tag}})
         return True
 
@@ -120,7 +120,7 @@ class DB(object):
             if key in resp:
                 setline[mappings[key]] = resp[key]
 
-        self.images_update({'_id': ident}, {'$set': setline})
+        self._images_update({'_id': ident}, {'$set': setline})
 
     def update_image_state(self, ident: str, state: str,
                            info: dict | None = None):
@@ -136,7 +136,7 @@ class DB(object):
                 set_list['last_heartbeat'] = info['heartbeat']
             if 'message' in info:
                 set_list['status_message'] = info['message']
-        self.images_update({'_id': ident}, {'$set': set_list})
+        self._images_update({'_id': ident}, {'$set': set_list})
 
     def get_state(self, ident: str):
         """
@@ -144,7 +144,7 @@ class DB(object):
         Returns the state.
         """
         self.update_states()
-        rec = self.images_find_one({'_id': ident}, {'status': 1})
+        rec = self._images_find_one({'_id': ident}, {'status': 1})
         if rec is None:
             return None
         elif 'status' not in rec:
@@ -155,11 +155,18 @@ class DB(object):
         """
         Cleanup failed transcations after a period
         """
-        for rec in self.images_find({'status': 'FAILURE'}):
+        for rec in self._images_find({'status': 'FAILURE'}):
             nextpull = self.pullupdatetimeout + rec['last_pull']
             # It it has been a while then let's clean up
             if time() > nextpull:
-                self.images_remove({'_id': rec['_id']})
+                self._images_remove({'_id': rec['_id']})
+
+    def reset_expire(self, ident, duration):
+        """Reset the expire time.  (Not fully implemented)."""
+
+        expire = time() + duration
+        self._images_update({'_id': ident}, {'$set': {'expiration': expire}})
+        return expire
 
     def get_metrics(self, limit: int):
         """
@@ -175,33 +182,81 @@ class DB(object):
             recs.append(r)
         return recs
 
+    def find_image_by(self, id: str | None = None,
+                      image_id: str | None = None,
+                      system: str | None = None,
+                      status: str | None = None,
+                      image_type=None,
+                      tag=None,
+                      pulltag=None):
+        q = {}
+        if id:
+            q['_id'] = id
+        if image_id:
+            q['id'] = image_id
+        if system:
+            q['system'] = system
+        if status:
+            q['status'] = status
+        if image_type:
+            q['itype'] = image_type
+        if tag:
+            q['tag'] = {'$in': [tag]}
+        if pulltag:
+            q['pulltag'] = pulltag
+        return self._images_find_one(q)
+
+    def find_many_images_by(self, system=None, status=None,
+                            image_type=None, tag=None, pulltag=None):
+        q = {}
+        if system:
+            q['system'] = system
+        if status:
+            if status == "NOT_READY":
+                q['status'] = {'$ne': 'READY'}
+            else:
+                q['status'] = status
+        if image_type:
+            q['itype'] = image_type
+        if tag:
+            q['tag'] = {'$in': [tag]}
+        if pulltag:
+            q['pulltag'] = pulltag
+        return self._images_find(q)
+
+    def remove_image_by_id(self, id):
+        self._images_remove({"_id": id})
+
+    def remove_pending_images(self):
+        self._images_remove_many({'status': 'PENDING'})
+
     @mongo_reconnect_reattempt
-    def images_remove(self, *args, **kwargs):
+    def _images_remove(self, *args, **kwargs):
         """ Decorated function to remove images from mongo """
         return self.images.delete_one(*args, **kwargs)
 
     @mongo_reconnect_reattempt
-    def images_remove_many(self, *args, **kwargs):
+    def _images_remove_many(self, *args, **kwargs):
         """ Decorated function to remove images from mongo """
         return self.images.delete_many(*args, **kwargs)
 
     @mongo_reconnect_reattempt
-    def images_update(self, *args, **kwargs):
+    def _images_update(self, *args, **kwargs):
         """ Decorated function to updates images in mongo """
         return self.images.update_one(*args, **kwargs)
 
     @mongo_reconnect_reattempt
-    def images_update_many(self, *args, **kwargs):
+    def _images_update_many(self, *args, **kwargs):
         """ Decorated function to updates images in mongo """
         return self.images.update_many(*args, **kwargs)
 
     @mongo_reconnect_reattempt
-    def images_find(self, *args, **kwargs):
+    def _images_find(self, *args, **kwargs):
         """ Decorated function to find images in mongo """
         return self.images.find(*args, **kwargs)
 
     @mongo_reconnect_reattempt
-    def images_find_one(self, *args, **kwargs):
+    def _images_find_one(self, *args, **kwargs):
         """ Decorated function to find one image in mongo """
         return self.images.find_one(*args, **kwargs)
 
@@ -215,3 +270,7 @@ class DB(object):
         """ Decorated function to insert an image in mongo """
         if self.metrics:
             return self.metrics.insert_one(*args, **kwargs)
+
+
+# TODO
+# images_insert(newimage)

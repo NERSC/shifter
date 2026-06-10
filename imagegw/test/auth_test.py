@@ -43,6 +43,7 @@ def test_authenticate(mocker):
     assert sess.system == system
     assert sess.user == "root"
     assert sess.group in ["wheel", "root"]
+    assert sess.admin
 
     f.return_value = ('', 700, 700, object())
     sess = authenticate(c, "foo", system)
@@ -51,3 +52,4 @@ def test_authenticate(mocker):
     assert sess.system == system
     assert sess.user == "unknown"
     assert sess.group == "unknown"
+    assert not sess.admin

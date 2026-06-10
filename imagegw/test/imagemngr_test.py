@@ -137,13 +137,13 @@ def ctx():
             self.query = {'system': self.system,
                           'itype': self.itype,
                           'tag': self.tag}
-            self.pull = Request(system=self.system, itype=self.itype,
-                                tag=self.tag, userACL=[], groupACL=[],
-                                op=Operations.PULL)
             self.session = Session(uid=100, gid=100, system=self.system,
                                    user="user", group="user")
+            self.pull = Request(session=self.session, itype=self.itype,
+                                tag=self.tag, userACL=[], groupACL=[],
+                                op=Operations.PULL)
             self.admin_session = Session(uid=0, gid=0, system=self.system,
-                                         user="root", group="root")
+                                         user="root", group="root", admin=True)
             # Cleanup Mongo
             self.images.delete_many({})
     conf = Conf()
@@ -249,20 +249,6 @@ def read_tokens():
 #
 #  Tests
 #
-def test_noadmin(ctx):
-    s = ctx.session
-    assert s
-    resp = ctx.m._isadmin(s)
-    assert resp is False
-
-
-def test_admin(ctx):
-    s = ctx.admin_session
-    assert s
-    resp = ctx.m._isadmin(s)
-    assert resp is True
-
-
 def test_add_remove_tag(ctx):
     """
     Create an image and tag with a new tag.
@@ -384,7 +370,7 @@ def test_resetexp(ctx):
               }
     id = ctx.images.insert_one(record.copy()).inserted_id
     assert id
-    expire = ctx.m._resetexpire(id)
+    expire = ctx.m.db.reset_expire(id, 100)
     assert expire > time.time()
     rec = ctx.images.find_one({'_id': id})
     assert rec['expiration'] == expire
@@ -785,7 +771,7 @@ def test_pulls_acl_change(ctx):
     assert id
     # Now try to submit an ACL change
     session = ctx.session
-    pr = Request(system=record['system'],
+    pr = Request(session=ctx.session,
                  itype=record['itype'],
                  tag=record['pulltag'],
                  userACL=[1001, 1002],
@@ -808,7 +794,7 @@ def test_pull_logic(ctx):
     id = ctx.images.insert_one(record).inserted_id
     assert id
     session = ctx.session
-    pr = Request(system=system,
+    pr = Request(session=ctx.session,
                  itype=itype,
                  tag=tag,
                  op=Operations.PULL)
@@ -828,7 +814,7 @@ def test_pull_logic(ctx):
     ctx.images.delete_many({})
     id = ctx.images.insert_one(record).inserted_id
     assert id
-    pr = Request(system=system,
+    pr = Request(session=ctx.session,
                  itype=itype,
                  tag=tag,
                  op=Operations.PULL)
@@ -839,7 +825,7 @@ def test_pull_logic(ctx):
 
     # reset and test a re-pull of an old image
     ctx.images.delete_many({})
-    pr = Request(system=system,
+    pr = Request(session=ctx.session,
                  itype=itype,
                  tag=tag,
                  op=Operations.PULL)
@@ -1077,6 +1063,7 @@ def test_expire_noadmin(ctx):
 
 
 def test_autoexpire_stuckpull(ctx):
+    assert ctx.config.expire_secs == 90*3600*24
     record = good_pullrecord(ctx)
     record['status'] = 'PENDING'
     record['last_pull'] = time.time() - 3000
@@ -1256,7 +1243,7 @@ def test_pull_multiple_tags(ctx):
     """
     Test pulling an image with multiple tags.
     """
-    pr = Request(system=ctx.system, itype=ctx.itype, tag=ctx.public,
+    pr = Request(session=ctx.session, itype=ctx.itype, tag=ctx.public,
                  op=Operations.PULL)
     # Do the pull
     session = ctx.session
@@ -1274,7 +1261,7 @@ def test_pull_multiple_tags(ctx):
 
     # Now reppull with a different tag for the same image
     newtag = ctx.public.replace('latest', '1')
-    pr = Request(system=ctx.system, itype=ctx.itype, tag=newtag,
+    pr = Request(session=ctx.session, itype=ctx.itype, tag=newtag,
                  op=Operations.PULL)
     rec = ctx.m.pull(session, pr)  # ,delay=False)
     id = rec['_id']

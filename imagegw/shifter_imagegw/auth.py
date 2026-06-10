@@ -54,5 +54,10 @@ def authenticate(conf: Config, authstr: str, system: str):
         group = grp.getgrgid(gid).gr_name
     except KeyError:
         pass
+    admin = False
+    if user in conf.Platforms[system].admins:
+        admin = True
+    
     return Session(uid=uid, gid=gid, tokens=token,
-                   system=system, user=user, group=group)
+                   system=system, user=user, group=group,
+                   admin=admin)
