@@ -418,29 +418,20 @@ class ImageMngr(object):
 
         return rec
 
-    def mngrimport(self, session: Session, image: dict):
+    def mngrimport(self, session: Session, req: Request):
         """
         import the image directly from a file
         Only for allowed users
         Takes an auth token, a request object
         """
         meta = {}
-        fp = image['filepath']
-        request = {
-            'system': image['system'],
-            'itype': image['itype'],
-            'pulltag': image['tag'],
-            'filepath': image['filepath'],
-            'format': image['format'],
-            'meta': meta
-        }
-        logging.debug(f'mngrmport called for file {fp}')
+        logging.debug(f'mngrmport called for file {req.filepath}')
         # Skip checks about previous requests for now
         # Future work could check the fasthash and
         # not import if they're the same
-        rec = self.db.find_image_by(system=image['system'],
-                                    image_type=image['itype'],
-                                    pulltag=image['tag'])
+        rec = self.db.find_image_by(system=req.system,
+                                    image_type=req.itype,
+                                    pulltag=req.tag)
         if not self._pullable(rec):
             return rec
 
@@ -449,6 +440,15 @@ class ImageMngr(object):
 
         logging.debug("Creating New Import Record")
         # new_pull_record works for import too
+        request = {
+            'system': req.system,
+            'itype': req.itype,
+            'pulltag': req.tag,
+            'filepath': req.filepath,
+            'format': req.format,
+            'meta': meta,
+            'last_pull': time()
+        }
         rec = self.new_pull_record(request)
         ident = rec['_id']
         logging.debug(f"PENDING Request, ident {ident}")
@@ -459,16 +459,15 @@ class ImageMngr(object):
                       "{request['system']}")
         ir = ImportRequest(self.config,
                            session.system,
-                           image['tag'],
+                           req.tag,
                            ident,
                            session,
-                           image['filepath'])
+                           req.filepath)
         self.workers.submit(ir)
 
         memo = "import request queued " \
-               f"s={request['system']} tag={request['tag']}"
+               f"s={req.system} tag={req.tag}"
         logging.info(memo)
-        self.db.update_image(ident, {'last_pull': time()})
         return rec
 
     def update_acls(self, ident: str, response: dict):

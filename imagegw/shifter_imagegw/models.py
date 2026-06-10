@@ -28,6 +28,7 @@ class Request(BaseModel):
     itype: str
     tag: str
     format: str = "squashfs"
+    filepath: str | None = None
     userACL: list[int] | None = []
     groupACL: list[int] | None = []
     system: str | None = None
@@ -62,31 +63,3 @@ class Request(BaseModel):
         if self.groupACL and self.groupACL != []:
             rec['groupACL'] = _make_acl(self.groupACL, session.gid)
         return rec
-
-
-class Image(BaseException):
-    id: str
-    system: str
-    itype: str
-    tag: list[str]
-    format: str
-    userACL: list[int] | None = []
-    groupACL: list[int] | None = []
-    private: bool
-    status: str
-    last_pull: int
-    status_message: str
-    last_heartbeat: int
-    pulltag: str
-    expiration: int
-    ENV: list[str] | None
-    ENTRY: list[str] | None
-    WORKDIR: str | None
-    LABELS: list[str] | None
-    # These aren't really used
-    arch: str
-    os: str
-    location: str = ""
-    remotetype: str = ""
-    ostcount: str = ""
-    replication: str = ""
