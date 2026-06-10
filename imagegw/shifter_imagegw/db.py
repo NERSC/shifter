@@ -26,6 +26,7 @@ from time import time, sleep
 from pymongo import MongoClient
 import pymongo.errors
 from shifter_imagegw.config import Config
+from shifter_imagegw.models import Request, Operations
 
 
 # decorator function to re-attempt any mongo operation that may have failed
@@ -224,6 +225,36 @@ class DB(object):
             q['pulltag'] = pulltag
         return self._images_find(q)
 
+    def create_pull_record(self, req: Request):
+        """
+        Creates a new image in mongo.  If the pull already exist it removes
+        it first.
+        """
+        # Clean out any existing records
+        for rec in self.find_many_images_by(status='NOT_READY',
+                                            system=req.system,
+                                            image_type=req.itype,
+                                            pulltag=req.tag):
+            self.remove_image_by_id(rec['_id'])
+
+        newimage = {
+            'system': req.system,
+            'itype': req.itype,
+            'userACL': req.userACL,
+            'groupACL': req.groupACL,
+            'private': None,
+            'pulltag': req.tag,
+            'status': 'INIT',
+            'last_pull': time()
+        }
+        # These are for imports
+        if req.op == Operations.IMPORT:
+            newimage['format'] = req.format
+            newimage['filepath'] = req.filepath
+            newimage['meta'] = {}
+        self._images_insert(newimage)
+        return newimage
+
     def remove_image_by_id(self, id):
         self._images_remove({"_id": id})
 
@@ -261,7 +292,7 @@ class DB(object):
         return self.images.find_one(*args, **kwargs)
 
     @mongo_reconnect_reattempt
-    def images_insert(self, *args, **kwargs):
+    def _images_insert(self, *args, **kwargs):
         """ Decorated function to insert an image in mongo """
         return self.images.insert_one(*args, **kwargs).inserted_id
 
@@ -270,7 +301,3 @@ class DB(object):
         """ Decorated function to insert an image in mongo """
         if self.metrics:
             return self.metrics.insert_one(*args, **kwargs)
-
-
-# TODO
-# images_insert(newimage)

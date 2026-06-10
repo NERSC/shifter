@@ -311,36 +311,6 @@ class ImageMngr(object):
 
         return False
 
-    def new_pull_record(self, image: dict):
-        """
-        Creates a new image in mongo.  If the pull already exist it removes
-        it first.
-        """
-        # Clean out any existing records
-        for rec in self.db.find_many_images_by(status='NOT_READY',
-                                               system=image['system'],
-                                               image_type=image['itype'],
-                                               pulltag=image['pulltag']):
-            self.db.remove_image_by_id(rec['_id'])
-
-        # TODO: replace this
-        newimage = {
-            'format': 'invalid',  # <ext4|squashfs|vfs>
-            'userACL': [],
-            'groupACL': [],
-            'private': None,
-            'tag': [],
-            'status': 'INIT',
-            'last_pull': time()
-        }
-        newimage['format'] = self.config.DefaultImageFormat
-        for param in image:
-            if param == 'tag':
-                continue
-            newimage[param] = image[param]
-        self.db.images_insert(newimage)
-        return newimage
-
     def pull(self, session: Session, req: Request):
         """
         pull the image
@@ -398,19 +368,18 @@ class ImageMngr(object):
 
         if update:
             logging.debug("Creating New Pull Record")
-            request = req.pull_record(session)
-            rec = self.new_pull_record(request)
+            rec = self.db.create_pull_record(req)
             ident = rec['_id']
             logging.debug("PENDING Request")
             self.db.update_image_state(ident, 'PENDING')
             logging.debug("Calling do pull with queue="
-                          f"{request['system']}")
+                          f"{req.system}")
             pr = PullRequest(self.config,
                              req.tag,
                              ident,
                              session,
-                             useracl=request['userACL'],
-                             groupacl=request['groupACL'])
+                             useracl=req.userACL,
+                             groupacl=req.groupACL)
             self.workers.submit(pr)
 
             memo = "pull request queued s={req.system} tag={req.tag}"
@@ -424,7 +393,6 @@ class ImageMngr(object):
         Only for allowed users
         Takes an auth token, a request object
         """
-        meta = {}
         logging.debug(f'mngrmport called for file {req.filepath}')
         # Skip checks about previous requests for now
         # Future work could check the fasthash and
@@ -439,22 +407,10 @@ class ImageMngr(object):
         # so just do our best and update if there are problems
 
         logging.debug("Creating New Import Record")
-        # new_pull_record works for import too
-        request = {
-            'system': req.system,
-            'itype': req.itype,
-            'pulltag': req.tag,
-            'filepath': req.filepath,
-            'format': req.format,
-            'meta': meta,
-            'last_pull': time()
-        }
-        rec = self.new_pull_record(request)
+        rec = self.db.create_pull_record(req)
         ident = rec['_id']
         logging.debug(f"PENDING Request, ident {ident}")
         self.db.update_image_state(ident, 'PENDING')
-        request['tag'] = request['pulltag']
-        request['session'] = session
         logging.debug("Calling wrkimport with queue="
                       "{request['system']}")
         ir = ImportRequest(self.config,
