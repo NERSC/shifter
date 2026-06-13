@@ -69,14 +69,16 @@ def transfer(system, image_path, metadata_path=None,
     transfer an image and its metadata to the system
     """
 
+    logging.debug(f"Transfer: {system.imageDir} {image_path} " + \
+                  f"{metadata_path} {import_image} {dest_path}")
     for fn in [image_path, metadata_path]:
         if not fn:
             continue
-        logging.debug(f'copy file {fn} to {dest_path}')
         dstfn = os.path.basename(fn)
         if import_image and fn == image_path:
             dstfn = dest_path
         dst = os.path.join(system.imageDir, dstfn)
+        logging.debug(f'copy file {fn} to {dst}')
         shutil.copyfile(fn, dst)
 
 
@@ -99,5 +101,6 @@ def imagevalid(system, image_path, metadata_path=None):
     if metadata_path is not None:
         metadata_ok = check_file(metadata_path, system)
     image_ok = check_file(image_path, system)
+    logging.debug(f"imagevalid: image_dir:{system.imageDir} image_path:{image_path} image:{image_ok} meta:{metadata_ok}")
 
     return metadata_ok and image_ok

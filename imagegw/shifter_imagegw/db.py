@@ -116,11 +116,9 @@ class DB(object):
         if 'private' in resp and resp['private'] is False:
             resp['userACL'] = []
             resp['groupACL'] = []
-
         for key in list(mappings.keys()):
             if key in resp:
                 setline[mappings[key]] = resp[key]
-
         self._images_update({'_id': ident}, {'$set': setline})
 
     def update_image_state(self, ident: str, state: str,
@@ -235,6 +233,7 @@ class DB(object):
                                             system=req.system,
                                             image_type=req.itype,
                                             pulltag=req.tag):
+            logging.debug(f"Removing stale record {rec['_id']}")
             self.remove_image_by_id(rec['_id'])
 
         newimage = {
