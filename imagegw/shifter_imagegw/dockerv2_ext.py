@@ -28,6 +28,7 @@ from subprocess import Popen, PIPE
 import base64
 import tempfile
 import shutil
+import logging
 
 
 class DockerV2ext(object):
@@ -67,6 +68,11 @@ class DockerV2ext(object):
         self.cache_dir = cachedir
         self.pulled = False
         self.image_dir = None
+        tools = ['skopeo', 'oci-image-tool-wrapper', 'umoci']
+        for tool in tools:
+            if not shutil.which(tool):
+                logging.error(f"Missing {tool}")
+                raise OSError(f"Tool {tool} not found")
 
     def get_eldest_layer(self):
         """Return base layer"""
