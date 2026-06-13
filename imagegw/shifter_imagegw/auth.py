@@ -27,6 +27,7 @@ from shifter_imagegw.models import Session
 from shifter_imagegw.errors import AuthenticationError
 import pwd
 import grp
+import json
 
 
 def authenticate(conf: Config, authstr: str, system: str):
@@ -39,7 +40,7 @@ def authenticate(conf: Config, authstr: str, system: str):
     if conf.Authentication != 'munge':
         raise NotImplementedError(f'{conf.Authentication} is not supported')
     try:
-        token, uid, gid, _ = decode(authstr.encode('utf-8'))
+        payload, uid, gid, _ = decode(authstr.encode('utf-8'))
     except MungeError as e:
         raise AuthenticationError(e)
     user = "unknown"
@@ -58,6 +59,11 @@ def authenticate(conf: Config, authstr: str, system: str):
     if user in conf.Platforms[system].admins:
         admin = True
 
-    return Session(uid=uid, gid=gid, tokens=token,
+    try:
+        tokens = json.loads(payload).get('authorized_locations')
+    except:
+        tokens = None
+
+    return Session(uid=uid, gid=gid, tokens=tokens,
                    system=system, user=user, group=group,
                    admin=admin)

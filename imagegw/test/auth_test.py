@@ -36,7 +36,8 @@ def test_authenticate(mocker):
     }
     c = Config(data)
     f = mocker.patch("shifter_imagegw.auth.decode")
-    f.return_value = ('', 0, 0, object())
+    tokens = '{"authorized_locations":{"foo.bar":"user:pass"}}'
+    f.return_value = (tokens, 0, 0, object())
     sess = authenticate(c, "foo", system)
     assert sess.uid == 0
     assert sess.gid == 0
@@ -44,6 +45,8 @@ def test_authenticate(mocker):
     assert sess.user == "root"
     assert sess.group in ["wheel", "root"]
     assert sess.admin
+    assert 'foo.bar' in sess.tokens
+    assert sess.tokens.get('foo.bar') == "user:pass"
 
     f.return_value = ('', 700, 700, object())
     sess = authenticate(c, "foo", system)
@@ -52,4 +55,5 @@ def test_authenticate(mocker):
     assert sess.system == system
     assert sess.user == "unknown"
     assert sess.group == "unknown"
+    assert sess.tokens is None
     assert not sess.admin
