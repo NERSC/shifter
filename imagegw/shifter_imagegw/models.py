@@ -9,7 +9,7 @@ class Session(BaseModel):
     system: str
     user: str
     group: str
-    tokens: str = ""
+    tokens: dict | None = None
     admin: bool = False
 
     def __hash__(self):
