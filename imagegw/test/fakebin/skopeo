@@ -9,6 +9,14 @@ if [ "z$1" = "z--policy" ] ; then
   shift 2
 fi
 
+# Simulate a private image which will fail without auth
+if [ ! -z "$PRIVATE" ] ; then
+   echo "unauthorized" >&2
+   if [ $(echo $@|grep -c --authfile) -eq 0 ] ; then
+     exit 0
+   fi
+fi
+
 D=$(dirname $0)
 
 if [ "z$1" = "zinspect" ] ; then
