@@ -37,6 +37,8 @@ from shifter_imagegw.models import Session
 class Updater(object):
     """
     This is a helper class to update the status for the request.
+
+    This could possibly be moved into the Abstract Async Request class.
     """
     def __init__(self, ident: str = None, update_method=None):
         """ init the updater. """
@@ -52,7 +54,7 @@ class Updater(object):
             self.update_method(ident=self.ident, state=state, meta=metadata)
 
     def failed(self, e):
-        logging.error(f"Failure: {e}")
+        logging.error(f"Failure: {str(e)}")
         if self.update_method:
             metadata = {'heartbeat': time(),
                         'message': "Operation Failed",
@@ -85,6 +87,8 @@ class WorkerThreads(object):
     def updater(self, ident, state, meta):
         """
         Updater function: This just post a message to a queue.
+
+        TODO: switch this to a data model.
         """
         self.updater_queue.put({'id': ident, 'state': state, 'meta': meta})
 
@@ -136,7 +140,7 @@ class AsyncRequest(object):
                         os.unlink(cleanitem)
                 except Exception:
                     logging.error("Worker: caught exception while trying to "
-                                  f"clean up {cleanitem}")
+                                  f"clean up {cleanitem}: ignoring")
 
     def _write_metadata(self):
         """
@@ -211,11 +215,13 @@ class PullRequest(AsyncRequest):
 
         url = loc.url if loc.url else f'https://{location}'
         if self.tokens:
+            userpass = None
             if location in self.tokens:
                 userpass = self.tokens[location]
             elif 'default' in self.tokens:
                 userpass = self.tokens['default']
-            username, password = userpass.split(":", maxsplit=1)
+            if userpass:
+                username, password = userpass.split(":", maxsplit=1)
         imgid = f'{repo}:{tag}'
 
         try:
@@ -245,7 +251,7 @@ class PullRequest(AsyncRequest):
             dock.extract_docker_layers(self.expandedpath)
             return True
         except Exception as e:
-            logging.warning(str(e))
+            logging.error(str(e))
             raise e
 
     def _pull_image(self):
@@ -345,7 +351,7 @@ class PullRequest(AsyncRequest):
         try:
             # Step 1 - Do the pull
             self.updater.update_status('PULLING', 'PULLING')
-            logging.debug(self.tag)
+            logging.debug(f"tag: {self.tag}")
             if not self._pull_image():
                 logging.warning("Worker: Pull failed")
                 raise OSError('Pull failed')
@@ -373,6 +379,7 @@ class PullRequest(AsyncRequest):
                 # if not self._transfer_image():
                 #     raise OSError('Transfer failed')
             else:
+                logging.debug(f"metadata only: {self.tag}")
                 self.meta_only = True
                 self.meta['meta_only'] = True
                 logging.debug(f"Updating metdata for {self.tag}")
@@ -391,7 +398,7 @@ class PullRequest(AsyncRequest):
             return self.meta
 
         except Exception as e:
-            err_msg = f"ERROR: Dopull failed sys={self.system} tag={self.tag}"
+            err_msg = f"ERROR: Dopull failed sys={self.system} tag={self.tag} {str(e)}"
             logging.error(err_msg)
             self.updater.update_status('FAILURE', 'FAILED')
 
@@ -470,6 +477,7 @@ class ImportRequest(AsyncRequest):
             #     raise OSError("Import copy failed")
 
             # Done
+            logging.debug(f"run: resp: {self.meta}")
             self.updater.update_status('READY', 'Image ready',
                                        response=self.meta)
             self._cleanup_temporary()
