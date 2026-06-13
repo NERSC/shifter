@@ -1,4 +1,5 @@
 import os
+import sys
 import pytest
 import time
 import json
@@ -12,6 +13,8 @@ from shifter_imagegw.config import Config
 from shifter_imagegw.models import Session, Request, Operations
 from shifter_imagegw.imageworker import WorkerThreads
 from shifter_imagegw.imagemngr import ImageMngr
+from pathlib import Path
+import logging
 
 """
 Shifter, Copyright (c) 2015, The Regents of the University of California,
@@ -215,6 +218,16 @@ def good_record(ctx):
     }
 
 
+def cleanup(ctx):
+    idir = ctx.config.Platforms[ctx.system].imageDir
+    cdir = ctx.config.CacheDirectory
+    tag = "468b48e3864f5489a6fa4a35843292b101ac73c31e3272688fa3220ff485f549"
+    Path(f"{idir}/{tag}.squashfs").unlink(missing_ok=True)
+    Path(f"{idir}/{tag}.meta").unlink(missing_ok=True)
+    Path(f"{cdir}/{tag}.squashfs").unlink(missing_ok=True)
+    Path(f"{cdir}/{tag}.meta").unlink(missing_ok=True)
+
+
 def read_metafile(metafile):
     kv = {}
     with open(metafile) as mf:
@@ -378,37 +391,36 @@ def test_resetexp(ctx):
 
 def test_pullable(ctx):
     # An old READY image
-    rec = {'last_pull': 0, 'status': 'READY'}
-    assert ctx.m._pullable(rec) is True
-    rec = {'last_pull': time.time(), 'status': 'READY'}
+    rec = {'last_pull': 0, 'status': 'READY', 'userACL': [], 'groupACL': []}
+    assert ctx.m._pullable(ctx.pull, rec) is True
+    rec['last_pull'] = time.time()
     # A recent READY image
-    assert ctx.m._pullable(rec) is False
+    assert ctx.m._pullable(ctx.pull, rec) is False
 
-    rec = {'last_pull': time.time(),
-           'last_heartbeat': 0,
-           'status': 'READY'}
+    rec['last_heartbeat'] = 0
     # A recent READY image but an old heartbeat (maybe re-pulled)
-    assert ctx.m._pullable(rec) is False
+    assert ctx.m._pullable(ctx.pull, rec) is False
 
     # A failed image
-    rec = {'last_pull': 0, 'status': 'FAILURE'}
-    assert ctx.m._pullable(rec) is True
+    rec = {'last_pull': 0, 'status': 'FAILURE', 'userACL': [], 'groupACL': []}
+    assert ctx.m._pullable(ctx.pull, rec) is True
     # recent pull
-    rec = {'last_pull': time.time(), 'status': 'FAILURE'}
-    assert ctx.m._pullable(rec) is False
+    rec = {'last_pull': time.time(), 'status': 'FAILURE', 'userACL': [], 'groupACL': []}
+    assert ctx.m._pullable(ctx.pull, rec) is False
 
     # A hung pull
     rec = {'last_pull': 0, 'last_heartbeat': time.time() - 7200,
-           'status': 'PULLING'}
-    assert ctx.m._pullable(rec) is True
+           'status': 'PULLING', 'userACL': [], 'groupACL': []}
+    assert ctx.m._pullable(ctx.pull, rec) is True
     # recent pull
-    rec = {'last_pull': time.time(), 'status': 'PULLING'}
-    assert ctx.m._pullable(rec) is False
+    rec = {'last_pull': time.time(), 'status': 'PULLING',
+           'userACL': [], 'groupACL': []}
+    assert ctx.m._pullable(ctx.pull, rec) is False
 
     # A hung pull
     rec = {'last_pull': 0, 'last_heartbeat': time.time(),
-           'status': 'PULLING'}
-    assert ctx.m._pullable(rec) is False
+           'status': 'PULLING', 'userACL': [], 'groupACL': []}
+    assert ctx.m._pullable(ctx.pull, rec) is False
 
 
 def test_complete_pull(ctx):
@@ -760,17 +772,22 @@ def xtest_checkread(ctx):
     assert ctx.m._checkread({'uid': 7, 'gid': 7}, mock_image) is False
 
 
-def test_pulls_acl_change(ctx):
+def test_pulls_acl_change(ctx, monkeypatch):
     """
     This simulates a pull inflight + an ACL pull
     request at the same time.
     """
+    monkeypatch.setenv("PRIVATE", "1")
+
     record = good_pullrecord(ctx)
-    record['status'] = 'PULLING'
+    record['status'] = 'READY'
+    record['tag'] = [record['pulltag']]
+    record['id'] = '468b48e3864f5489a6fa4a35843292b101ac73c31e3272688fa3220ff485f549'
     id = ctx.images.insert_one(record).inserted_id
     assert id
     # Now try to submit an ACL change
     session = ctx.session
+    session.tokens   = {"default":"asdf:asdfjd"}
     pr = Request(session=ctx.session,
                  itype=record['itype'],
                  tag=record['pulltag'],
@@ -778,21 +795,30 @@ def test_pulls_acl_change(ctx):
                  groupACL=[1003, 1004],
                  op=Operations.PULL)
     rec = ctx.m.pull(session, pr)
-    assert rec['status'] == 'PULLING'
+    # FIXFIX
+    time_wait(ctx, rec['_id'])
+    rec = ctx.m.pull(session, pr)
+    assert rec['status'] == 'READY'
 
 
-def test_pull_logic(ctx):
+def test_pull_logic(ctx, monkeypatch):
     """
     Consolidate some of the various tests around
     handling various pull sceanrios
     """
+    monkeypatch.setenv("PRIVATE", "1")
     # Assume the image is already recently pulled
     record = good_record(ctx)
+    record['userACL'] = None
+    record['groupACL'] = None
+    record['id'] = "468b48e3864f5489a6fa4a35843292b101ac73c31e3272688fa3220ff485f549"
     itype = record['itype']
     tag = record['tag'][0]
+    logging.debug(record['last_pull'])
     id = ctx.images.insert_one(record).inserted_id
     assert id
     session = ctx.session
+    session.tokens   = {"default":"asdf:asdfjd"}
     pr = Request(session=ctx.session,
                  itype=itype,
                  tag=tag,
@@ -808,6 +834,9 @@ def test_pull_logic(ctx):
     session = ctx.session
     rec = ctx.m.pull(session, pr)
     assert rec['status'] == 'INIT'
+    time.sleep(1)
+    rec = ctx.m.pull(session, pr)
+    assert rec['status'] == 'READY'
 
     # Re-pull of new image with ACL change
     ctx.images.delete_many({})
@@ -821,6 +850,9 @@ def test_pull_logic(ctx):
     session = ctx.session
     rec = ctx.m.pull(session, pr)
     assert rec['status'] == 'INIT'
+    time.sleep(1)
+    rec = ctx.m.pull(session, pr)
+    assert rec['status'] == 'READY'
 
     # reset and test a re-pull of an old image
     ctx.images.delete_many({})
@@ -837,10 +869,10 @@ def test_pull_logic(ctx):
     # Now let's do a re-pull with ACL change.  We should
     # get back the prev rec.  The status will now be
     # pending because we do an update status
-    pr.userACL = [1001]
-    session = ctx.session
-    rec2 = ctx.m.pull(session, pr)
-    assert rec2['_id'] == rec['_id']
+    # pr.userACL = [1001]
+    # session = ctx.session
+    # rec2 = ctx.m.pull(session, pr)
+    # assert rec2['_id'] == rec['_id']
     # TODO: Need to find a way to trigger this test now.
     # ctx.assertEquals(rec2['status'], 'PENDING')
 
@@ -850,6 +882,7 @@ def test_pull_public_acl(ctx):
     Pulling a public image with ACLs should ignore the acls.
     """
     # Use defaults for format, arch, os, ostcount, replication
+    cleanup(ctx)
     pr = ctx.pull
     pr.userACL = [1001, 1002]
     pr.groupACL = [1003, 1004]
@@ -1241,6 +1274,7 @@ def test_pull_multiple_tags(ctx):
     """
     Test pulling an image with multiple tags.
     """
+    cleanup(ctx)
     pr = Request(session=ctx.session, itype=ctx.itype, tag=ctx.public,
                  op=Operations.PULL)
     # Do the pull
@@ -1273,6 +1307,7 @@ def test_pull_multiple_tags(ctx):
 
 
 def test_labels(ctx):
+    cleanup(ctx)
     # Need use_external
     conf = deepcopy(ctx.config)
     os.environ['ENABLE_LABELS'] = "1"

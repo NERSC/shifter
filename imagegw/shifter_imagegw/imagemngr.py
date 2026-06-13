@@ -84,6 +84,7 @@ class ImageMngr(object):
         """
         This listens for update messages from a queue.
         """
+        logging.basicConfig(level=config.LogLevel)
         self.db = DB(config)
         while True:
             message = self.status_queue.get()
@@ -95,7 +96,7 @@ class ImageMngr(object):
             meta = message['meta']
             # TODO: Handle a failed expire
             if state == "FAILURE":
-                logging.warning(f"Operation failed for {ident}")
+                logging.error(f"Operation failed for {ident}")
 
             # A response message
             if state != 'READY':
@@ -103,13 +104,13 @@ class ImageMngr(object):
                 continue
             if 'response' in meta and meta['response']:
                 response = meta['response']
-                logging.debug(response)
                 if 'meta_only' in response:
                     logging.debug('Updating ACLs')
                     self.update_acls(ident, response)
                 else:
+                    logging.debug(f"status thread: {response}")
                     self.complete_pull(ident, response)
-                logging.debug('meta={str(response)}')
+                logging.debug(f'meta={str(response)}')
 
     def _checkread(self, session: Session, rec: dict):
         """
@@ -153,14 +154,17 @@ class ImageMngr(object):
         return False if anything is different
         """
 
-        # If the key isn't in the objects or
-        # something else fails, then it must
-        # have changed.
+        # Trivial check
         if a == b:
             return True
+        
+        if a is None:
+            a = []
+        if b is None:
+            b = []
 
-        if a is None or b is None:
-            return False
+        # if a is None or b is None:
+        #     return False
         if len(a) != len(b):
             return False
         for item in a:
@@ -266,40 +270,46 @@ class ImageMngr(object):
                         'image': record['pulltag']})
         return resp
 
-    def _pullable(self, rec: dict):
+    def _pullable(self, req: Request, rec: dict):
         """
         An image is pullable when:
         -There is no existing record
-        -The status is a FAILURE
+        -The status is a FAILURE and it has been a while
         -The status is READY and it is past the update time
         -The state is something else and the pull has expired
         """
 
         # if rec is None then do a pull
         if rec is None:
+            logging.debug(f"pullable: no rec")
             return True
 
         # Okay there has been a pull before
         # If the status flag is missing just repull (shouldn't happen)
         if 'status' not in rec:
+            logging.debug(f"pullable: no status")
             return True
         status = rec['status']
 
         # EXPIRED images can be pulled
         if status == 'EXPIRED':
+            logging.debug(f"pullable: expired")
             return True
 
         # Need to deal with last_pull for a READY record
         if 'last_pull' not in rec:
+            logging.debug(f"pullable: no last pull")
             return True
         nextpull = self.pullupdatetimeout + rec['last_pull']
 
         # It has been a while, so re-pull to see if it is fresh
         if status == 'READY' and (time() > nextpull):
+            logging.debug(f"pullable: time since last pull")
             return True
 
         # Repull failed pulls
         if status == 'FAILURE' and (time() > nextpull):
+            logging.debug(f"pullable: time since last pull failed")
             return True
 
         # Last thing... What if the pull somehow got hung or died in the middle
@@ -307,8 +317,21 @@ class ImageMngr(object):
         # TODO: add pull timeout.  For now use 1 hour
         if status != 'READY' and 'last_heartbeat' in rec:
             if (time() - rec['last_heartbeat']) > 3600:
+                logging.debug("pullable: heartbeat expired")
                 return True
 
+        # Look for an ACL change.  This should only be checked for ready
+        # images because the ACL isn't fully populated unti the pull is
+        # complete.
+        if status == 'READY' and \
+            (not self._compare_list(req.userACL, rec.get('userACL')) or \
+                not self._compare_list(req.groupACL, rec.get('groupACL'))):
+            logging.info("ACL change detected.")
+            logging.debug(f"{req.userACL} vs {rec['userACL']}")
+            logging.debug(f"{req.groupACL} vs {rec['groupACL']}")
+            return True
+
+        logging.debug("Not Pullable")
         return False
 
     def pull(self, session: Session, req: Request):
@@ -331,38 +354,16 @@ class ImageMngr(object):
         recs = self.db.find_many_images_by(system=req.system,
                                            image_type=req.itype,
                                            pulltag=req.tag)
+        # TODO: Make this a single query
         for record in recs:
             if record['status'] in ['READY', 'SUCCESS']:
                 continue
             rec = record
             break
 
-        # TODO: Clean this up
-        inflight = False
-        recent = False
-        if rec is not None and rec['status'] != 'READY':
-            inflight = True
-        elif rec is not None:
-            # if an image has been pulled in the last 60 seconds
-            # let's consider that "recent"
-            if (time() - rec['last_pull']) < 60:
-                recent = True
-        # TODO: refactor the compare to not require the dicitonary
-        if rec and self._compare_list(req.userACL, rec.get('userACL')) and \
-                self._compare_list(req.groupACL, rec.get('groupACL')):
-            acl_changed = False
-        else:
-            logging.debug("ACL change detected.")
-            acl_changed = True
-
-        # We could hit a key error or some other edge case
-        # so just do our best and update if there are problems
+        # Reduce
         update = False
-        if not recent and not inflight and acl_changed:
-            logging.debug("ACL change detected.")
-            update = True
-
-        if self._pullable(rec):
+        if self._pullable(req, rec):
             logging.debug("Pullable image")
             update = True
 
@@ -382,7 +383,7 @@ class ImageMngr(object):
                              groupacl=req.groupACL)
             self.workers.submit(pr)
 
-            memo = "pull request queued s={req.system} tag={req.tag}"
+            memo = f"pull request queued s={req.system} tag={req.tag}"
             logging.info(memo)
 
         return rec
@@ -400,7 +401,7 @@ class ImageMngr(object):
         rec = self.db.find_image_by(system=req.system,
                                     image_type=req.itype,
                                     pulltag=req.tag)
-        if not self._pullable(rec):
+        if not self._pullable(req, rec):
             return rec
 
         # We could hit a key error or some other edge case
@@ -427,12 +428,12 @@ class ImageMngr(object):
         return rec
 
     def update_acls(self, ident: str, response: dict):
-        logging.debug(f"Update ACLs called for {ident} {str(response)}")
         pullrec = self.db.find_image_by(id=ident)
         if pullrec is None:
             logging.error('ERROR: Missing pull request resp=',
                           f'{str(response)}')
-            return
+            raise ValueError("Missing record")
+            # return
         # Check that this image ident doesn't already exist for this system
         rec = self.db.find_image_by(image_id=response['id'], status='READY',
                                     system=pullrec['system'])
@@ -442,8 +443,6 @@ class ImageMngr(object):
             # note it and power on through.
             msg = "WARNING: No image record found for an ACL update"
             logging.warning(msg)
-            response['last_pull'] = time()
-            response['status'] = 'READY'
             self.db.update_image(ident, response)
             self.db.add_tag(ident, pullrec['system'], pullrec['pulltag'])
         else:
@@ -455,8 +454,6 @@ class ImageMngr(object):
                 'last_pull': time()
             }
             logging.debug("Doing ACLs update")
-            response['last_pull'] = time()
-            response['status'] = 'READY'
             self.db.update_image(rec['_id'], updates)
             self.db.remove_image_by_id(ident)
 
@@ -475,6 +472,7 @@ class ImageMngr(object):
                                     system=pullrec['system'],
                                     status='READY')
         tag = pullrec['pulltag']
+        logging.debug(f"complete: {rec}")
         if rec is not None:
             # So we already had this image.
             # Let's delete the pull record.
