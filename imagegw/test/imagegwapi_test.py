@@ -1,5 +1,6 @@
 from shifter_imagegw.errors import AuthenticationError
 import os
+from pathlib import Path
 import time
 from shifter_imagegw.fasthash import fast_hash
 from pymongo import MongoClient
@@ -140,6 +141,16 @@ def good_record(ctx):
             }
 
 
+def cleanup(ctx):
+    idir = ctx['config'].Platforms[ctx['system']].imageDir
+    cdir = ctx['config'].CacheDirectory
+    tag = "468b48e3864f5489a6fa4a35843292b101ac73c31e3272688fa3220ff485f549"
+    Path(f"{idir}/{tag}.squashfs").unlink(missing_ok=True)
+    Path(f"{idir}/{tag}.meta").unlink(missing_ok=True)
+    Path(f"{cdir}/{tag}.squashfs").unlink(missing_ok=True)
+    Path(f"{cdir}/{tag}.meta").unlink(missing_ok=True)
+
+
 def test_basics(api_ctx):
     """
     Basic client test against status and /
@@ -154,6 +165,7 @@ def test_basics(api_ctx):
 
 
 def test_pull1(api_ctx, user):
+    cleanup(api_ctx)
     with TestClient(api.app) as client:
         uri = f'{api_ctx["url"]}/pull/{api_ctx["urlreq"]}'
         data = {'allowed_uids': '1000,1001',
@@ -171,6 +183,7 @@ def test_pull1(api_ctx, user):
 
 
 def test_list(api_ctx, user):
+    cleanup(api_ctx)
     with TestClient(api.app) as client:
         rv = time_wait(client, api_ctx['url'], 'bogus', api_ctx['urlreq'])
         assert rv.status_code == 200
@@ -180,6 +193,7 @@ def test_list(api_ctx, user):
 
 
 def test_queue(api_ctx, user):
+    cleanup(api_ctx)
     with TestClient(api.app) as client:
         uri = "/".join([api_ctx["url"], 'pull', api_ctx['urlreq']])
         response = client.post(uri, headers={AUTH_HEADER: 'bogus'})
@@ -187,9 +201,13 @@ def test_queue(api_ctx, user):
         uri = "/".join([api_ctx["url"], 'queue', api_ctx['system']])
         response = client.get(uri, headers={AUTH_HEADER: 'bogus'})
         assert response.status_code == 200
+        rv = time_wait(client, api_ctx['url'], 'bogus', api_ctx['urlreq'])
+        assert rv.status_code == 200
 
 
 def test_pulllookup(api_ctx, user):
+    cleanup(api_ctx)
+
     with TestClient(api.app) as client:
         time_wait(client, api_ctx['url'], 'bogus', api_ctx['urlreq'])
         uri = "/".join([api_ctx["url"], 'lookup', api_ctx['urlreq']])
@@ -295,9 +313,7 @@ def test_import(api_ctx, admin):
         uri = '/'.join([api_ctx['url'], 'doimport', api_ctx['urlreq']])
         ifile = os.path.join(api_ctx['test_dir'], 'test.squashfs')
         data = {'filepath': ifile,
-                'format': 'squashfs',
-                'allowed_uids': '100',
-                'allowed_gids': '100'
+                'format': 'squashfs'
                 }
         hash = fast_hash(ifile)
         response = client.post(uri, json=data, headers={AUTH_HEADER: 'bogus'})
@@ -321,6 +337,7 @@ def test_import_fail(api_ctx, user):
 
 
 def test_labels(api_ctx, user):
+    cleanup(api_ctx)
     os.environ['ENABLE_LABELS'] = "1"
     with TestClient(api.app) as client:
         uri = f'{api_ctx["url"]}/pull/{api_ctx["urlreq"]}'
