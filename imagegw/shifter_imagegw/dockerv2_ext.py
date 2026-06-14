@@ -74,10 +74,6 @@ class DockerV2ext(object):
                 logging.error(f"Missing {tool}")
                 raise OSError(f"Tool {tool} not found")
 
-    def get_eldest_layer(self):
-        """Return base layer"""
-        return None
-
     def log(self, state, message=''):
         """Write state/message to upstream status collector"""
         if self.updater is not None:
@@ -178,16 +174,12 @@ class DockerV2ext(object):
             if 'Labels' in config:
                 resp['labels'] = config['Labels']
         resp['private'] = self.private
-        resp['private'] = self.private
         return resp
 
     def _read_json_hash(self, hash_name):
         hashalgo, hashid = hash_name.split(':')
         fn = os.path.join(self.cache_dir, hashalgo, hashid)
-        with open(fn) as f:
-            data = f.read()
-
-        return json.loads(data)
+        return json.load(open(fn))
 
     def pull_layers(self):
         """
