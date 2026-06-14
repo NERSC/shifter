@@ -1,5 +1,4 @@
 import os
-import sys
 import pytest
 import time
 import json
@@ -405,7 +404,8 @@ def test_pullable(ctx):
     rec = {'last_pull': 0, 'status': 'FAILURE', 'userACL': [], 'groupACL': []}
     assert ctx.m._pullable(ctx.pull, rec) is True
     # recent pull
-    rec = {'last_pull': time.time(), 'status': 'FAILURE', 'userACL': [], 'groupACL': []}
+    rec = {'last_pull': time.time(), 'status': 'FAILURE',
+           'userACL': [], 'groupACL': []}
     assert ctx.m._pullable(ctx.pull, rec) is False
 
     # A hung pull
@@ -782,12 +782,13 @@ def test_pulls_acl_change(ctx, monkeypatch):
     record = good_pullrecord(ctx)
     record['status'] = 'READY'
     record['tag'] = [record['pulltag']]
-    record['id'] = '468b48e3864f5489a6fa4a35843292b101ac73c31e3272688fa3220ff485f549'
+    record['id'] = \
+        '468b48e3864f5489a6fa4a35843292b101ac73c31e3272688fa3220ff485f549'
     id = ctx.images.insert_one(record).inserted_id
     assert id
     # Now try to submit an ACL change
     session = ctx.session
-    session.tokens   = {"default":"asdf:asdfjd"}
+    session.tokens = {"default": "asdf:asdfjd"}
     pr = Request(session=ctx.session,
                  itype=record['itype'],
                  tag=record['pulltag'],
@@ -811,14 +812,15 @@ def test_pull_logic(ctx, monkeypatch):
     record = good_record(ctx)
     record['userACL'] = None
     record['groupACL'] = None
-    record['id'] = "468b48e3864f5489a6fa4a35843292b101ac73c31e3272688fa3220ff485f549"
+    record['id'] = \
+        "468b48e3864f5489a6fa4a35843292b101ac73c31e3272688fa3220ff485f549"
     itype = record['itype']
     tag = record['tag'][0]
     logging.debug(record['last_pull'])
     id = ctx.images.insert_one(record).inserted_id
     assert id
     session = ctx.session
-    session.tokens   = {"default":"asdf:asdfjd"}
+    session.tokens = {"default": "asdf:asdfjd"}
     pr = Request(session=ctx.session,
                  itype=itype,
                  tag=tag,

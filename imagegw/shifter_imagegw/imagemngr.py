@@ -157,7 +157,7 @@ class ImageMngr(object):
         # Trivial check
         if a == b:
             return True
-        
+
         if a is None:
             a = []
         if b is None:
@@ -281,35 +281,35 @@ class ImageMngr(object):
 
         # if rec is None then do a pull
         if rec is None:
-            logging.debug(f"pullable: no rec")
+            logging.debug("pullable: no rec")
             return True
 
         # Okay there has been a pull before
         # If the status flag is missing just repull (shouldn't happen)
         if 'status' not in rec:
-            logging.debug(f"pullable: no status")
+            logging.debug("pullable: no status")
             return True
         status = rec['status']
 
         # EXPIRED images can be pulled
         if status == 'EXPIRED':
-            logging.debug(f"pullable: expired")
+            logging.debug("pullable: expired")
             return True
 
         # Need to deal with last_pull for a READY record
         if 'last_pull' not in rec:
-            logging.debug(f"pullable: no last pull")
+            logging.debug("pullable: no last pull")
             return True
         nextpull = self.pullupdatetimeout + rec['last_pull']
 
         # It has been a while, so re-pull to see if it is fresh
         if status == 'READY' and (time() > nextpull):
-            logging.debug(f"pullable: time since last pull")
+            logging.debug("pullable: time since last pull")
             return True
 
         # Repull failed pulls
         if status == 'FAILURE' and (time() > nextpull):
-            logging.debug(f"pullable: time since last pull failed")
+            logging.debug("pullable: time since last pull failed")
             return True
 
         # Last thing... What if the pull somehow got hung or died in the middle
@@ -324,7 +324,7 @@ class ImageMngr(object):
         # images because the ACL isn't fully populated unti the pull is
         # complete.
         if status == 'READY' and \
-            (not self._compare_list(req.userACL, rec.get('userACL')) or \
+            (not self._compare_list(req.userACL, rec.get('userACL')) or
                 not self._compare_list(req.groupACL, rec.get('groupACL'))):
             logging.info("ACL change detected.")
             logging.debug(f"{req.userACL} vs {rec['userACL']}")

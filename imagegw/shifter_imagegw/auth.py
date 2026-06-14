@@ -61,7 +61,7 @@ def authenticate(conf: Config, authstr: str, system: str):
 
     try:
         tokens = json.loads(payload).get('authorized_locations')
-    except:
+    except Exception:
         tokens = None
 
     return Session(uid=uid, gid=gid, tokens=tokens,

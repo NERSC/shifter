@@ -398,7 +398,8 @@ class PullRequest(AsyncRequest):
             return self.meta
 
         except Exception as e:
-            err_msg = f"ERROR: Dopull failed sys={self.system} tag={self.tag} {str(e)}"
+            err_msg = f"ERROR: Dopull failed sys={self.system}" + \
+                      f"tag={self.tag} {str(e)}"
             logging.error(err_msg)
             self.updater.update_status('FAILURE', 'FAILED')
 
