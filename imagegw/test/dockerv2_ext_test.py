@@ -25,9 +25,8 @@ import base64
 import pytest
 
 
-class update():
-    def update_status(self, state, message):
-        print(f"{state}: {message}")
+def update_status(state, message):
+    print(f"{state}: {message}")
 
 
 @pytest.fixture(autouse=True)
@@ -43,7 +42,7 @@ def test_dir():
 
 @pytest.fixture
 def updater():
-    return update()
+    return update_status
 
 
 @pytest.fixture

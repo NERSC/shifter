@@ -33,12 +33,13 @@ from shifter_imagegw.imageworker import PullRequest
 from shifter_imagegw.imageworker import ImportRequest
 from shifter_imagegw.imageworker import ExpireRequest
 from shifter_imagegw.db import DB
-from shifter_imagegw.models import Session, Request
+from shifter_imagegw.models import Session, Request, Message
 from shifter_imagegw.config import Config
 import grp
 from multiprocessing import Process
 import atexit
 from cachetools import cached, TTLCache, LFUCache
+from bson.objectid import ObjectId
 
 
 class ImageMngr(object):
@@ -87,23 +88,24 @@ class ImageMngr(object):
         logging.basicConfig(level=config.LogLevel)
         self.db = DB(config)
         while True:
-            message = self.status_queue.get()
+            message: Message = self.status_queue.get()
             if message == 'stop':
                 logging.info("Shutting down Status Thread")
                 break
-            ident = message['id']
-            state = message['state']
-            meta = message['meta']
+            ident = ObjectId(message.ident)
+            state = message.status
             # TODO: Handle a failed expire
             if state == "FAILURE":
                 logging.error(f"Operation failed for {ident}")
 
             # A response message
             if state != 'READY':
-                self.db.update_image_state(ident, state, meta)
+                self.db.update_image_state(ident, state,
+                                           heartbeat=message.heartbeat,
+                                           message=message.message)
                 continue
-            if 'response' in meta and meta['response']:
-                response = meta['response']
+            if message.response:
+                response = message.response
                 if 'meta_only' in response:
                     logging.debug('Updating ACLs')
                     self.update_acls(ident, response)
@@ -430,7 +432,7 @@ class ImageMngr(object):
     def update_acls(self, ident: str, response: dict):
         pullrec = self.db.find_image_by(id=ident)
         if pullrec is None:
-            logging.error('ERROR: Missing pull request resp=',
+            logging.error(f'ERROR: Missing pull request {ident} resp=',
                           f'{str(response)}')
             raise ValueError("Missing record")
             # return
@@ -465,7 +467,8 @@ class ImageMngr(object):
         logging.debug(f"Complete called for {ident} {str(response)}")
         pullrec = self.db.find_image_by(id=ident)
         if pullrec is None:
-            logging.warning(f'Missing pull request resp={str(response)}')
+            logging.warning('Missing pull request ' +
+                            f'{ident} resp={str(response)}')
             return
         # Check that this image ident doesn't already exist for this system
         rec = self.db.find_image_by(image_id=response['id'],

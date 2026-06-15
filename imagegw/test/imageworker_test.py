@@ -23,7 +23,6 @@ import shutil
 from shifter_imagegw.config import Config
 from shifter_imagegw.models import Session
 from shifter_imagegw.imageworker import PullRequest
-from shifter_imagegw import imageworker
 DEBUG = False
 
 
@@ -37,8 +36,7 @@ def test_setup():
     """Setup test environment similar to unittest setUp"""
     cwd = os.path.dirname(os.path.realpath(__file__))
     os.environ['PATH'] = f'{cwd}/fakebin:{os.environ["PATH"]}'
-    updater = imageworker.Updater('bogusid', update_status)
-    configfile = 'test.json'
+    configfile = f'{cwd}/../test.json'
     with open(configfile) as config_file:
         data = json.load(config_file)
     config = Config(data=data)
@@ -70,7 +68,6 @@ def test_setup():
                       system=system)
 
     return {
-        'updater': updater,
         'config': config,
         'system': system,
         'itype': itype,
@@ -247,10 +244,8 @@ def test_labels(pull_request):
 def test_pull_image_new(test_setup):
     cleanup_cache(test_setup)
     system = test_setup['system']
-    req = imageworker.PullRequest(test_setup['config'],
-                                  test_setup['tag'],
-                                  "foo",
-                                  test_setup['session'])
+    req = PullRequest(test_setup['config'], test_setup['tag'],
+                      "foo", test_setup['session'])
     status = req.run()
     assert status
     assert req.meta

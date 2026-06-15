@@ -122,7 +122,8 @@ class DB(object):
         self._images_update({'_id': ident}, {'$set': setline})
 
     def update_image_state(self, ident: str, state: str,
-                           info: dict | None = None):
+                           heartbeat: int | None = None,
+                           message: str = ""):
         """
         Helper function to set the mongo state for an image with _id==ident
         to state=state.
@@ -130,11 +131,10 @@ class DB(object):
         if state == 'SUCCESS':
             state = 'READY'
         set_list = {'status': state, 'status_message': ''}
-        if info and isinstance(info, dict):
-            if 'heartbeat' in info:
-                set_list['last_heartbeat'] = info['heartbeat']
-            if 'message' in info:
-                set_list['status_message'] = info['message']
+        if heartbeat:
+            set_list['last_heartbeat'] = heartbeat
+        if message:
+            set_list['status_message'] = message
         self._images_update({'_id': ident}, {'$set': set_list})
 
     def get_state(self, ident: str):

@@ -1,6 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from enum import Enum, auto
 from typing import Any
+from time import time
 
 
 class Session(BaseModel):
@@ -63,3 +64,11 @@ class Request(BaseModel):
         if self.groupACL and self.groupACL != []:
             rec['groupACL'] = _make_acl(self.groupACL, session.gid)
         return rec
+
+
+class Message(BaseModel):
+    heartbeat: int = Field(default_factory=time)
+    ident: str
+    message: str
+    status: str
+    response: dict | None = {}

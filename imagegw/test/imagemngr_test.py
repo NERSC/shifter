@@ -10,6 +10,7 @@ from multiprocessing.pool import ThreadPool
 from random import randint
 from shifter_imagegw.config import Config
 from shifter_imagegw.models import Session, Request, Operations
+from shifter_imagegw.models import Message
 from shifter_imagegw.imageworker import WorkerThreads
 from shifter_imagegw.imagemngr import ImageMngr
 from pathlib import Path
@@ -46,18 +47,19 @@ class mock_worker(WorkerThreads):
     def set_mode(self, mode):
         self.mode = mode
 
-    def updater(self, ident, state, meta):
+    def updater(self, mess):
         """
         Updater function: This just post a message to a queue.
         """
-        self.q.put({'id': ident, 'state': state, 'meta': meta})
+        self.q.put(mess)
 
     def pull(self, request, updater):
         if self.mode == 2:
-            raise OSError('task failed')
+            # Simulate a failure
+            raise OSError('simulated task failure')
         states = ('PULLING', 'EXAMINATION', 'CONVERSION', 'TRANSFER')
         for state in states:
-            updater.update_status(state, state)
+            updater(state, state)
             sleep(0.1)
         ret = {
             'id': '%x' % randint(0, 100000),
@@ -66,13 +68,13 @@ class mock_worker(WorkerThreads):
             'env': ['FOO=bar', 'BAZ=boz']
         }
         state = 'READY'
-        updater.update_status(state, state, ret)
+        updater(state, state, ret)
         return ret
 
     def wrkimport(self, request, updater):
         states = ('HASHING', 'TRANSFER', 'READY')
         for state in states:
-            updater.update_status(state, state)
+            updater(state, state)
             sleep(0.1)
         ret = {
             'id': '%x' % randint(0, 100000),
@@ -81,17 +83,17 @@ class mock_worker(WorkerThreads):
             'env': ['FOO=bar', 'BAZ=boz']
         }
         state = 'READY'
-        updater.update_status(state, state, ret)
+        updater(state, state, ret)
         return ret
 
     def submit(self, req):
-        req.updater.update_method = self.updater
+        req.update_method = self.updater
         if self.op == "pull":
-            self.pools.apply_async(self.pull, [req, req.updater],
-                                   {}, None, req.updater.failed)
+            self.pools.apply_async(self.pull, [req, req.update_status],
+                                   {}, None, req.failed)
         elif self.op == "import":
-            self.pools.apply_async(self.wrkimport, [req, req.updater],
-                                   {}, None, req.updater.failed)
+            self.pools.apply_async(self.wrkimport, [req, req.update_status],
+                                   {}, None, req.failed)
 
 
 @pytest.fixture(autouse=True)
@@ -102,7 +104,8 @@ def set_path(monkeypatch):
 
 @pytest.fixture()
 def conf():
-    configfile = 'test.json'
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    configfile = f'{test_dir}/../test.json'
     with open(configfile) as config_file:
         data = json.load(config_file)
     config = Config(data)
@@ -113,7 +116,8 @@ def conf():
 def ctx():
     class Conf():
         def __init__(self):
-            self.configfile = 'test.json'
+            test_dir = os.path.dirname(os.path.abspath(__file__))
+            self.configfile = f'{test_dir}/../test.json'
             with open(self.configfile) as config_file:
                 data = json.load(config_file)
             self.config = Config(data)
@@ -130,7 +134,7 @@ def ctx():
             self.system = 'systema'
             self.itype = 'docker'
             self.tag = 'alpine:latest'
-            self.id = 'fakeid'
+            self.id = '6a2f14d27fb082136392071a'
             self.tag2 = 'test2'
             self.public = 'index.docker.io/busybox:latest'
             self.private = 'index.docker.io/scanon/shaneprivate:latest'
@@ -686,7 +690,7 @@ def test_pull_mocked(ctx):
     mrec = ctx.images.find_one(q)
     assert '_id' in mrec
     # Track through transistions
-    state = time_wait(ctx, id)
+    state = time_wait(ctx, id, TIMEOUT=5)
     assert state == 'READY'
     imagerec = ctx.mtm.lookup(session, pr.itype, pr.tag)
     assert 'ENTRY' in imagerec
@@ -695,7 +699,7 @@ def test_pull_mocked(ctx):
     ctx.images.delete_many({})
     ctx.mtm.workers.set_mode(2)
     rec = ctx.mtm.pull(session, pr)
-    time.sleep(2)
+    time.sleep(1)
     assert rec
     id = rec['_id']
     state = ctx.mtm.db.get_state(id)
@@ -1238,11 +1242,10 @@ def test_status_thread(ctx):
     record['status'] = 'PULLING'
     rec = ctx.images.insert_one(record).inserted_id
     id = record['_id']
-    m = {
-        'id': id,
-        'state': 'READY',
-        'meta': {'response': {'id': 'fakeid'}}
-    }
+    m = Message(ident=str(id),
+                status='READY',
+                message='test',
+                response={'id': 'fakeid'})
     # Create a fake response and queue it
     ctx.m.status_queue.put(m)
     ctx.m.status_queue.put('stop')
@@ -1255,15 +1258,14 @@ def test_status_thread(ctx):
     record['pulltag'] = 'bogus'
     record['status'] = 'PULLING'
     id = ctx.images.insert_one(record).inserted_id
-    m = {
-        'id': id,
-        'state': 'READY',
-        'meta': {'response': {'id': 'fakeid'}}
-    }
-    m['meta']['response']['meta_only'] = True
-    m['meta']['response']['userACL'] = 1
-    m['meta']['response']['groupACL'] = 1
-    m['meta']['response']['private'] = True
+    m = Message(ident=str(id),
+                status='READY',
+                message='test',
+                response={'id': 'fakeid'})
+    m.response['meta_only'] = True
+    m.response['userACL'] = 1
+    m.response['groupACL'] = 1
+    m.response['private'] = True
     ctx.m.status_queue.put(m)
     ctx.m.status_queue.put('stop')
     ctx.m.status_thread(ctx.config)

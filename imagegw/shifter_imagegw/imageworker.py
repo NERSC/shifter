@@ -27,40 +27,10 @@ import logging
 import tempfile
 from multiprocessing import Queue
 from multiprocessing.pool import ThreadPool
-from time import time
 from shifter_imagegw import converters, transfer
 from shifter_imagegw.dockerv2_ext import DockerV2ext
 from shifter_imagegw.config import Config
-from shifter_imagegw.models import Session
-
-
-class Updater(object):
-    """
-    This is a helper class to update the status for the request.
-
-    This could possibly be moved into the Abstract Async Request class.
-    """
-    def __init__(self, ident: str = None, update_method=None):
-        """ init the updater. """
-        self.ident = ident
-        self.update_method = update_method
-
-    def update_status(self, state: str, message: str, response=None):
-        """ update the status including the heartbeat and message """
-        if self.update_method:
-            metadata = {'heartbeat': time(),
-                        'message': message,
-                        'response': response}
-            self.update_method(ident=self.ident, state=state, meta=metadata)
-
-    def failed(self, e):
-        logging.error(f"Failure: {str(e)}")
-        if self.update_method:
-            metadata = {'heartbeat': time(),
-                        'message': "Operation Failed",
-                        'response': {}}
-            self.update_method(ident=self.ident, state="FAILURE",
-                               meta=metadata)
+from shifter_imagegw.models import Session, Message
 
 
 class WorkerThreads(object):
@@ -84,20 +54,20 @@ class WorkerThreads(object):
     def get_updater_queue(self):
         return self.updater_queue
 
-    def updater(self, ident, state, meta):
+    def updater(self, message: Message):
         """
         Updater function: This just post a message to a queue.
 
         TODO: switch this to a data model.
         """
-        self.updater_queue.put({'id': ident, 'state': state, 'meta': meta})
+        self.updater_queue.put(message)
 
     def submit(self, req: object):
         # We have to override the updater method here since we
         # didn't have the method when it was initialized.
-        req.updater.update_method = self.updater
+        req.update_method = self.updater
         try:
-            self.pools.apply_async(req.run, [], {}, None, req.updater.failed)
+            self.pools.apply_async(req.run, [], {}, None, req.failed)
         except Exception as ex:
             logging.error(str(ex))
             raise ex
@@ -111,6 +81,24 @@ class AsyncRequest(object):
 
     def _null_func(self, **kwargs):
         pass
+
+    def update_status(self, state: str, message: str, response=None):
+        """ update the status including the heartbeat and message """
+        if self.update_method:
+            mess = Message(ident=str(self.ident),
+                           status=state,
+                           message=message,
+                           response=response)
+            self.update_method(mess)
+
+    def failed(self, e):
+        logging.error(f"Failure: {str(e)}")
+        if self.update_method:
+            mess = Message(ident=str(self.ident),
+                           status="FAILURE",
+                           message=f"Operation Failed: {str(e)}",
+                           response={})
+            self.update_method(mess)
 
     def _cleanup_temporary(self):
         """
@@ -203,7 +191,7 @@ class PullRequest(AsyncRequest):
             self.tokens = self.session.tokens
         self.userACL = useracl
         self.groupACL = groupacl
-        self.updater = Updater(ident, self._null_func)
+        self.update_method = None
 
     def _pull_dockerv2(self, location, repo, tag):
         """ Private method to pull a docker images. """
@@ -226,13 +214,13 @@ class PullRequest(AsyncRequest):
 
         try:
             dock = DockerV2ext(imgid,
-                               updater=self.updater,
+                               updater=self.update_status,
                                baseurl=url,
                                username=username,
                                password=password,
                                policy_file=self.sysconf.policy_file,
                                cachedir=cdir)
-            self.updater.update_status("PULLING", 'Getting manifest')
+            self.update_status("PULLING", 'Getting manifest')
             self.meta = dock.examine_manifest()
             # Get the ID
             self.id = str(self.meta['id'])
@@ -247,7 +235,7 @@ class PullRequest(AsyncRequest):
                                                  dir=edir)
             self.clean_items.append(self.expandedpath)
 
-            self.updater.update_status("PULLING", 'Extracting Layers')
+            self.update_status("PULLING", 'Extracting Layers')
             dock.extract_docker_layers(self.expandedpath)
             return True
         except Exception as e:
@@ -350,7 +338,7 @@ class PullRequest(AsyncRequest):
         tag = self.tag
         try:
             # Step 1 - Do the pull
-            self.updater.update_status('PULLING', 'PULLING')
+            self.update_status('PULLING', 'PULLING')
             logging.debug(f"tag: {self.tag}")
             if not self._pull_image():
                 logging.warning("Worker: Pull failed")
@@ -361,23 +349,21 @@ class PullRequest(AsyncRequest):
 
             if not self._check_image():
                 # Step 2 - Check the image
-                self.updater.update_status('EXAMINATION', 'Examining image')
+                self.update_status('EXAMINATION', 'Examining image')
                 logging.debug(f"Worker: examining image {tag}")
                 if not self._examine_image():
                     raise OSError('Examine failed')
                 # Step 3 - Convert
-                self.updater.update_status('CONVERSION', 'Converting image')
+                self.update_status('CONVERSION', 'Converting image')
                 logging.debug(f"Worker: converting image {tag}")
                 if not self._convert_image():
                     raise OSError('Conversion failed')
                 if not self._write_metadata():
                     raise OSError('Metadata creation failed')
                 # Step 4 - TRANSFER
-                self.updater.update_status('TRANSFER', 'Transferring image')
+                self.update_status('TRANSFER', 'Transferring image')
                 logging.debug(F"Worker: transferring image {tag}")
                 self._transfer_image()
-                # if not self._transfer_image():
-                #     raise OSError('Transfer failed')
             else:
                 logging.debug(f"metadata only: {self.tag}")
                 self.meta_only = True
@@ -385,15 +371,12 @@ class PullRequest(AsyncRequest):
                 logging.debug(f"Updating metdata for {self.tag}")
                 if not self._write_metadata():
                     raise OSError('Metadata creation failed')
-                self.updater.update_status('TRANSFER', 'Transferring metadata')
+                self.update_status('TRANSFER', 'Transferring metadata')
                 logging.debug(f"Worker: transferring metadata {self.tag}")
                 self._transfer_image()
-                # if not self._transfer_image():
-                #     raise OSError('Transfer failed')
 
             # Done
-            self.updater.update_status('READY', 'Image ready',
-                                       response=self.meta)
+            self.update_status('READY', 'Image ready', response=self.meta)
             self._cleanup_temporary()
             return self.meta
 
@@ -401,7 +384,7 @@ class PullRequest(AsyncRequest):
             err_msg = f"ERROR: Dopull failed sys={self.system}" + \
                       f"tag={self.tag} {str(e)}"
             logging.error(err_msg)
-            self.updater.update_status('FAILURE', 'FAILED')
+            self.update_status('FAILURE', 'FAILED')
 
             # TODO: add a debugging flag and only disable cleanup if debugging
             self._cleanup_temporary()
@@ -414,7 +397,7 @@ class ImportRequest(AsyncRequest):
                  conf: Config,
                  system: str,
                  tag: str,
-                 id: str,
+                 ident: str,
                  session: Session,
                  filepath: str,
                  useracl=None,
@@ -425,7 +408,8 @@ class ImportRequest(AsyncRequest):
         self.system = system
         self.sysconf = conf.Platforms[self.system]
         self.tag = tag
-        self.id = id
+        self.id = None
+        self.ident = ident
         self.meta = None
         self.import_image = True
         self.metafile = None
@@ -436,7 +420,7 @@ class ImportRequest(AsyncRequest):
         self.user = session.user
         self.userACL = None
         self.groupACL = None
-        self.updater = Updater(id, self._null_func)
+        self.update_method = None
 
     def run(self):
         """
@@ -454,7 +438,7 @@ class ImportRequest(AsyncRequest):
                 raise OSError('Path not valid')
             # Step 1 - Calculate the hash of the file
             logging.debug("Starting import hashing")
-            self.updater.update_status('HASHING', 'HASHING')
+            self.update_status('HASHING', 'HASHING')
             self.id = transfer.hash_file(self.filepath,
                                          self.sysconf)
             # Step 2 - Populate the metadata file
@@ -471,16 +455,12 @@ class ImportRequest(AsyncRequest):
             imgfile = f'{self.id}.{self.fmt}'
             self.imagefile = imgfile
             self.meta['id'] = self.id
-            self.updater.update_status('TRANSFER', 'TRANSFER')
+            self.update_status('TRANSFER', 'TRANSFER')
             self._transfer_image()
-            # if not self._transfer_image():
-            #     logging.warning("Worker: Import copy failed")
-            #     raise OSError("Import copy failed")
 
             # Done
             logging.debug(f"run: resp: {self.meta}")
-            self.updater.update_status('READY', 'Image ready',
-                                       response=self.meta)
+            self.update_status('READY', 'Image ready', response=self.meta)
             self._cleanup_temporary()
             return self.meta
 
@@ -488,7 +468,7 @@ class ImportRequest(AsyncRequest):
             err_msg = f"img_import failed sys={self.system} tag={self.tag}"
             logging.error(err_msg)
             logging.error(f"{str(e)}")
-            self.updater.update_status('FAILURE', 'FAILED')
+            self.update_status('FAILURE', 'FAILED')
 
             # TODO: add a debugging flag and only disable cleanup if debugging
             self._cleanup_temporary()
@@ -521,8 +501,8 @@ class ExpireRequest(AsyncRequest):
         self.sysconf = conf.Platforms[self.system]
         self.tag = tag
         self.id = id
+        self.ident = ident
         self.metafile = None
-        self.updater = Updater(ident, self._null_func)
 
     def run(self):
         """
@@ -530,12 +510,12 @@ class ExpireRequest(AsyncRequest):
 
         Returns True on success
         """
-        logging.debug(f"do expire system={self.system} tag={self.tag}")
-        self.updater.update_status('EXPIRING', 'EXPIRING')
+        logging.debug(f"do expire system={self.system} tag={self.id}")
+        self.update_status('EXPIRING', 'EXPIRING')
 
         imagefile = f'{self.id}.{self.fmt}'
         meta = f'{self.id}.meta'
         if self.metafile:
             meta = self.metafile
         transfer.remove(self.sysconf, imagefile, meta)
-        self.updater.update_status('EXPIRED', 'EXPIRED')
+        self.update_status('EXPIRED', 'EXPIRED')

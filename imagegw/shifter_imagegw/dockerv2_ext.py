@@ -77,7 +77,7 @@ class DockerV2ext(object):
     def log(self, state, message=''):
         """Write state/message to upstream status collector"""
         if self.updater is not None:
-            self.updater.update_status(state, message)
+            self.updater(state, message)
 
     def _auth_file(self):
         if not self.username:
@@ -152,10 +152,6 @@ class DockerV2ext(object):
 
         self.pull_layers()
         # Read manifest
-        # with open(self.manifest_file) as f:
-        #     data = f.read()
-        #     manifest = json.loads(data)
-
         conf = self.manifest['config']['digest']
         meta = self._read_json_hash(conf)
 
@@ -205,9 +201,6 @@ class DockerV2ext(object):
         with open(os.path.join(outdir, 'index.json')) as f:
             data = json.loads(f.read())
         digest = data['manifests'][0]['digest']
-        # hashalgo, hashid = data['manifests'][0]['digest'].split(':')
-        # m_file = os.path.join(self.cache_dir, hashalgo, hashid)
-        # self.manifest_file = m_file
         self.manifest = self._read_json_hash(digest)
 
         blobs = os.path.join(outdir, "blobs", "sha256")
