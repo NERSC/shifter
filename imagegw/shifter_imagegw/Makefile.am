@@ -4,6 +4,7 @@ shifter_imagegw_PYTHON = \
 				auth.py \
 				config.py \
 				converters.py \
+				db.py \
 				dockerv2_ext.py \
 				errors.py \
 				fasthash.py \
