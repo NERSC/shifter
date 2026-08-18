@@ -66,6 +66,11 @@ extern "C" {
 /*
  * Parsing options are separate from validation flags so callers cannot
  * accidentally weaken the default configuration-file checks.
+ *
+ * UDIROOT_PARSE_SKIP_FILE_OWNER_CHECK accepts a configuration file whose
+ * owner is not reported as UID 0.  It does not skip the group/world-writable
+ * mode check.  This option is intended for the unprivileged shifterimg client;
+ * privileged runtime callers must use parse_UdiRootConfig().
  */
 #define UDIROOT_PARSE_SKIP_FILE_OWNER_CHECK 0x01
 
@@ -175,6 +180,7 @@ typedef struct _UdiRootConfig {
 } UdiRootConfig;
 
 int parse_UdiRootConfig(const char *, UdiRootConfig *, int validateFlags);
+/* Internal opt-in parser for unprivileged callers; not a command-line option. */
 int parse_UdiRootConfigWithFlags(const char *, UdiRootConfig *,
         int validateFlags, int parseFlags);
 void free_UdiRootConfig(UdiRootConfig *, int freeStruct);

@@ -10,6 +10,23 @@ reduce risk as much as possible.
 Once a process is launched into the container, processes are stripped of all
 privilege, and should not be able to re-escalate afterwards.
 
+Configuration file trust
+------------------------
+
+The privileged ``shifter`` runtime and the root-run ``setupRoot`` and
+``unsetupRoot`` helpers require ``udiRoot.conf`` to be owned by UID 0 and not
+be group- or world-writable.  The Slurm integration uses the same strict
+configuration parser.  These checks prevent privileged runtime operations
+from being directed by an untrusted configuration file.
+
+``shifterimg`` is not setuid and performs image-gateway client operations with
+the invoking user's privileges.  It skips only the UID-0 ownership check so it
+can operate in a user namespace, where host UID 0 may be unmapped.  It retains
+the group- and world-writable mode check.  The exception is selected internally
+with ``UDIROOT_PARSE_SKIP_FILE_OWNER_CHECK``.  It is not available as a
+command-line or configuration-file option.  The privileged runtime programs
+continue to use the strict parser entry point.
+
 Shifter enables User Defined Image environment containers.  To do this while
 optimizing I/O on the compute nodes it does require performing several
 privileged operations on the execution node, both privilege to mount filesystems
