@@ -61,7 +61,7 @@
 #define PNCALLOWEDFS_ALLOC_BLOCK 10
 
 static int _assign(const char *key, const char *value, void *tUdiRootConfig);
-static int _validateConfigFile(const char *);
+static int _validateConfigFile(const char *, int);
 
 void free_ShifterModule(ShifterModule *module, int free_struct) {
     char **ptr = NULL;
@@ -218,9 +218,14 @@ finish:
 }
 
 int parse_UdiRootConfig(const char *configFile, UdiRootConfig *config, int validateFlags) {
+    return parse_UdiRootConfigWithFlags(configFile, config, validateFlags, 0);
+}
+
+int parse_UdiRootConfigWithFlags(const char *configFile, UdiRootConfig *config,
+        int validateFlags, int parseFlags) {
     int ret = 0;
 
-    ret = _validateConfigFile(configFile);
+    ret = _validateConfigFile(configFile, parseFlags);
     if (ret != 0) {
         return ret;
     }
@@ -982,7 +987,7 @@ size_t fprint_ShifterModule(FILE *fp, ShifterModule *module) {
     return 0;
 }
 
-static int _validateConfigFile(const char *configFile) {
+static int _validateConfigFile(const char *configFile, int parseFlags) {
     struct stat st;
     memset(&st, 0, sizeof(struct stat));
 
@@ -991,7 +996,7 @@ static int _validateConfigFile(const char *configFile) {
         return 1;
     }
 #ifndef NO_ROOT_OWN_CHECK
-    if (st.st_uid != 0) {
+    if (!(parseFlags & UDIROOT_PARSE_SKIP_FILE_OWNER_CHECK) && st.st_uid != 0) {
         fprintf(stderr, "udiRoot.conf must be owned by user root!");
         return UDIROOT_VAL_CFGFILE;
     }

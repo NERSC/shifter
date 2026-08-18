@@ -2,9 +2,18 @@ udiRoot.conf reference
 **********************
 
 udiRoot.conf is read by shifter and most other related shifter utilities within
-the udiRoot component.  Unless udiRoot is built enabling particular options
-udiRoot.conf must be owned by root, but readable by all users, or at least
-all users you want accessing shifter.
+the udiRoot component.  The privileged runtime programs, including ``shifter``,
+``setupRoot``, ``unsetupRoot``, and the Slurm integration, require the file to
+be owned by root.  It must be readable by all users, or at least all users you
+want accessing Shifter.
+
+``shifterimg`` is an unprivileged image-gateway client and does not require the
+configuration file owner to appear as UID 0.  This allows image operations to
+work in a user namespace, where a host-root-owned ``udiRoot.conf`` may appear
+to be owned by an unmapped UID.  ``shifterimg`` still rejects a configuration
+file that is group- or world-writable.  This exception is built into
+``shifterimg``; it is not a command-line or ``udiRoot.conf`` option and does
+not change the checks made by the privileged runtime programs.
 
 Configuration File Format
 =========================
