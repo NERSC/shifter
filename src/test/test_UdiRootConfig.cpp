@@ -39,6 +39,8 @@
 */
 
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include "UdiRootConfig.h"
 #include "utility.h"
 #include <CppUTest/CommandLineTestRunner.h>
@@ -50,7 +52,8 @@ TEST(UdiRootConfigTestGroup, ParseUdiRootConfig_basic) {
     UdiRootConfig config;
 
     memset(&config, 0, sizeof(UdiRootConfig));
-    int ret = parse_UdiRootConfig("test_udiRoot.conf", &config, 0);
+    int ret = parse_UdiRootConfigWithFlags("test_udiRoot.conf", &config, 0,
+            UDIROOT_PARSE_SKIP_FILE_OWNER_CHECK);
     printf("value: %d\n", ret);
     CHECK(ret == 0);
     CHECK(strcmp(config.udiMountPoint, "/var/udiMount") == 0);
@@ -107,7 +110,8 @@ TEST(UdiRootConfigTestGroup, ParseUdiRootConfig_display) {
     memset(&config, 0, sizeof(UdiRootConfig));
     char buffer[4096];
     printf("about to parse\n");
-    int ret = parse_UdiRootConfig("test_udiRoot.conf", &config, 0);
+    int ret = parse_UdiRootConfigWithFlags("test_udiRoot.conf", &config, 0,
+            UDIROOT_PARSE_SKIP_FILE_OWNER_CHECK);
     CHECK(ret == 0);
     FILE *output = fopen("ParseUdiRootConfig_display.out", "w");
     CHECK(output != NULL);
@@ -125,6 +129,58 @@ TEST(UdiRootConfigTestGroup, ParseUdiRootConfig_display) {
     fclose(input);
     free_UdiRootConfig(&config, 0);
     unlink("ParseUdiRootConfig_display.out");
+}
+
+TEST_GROUP(UdiRootConfigPermissionTestGroup) {
+    char configFile[64];
+
+    void setup() {
+        strcpy(configFile, "test_udiRoot_permissions.XXXXXX");
+        int fd = mkstemp(configFile);
+        CHECK(fd >= 0);
+
+        const char contents[] = "system=testSystem\n";
+        LONGS_EQUAL(sizeof(contents) - 1,
+                write(fd, contents, sizeof(contents) - 1));
+        LONGS_EQUAL(0, fchmod(fd, 0644));
+
+        /* Make the fixture non-root-owned even when tests run as root. */
+        if (geteuid() == 0) {
+            LONGS_EQUAL(0, fchown(fd, 65534, -1));
+        }
+        LONGS_EQUAL(0, close(fd));
+    }
+
+    void teardown() {
+        unlink(configFile);
+    }
+};
+
+TEST(UdiRootConfigPermissionTestGroup, RuntimeParserRequiresRootOwner) {
+    UdiRootConfig config;
+    memset(&config, 0, sizeof(UdiRootConfig));
+
+    LONGS_EQUAL(UDIROOT_VAL_CFGFILE,
+            parse_UdiRootConfig(configFile, &config, 0));
+}
+
+TEST(UdiRootConfigPermissionTestGroup, OwnerCheckCanBeSkipped) {
+    UdiRootConfig config;
+    memset(&config, 0, sizeof(UdiRootConfig));
+
+    LONGS_EQUAL(0, parse_UdiRootConfigWithFlags(configFile, &config, 0,
+                UDIROOT_PARSE_SKIP_FILE_OWNER_CHECK));
+    free_UdiRootConfig(&config, 0);
+}
+
+TEST(UdiRootConfigPermissionTestGroup, WritableConfigIsStillRejected) {
+    UdiRootConfig config;
+    memset(&config, 0, sizeof(UdiRootConfig));
+    LONGS_EQUAL(0, chmod(configFile, 0664));
+
+    LONGS_EQUAL(UDIROOT_VAL_CFGFILE,
+            parse_UdiRootConfigWithFlags(configFile, &config, 0,
+                UDIROOT_PARSE_SKIP_FILE_OWNER_CHECK));
 }
 
 int main(int argc, char** argv) {

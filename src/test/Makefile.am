@@ -3,7 +3,8 @@ AUTOMAKE_OPTIONS=foreign
 AM_CPPFLAGS = -DCONFIG_FILE=\"test_udiRoot.conf\" -DLIBEXECDIR=\"${libexecdir}/shifter\"
 CPPUTEST_CFLAGS = -I$(top_builddir)/dep/cpputest/include
 CPPUTEST_LDFLAGS = $(top_builddir)/dep/cpputest/lib*/libCppUTest.a
-TEST_CFLAGS = -fprofile-arcs -ftest-coverage -O0 -ggdb -I$(top_srcdir)/src $(AM_CPPFLAGS) $(CPPUTEST_CFLAGS) -DNO_ROOT_OWN_CHECK=1 -DROOTFS_TYPE="\"$(ROOTFS_TYPE)\"" -Wall
+TEST_CFLAGS_BASE = -fprofile-arcs -ftest-coverage -O0 -ggdb -I$(top_srcdir)/src $(AM_CPPFLAGS) $(CPPUTEST_CFLAGS) -DROOTFS_TYPE="\"$(ROOTFS_TYPE)\"" -Wall
+TEST_CFLAGS = $(TEST_CFLAGS_BASE) -DNO_ROOT_OWN_CHECK=1
 TEST_LDFLAGS = $(CPPUTEST_LDFLAGS)
 
 dist_noinst_DATA = test_udiRoot.conf.in etc chroot1 chroot2 chroot3 etc_small data_config1.conf data_config2.conf data_config3.conf data_config4.conf setup_test_chroot.sh shifter_sleep_test
@@ -55,8 +56,8 @@ test_UdiRootConfig_SOURCES = \
     $(top_srcdir)/src/shifter_mem.c \
     $(top_srcdir)/src/shifter_core.c
 
-test_UdiRootConfig_CXXFLAGS = $(TEST_CFLAGS)
-test_UdiRootConfig_CFLAGS = $(TEST_CFLAGS)
+test_UdiRootConfig_CXXFLAGS = $(TEST_CFLAGS_BASE)
+test_UdiRootConfig_CFLAGS = $(TEST_CFLAGS_BASE)
 test_UdiRootConfig_LDFLAGS = $(TEST_LDFLAGS)
 
 test_shifter_SOURCES = \

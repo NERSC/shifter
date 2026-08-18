@@ -1241,7 +1241,8 @@ int main(int argc, char **argv) {
     memset(&config, 0, sizeof(struct options));
     curl_global_init(CURL_GLOBAL_ALL);
 
-    if (parse_UdiRootConfig(CONFIG_FILE, &udiConfig, UDIROOT_VAL_ALL) != 0) {
+    if (parse_UdiRootConfigWithFlags(CONFIG_FILE, &udiConfig, UDIROOT_VAL_ALL,
+                UDIROOT_PARSE_SKIP_FILE_OWNER_CHECK) != 0) {
         fprintf(stderr, "FAILED to parse udiRoot configuration.\n");
         exit(1);
     }

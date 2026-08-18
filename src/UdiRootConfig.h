@@ -63,6 +63,12 @@ extern "C" {
 #define UDIROOT_VAL_FILEVAL 0x10
 #define UDIROOT_VAL_ALL 0xffffffff
 
+/*
+ * Parsing options are separate from validation flags so callers cannot
+ * accidentally weaken the default configuration-file checks.
+ */
+#define UDIROOT_PARSE_SKIP_FILE_OWNER_CHECK 0x01
+
 #ifndef IMAGEGW_PORT_DEFAULT
 #define IMAGEGW_PORT_DEFAULT "7777"
 #endif
@@ -169,6 +175,8 @@ typedef struct _UdiRootConfig {
 } UdiRootConfig;
 
 int parse_UdiRootConfig(const char *, UdiRootConfig *, int validateFlags);
+int parse_UdiRootConfigWithFlags(const char *, UdiRootConfig *,
+        int validateFlags, int parseFlags);
 void free_UdiRootConfig(UdiRootConfig *, int freeStruct);
 size_t fprint_UdiRootConfig(FILE *, UdiRootConfig *);
 int validate_UdiRootConfig(UdiRootConfig *, int validateFlags);
