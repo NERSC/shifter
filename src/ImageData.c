@@ -181,6 +181,13 @@ int parse_ImageData(char *type, char *identifier, UdiRootConfig *config, ImageDa
         return 1;
     }
 
+    /* record the type so callers can act on it; shifter_core.c reads it to
+       enforce allowLocalChroot. a caller can pass image->type itself, so this
+       neither frees nor replaces a value that is already there */
+    if (type != NULL && image->type == NULL) {
+        image->type = _strdup(type);
+    }
+
     if (type != NULL && strcmp(type, "local") == 0) {
         image->identifier = _strdup(identifier);
         image->filename = _strdup(identifier);
